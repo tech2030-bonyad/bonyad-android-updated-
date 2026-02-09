@@ -1,0 +1,59 @@
+# === Node / React Native ===
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+expo-debug.log
+.expo/
+.expo-shared/
+
+# === Build outputs ===
+build/
+dist/
+android/app/build/
+ios/build/
+ios/Pods/
+ios/DerivedData/
+*.apk
+*.aab
+*.ipa
+
+# === Env / Config ===
+.env
+.env.*
+app.json.backup
+app.config.js.backup
+
+# === API Keys & Secrets ===
+# OpenAI API keys and other sensitive credentials
+*api*key*
+*openai*
+*OPENAI*
+*open_ai*
+*OPEN_AI*
+*secret*
+*credentials*
+*config.local*
+*.key
+*.pem
+# Environment files that might contain API keys
+.env.local
+.env.production
+.env.development
+
+# === IDEs & OS files ===
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+*.bak
+*.tmp
+Thumbs.db
+
+# === Test & Coverage ===
+coverage/
+*.lcov
+
+# === macOS ===
+*.DS_Store
