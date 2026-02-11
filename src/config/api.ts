@@ -213,6 +213,39 @@ export const API_ENDPOINTS = {
     MAP_SUMMARIZE: '/ai/map/summarize',
     MAP_PROJECTS: '/ai/map/projects',
   },
+  
+  // Small Tasks
+  SMALL_TASKS: {
+    TYPES: '/small-tasks/types',
+    CREATE_REQUEST: '/small-tasks/requests',
+    REQUESTS_AVAILABLE: '/small-tasks/requests/available',
+    MY_REQUESTS: '/small-tasks/requests/my-requests',
+    REQUEST_BID: '/small-tasks/requests/:id/bids',
+    MY_BIDS: '/small-tasks/bids/my-bids',
+    WITHDRAW_BID: '/small-tasks/bids/:id/withdraw',
+    UPDATE_STATUS: '/small-tasks/requests/:id/status',
+  },
+  
+  // Technician Services
+  TECHNICIAN_SERVICES: {
+    MY_SERVICES: '/technician/services/my-services',
+    ADD_SERVICE: '/technician/services/add/:serviceId',
+    ADD_SERVICES: '/technician/services/add',
+    REMOVE_SERVICE: '/technician/services/remove/:serviceId',
+    OFFERING: '/technician/services/offering/:serviceId',
+  },
+  
+  // Service Suggestions
+  SERVICE_SUGGESTIONS: {
+    CREATE: '/suggestions/services',
+    MY_REQUESTS: '/suggestions/services/my-requests',
+  },
+  
+  // Task Type Requests
+  TASK_TYPE_REQUESTS: {
+    CREATE: '/small-tasks/request-type',
+    MY_REQUESTS: '/small-tasks/request-type/my-requests',
+  },
 };
 
 // Export getApiUrl for convenience

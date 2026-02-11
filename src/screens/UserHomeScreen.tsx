@@ -30,6 +30,9 @@ import ChatRoomsListScreen from './ChatRoomsListScreen';
 import ChatDetailScreen from './ChatDetailScreen';
 import ProfileScreen from './ProfileScreen';
 import NewProjectView from './NewProjectView';
+import ProjectTypeSelectionScreen from './ProjectTypeSelectionScreen';
+import SmallTaskTypeSelectionScreen from './SmallTaskTypeSelectionScreen';
+import SmallTaskRequestForm from './SmallTaskRequestForm';
 import NotificationsScreen from './NotificationsScreen';
 import MyDataScreen from './MyDataScreen';
 import EditProfileScreen from './EditProfileScreen';
@@ -49,6 +52,7 @@ import Footer from '../components/Footer';
 import { buildApiUrl, API_ENDPOINTS, getApiUrl, getServerBaseUrl } from '../config/api';
 import { storage } from '../utils/storage';
 import { FontFamily, FontWeights } from '../constants/Fonts';
+import UserHomeScreenContent from './home/UserHomeScreen';
 
 interface UserHomeScreenProps {
   onShowProfile: () => void;
@@ -112,7 +116,8 @@ export default function UserHomeScreen({
   const [currentProjectsFilter, setCurrentProjectsFilter] = useState<'available' | 'running' | 'completed'>(projectsFilter || 'available');
   const [profileSubView, setProfileSubView] = useState<'myData' | 'editProfile' | 'portfolio' | 'subscription' | 'services' | 'availability' | 'changePassword' | 'changePhone' | 'verifyPhoneChange' | null>(null);
   const [phoneChangeNumber, setPhoneChangeNumber] = useState<string>('');
-  const [newProjectSubView, setNewProjectSubView] = useState<'ai' | 'manual' | null>(null);
+  const [newProjectSubView, setNewProjectSubView] = useState<'project-type-selection' | 'ai' | 'manual' | 'small-task-type-selection' | 'small-task-request-form' | null>(null);
+  const [selectedTaskType, setSelectedTaskType] = useState<any>(null);
   const [selectedChat, setSelectedChat] = useState<{ roomId: string; receiverId: number; receiverName: string; projectId?: number | null } | null>(null);
   const [showChatList, setShowChatList] = useState(true);
   const [chatReturnContext, setChatReturnContext] = useState<'home' | 'service-technicians' | null>(null);
@@ -421,7 +426,7 @@ export default function UserHomeScreen({
     try {
       const token = authToken || await storage.getAuthToken();
       if (!token) {
-        console.log('⚠️ No auth token found, skipping unread count fetch');
+        // Silently skip if no token - user is not authenticated
         return 0;
       }
 
@@ -451,13 +456,27 @@ export default function UserHomeScreen({
         return count;
       } else {
         const errorText = await response.text();
-        console.error('❌ Failed to fetch unread count. Status:', response.status);
-        console.error('   Error body:', errorText);
+        // Only log error if it's not a 401 (unauthorized) - that's expected when not logged in
+        if (response.status !== 401) {
+          console.error('❌ Failed to fetch unread count. Status:', response.status);
+          console.error('   Error body:', errorText);
+        }
         // Set to 0 on error to avoid showing stale data
         setUnreadNotificationCount(0);
       }
-    } catch (error) {
-      console.error('❌ Error fetching unread count:', error);
+    } catch (error: any) {
+      // Only log network errors if we have a token (meaning user is authenticated)
+      const token = authToken || await storage.getAuthToken();
+      if (token) {
+        // Check if it's a network error
+        if (error?.message?.includes('Network request failed') || error?.message?.includes('Failed to fetch')) {
+          // Network error - might be offline, silently handle it
+          console.log('⚠️ Network error fetching unread count (may be offline)');
+        } else {
+          console.error('❌ Error fetching unread count:', error);
+        }
+      }
+      // Silently set to 0 if no token or on network error
       setUnreadNotificationCount(0);
     }
     return 0;
@@ -754,7 +773,10 @@ export default function UserHomeScreen({
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         {/* TOP BAR - Figma Design (Node 58:2467) */}
-        <View style={[styles.figmaTopBar, { paddingTop: Math.max(insets.top, 10), backgroundColor: isDarkMode ? colors.primary : '#00549B' }]}>
+        <View style={[styles.figmaTopBar, { 
+          paddingTop: Math.max(insets.top, 10), 
+          backgroundColor: isDarkMode ? colors.cardBackground : colors.primary 
+        }]}>
           {/* Logo Section */}
           <View style={styles.figmaLogoContainer}>
             {/* 3D Cube Logo */}
@@ -770,18 +792,30 @@ export default function UserHomeScreen({
             </View>
             {/* Logo Text */}
             <View style={styles.figmaLogoTextContainer}>
-              <Text style={styles.figmaLogoText}>Bonyad</Text>
-              <Text style={styles.figmaLogoTextArabic}>بُنيـــاد</Text>
+              <Text style={[styles.figmaLogoText, { 
+                color: isDarkMode ? colors.text : '#E6EFF7' 
+              }]}>Bonyad</Text>
+              <Text style={[styles.figmaLogoTextArabic, { 
+                color: isDarkMode ? colors.text : '#E6EFF7' 
+              }]}>بُنيـــاد</Text>
             </View>
           </View>
           {/* Icons Section */}
           <View style={styles.figmaTopBarIcons}>
             <TouchableOpacity style={styles.figmaIconButton}>
-              <Ionicons name="information-circle-outline" size={24} color="#E6EFF7" />
+              <Ionicons 
+                name="information-circle-outline" 
+                size={24} 
+                color={isDarkMode ? colors.text : '#E6EFF7'} 
+              />
             </TouchableOpacity>
             <TouchableOpacity style={styles.figmaIconButton} onPress={() => setActiveTab('notifications')}>
               <View style={styles.figmaNotificationWrapper}>
-                <Ionicons name="notifications-outline" size={24} color="#E6EFF7" />
+                <Ionicons 
+                  name="notifications-outline" 
+                  size={24} 
+                  color={isDarkMode ? colors.text : '#E6EFF7'} 
+                />
                 {unreadNotificationCount > 0 && (
                   <View style={styles.figmaNotificationBadge}>
                     <View style={styles.figmaNotificationDot} />
@@ -794,6 +828,49 @@ export default function UserHomeScreen({
 
       {/* Render content based on active tab */}
       {activeTab === 'home' && (
+        <UserHomeScreenContent
+          onPressSearch={(query) => {
+            setSearchText(query);
+            if (query.trim().length > 0) {
+              setShowSearchResults(true);
+            }
+          }}
+          onPressOpenServices={() => setShowServicesList(true)}
+          onPressServiceProvidersAll={() => setShowServicesList(true)}
+          onPressMyProjects={() => {
+            setActiveTab('projects');
+            setCurrentProjectsFilter('running');
+          }}
+          onPressMyTasks={() => {
+            setActiveTab('projects');
+            setCurrentProjectsFilter('available');
+          }}
+          onPressPremiumUpgrade={() => {
+            setActiveTab('profile');
+            setProfileSubView('subscription');
+          }}
+          onPressNotifications={() => onShowNotifications?.()}
+          onPressMessages={() => onShowChat?.()}
+          onPressInfo={() => {}}
+          onPressFab={() => {
+            setActiveTab('new');
+            setNewProjectSubView('ai');
+          }}
+          onPressProjectStatus={(status) => {
+            if (status === 'pending') {
+              setCurrentProjectsFilter('available');
+            } else if (status === 'running') {
+              setCurrentProjectsFilter('running');
+            } else if (status === 'completed') {
+              setCurrentProjectsFilter('completed');
+            }
+            setActiveTab('projects');
+          }}
+        />
+      )}
+
+      {/* Keep search results modal for backward compatibility */}
+      {false && activeTab === 'home' && (
         <View style={{ flex: 1 }}>
           {/* Search Bar - Only visible on home tab */}
           <View style={[styles.searchBarContainer, { backgroundColor: colors.background }]}>
@@ -1423,7 +1500,43 @@ export default function UserHomeScreen({
 
       {activeTab === 'new' && (
         <View style={{ flex: 1 }}>
-          {newProjectSubView === null ? (
+          {newProjectSubView === 'project-type-selection' ? (
+            <ProjectTypeSelectionScreen
+              onSelectLarge={() => {
+                setNewProjectSubView(null);
+              }}
+              onSelectSmall={() => {
+                setNewProjectSubView('small-task-type-selection');
+              }}
+              onBack={() => {
+                setActiveTab('home');
+                setNewProjectSubView(null);
+              }}
+            />
+          ) : newProjectSubView === 'small-task-type-selection' ? (
+            <SmallTaskTypeSelectionScreen
+              onSelectTaskType={(taskType) => {
+                console.log('Selected task type:', taskType);
+                setSelectedTaskType(taskType);
+                setNewProjectSubView('small-task-request-form');
+              }}
+              onBack={() => {
+                setNewProjectSubView('project-type-selection');
+              }}
+            />
+          ) : newProjectSubView === 'small-task-request-form' && selectedTaskType ? (
+            <SmallTaskRequestForm
+              taskType={selectedTaskType}
+              onBack={() => {
+                setNewProjectSubView('small-task-type-selection');
+              }}
+              onSuccess={() => {
+                setSelectedTaskType(null);
+                setActiveTab('home');
+                setNewProjectSubView(null);
+              }}
+            />
+          ) : newProjectSubView === null ? (
             <NewProjectView
               onNavigateToAI={() => setNewProjectSubView('ai')}
               onNavigateToManual={() => setNewProjectSubView('manual')}
@@ -1514,6 +1627,27 @@ export default function UserHomeScreen({
             </Text>
           </TouchableOpacity>
 
+          {/* New Project */}
+          <TouchableOpacity 
+            style={styles.figmaTabItem}
+            onPress={() => {
+              setActiveTab('new');
+              setNewProjectSubView('project-type-selection');
+            }}
+          >
+            <Ionicons 
+              name={activeTab === 'new' ? "add-circle" : "add-circle-outline"} 
+              size={24} 
+              color={activeTab === 'new' ? colors.primary : (isDarkMode ? colors.textSecondary : "#6E6E6E")} 
+            />
+            <Text style={[
+              styles.figmaTabLabel, 
+              { color: activeTab === 'new' ? colors.primary : (isDarkMode ? colors.textSecondary : "#383838"), fontSize: scaledSize(12) }
+            ]}>
+              {t('New Project')}
+            </Text>
+          </TouchableOpacity>
+
           {/* Profile */}
           <TouchableOpacity 
             style={styles.figmaTabItem}
@@ -1541,7 +1675,9 @@ export default function UserHomeScreen({
   return (
     <View style={[styles.desktopContainer, { backgroundColor: colors.background }]}>
       {/* New Horizontal Navigation Bar - Figma Design */}
-      <View style={[styles.desktopNavBar, { backgroundColor: colors.primary }]}>
+      <View style={[styles.desktopNavBar, { 
+        backgroundColor: isDarkMode ? colors.cardBackground : colors.primary 
+      }]}>
         {/* Logo Section */}
         <View style={styles.desktopNavLogoSection}>
           <View style={styles.desktopNavLogoIcon}>
@@ -1552,42 +1688,74 @@ export default function UserHomeScreen({
             />
           </View>
           <View style={styles.desktopNavLogoTextContainer}>
-            <Text style={styles.desktopNavLogoText}>Bonyad</Text>
-            <Text style={styles.desktopNavLogoTextArabic}>بُنياد</Text>
+            <Text style={[styles.desktopNavLogoText, { 
+              color: isDarkMode ? colors.text : '#E6EFF7' 
+            }]}>Bonyad</Text>
+            <Text style={[styles.desktopNavLogoTextArabic, { 
+              color: isDarkMode ? colors.text : '#E6EFF7' 
+            }]}>بُنياد</Text>
           </View>
       </View>
 
         {/* Navigation Tabs */}
         <View style={styles.desktopNavTabs}>
           <TouchableOpacity 
-            style={[styles.desktopNavTab, activeTab === 'home' && styles.desktopNavTabActive]}
+            style={[styles.desktopNavTab, activeTab === 'home' && {
+              ...styles.desktopNavTabActive,
+              borderBottomColor: isDarkMode ? colors.primary : '#FFFFFF'
+            }]}
             onPress={() => setActiveTab('home')}
           >
-            <Text style={[styles.desktopNavTabText, activeTab === 'home' && styles.desktopNavTabTextActive]}>
+            <Text style={[styles.desktopNavTabText, activeTab === 'home' && styles.desktopNavTabTextActive, {
+              color: activeTab === 'home' 
+                ? (isDarkMode ? colors.primary : '#FFFFFF')
+                : (isDarkMode ? colors.textSecondary : '#B3CEE6')
+            }]}>
               {t('Dashboard')}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity 
-            style={[styles.desktopNavTab, activeTab === 'projects' && styles.desktopNavTabActive]}
+            style={[styles.desktopNavTab, activeTab === 'projects' && {
+              ...styles.desktopNavTabActive,
+              borderBottomColor: isDarkMode ? colors.primary : '#FFFFFF'
+            }]}
             onPress={() => setActiveTab('projects')}
           >
-            <Text style={[styles.desktopNavTabText, activeTab === 'projects' && styles.desktopNavTabTextActive]}>
+            <Text style={[styles.desktopNavTabText, activeTab === 'projects' && styles.desktopNavTabTextActive, {
+              color: activeTab === 'projects' 
+                ? (isDarkMode ? colors.primary : '#FFFFFF')
+                : (isDarkMode ? colors.textSecondary : '#B3CEE6')
+            }]}>
               {t('Projects')}
             </Text>
           </TouchableOpacity>
             <TouchableOpacity 
-            style={[styles.desktopNavTab, activeTab === 'appointments' && styles.desktopNavTabActive]}
+            style={[styles.desktopNavTab, activeTab === 'appointments' && {
+              ...styles.desktopNavTabActive,
+              borderBottomColor: isDarkMode ? colors.primary : '#FFFFFF'
+            }]}
             onPress={() => setActiveTab('appointments')}
           >
-            <Text style={[styles.desktopNavTabText, activeTab === 'appointments' && styles.desktopNavTabTextActive]}>
+            <Text style={[styles.desktopNavTabText, activeTab === 'appointments' && styles.desktopNavTabTextActive, {
+              color: activeTab === 'appointments' 
+                ? (isDarkMode ? colors.primary : '#FFFFFF')
+                : (isDarkMode ? colors.textSecondary : '#B3CEE6')
+            }]}>
               {t('Appointments')}
             </Text>
             </TouchableOpacity>
                               <TouchableOpacity 
-            style={[styles.desktopNavTab, activeTab === 'new' && styles.desktopNavTabActive]}
+            style={[styles.desktopNavTab, activeTab === 'new' && {
+              ...styles.desktopNavTabActive,
+              borderBottomColor: isDarkMode ? colors.primary : '#FFFFFF'
+            }]}
             onPress={() => setActiveTab('new')}
               >
-            <Text style={[styles.desktopNavTabText, activeTab === 'new' && styles.desktopNavTabTextActive]}>
+            <Text style={[styles.desktopNavTabText, activeTab === 'new' && styles.desktopNavTabTextActive, {
+              color: activeTab === 'new' 
+                ? (isDarkMode ? colors.primary : '#FFFFFF')
+                : (isDarkMode ? colors.textSecondary : '#B3CEE6')
+            }]}>
               {t('New Project')}
             </Text>
               </TouchableOpacity>
@@ -1596,20 +1764,32 @@ export default function UserHomeScreen({
         {/* Icons Section */}
         <View style={styles.desktopNavIcons}>
           <TouchableOpacity style={styles.desktopNavIconButton}>
-            <Ionicons name="information-circle-outline" size={24} color="#E6EFF7" />
+            <Ionicons 
+              name="information-circle-outline" 
+              size={24} 
+              color={isDarkMode ? colors.text : '#E6EFF7'} 
+            />
           </TouchableOpacity>
           <TouchableOpacity 
             style={styles.desktopNavIconButton}
             onPress={() => setActiveTab('chat')}
           >
-            <Ionicons name="chatbubble-outline" size={24} color="#E6EFF7" />
+            <Ionicons 
+              name="chatbubble-outline" 
+              size={24} 
+              color={isDarkMode ? colors.text : '#E6EFF7'} 
+            />
           </TouchableOpacity>
           <TouchableOpacity 
             style={styles.desktopNavIconButton}
             onPress={() => setActiveTab('notifications')}
           >
             <View style={styles.desktopNavNotificationWrapper}>
-              <Ionicons name="notifications-outline" size={24} color="#E6EFF7" />
+              <Ionicons 
+                name="notifications-outline" 
+                size={24} 
+                color={isDarkMode ? colors.text : '#E6EFF7'} 
+              />
               {unreadNotificationCount > 0 && (
                 <View style={styles.desktopNavNotificationBadge}>
                   <View style={styles.desktopNavNotificationDot} />
@@ -1632,7 +1812,9 @@ export default function UserHomeScreen({
                   style={styles.desktopNavProfileAvatarImage}
                 />
               ) : (
-                <View style={[styles.desktopNavProfileAvatarPlaceholder, { backgroundColor: '#4D8EC5' }]}>
+                <View style={[styles.desktopNavProfileAvatarPlaceholder, { 
+                  backgroundColor: isDarkMode ? colors.primary : '#4D8EC5' 
+                }]}>
                   <Text style={styles.desktopNavProfileAvatarText}>
                     {(userProfile?.name || userName || 'U').charAt(0).toUpperCase()}
                   </Text>
@@ -1640,12 +1822,21 @@ export default function UserHomeScreen({
               )}
             </View>
             <View style={styles.desktopNavProfileInfo}>
-              <Text style={styles.desktopNavProfileName}>
+              <Text style={[styles.desktopNavProfileName, { 
+                color: isDarkMode ? colors.text : '#FFFFFF' 
+              }]}>
                 {userProfile?.name || userName || t('User')}
               </Text>
-              <Text style={styles.desktopNavProfileRole}>{t('User')}</Text>
+              <Text style={[styles.desktopNavProfileRole, { 
+                color: isDarkMode ? colors.textSecondary : '#FFFFFF' 
+              }]}>{t('User')}</Text>
             </View>
-            <Ionicons name="chevron-down" size={24} color="#FFFFFF" style={{ transform: [{ rotate: showProfileDropdown ? '180deg' : '0deg' }] }} />
+            <Ionicons 
+              name="chevron-down" 
+              size={24} 
+              color={isDarkMode ? colors.text : '#FFFFFF'} 
+              style={{ transform: [{ rotate: showProfileDropdown ? '180deg' : '0deg' }] }} 
+            />
           </TouchableOpacity>
 
           {/* Profile Dropdown */}
@@ -1679,6 +1870,49 @@ export default function UserHomeScreen({
         {/* Main content - Render based on active tab */}
       <View style={styles.desktopMainContentWrapper}>
         {activeTab === 'home' && (
+          <UserHomeScreenContent
+            onPressSearch={(query) => {
+              setSearchText(query);
+              if (query.trim().length > 0) {
+                setShowSearchResults(true);
+              }
+            }}
+            onPressOpenServices={() => setShowServicesList(true)}
+            onPressServiceProvidersAll={() => setShowServicesList(true)}
+            onPressMyProjects={() => {
+              setActiveTab('projects');
+              setCurrentProjectsFilter('running');
+            }}
+            onPressMyTasks={() => {
+              setActiveTab('projects');
+              setCurrentProjectsFilter('available');
+            }}
+            onPressPremiumUpgrade={() => {
+              setActiveTab('profile');
+              setProfileSubView('subscription');
+            }}
+            onPressNotifications={() => onShowNotifications?.()}
+            onPressMessages={() => onShowChat?.()}
+            onPressInfo={() => {}}
+            onPressFab={() => {
+              setActiveTab('new');
+              setNewProjectSubView('ai');
+            }}
+            onPressProjectStatus={(status) => {
+              if (status === 'pending') {
+                setCurrentProjectsFilter('available');
+              } else if (status === 'running') {
+                setCurrentProjectsFilter('running');
+              } else if (status === 'completed') {
+                setCurrentProjectsFilter('completed');
+              }
+              setActiveTab('projects');
+            }}
+          />
+        )}
+
+        {/* Keep old desktop content for reference - disabled */}
+        {false && activeTab === 'home' && (
           <ScrollView 
             style={[styles.desktopMainContent, { backgroundColor: colors.background }]} 
             contentContainerStyle={styles.scrollContentWithFooter}
@@ -2285,13 +2519,11 @@ const styles = StyleSheet.create({
   figmaLogoText: {
     fontSize: 20,
     fontWeight: '800', // Extra Bold
-    color: '#E6EFF7', // Blue-Primary/10
     fontFamily: Platform.OS === 'ios' ? 'Inter' : 'Inter',
   },
   figmaLogoTextArabic: {
     fontSize: 20,
     fontWeight: '800', // Extra Bold
-    color: '#E6EFF7', // Blue-Primary/10
     fontFamily: Platform.OS === 'ios' ? 'Inter' : 'Inter',
   },
   figmaTopBarIcons: {
@@ -3090,12 +3322,10 @@ const styles = StyleSheet.create({
   desktopNavLogoText: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#E6EFF7',
     fontFamily: Platform.OS === 'ios' ? 'Inter' : 'Inter',
   },
   desktopNavLogoTextArabic: {
     fontSize: 20,
-    color: '#E6EFF7',
     fontFamily: Platform.OS === 'ios' ? 'Inter' : 'Inter',
   },
   desktopNavTabs: {
@@ -3112,16 +3342,14 @@ const styles = StyleSheet.create({
   },
   desktopNavTabActive: {
     borderBottomWidth: 3,
-    borderBottomColor: '#FFFFFF',
   },
   desktopNavTabText: {
     fontSize: 16,
     fontWeight: '400',
-    color: '#B3CEE6',
     fontFamily: Platform.OS === 'ios' ? 'Inter' : 'Inter',
   },
   desktopNavTabTextActive: {
-    color: '#FFFFFF',
+    // Color is set inline based on theme
   },
   desktopNavIcons: {
     flexDirection: 'row',
@@ -3186,13 +3414,11 @@ const styles = StyleSheet.create({
   desktopNavProfileName: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#FFFFFF',
     fontFamily: Platform.OS === 'ios' ? 'Inter' : 'Inter',
   },
   desktopNavProfileRole: {
     fontSize: 14,
     fontWeight: '300',
-    color: '#FFFFFF',
     fontFamily: Platform.OS === 'ios' ? 'Inter' : 'Inter',
   },
   desktopNavProfileDropdown: {

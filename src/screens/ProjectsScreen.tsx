@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -13,9 +13,11 @@ import {
   Modal,
   Platform,
   TextInput,
+  Animated,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { useTranslation } from 'react-i18next';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, Feather } from '@expo/vector-icons';
 // import { PieChart, BarChart } from 'react-native-chart-kit';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
@@ -44,6 +46,12 @@ import OwnerProjectEditScreen from './OwnerProjectEditScreen';
 import NewProjectView from './NewProjectView';
 import ConversationalAIForm from './ConversationalAIForm';
 import ManualProjectForm from './ManualProjectForm';
+import SmallTasksListScreen from './SmallTasksListScreen';
+import ProjectTypeSelectionScreen from './ProjectTypeSelectionScreen';
+import SmallTaskTypeSelectionScreen from './SmallTaskTypeSelectionScreen';
+import SmallTaskRequestForm from './SmallTaskRequestForm';
+import SmallTaskDetailScreen from './SmallTaskDetailScreen';
+import AnimatedProjectTypeToggle from '../components/AnimatedProjectTypeToggle';
 
 interface ProjectsScreenProps {
   onBack?: () => void;
@@ -141,9 +149,17 @@ export default function ProjectsScreen({ onBack, filter = 'available', onOpenCha
   const [showVisitRequest, setShowVisitRequest] = useState(false);
   const [screenWidth, setScreenWidth] = useState(Dimensions.get('window').width);
   const [localFilter, setLocalFilter] = useState<'all' | 'available' | 'running' | 'completed' | 'bid_received' | 'direct_offers'>(filter || 'available');
+  const [projectType, setProjectType] = useState<'large' | 'small'>('large'); // Large or Small projects
+  const [selectedTaskType, setSelectedTaskType] = useState<any>(null);
+  const [smallTasksRefreshTrigger, setSmallTasksRefreshTrigger] = useState(0);
   // New pages for technicians and users
-  const [currentPage, setCurrentPage] = useState<'list' | 'contract-signing' | 'progress' | 'user-phase-view' | 'user-contract-signing' | 'user-progress' | 'completed-project' | 'technician-profile' | 'project-detail' | 'owner-edit' | 'project-detail-screen' | 'pending-project' | 'bid-received-project' | 'technician-pending-project' | 'technician-bid-received' | 'approved-project' | 'technician-approved-project' | 'new-project' | 'ai-form' | 'manual-form'>('list');
+  const [currentPage, setCurrentPage] = useState<'list' | 'contract-signing' | 'progress' | 'user-phase-view' | 'user-contract-signing' | 'user-progress' | 'completed-project' | 'technician-profile' | 'project-detail' | 'owner-edit' | 'project-detail-screen' | 'pending-project' | 'bid-received-project' | 'technician-pending-project' | 'technician-bid-received' | 'approved-project' | 'technician-approved-project' | 'new-project' | 'project-type-selection' | 'small-task-type-selection' | 'small-task-request-form' | 'ai-form' | 'manual-form' | 'small-tasks-list' | 'small-task-detail'>('list');
   const [selectedTechnicianId, setSelectedTechnicianId] = useState<number | null>(null);
+  
+  // Android Filter Dropdown State
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  const dropdownAnimation = useRef(new Animated.Value(0)).current;
+  const rotateAnimation = useRef(new Animated.Value(0)).current;
   
   // Custom popup hooks
   const { alertState, showError, showSuccess, hideAlert } = useAlertPopup();
@@ -230,6 +246,92 @@ export default function ProjectsScreen({ onBack, filter = 'available', onOpenCha
     loadUserRole();
     loadServices();
   }, []);
+
+  // Android Filter Dropdown Animation
+  useEffect(() => {
+    if (showFilterDropdown) {
+      Animated.parallel([
+        Animated.timing(dropdownAnimation, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: false,
+        }),
+        Animated.timing(rotateAnimation, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(dropdownAnimation, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: false,
+        }),
+        Animated.timing(rotateAnimation, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [showFilterDropdown]);
+
+  const toggleFilterDropdown = () => {
+    setShowFilterDropdown(!showFilterDropdown);
+  };
+
+  // Get unique project statuses from projects
+  const getUniqueStatuses = () => {
+    const statuses = new Set<string>();
+    projects.forEach(project => {
+      const status = (project.status || '').trim().toUpperCase();
+      if (status) {
+        statuses.add(status);
+      }
+    });
+    return Array.from(statuses).sort();
+  };
+
+  const handleStatusSelect = (statusValue: string) => {
+    // Create a filter state for status
+    if (statusValue === 'All') {
+      setSelectedCategory('All');
+    } else {
+      setSelectedCategory(statusValue);
+    }
+    setShowFilterDropdown(false);
+  };
+
+  const getStatusFilterLabel = (statusValue: string) => {
+    if (statusValue === 'All') {
+      return t('All');
+    }
+    return getStatusLabel(statusValue);
+  };
+
+  // Calculate dropdown height based on number of status options
+  const getDropdownHeight = () => {
+    const uniqueStatuses = getUniqueStatuses();
+    const optionCount = 1 + uniqueStatuses.length; // "All" + statuses
+    return Math.min(optionCount * 48, 240); // 48px per option, max 240px (5 items visible)
+  };
+
+  const dropdownHeight = dropdownAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, getDropdownHeight()],
+  });
+
+  const dropdownOpacity = dropdownAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 1],
+  });
+
+  const rotateInterpolate = rotateAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '180deg'],
+  });
 
   // Load projects on mount and when filter changes
   useEffect(() => {
@@ -400,19 +502,20 @@ export default function ProjectsScreen({ onBack, filter = 'available', onOpenCha
   const filterProjects = () => {
     let filtered = [...projects];
     const isTechnician = userRole?.toUpperCase() === 'TECHNICIAN';
+    const isAndroid = Platform.OS === 'android';
 
-    // Filter by status based on the localFilter state and role
+    // Step 1: Apply localFilter status filtering (available/running/completed/etc.)
+    // This determines which projects to show based on the tab/filter selected
     if (localFilter === 'available') {
       if (isTechnician) {
-        // For technicians: Available Projects - show all projects from /projects endpoint
-        // The API returns all available projects, so no additional filtering needed
-        // Optionally filter to show only PENDING if you want to exclude other statuses
-        filtered = filtered.filter(p => p.status === 'PENDING');
+        // For technicians: Available Projects - show PENDING projects (available to bid on)
+        filtered = filtered.filter(p => (p.status || '').toUpperCase() === 'PENDING');
       } else {
         // For users: Available Projects - show PENDING and BID_RECEIVED projects
-        filtered = filtered.filter(p => 
-          p.status === 'PENDING' || p.status === 'BID_RECEIVED'
-        );
+        filtered = filtered.filter(p => {
+          const status = (p.status || '').toUpperCase();
+          return status === 'PENDING' || status === 'BID_RECEIVED';
+        });
       }
     } else if (localFilter === 'running') {
       // For technicians: Running Projects - exclude PENDING and COMPLETED
@@ -420,7 +523,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', onOpenCha
       if (userRole?.toUpperCase() === 'TECHNICIAN') {
         // Technician: All projects except PENDING and COMPLETED
         filtered = filtered.filter(p => {
-          const status = p.status.toUpperCase();
+          const status = (p.status || '').toUpperCase();
           return status !== 'PENDING' && status !== 'COMPLETED';
         });
       } else {
@@ -432,41 +535,58 @@ export default function ProjectsScreen({ onBack, filter = 'available', onOpenCha
           'CONTRACT_SIGNING',      // Contract signing phase
           'IN_PROGRESS'            // Work in progress
         ];
-        filtered = filtered.filter(p => 
-          runningStatuses.includes(p.status.toUpperCase())
-        );
+        filtered = filtered.filter(p => {
+          const status = (p.status || '').toUpperCase();
+          return runningStatuses.includes(status);
+        });
       }
     } else if (localFilter === 'completed') {
       // Completed Projects - filter by COMPLETED status
       filtered = filtered.filter(p => 
-        p.status.toUpperCase() === 'COMPLETED'
+        (p.status || '').toUpperCase() === 'COMPLETED'
       );
     } else if (localFilter === 'bid_received') {
       // My Bids - for technicians, these are already bids transformed to projects
       // Show all bids (they're already filtered by the API)
-      filtered = filtered; // No additional filtering needed
+      // No additional status filtering needed - API returns only bids
+      filtered = filtered;
     } else if (localFilter === 'direct_offers') {
       // Direct Offers - for technicians
       // The API /projects/my-assigned?type=DIRECT_ASSIGNMENT already filters correctly
-      filtered = filtered; // No additional filtering needed
+      // No additional status filtering needed
+      filtered = filtered;
     }
+    // If localFilter is 'all' or undefined, show all projects (no filtering)
 
-    // Filter by service category
+    // Step 2: Apply additional filters based on platform
+    if (isAndroid) {
+      // Android: Filter by project status from dropdown (if a specific status is selected)
+      if (selectedCategory !== 'All') {
+        filtered = filtered.filter(p => {
+          const projectStatus = (p.status || '').toUpperCase().trim();
+          const selectedStatus = selectedCategory.toUpperCase().trim();
+          return projectStatus === selectedStatus;
+        });
+      }
+      // If "All" is selected, keep the localFilter results
+    } else {
+      // Non-Android: Filter by service category
     if (selectedCategory !== 'All') {
       const serviceId = parseInt(selectedCategory);
       if (!isNaN(serviceId)) {
         filtered = filtered.filter(p => p.serviceId === serviceId);
+        }
       }
     }
 
-    // Filter by search query
+    // Step 3: Apply search query filter (applies to all platforms)
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
       filtered = filtered.filter(p => {
-        const description = p.description?.toLowerCase() || '';
-        const serviceNameEn = p.serviceNameEn?.toLowerCase() || '';
-        const serviceNameAr = p.serviceNameAr?.toLowerCase() || '';
-        const address = p.address?.toLowerCase() || '';
+        const description = (p.description || '').toLowerCase();
+        const serviceNameEn = (p.serviceNameEn || '').toLowerCase();
+        const serviceNameAr = (p.serviceNameAr || '').toLowerCase();
+        const address = (p.address || '').toLowerCase();
         return (
           description.includes(query) ||
           serviceNameEn.includes(query) ||
@@ -1160,7 +1280,224 @@ export default function ProjectsScreen({ onBack, filter = 'available', onOpenCha
       {/* Projects List - Only show if not on a specific page */}
       {currentPage === 'list' && (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
+      {/* Android Design - New Redesign */}
+      {Platform.OS === 'android' ? (
+        <View style={styles.androidContainer}>
+          {/* Content Area */}
+          <ScrollView 
+            style={styles.androidContent}
+            contentContainerStyle={styles.androidContentContainer}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor="#1e5a9e"
+              />
+            }
+          >
+            {/* Project Type Selector - Toggle */}
+            <View style={styles.androidProjectTypeSelector}>
+              <AnimatedProjectTypeToggle
+                selectedType={projectType}
+                onTypeChange={setProjectType}
+              />
+            </View>
+
+            {/* Show Small Tasks or Large Projects */}
+            {projectType === 'small' ? (
+              <SmallTasksListScreen
+                onBack={onBack}
+                onTaskPress={(task) => {
+                  setCurrentPage('small-task-detail');
+                  setSelectedProject(task as any);
+                }}
+                filter={localFilter === 'available' ? 'available' : localFilter === 'running' ? 'in-progress' : localFilter === 'completed' ? 'completed' : 'available'}
+                refreshTrigger={smallTasksRefreshTrigger}
+              />
+            ) : (
+              <>
+                {/* Title Section */}
+                <View style={styles.androidTitleSection}>
+                  <Text style={styles.androidPageTitle}>{t('My Projects')}</Text>
+                  <Text style={styles.androidProjectCount}>
+                    {filteredProjects.length} {t('Total Projects')}
+                  </Text>
+                </View>
+
+            {/* Search Bar */}
+            <View style={styles.androidSearchContainer}>
+              <Feather name="search" size={20} color="#9ca3af" />
+              <TextInput
+                style={styles.androidSearchInput}
+                placeholder="search for project.."
+                placeholderTextColor="#9ca3af"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
+            </View>
+
+            {/* Filter Dropdown */}
+            <View style={styles.androidFilterContainer}>
+              <TouchableOpacity
+                style={styles.androidFilterButton}
+                onPress={toggleFilterDropdown}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.androidFilterButtonText}>
+                  {getStatusFilterLabel(selectedCategory)}
+                </Text>
+                <Animated.View style={{ transform: [{ rotate: rotateInterpolate }] }}>
+                  <Feather name="chevron-down" size={20} color="#1e5a9e" />
+                </Animated.View>
+              </TouchableOpacity>
+
+              <Animated.View
+                style={[
+                  styles.androidFilterDropdown,
+                  {
+                    maxHeight: dropdownHeight,
+                    opacity: dropdownOpacity,
+                  },
+                ]}
+              >
+                <ScrollView
+                  style={styles.androidFilterDropdownContent}
+                  nestedScrollEnabled={true}
+                  showsVerticalScrollIndicator={false}
+                >
+                  {/* All Option */}
+                  <TouchableOpacity
+                    style={[
+                      styles.androidFilterOption,
+                      selectedCategory === 'All' && styles.androidFilterOptionActive,
+                    ]}
+                    onPress={() => handleStatusSelect('All')}
+                  >
+                    <Text
+                      style={[
+                        styles.androidFilterOptionText,
+                        selectedCategory === 'All' && styles.androidFilterOptionTextActive,
+                      ]}
+                    >
+                      {t('All')}
+                    </Text>
+                    {selectedCategory === 'All' && (
+                      <Feather name="check" size={16} color="#1e5a9e" />
+                    )}
+                  </TouchableOpacity>
+
+                  {/* Project Statuses */}
+                  {getUniqueStatuses().map((status) => (
+                    <TouchableOpacity
+                      key={status}
+                      style={[
+                        styles.androidFilterOption,
+                        selectedCategory === status && styles.androidFilterOptionActive,
+                      ]}
+                      onPress={() => handleStatusSelect(status)}
+                    >
+                      <Text
+                        style={[
+                          styles.androidFilterOptionText,
+                          selectedCategory === status && styles.androidFilterOptionTextActive,
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {getStatusLabel(status)}
+                      </Text>
+                      {selectedCategory === status && (
+                        <Feather name="check" size={16} color="#1e5a9e" />
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </Animated.View>
+            </View>
+
+            {/* View All Link */}
+            <View style={styles.androidViewAllContainer}>
+              <TouchableOpacity>
+                <Text style={styles.androidViewAllText}>{t('View All')} &gt;</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Project Grid */}
+            {filteredProjects.length === 0 ? (
+              <View style={styles.androidEmptyContainer}>
+                <Ionicons name="folder-outline" size={80} color="#9ca3af" />
+                <Text style={styles.androidEmptyText}>
+                  {t('No projects found')}
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.androidProjectGrid}>
+                {filteredProjects.map((project) => {
+                  // Truncate description to first 7 words
+                  const truncateDescription = (text: string): string => {
+                    if (!text) return t('project description');
+                    const words = text.trim().split(/\s+/);
+                    if (words.length <= 7) return text;
+                    return words.slice(0, 7).join(' ') + '...';
+                  };
+
+                  const statusLabel = getStatusLabel(project.status || '');
+                  const statusColor = getStatusColor(project.status || '');
+
+                  return (
+                    <TouchableOpacity
+                      key={project.id}
+                      style={styles.androidProjectCard}
+                      onPress={() => handleProjectCardPress(project)}
+                    >
+                      <View style={styles.androidCardHeader}>
+                        <Text style={styles.androidProjectTitle}>
+                          {project.serviceNameEn || project.serviceNameAr || `Project${project.id}`}
+                        </Text>
+                        {project.status && (
+                          <View style={[styles.androidStatusBadge, { backgroundColor: statusColor + '20' }]}>
+                            <Text style={[styles.androidStatusText, { color: statusColor }]}>
+                              {statusLabel}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={styles.androidProjectDescription}>
+                        {truncateDescription(project.description || '')}
+                      </Text>
+                      
+                      {/* Price Section */}
+                      <View style={styles.androidPriceContainer}>
+                        <ExpoImage
+                          source={riyalLogo}
+                          style={styles.androidRiyalLogo}
+                          contentFit="contain"
+                        />
+                        <Text style={styles.androidPriceText}>
+                          {formatBudget(project.budget)}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+              </>
+            )}
+          </ScrollView>
+
+          {/* FAB - Floating Action Button */}
+          <TouchableOpacity
+            style={styles.androidFab}
+            onPress={() => setCurrentPage('project-type-selection')}
+            activeOpacity={0.8}
+          >
+            <Feather name="plus" size={28} color="#ffffff" />
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <>
+          {/* Original Header - For non-Android platforms */}
       {!IS_LARGE_WEB && (() => {
         const isTechnician = userRole?.toUpperCase() === 'TECHNICIAN';
         return (
@@ -1185,8 +1522,8 @@ export default function ProjectsScreen({ onBack, filter = 'available', onOpenCha
         );
       })()}
 
-      {/* Filter Tabs - All Screens */}
-      {(() => {
+          {/* Filter Tabs - All Screens - Only for non-Android */}
+          {(Platform.OS !== 'android' as any) && (() => {
         const isTechnician = userRole?.toUpperCase() === 'TECHNICIAN';
         return (
           <View style={[IS_LARGE_WEB ? styles.tabsContainer : styles.mobileTabsContainer, { backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
@@ -1281,7 +1618,8 @@ export default function ProjectsScreen({ onBack, filter = 'available', onOpenCha
         );
       })()}
 
-      {/* Category Filter */}
+          {/* Category Filter - Only for non-Android */}
+          {(Platform.OS !== 'android' as any) && (
       <View style={[styles.categoryFilterWrapper, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         <ScrollView 
           horizontal 
@@ -1340,8 +1678,11 @@ export default function ProjectsScreen({ onBack, filter = 'available', onOpenCha
         ))}
         </ScrollView>
       </View>
+          )}
 
-      {/* Projects Grid */}
+          {/* Projects Grid - Only for non-Android */}
+          {(Platform.OS !== 'android' as any) && (
+            <>
       {filteredProjects.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Ionicons name="folder-outline" size={80} color={colors.textSecondary} />
@@ -1376,11 +1717,15 @@ export default function ProjectsScreen({ onBack, filter = 'available', onOpenCha
       {/* Floating Action Button - Add New Project */}
       <TouchableOpacity
         style={styles.figmaFab}
-        onPress={() => setCurrentPage('new-project')}
+                onPress={() => setCurrentPage('project-type-selection')}
         activeOpacity={0.8}
       >
         <Ionicons name="add" size={24} color={FIGMA_COLORS.amber60} />
       </TouchableOpacity>
+            </>
+          )}
+        </>
+      )}
 
       {/* Project Detail Modal - Show ProjectDetailModal for general project details */}
       {/* Note: Specific screens like PendingProjectScreen and BidReceivedProjectScreen are now 
@@ -1452,7 +1797,59 @@ export default function ProjectsScreen({ onBack, filter = 'available', onOpenCha
         />
       )}
 
-      {/* New Project View - For creating new projects */}
+      {/* Project Type Selection Screen - First screen when clicking New Project */}
+      {currentPage === 'project-type-selection' && (
+        <ProjectTypeSelectionScreen
+          onSelectLarge={() => {
+            console.log('🔵 [ProjectsScreen] Selected Large Project');
+            setCurrentPage('new-project');
+          }}
+          onSelectSmall={() => {
+            console.log('🔵 [ProjectsScreen] Selected Small Task');
+            setCurrentPage('small-task-type-selection');
+          }}
+          onBack={() => {
+            console.log('🔵 [ProjectsScreen] Back from ProjectTypeSelection');
+            setCurrentPage('list');
+          }}
+        />
+      )}
+
+      {/* Small Task Type Selection Screen */}
+      {currentPage === 'small-task-type-selection' && (
+        <SmallTaskTypeSelectionScreen
+          onSelectTaskType={(taskType) => {
+            console.log('🔵 [ProjectsScreen] Selected task type:', taskType);
+            setSelectedTaskType(taskType);
+            setCurrentPage('small-task-request-form');
+          }}
+          onBack={() => {
+            console.log('🔵 [ProjectsScreen] Back from SmallTaskTypeSelection');
+            setCurrentPage('project-type-selection');
+          }}
+        />
+      )}
+
+      {/* Small Task Request Form */}
+      {currentPage === 'small-task-request-form' && selectedTaskType && (
+        <SmallTaskRequestForm
+          taskType={selectedTaskType}
+          onBack={() => {
+            console.log('🔵 [ProjectsScreen] Back from SmallTaskRequestForm');
+            setCurrentPage('small-task-type-selection');
+          }}
+          onSuccess={() => {
+            console.log('🔵 [ProjectsScreen] Small task request created successfully');
+            // Trigger refresh of small tasks list
+            setSmallTasksRefreshTrigger(prev => prev + 1);
+            setProjectType('small');
+            setCurrentPage('list');
+            setSelectedTaskType(null);
+          }}
+        />
+      )}
+
+      {/* New Project View - For creating large projects */}
       {currentPage === 'new-project' && (
         <NewProjectView
           onNavigateToAI={() => {
@@ -1465,7 +1862,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', onOpenCha
           }}
           onBack={() => {
             console.log('🔵 [ProjectsScreen] Back from NewProjectView');
-            setCurrentPage('list');
+            setCurrentPage('project-type-selection');
           }}
         />
       )}
@@ -1495,6 +1892,23 @@ export default function ProjectsScreen({ onBack, filter = 'available', onOpenCha
           onSuccess={() => {
             console.log('🔵 [ProjectsScreen] Manual Form success - reloading projects');
             loadProjects();
+            setCurrentPage('list');
+          }}
+        />
+      )}
+
+      {/* Small Task Detail Screen */}
+      {currentPage === 'small-task-detail' && selectedProject && (
+        <SmallTaskDetailScreen
+          task={selectedProject as any}
+          onBack={() => {
+            console.log('🔵 [ProjectsScreen] Back from Small Task Detail');
+            setCurrentPage('list');
+            setSelectedProject(null);
+          }}
+          onSuccess={() => {
+            console.log('🔵 [ProjectsScreen] Small task detail success');
+            setSmallTasksRefreshTrigger(prev => prev + 1);
             setCurrentPage('list');
           }}
         />
@@ -1953,6 +2367,253 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#A3A3A3', // FIGMA_COLORS.textSecondary
     marginTop: 16,
+  },
+  // Android Design Styles
+  androidContainer: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+  androidHeader: {
+    backgroundColor: '#1e5a9e',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+  },
+  androidLogoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  androidLogoBox: {
+    width: 40,
+    height: 40,
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+  },
+  androidLogoText: {
+    marginLeft: 12,
+  },
+  androidLogoTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  androidLogoSubtitle: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#ffffff',
+  },
+  androidHeaderIcons: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  androidHeaderIcon: {
+    padding: 4,
+  },
+  androidContent: {
+    flex: 1,
+  },
+  androidContentContainer: {
+    padding: 16,
+    paddingBottom: 100,
+  },
+  androidTitleSection: {
+    marginBottom: 8,
+  },
+  androidPageTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#1f2937',
+    marginBottom: 4,
+  },
+  androidProjectCount: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#6b7280',
+    marginBottom: 16,
+  },
+  androidSearchContainer: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginBottom: 16,
+  },
+  androidSearchInput: {
+    flex: 1,
+    marginLeft: 12,
+    fontSize: 14,
+    color: '#1f2937',
+  },
+  androidViewAllContainer: {
+    alignItems: 'flex-end',
+    marginBottom: 12,
+  },
+  androidViewAllText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#3b82f6',
+  },
+  androidFilterContainer: {
+    marginBottom: 16,
+    position: 'relative',
+    zIndex: 10,
+  },
+  androidFilterButton: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  androidFilterButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  androidFilterDropdown: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderTopWidth: 0,
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12,
+    marginTop: -1,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  androidFilterDropdownContent: {
+    maxHeight: 200,
+  },
+  androidFilterOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  androidFilterOptionActive: {
+    backgroundColor: '#e6eff7',
+  },
+  androidFilterOptionText: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#6b7280',
+  },
+  androidFilterOptionTextActive: {
+    fontWeight: '600',
+    color: '#1e5a9e',
+  },
+  androidProjectGrid: {
+    flexDirection: 'column',
+  },
+  androidProjectCard: {
+    width: '100%',
+    backgroundColor: '#ffffff',
+    borderWidth: 1.5,
+    borderColor: '#d1d5db',
+    borderRadius: 12,
+    padding: 16,
+    paddingVertical: 20,
+    marginBottom: 16,
+    minHeight: 100,
+  },
+  androidCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+    gap: 8,
+  },
+  androidProjectTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1f2937',
+    flex: 1,
+  },
+  androidStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  androidStatusText: {
+    fontSize: 10,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  androidProjectDescription: {
+    fontSize: 13,
+    fontWeight: '400',
+    color: '#9ca3af',
+    marginBottom: 12,
+  },
+  androidPriceContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+  },
+  androidRiyalLogo: {
+    width: 16,
+    height: 16,
+  },
+  androidPriceText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1e5a9e',
+  },
+  androidFab: {
+    position: 'absolute',
+    right: 20,
+    bottom: 90,
+    width: 56,
+    height: 56,
+    backgroundColor: '#fbbf24',
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 8,
+    zIndex: 999,
+  },
+  androidEmptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  androidEmptyText: {
+    fontSize: 16,
+    color: '#9ca3af',
+    marginTop: 16,
+  },
+  androidProjectTypeSelector: {
+    marginBottom: 16,
+    paddingHorizontal: 4,
   },
 });
 

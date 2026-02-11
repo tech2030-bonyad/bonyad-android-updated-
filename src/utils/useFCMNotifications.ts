@@ -40,6 +40,21 @@ export const useFCMNotifications = () => {
         return;
       }
 
+      // Wait for native modules to be ready
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Check if messaging module is available
+      try {
+        const messagingModule = messaging();
+        if (!messagingModule) {
+          throw new Error('Messaging module not available');
+        }
+      } catch (moduleError) {
+        console.log('⚠️ Firebase messaging module not ready, skipping FCM initialization');
+        setIsLoading(false);
+        return;
+      }
+
       // Step 2: Request notification permissions
       console.log('🔔 Step 1: Requesting notification permissions...');
       const permissionGranted = await requestNotificationPermissions();

@@ -28,6 +28,22 @@ export const useNativeFCMToken = () => {
         return;
       }
 
+      // Wait a bit for native modules to be ready
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Check if messaging module is available
+      try {
+        const messagingModule = messaging();
+        if (!messagingModule) {
+          throw new Error('Messaging module not available');
+        }
+      } catch (moduleError) {
+        console.log('⚠️ Firebase messaging module not ready, using fallback');
+        setFcmToken(generateFallbackToken());
+        setIsLoading(false);
+        return;
+      }
+
       // Request permission
       console.log('🔔 Requesting notification permission...');
       const authStatus = await messaging().requestPermission();
@@ -48,9 +64,23 @@ export const useNativeFCMToken = () => {
 
       console.log('✅ Notification permissions GRANTED!');
 
-      // Get FCM token
+      // Get FCM token - with retry logic
       console.log('🔔 Getting FCM token from Firebase...');
-      const token = await messaging().getToken();
+      let token: string | null = null;
+      let retries = 3;
+      
+      while (!token && retries > 0) {
+        try {
+          token = await messaging().getToken();
+          if (token) break;
+        } catch (tokenError: any) {
+          console.log(`⚠️ Token request failed (${retries} retries left):`, tokenError?.message);
+          retries--;
+          if (retries > 0) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+        }
+      }
 
       if (token) {
         console.log('✅✅✅ REAL FCM TOKEN OBTAINED!');

@@ -36,10 +36,17 @@ import SubscriptionScreen from './SubscriptionScreen';
 import ServiceManagementScreen from './ServiceManagementScreen';
 import AvailabilityScreen from './AvailabilityScreen';
 import CommissionPaymentScreen from './CommissionPaymentScreen';
+import AvailableSmallTasksScreen from './AvailableSmallTasksScreen';
+import MySmallTaskBidsScreen from './MySmallTaskBidsScreen';
+import SmallTaskDetailScreen from './SmallTaskDetailScreen';
+import ServiceSuggestionFormScreen from './ServiceSuggestionFormScreen';
+import MyServiceSuggestionsScreen from './MyServiceSuggestionsScreen';
 import Footer from '../components/Footer';
 import { buildApiUrl, API_ENDPOINTS } from '../config/api';
 import { storage } from '../utils/storage';
 import { checkHasPortfolio } from '../services/PortfolioService';
+import TechnicalHomeScreenContent from './home/TechnicalHomeScreen';
+import { SmallTaskRequest } from '../types/smallTasks';
 
 interface TechnicianHomeScreenProps {
   onShowProfile: () => void;
@@ -89,7 +96,7 @@ export default function TechnicianHomeScreen({
   const [showProjectsDropdown, setShowProjectsDropdown] = useState(false);
   const [activeTab, setActiveTab] = useState('home');
   const [currentProjectsFilter, setCurrentProjectsFilter] = useState<'available' | 'running' | 'completed' | 'bid_received' | 'direct_offers'>(projectsFilter || 'available');
-  const [profileSubView, setProfileSubView] = useState<'myData' | 'editProfile' | 'portfolio' | 'subscription' | 'services' | 'availability' | 'changePassword' | 'changePhone' | 'verifyPhoneChange' | null>(null);
+  const [profileSubView, setProfileSubView] = useState<'myData' | 'editProfile' | 'portfolio' | 'subscription' | 'services' | 'availability' | 'changePassword' | 'changePhone' | 'verifyPhoneChange' | 'serviceSuggestions' | null>(null);
   const [phoneChangeNumber, setPhoneChangeNumber] = useState<string>('');
   const [selectedChat, setSelectedChat] = useState<{ roomId: string; receiverId: number; receiverName: string; projectId?: number | null } | null>(null);
   const [showChatList, setShowChatList] = useState(true);
@@ -98,6 +105,11 @@ export default function TechnicianHomeScreen({
   const [hasPortfolio, setHasPortfolio] = useState<boolean | null>(null);
   const [userProfile, setUserProfile] = useState<{ name?: string; avatar?: string; profileImage?: string } | null>(null);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
+  
+  // Small Tasks state
+  const [smallTasksView, setSmallTasksView] = useState<'list' | 'myBids' | 'detail' | 'serviceSuggestion' | 'mySuggestions' | null>(null);
+  const [selectedSmallTask, setSelectedSmallTask] = useState<SmallTaskRequest | null>(null);
+  const [smallTasksRefreshTrigger, setSmallTasksRefreshTrigger] = useState(0);
   
   // Animation values for dropdowns
   const mobileDropdownAnim = useRef(new Animated.Value(0)).current;
@@ -228,6 +240,7 @@ export default function TechnicianHomeScreen({
     try {
       const token = authToken || await storage.getAuthToken();
       if (!token) {
+        // Silently skip if no token - user is not authenticated
         return 0;
       }
 
@@ -245,9 +258,24 @@ export default function TechnicianHomeScreen({
         const count = typeof data === 'number' ? data : (data.count || data.unreadCount || data.unread_count || 0);
         setUnreadNotificationCount(count);
         return count;
+      } else if (response.status !== 401) {
+        // Only log error if it's not a 401 (unauthorized) - that's expected when not logged in
+        const errorText = await response.text();
+        console.error('❌ Failed to fetch unread count. Status:', response.status);
+        console.error('   Error body:', errorText);
       }
-    } catch (error) {
-      console.error('❌ Error fetching unread count:', error);
+    } catch (error: any) {
+      // Only log network errors if we have a token (meaning user is authenticated)
+      const token = authToken || await storage.getAuthToken();
+      if (token) {
+        // Check if it's a network error
+        if (error?.message?.includes('Network request failed') || error?.message?.includes('Failed to fetch')) {
+          // Network error - might be offline, silently handle it
+          console.log('⚠️ Network error fetching unread count (may be offline)');
+        } else {
+          console.error('❌ Error fetching unread count:', error);
+        }
+      }
     }
     return 0;
   };
@@ -305,7 +333,10 @@ export default function TechnicianHomeScreen({
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         {/* TOP BAR - Figma Design (Node 58:2467) */}
-        <View style={[styles.figmaTopBar, { paddingTop: Math.max(insets.top, 10), backgroundColor: isDarkMode ? colors.primary : '#00549B' }]}>
+        <View style={[styles.figmaTopBar, { 
+          paddingTop: Math.max(insets.top, 10), 
+          backgroundColor: isDarkMode ? colors.cardBackground : colors.primary 
+        }]}>
           {/* Logo Section */}
           <View style={styles.figmaLogoContainer}>
             {/* 3D Cube Logo */}
@@ -321,18 +352,30 @@ export default function TechnicianHomeScreen({
             </View>
             {/* Logo Text */}
             <View style={styles.figmaLogoTextContainer}>
-              <Text style={styles.figmaLogoText}>Bonyad</Text>
-              <Text style={styles.figmaLogoTextArabic}>بُنيـــاد</Text>
+              <Text style={[styles.figmaLogoText, { 
+                color: isDarkMode ? colors.text : '#E6EFF7' 
+              }]}>Bonyad</Text>
+              <Text style={[styles.figmaLogoTextArabic, { 
+                color: isDarkMode ? colors.text : '#E6EFF7' 
+              }]}>بُنيـــاد</Text>
             </View>
           </View>
           {/* Icons Section */}
           <View style={styles.figmaTopBarIcons}>
             <TouchableOpacity style={styles.figmaIconButton}>
-              <Ionicons name="information-circle-outline" size={24} color="#E6EFF7" />
+              <Ionicons 
+                name="information-circle-outline" 
+                size={24} 
+                color={isDarkMode ? colors.text : '#E6EFF7'} 
+              />
             </TouchableOpacity>
             <TouchableOpacity style={styles.figmaIconButton} onPress={() => setActiveTab('notifications')}>
               <View style={styles.figmaNotificationWrapper}>
-                <Ionicons name="notifications-outline" size={24} color="#E6EFF7" />
+                <Ionicons 
+                  name="notifications-outline" 
+                  size={24} 
+                  color={isDarkMode ? colors.text : '#E6EFF7'} 
+                />
                 {unreadNotificationCount > 0 && (
                   <View style={styles.figmaNotificationBadge}>
                     <View style={styles.figmaNotificationDot} />
@@ -344,167 +387,92 @@ export default function TechnicianHomeScreen({
         </View>
 
         {/* Render tab content */}
-        {activeTab === 'home' && (
-          <ScrollView 
-            showsVerticalScrollIndicator={false} 
-            style={[styles.scrollView, { backgroundColor: colors.background }]}
-            contentContainerStyle={{ paddingBottom: 120 }}
-          >
-
-        {/* Fixed Buttons - iOS Style Design */}
-        <View style={styles.section}>
-          {/* Create Portfolio Button - Only show if portfolio doesn't exist */}
-          {hasPortfolio === false && (
-            <TouchableOpacity 
-              style={[styles.iosButton, { backgroundColor: colors.cardBackground, borderColor: '#FF9500', borderWidth: 2 }]}
-              onPress={() => {
-                // Navigate to portfolio management
-                setActiveTab('profile');
-                setProfileSubView('portfolio');
-              }}
-            >
-              <View style={[styles.iosButtonIconContainer, { backgroundColor: isDarkMode ? 'rgba(255, 149, 0, 0.2)' : 'rgba(255, 149, 0, 0.1)' }]}>
-                <Ionicons name="folder-open-outline" size={24} color="#FF9500" />
-              </View>
-              <Text style={[styles.iosButtonText, { color: colors.text, fontSize: scaledSize(16) }]}>
-                {t('Create Portfolio')}
-              </Text>
-          </TouchableOpacity>
-          )}
-
-          {/* Projects Button with Sub-navigation */}
-          <TouchableOpacity 
-            style={[styles.iosButton, { backgroundColor: colors.cardBackground, borderColor: isDarkMode ? colors.border : 'rgba(0, 0, 0, 0.05)' }]}
-            onPress={() => setShowProjectsDropdown(!showProjectsDropdown)}
-          >
-            <View style={[styles.iosButtonIconContainer, { backgroundColor: isDarkMode ? colors.primary + '30' : 'rgba(0, 128, 224, 0.1)' }]}>
-              <Ionicons name="briefcase-outline" size={24} color={colors.primary} />
-            </View>
-            <View style={styles.iosButtonTextContainer}>
-              <Text style={[styles.iosButtonText, { color: colors.text, fontSize: scaledSize(16) }]}>{t('Projects')}</Text>
-              <Text style={[styles.iosButtonSubtext, { color: colors.textSecondary, fontSize: scaledSize(12) }]}>{t('View all project statuses')}</Text>
-            </View>
-            <Ionicons 
-              name={showProjectsDropdown ? "chevron-up" : "chevron-down"} 
-              size={20} 
-              color={colors.textSecondary} 
-            />
-          </TouchableOpacity>
-
-          {/* Sub-navigation for Projects - Animated */}
-          <Animated.View
-            style={[
-              styles.iosDropdown,
-              {
-                backgroundColor: colors.cardBackground,
-                borderColor: isDarkMode ? colors.border : 'rgba(0, 0, 0, 0.05)',
-                maxHeight: mobileDropdownAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, 300],
-                }),
-                opacity: mobileDropdownAnim,
-                overflow: 'hidden',
-              },
-            ]}
-          >
-              <TouchableOpacity 
-              style={[styles.iosDropdownItem, { borderBottomColor: colors.border }]}
-                onPress={() => {
-                  setShowProjectsDropdown(false);
-                  setActiveTab('projects');
-                  setCurrentProjectsFilter('available');
-                }}
-              >
-              <View style={[styles.iosDropdownIconContainer, { backgroundColor: isDarkMode ? colors.primary + '30' : 'rgba(0, 128, 224, 0.1)' }]}>
-                <Ionicons name="list-outline" size={22} color={colors.primary} />
-              </View>
-              <Text style={[styles.iosDropdownText, { color: colors.text, fontSize: scaledSize(14) }]}>{t('Look for Offers')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-              style={[styles.iosDropdownItem, { borderBottomColor: colors.border }]}
-                onPress={() => {
-                  setShowProjectsDropdown(false);
-                  setActiveTab('projects');
-                  setCurrentProjectsFilter('direct_offers');
-                }}
-              >
-              <View style={[styles.iosDropdownIconContainer, { backgroundColor: isDarkMode ? colors.primary + '30' : 'rgba(0, 128, 224, 0.1)' }]}>
-                <Ionicons name="mail-outline" size={22} color={colors.primary} />
-              </View>
-              <Text style={[styles.iosDropdownText, { color: colors.text, fontSize: scaledSize(14) }]}>{t('Direct Offers')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-              style={[styles.iosDropdownItem, { borderBottomColor: colors.border }]}
-                onPress={() => {
-                  setShowProjectsDropdown(false);
-                  setActiveTab('projects');
-                  setCurrentProjectsFilter('running');
-                }}
-              >
-              <View style={[styles.iosDropdownIconContainer, { backgroundColor: isDarkMode ? colors.primary + '30' : 'rgba(0, 128, 224, 0.1)' }]}>
-                <Ionicons name="trending-up-outline" size={22} color={colors.primary} />
-              </View>
-              <Text style={[styles.iosDropdownText, { color: colors.text, fontSize: scaledSize(14) }]}>{t('My Assigned Projects')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-              style={styles.iosDropdownItem}
-                onPress={() => {
-                  setShowProjectsDropdown(false);
-                  setActiveTab('projects');
-                  setCurrentProjectsFilter('bid_received');
-                }}
-              >
-              <View style={[styles.iosDropdownIconContainer, { backgroundColor: isDarkMode ? colors.primary + '30' : 'rgba(0, 128, 224, 0.1)' }]}>
-                <Ionicons name="checkmark-done-outline" size={22} color={colors.primary} />
-            </View>
-              <Text style={[styles.iosDropdownText, { color: colors.text, fontSize: scaledSize(14) }]}>{t('My Bids')}</Text>
-          </TouchableOpacity>
-          </Animated.View>
-
-          {/* Appointments Button */}
-          <TouchableOpacity 
-            style={[styles.iosButton, { backgroundColor: colors.cardBackground, borderColor: isDarkMode ? colors.border : 'rgba(0, 0, 0, 0.05)' }]}
-            onPress={() => setActiveTab('appointments')}
-          >
-            <View style={[styles.iosButtonIconContainer, { backgroundColor: isDarkMode ? colors.primary + '30' : 'rgba(0, 128, 224, 0.1)' }]}>
-              <Ionicons name="calendar-outline" size={24} color={colors.primary} />
-          </View>
-            <Text style={[styles.iosButtonText, { color: colors.text, fontSize: scaledSize(16) }]}>{t('Appointments')}</Text>
-                  </TouchableOpacity>
-
-          {/* My Data Button */}
-          <TouchableOpacity 
-            style={[styles.iosButton, { backgroundColor: colors.cardBackground, borderColor: isDarkMode ? colors.border : 'rgba(0, 0, 0, 0.05)' }]}
-            onPress={() => {
-              setActiveTab('profile');
-              setProfileSubView('myData');
+        {activeTab === 'home' && !smallTasksView && (
+          <TechnicalHomeScreenContent
+            onPressAvailableProject={(status) => {
+              if (status === 'small_tasks') {
+                setSmallTasksView('list');
+              } else if (status === 'approved' || status === 'pending') {
+                setCurrentProjectsFilter(status === 'approved' ? 'available' : 'available');
+                setActiveTab('projects');
+              } else {
+                setCurrentProjectsFilter('available');
+                setActiveTab('projects');
+              }
             }}
-          >
-            <View style={[styles.iosButtonIconContainer, { backgroundColor: isDarkMode ? colors.primary + '30' : 'rgba(0, 128, 224, 0.1)' }]}>
-              <Ionicons name="person-circle-outline" size={24} color={colors.primary} />
-            </View>
-            <View style={styles.iosButtonTextContainer}>
-              <Text style={[styles.iosButtonText, { color: colors.text, fontSize: scaledSize(16) }]}>{t('My Data')}</Text>
-              <Text style={[styles.iosButtonSubtext, { color: colors.textSecondary, fontSize: scaledSize(12) }]}>{t('Edit profile, phone & password')}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-          </TouchableOpacity>
+            onPressTaskCategory={(status) => {
+              if (status === 'small_tasks') {
+                setSmallTasksView('list');
+              } else if (status === 'approved') {
+                setCurrentProjectsFilter('available');
+              } else if (status === 'direct') {
+                setCurrentProjectsFilter('direct_offers');
+              } else if (status === 'in_progress') {
+                setCurrentProjectsFilter('running');
+              } else if (status === 'bid_received') {
+                setCurrentProjectsFilter('bid_received');
+              }
+              setActiveTab('projects');
+            }}
+            onPressNotifications={() => onShowNotifications?.()}
+            onPressMessages={() => onShowChat?.()}
+            onPressInfo={() => {}}
+            onPressReferAndEarn={() => {}}
+            onPressFab={() => {}}
+          />
+        )}
 
-          {/* Messages Button */}
-          <TouchableOpacity 
-            style={[styles.iosButton, { backgroundColor: colors.cardBackground, borderColor: isDarkMode ? colors.border : 'rgba(0, 0, 0, 0.05)' }]}
-            onPress={() => setActiveTab('chat')}
-          >
-            <View style={[styles.iosButtonIconContainer, { backgroundColor: isDarkMode ? colors.primary + '30' : 'rgba(0, 128, 224, 0.1)' }]}>
-              <Ionicons name="chatbubbles-outline" size={24} color={colors.primary} />
-            </View>
-            <Text style={[styles.iosButtonText, { color: colors.text, fontSize: scaledSize(16) }]}>{t('Messages')}</Text>
-          </TouchableOpacity>
-        </View>
+        {/* Small Tasks Screens */}
+        {activeTab === 'home' && smallTasksView === 'list' && (
+          <AvailableSmallTasksScreen
+            onBack={() => setSmallTasksView(null)}
+            onTaskPress={(task) => {
+              setSelectedSmallTask(task);
+              setSmallTasksView('detail');
+            }}
+          />
+        )}
 
+        {activeTab === 'home' && smallTasksView === 'detail' && selectedSmallTask && (
+          <SmallTaskDetailScreen
+            task={selectedSmallTask}
+            onBack={() => {
+              setSmallTasksView('list');
+              setSelectedSmallTask(null);
+            }}
+            onSuccess={() => {
+              setSmallTasksRefreshTrigger(prev => prev + 1);
+            }}
+            isTechnician={true}
+          />
+        )}
 
-            <View style={{ height: 100 }} />
-          </ScrollView>
+        {activeTab === 'home' && smallTasksView === 'myBids' && (
+          <MySmallTaskBidsScreen
+            onBack={() => setSmallTasksView(null)}
+            onBidPress={(bid) => {
+              if (bid.request) {
+                setSelectedSmallTask(bid.request);
+                setSmallTasksView('detail');
+              }
+            }}
+          />
+        )}
+
+        {activeTab === 'home' && smallTasksView === 'serviceSuggestion' && (
+          <ServiceSuggestionFormScreen
+            onBack={() => setSmallTasksView(null)}
+            onSuccess={() => {
+              setSmallTasksView('mySuggestions');
+            }}
+          />
+        )}
+
+        {activeTab === 'home' && smallTasksView === 'mySuggestions' && (
+          <MyServiceSuggestionsScreen
+            onBack={() => setSmallTasksView(null)}
+            onAddNew={() => setSmallTasksView('serviceSuggestion')}
+          />
         )}
 
         {/* Render other tabs */}
@@ -663,6 +631,11 @@ export default function TechnicianHomeScreen({
               <ServiceManagementScreen
                 onBack={() => setProfileSubView(null)}
               />
+            ) : profileSubView === 'serviceSuggestions' ? (
+              <MyServiceSuggestionsScreen
+                onBack={() => setProfileSubView('services')}
+                onAddNew={() => setSmallTasksView('serviceSuggestion')}
+              />
             ) : profileSubView === 'availability' ? (
               <AvailabilityScreen
                 onBack={() => setProfileSubView(null)}
@@ -692,23 +665,8 @@ export default function TechnicianHomeScreen({
         {/* TAB BAR - Figma Design (Node 58:2493) */}
         <View style={[styles.figmaTabBarContainer, { paddingBottom: Math.max(insets.bottom, 0), backgroundColor: isDarkMode ? colors.cardBackground : '#FFFFFF', borderTopColor: isDarkMode ? colors.border : '#00549B' }]}>
           <View style={[styles.figmaTabBar, { backgroundColor: isDarkMode ? colors.cardBackground : '#FFFFFF' }]}>
-            {/* Projects */}
-            <TouchableOpacity 
-              style={styles.figmaTabItem}
-              onPress={() => setActiveTab('projects')}
-            >
-              <Ionicons 
-                name={activeTab === 'projects' ? "list" : "list-outline"} 
-                size={24} 
-                color={activeTab === 'projects' ? colors.primary : (isDarkMode ? colors.textSecondary : "#6E6E6E")} 
-              />
-              <Text style={[
-                styles.figmaTabLabel, 
-                { color: activeTab === 'projects' ? colors.primary : (isDarkMode ? colors.textSecondary : "#383838"), fontSize: scaledSize(12) }
-              ]}>
-                {t('Projects')}
-              </Text>
-            </TouchableOpacity>
+
+
 
             {/* Calendar */}
             <TouchableOpacity 
@@ -791,7 +749,9 @@ export default function TechnicianHomeScreen({
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* New Horizontal Navigation Bar - Figma Design */}
-      <View style={[styles.desktopNavBar, { backgroundColor: colors.primary }]}>
+      <View style={[styles.desktopNavBar, { 
+        backgroundColor: isDarkMode ? colors.cardBackground : colors.primary 
+      }]}>
         {/* Logo Section */}
         <View style={styles.desktopNavLogoSection}>
           <View style={styles.desktopNavLogoIcon}>
@@ -802,34 +762,62 @@ export default function TechnicianHomeScreen({
             />
           </View>
           <View style={styles.desktopNavLogoTextContainer}>
-            <Text style={styles.desktopNavLogoText}>Bonyad</Text>
-            <Text style={styles.desktopNavLogoTextArabic}>بُنياد</Text>
+            <Text style={[styles.desktopNavLogoText, { 
+              color: isDarkMode ? colors.text : '#E6EFF7' 
+            }]}>Bonyad</Text>
+            <Text style={[styles.desktopNavLogoTextArabic, { 
+              color: isDarkMode ? colors.text : '#E6EFF7' 
+            }]}>بُنياد</Text>
           </View>
           </View>
 
         {/* Navigation Tabs */}
         <View style={styles.desktopNavTabs}>
             <TouchableOpacity 
-            style={[styles.desktopNavTab, activeTab === 'home' && styles.desktopNavTabActive]}
+            style={[styles.desktopNavTab, activeTab === 'home' && {
+              ...styles.desktopNavTabActive,
+              borderBottomColor: isDarkMode ? colors.primary : '#FFFFFF'
+            }]}
               onPress={() => setActiveTab('home')}
             >
-            <Text style={[styles.desktopNavTabText, activeTab === 'home' && styles.desktopNavTabTextActive, { fontSize: scaledSize(16) }]}>
+            <Text style={[styles.desktopNavTabText, activeTab === 'home' && styles.desktopNavTabTextActive, { 
+              fontSize: scaledSize(16),
+              color: activeTab === 'home' 
+                ? (isDarkMode ? colors.primary : '#FFFFFF')
+                : (isDarkMode ? colors.textSecondary : '#B3CEE6')
+            }]}>
               {t('Dashboard')}
               </Text>
             </TouchableOpacity>
               <TouchableOpacity 
-            style={[styles.desktopNavTab, activeTab === 'projects' && styles.desktopNavTabActive]}
+            style={[styles.desktopNavTab, activeTab === 'projects' && {
+              ...styles.desktopNavTabActive,
+              borderBottomColor: isDarkMode ? colors.primary : '#FFFFFF'
+            }]}
             onPress={() => setActiveTab('projects')}
               >
-            <Text style={[styles.desktopNavTabText, activeTab === 'projects' && styles.desktopNavTabTextActive, { fontSize: scaledSize(16) }]}>
+            <Text style={[styles.desktopNavTabText, activeTab === 'projects' && styles.desktopNavTabTextActive, { 
+              fontSize: scaledSize(16),
+              color: activeTab === 'projects' 
+                ? (isDarkMode ? colors.primary : '#FFFFFF')
+                : (isDarkMode ? colors.textSecondary : '#B3CEE6')
+            }]}>
                   {t('Projects')}
                 </Text>
               </TouchableOpacity>
                   <TouchableOpacity 
-            style={[styles.desktopNavTab, activeTab === 'appointments' && styles.desktopNavTabActive]}
+            style={[styles.desktopNavTab, activeTab === 'appointments' && {
+              ...styles.desktopNavTabActive,
+              borderBottomColor: isDarkMode ? colors.primary : '#FFFFFF'
+            }]}
             onPress={() => setActiveTab('appointments')}
                   >
-            <Text style={[styles.desktopNavTabText, activeTab === 'appointments' && styles.desktopNavTabTextActive, { fontSize: scaledSize(16) }]}>
+            <Text style={[styles.desktopNavTabText, activeTab === 'appointments' && styles.desktopNavTabTextActive, { 
+              fontSize: scaledSize(16),
+              color: activeTab === 'appointments' 
+                ? (isDarkMode ? colors.primary : '#FFFFFF')
+                : (isDarkMode ? colors.textSecondary : '#B3CEE6')
+            }]}>
               {t('Appointments')}
                     </Text>
                   </TouchableOpacity>
@@ -838,20 +826,32 @@ export default function TechnicianHomeScreen({
         {/* Icons Section */}
         <View style={styles.desktopNavIcons}>
           <TouchableOpacity style={styles.desktopNavIconButton}>
-            <Ionicons name="information-circle-outline" size={24} color="#E6EFF7" />
+            <Ionicons 
+              name="information-circle-outline" 
+              size={24} 
+              color={isDarkMode ? colors.text : '#E6EFF7'} 
+            />
                   </TouchableOpacity>
                   <TouchableOpacity 
             style={styles.desktopNavIconButton}
             onPress={() => setActiveTab('chat')}
                   >
-            <Ionicons name="chatbubble-outline" size={24} color="#E6EFF7" />
+            <Ionicons 
+              name="chatbubble-outline" 
+              size={24} 
+              color={isDarkMode ? colors.text : '#E6EFF7'} 
+            />
                   </TouchableOpacity>
                   <TouchableOpacity 
             style={styles.desktopNavIconButton}
             onPress={() => setActiveTab('notifications')}
           >
             <View style={styles.desktopNavNotificationWrapper}>
-              <Ionicons name="notifications-outline" size={24} color="#E6EFF7" />
+              <Ionicons 
+                name="notifications-outline" 
+                size={24} 
+                color={isDarkMode ? colors.text : '#E6EFF7'} 
+              />
               {unreadNotificationCount > 0 && (
                 <View style={styles.desktopNavNotificationBadge}>
                   <View style={styles.desktopNavNotificationDot} />
@@ -874,7 +874,9 @@ export default function TechnicianHomeScreen({
                   style={styles.desktopNavProfileAvatarImage}
                 />
               ) : (
-                <View style={[styles.desktopNavProfileAvatarPlaceholder, { backgroundColor: '#4D8EC5' }]}>
+                <View style={[styles.desktopNavProfileAvatarPlaceholder, { 
+                backgroundColor: isDarkMode ? colors.primary : '#4D8EC5' 
+              }]}>
                   <Text style={styles.desktopNavProfileAvatarText}>
                     {(userProfile?.name || userName || 'T').charAt(0).toUpperCase()}
               </Text>
@@ -882,12 +884,21 @@ export default function TechnicianHomeScreen({
                 )}
               </View>
             <View style={styles.desktopNavProfileInfo}>
-              <Text style={styles.desktopNavProfileName}>
+              <Text style={[styles.desktopNavProfileName, { 
+                color: isDarkMode ? colors.text : '#FFFFFF' 
+              }]}>
                 {userProfile?.name || userName || t('Technician')}
               </Text>
-              <Text style={styles.desktopNavProfileRole}>{t('Technician')}</Text>
+              <Text style={[styles.desktopNavProfileRole, { 
+                color: isDarkMode ? colors.textSecondary : '#FFFFFF' 
+              }]}>{t('Technician')}</Text>
             </View>
-            <Ionicons name="chevron-down" size={24} color="#FFFFFF" style={{ transform: [{ rotate: showProfileDropdown ? '180deg' : '0deg' }] }} />
+            <Ionicons 
+              name="chevron-down" 
+              size={24} 
+              color={isDarkMode ? colors.text : '#FFFFFF'} 
+              style={{ transform: [{ rotate: showProfileDropdown ? '180deg' : '0deg' }] }} 
+            />
             </TouchableOpacity>
 
           {/* Profile Dropdown */}
@@ -932,43 +943,34 @@ export default function TechnicianHomeScreen({
       <View style={styles.desktopMainContentWrapper}>
           {/* Tab Content */}
           {activeTab === 'home' && (
-            <ScrollView 
-              style={[styles.desktopMainContent, { backgroundColor: colors.background }]} 
-              contentContainerStyle={styles.scrollContentWithFooter}
-              showsVerticalScrollIndicator={true}
-            >
-              <View style={styles.mainContentWrapper}>
-              {/* Create Portfolio Button - Desktop - Only show if portfolio doesn't exist */}
-              {hasPortfolio === false && (
-              <View style={styles.desktopSection}>
-                  <TouchableOpacity 
-                    style={[styles.desktopCreatePortfolioButton, { backgroundColor: colors.cardBackground || '#FFFFFF', borderColor: '#FF9500' }]}
-                    onPress={() => {
-                      // Navigate to portfolio management
-                      setActiveTab('profile');
-                      setProfileSubView('portfolio');
-                    }}
-                  >
-                    <View style={[styles.desktopCreatePortfolioIconContainer, { backgroundColor: 'rgba(255, 149, 0, 0.1)' }]}>
-                      <Ionicons name="folder-open-outline" size={28} color="#FF9500" />
-                </View>
-                    <View style={styles.desktopCreatePortfolioTextContainer}>
-                      <Text style={[styles.desktopCreatePortfolioTitle, { color: colors.text || '#000000' }]}>
-                        {t('Create Portfolio')}
-                            </Text>
-                      <Text style={[styles.desktopCreatePortfolioSubtitle, { color: colors.textSecondary || '#666666' }]}>
-                        {t('Start building your professional portfolio today')}
-                          </Text>
-                          </View>
-                    <Ionicons name="chevron-forward" size={24} color="#FF9500" />
-                  </TouchableOpacity>
-                            </View>
-                          )}
-
-              </View>
-            {/* Footer - Inside ScrollView for home tab */}
-            <Footer />
-            </ScrollView>
+            <TechnicalHomeScreenContent
+              onPressAvailableProject={(status) => {
+                if (status === 'approved' || status === 'pending') {
+                  setCurrentProjectsFilter(status === 'approved' ? 'available' : 'available');
+                  setActiveTab('projects');
+                } else {
+                  setCurrentProjectsFilter('available');
+                  setActiveTab('projects');
+                }
+              }}
+              onPressTaskCategory={(status) => {
+                if (status === 'approved') {
+                  setCurrentProjectsFilter('available');
+                } else if (status === 'direct') {
+                  setCurrentProjectsFilter('direct_offers');
+                } else if (status === 'in_progress') {
+                  setCurrentProjectsFilter('running');
+                } else if (status === 'bid_received') {
+                  setCurrentProjectsFilter('bid_received');
+                }
+                setActiveTab('projects');
+              }}
+              onPressNotifications={() => onShowNotifications?.()}
+              onPressMessages={() => onShowChat?.()}
+              onPressInfo={() => {}}
+              onPressReferAndEarn={() => {}}
+              onPressFab={() => {}}
+            />
           )}
 
           {activeTab === 'projects' && (
@@ -1140,6 +1142,11 @@ export default function TechnicianHomeScreen({
                   <ServiceManagementScreen
                     onBack={() => setProfileSubView(null)}
                   />
+                ) : profileSubView === 'serviceSuggestions' ? (
+                  <MyServiceSuggestionsScreen
+                    onBack={() => setProfileSubView('services')}
+                    onAddNew={() => setSmallTasksView('serviceSuggestion')}
+                  />
                 ) : profileSubView === 'availability' ? (
                   <AvailabilityScreen
                     onBack={() => setProfileSubView(null)}
@@ -1216,12 +1223,10 @@ const styles = StyleSheet.create({
   figmaLogoText: {
     fontSize: 20,
     fontWeight: '800', // Extra Bold
-    color: '#E6EFF7', // Blue-Primary/10
     fontFamily: Platform.OS === 'ios' ? 'Inter' : 'Inter',
   },
   figmaLogoTextArabic: {
     fontSize: 20,
-    color: '#E6EFF7', // Blue-Primary/10
     fontFamily: Platform.OS === 'ios' ? 'Inter' : 'Inter',
   },
   figmaTopBarIcons: {
@@ -2045,12 +2050,10 @@ const styles = StyleSheet.create({
   desktopNavLogoText: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#E6EFF7',
     fontFamily: Platform.OS === 'ios' ? 'Inter' : 'Inter',
   },
   desktopNavLogoTextArabic: {
     fontSize: 20,
-    color: '#E6EFF7',
     fontFamily: Platform.OS === 'ios' ? 'Inter' : 'Inter',
   },
   desktopNavTabs: {
@@ -2067,16 +2070,14 @@ const styles = StyleSheet.create({
   },
   desktopNavTabActive: {
     borderBottomWidth: 3,
-    borderBottomColor: '#FFFFFF',
   },
   desktopNavTabText: {
     fontSize: 16,
     fontWeight: '400',
-    color: '#B3CEE6',
     fontFamily: Platform.OS === 'ios' ? 'Inter' : 'Inter',
   },
   desktopNavTabTextActive: {
-    color: '#FFFFFF',
+    // Color is set inline based on theme
   },
   desktopNavIcons: {
     flexDirection: 'row',
@@ -2141,13 +2142,11 @@ const styles = StyleSheet.create({
   desktopNavProfileName: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#FFFFFF',
     fontFamily: Platform.OS === 'ios' ? 'Inter' : 'Inter',
   },
   desktopNavProfileRole: {
     fontSize: 14,
     fontWeight: '300',
-    color: '#FFFFFF',
     fontFamily: Platform.OS === 'ios' ? 'Inter' : 'Inter',
   },
   desktopNavProfileDropdown: {
