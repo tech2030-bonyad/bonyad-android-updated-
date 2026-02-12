@@ -33,7 +33,7 @@ export default function AvailableSmallTasksScreen({
 }: AvailableSmallTasksScreenProps) {
   const { t, i18n } = useTranslation();
   const { colors, theme } = useTheme();
-  const { fontFamily, scaledSize } = useFontFamily();
+  const { fontFamily, fonts, scaledSize } = useFontFamily();
   const insets = useSafeAreaInsets();
   const isRTL = i18n.language === 'ar';
 
@@ -129,7 +129,9 @@ export default function AvailableSmallTasksScreen({
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(task => {
-        const taskName = (isRTL ? task.taskType.nameAr : task.taskType.nameEn).toLowerCase();
+        const taskName = (task.taskType
+          ? (isRTL ? task.taskType?.nameAr : task.taskType?.nameEn) || ''
+          : '').toLowerCase();
         const description = task.description.toLowerCase();
         const address = task.address.toLowerCase();
         return taskName.includes(query) || description.includes(query) || address.includes(query);
@@ -151,10 +153,10 @@ export default function AvailableSmallTasksScreen({
   const renderEmpty = () => (
     <View style={styles.emptyContainer}>
       <Ionicons name="briefcase-outline" size={64} color={colors.textSecondary} />
-      <Text style={[styles.emptyText, { color: colors.textSecondary, fontFamily: fontFamily.semiBold }]}>
+      <Text style={[styles.emptyText, { color: colors.textSecondary, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>
         {searchQuery ? t('No tasks match your search') : t('No available tasks at the moment')}
       </Text>
-      <Text style={[styles.emptySubtext, { color: colors.textSecondary, fontFamily: fontFamily.regular }]}>
+      <Text style={[styles.emptySubtext, { color: colors.textSecondary, fontFamily: fonts?.body || fontFamily }]}>
         {t('Check back later for new opportunities')}
       </Text>
     </View>
@@ -182,7 +184,7 @@ export default function AvailableSmallTasksScreen({
           styles.filterButtonText,
           {
             color: selectedFilter === filter ? '#fff' : colors.text,
-            fontFamily: fontFamily.semiBold,
+            fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600',
           },
         ]}
       >
@@ -196,7 +198,7 @@ export default function AvailableSmallTasksScreen({
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, { color: colors.textSecondary, fontFamily: fontFamily.regular }]}>
+          <Text style={[styles.loadingText, { color: colors.textSecondary, fontFamily: fonts?.body || fontFamily }]}>
             {t('Loading tasks...')}
           </Text>
         </View>
@@ -234,11 +236,11 @@ export default function AvailableSmallTasksScreen({
           />
         </TouchableOpacity>
         <View style={styles.headerTitleContainer}>
-          <Text style={[styles.headerTitle, { color: colors.text, fontFamily: fontFamily.bold }]}>
+          <Text style={[styles.headerTitle, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '700' }]}>
             {t('Available Tasks')}
           </Text>
           {tasks.length > 0 && (
-            <Text style={[styles.headerSubtitle, { color: colors.textSecondary, fontFamily: fontFamily.regular }]}>
+            <Text style={[styles.headerSubtitle, { color: colors.textSecondary, fontFamily: fonts?.body || fontFamily }]}>
               {filteredTasks.length} {t('tasks available')}
             </Text>
           )}
@@ -270,7 +272,7 @@ export default function AvailableSmallTasksScreen({
               styles.searchInput,
               {
                 color: colors.text,
-                fontFamily: fontFamily.regular,
+                fontFamily: fonts?.body || fontFamily,
                 textAlign: isRTL ? 'right' : 'left',
               },
             ]}

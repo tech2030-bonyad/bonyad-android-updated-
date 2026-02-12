@@ -16,7 +16,7 @@ interface SmallTaskCardProps {
 export default function SmallTaskCard({ task, onPress, index = 0 }: SmallTaskCardProps) {
   const { t, i18n } = useTranslation();
   const { colors, theme } = useTheme();
-  const { fontFamily, scaledSize } = useFontFamily();
+  const { fontFamily, fonts, scaledSize } = useFontFamily();
   const isRTL = i18n.language === 'ar';
   const isDarkMode = theme === 'dark';
 
@@ -60,7 +60,11 @@ export default function SmallTaskCard({ task, onPress, index = 0 }: SmallTaskCar
     }
   }, [index]);
 
-  const taskName = isRTL ? task.taskType.nameAr : task.taskType.nameEn;
+  const taskName = task.taskType
+    ? isRTL
+      ? task.taskType?.nameAr || t('Task')
+      : task.taskType?.nameEn || t('Task')
+    : t('Task');
   const budget = task.budget || task.amount || 0;
 
   const riyalLogo = isDarkMode
@@ -125,7 +129,7 @@ export default function SmallTaskCard({ task, onPress, index = 0 }: SmallTaskCar
             <Text
               style={[
                 styles.taskName,
-                { color: colors.text, fontFamily: fontFamily.bold },
+                { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '700' },
               ]}
               numberOfLines={1}
             >
@@ -135,7 +139,7 @@ export default function SmallTaskCard({ task, onPress, index = 0 }: SmallTaskCar
               <Text
                 style={[
                   styles.statusText,
-                  { color: getStatusColor(task.status), fontFamily: fontFamily.semiBold },
+                  { color: getStatusColor(task.status), fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' },
                 ]}
               >
                 {getStatusLabel(task.status)}
@@ -150,7 +154,7 @@ export default function SmallTaskCard({ task, onPress, index = 0 }: SmallTaskCar
             styles.description,
             {
               color: colors.textSecondary,
-              fontFamily: fontFamily.regular,
+              fontFamily: fonts?.body || fontFamily,
               textAlign: isRTL ? 'right' : 'left',
             },
           ]}
@@ -165,7 +169,7 @@ export default function SmallTaskCard({ task, onPress, index = 0 }: SmallTaskCar
           <Text
             style={[
               styles.infoText,
-              { color: colors.textSecondary, fontFamily: fontFamily.regular },
+              { color: colors.textSecondary, fontFamily: fonts?.body || fontFamily },
             ]}
             numberOfLines={1}
           >
@@ -181,7 +185,7 @@ export default function SmallTaskCard({ task, onPress, index = 0 }: SmallTaskCar
               style={styles.riyalLogo}
               contentFit="contain"
             />
-            <Text style={[styles.budget, { color: colors.primary, fontFamily: fontFamily.bold }]}>
+            <Text style={[styles.budget, { color: colors.primary, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '700' }]}>
               {new Intl.NumberFormat('en-US').format(budget)}
             </Text>
           </View>
@@ -192,7 +196,7 @@ export default function SmallTaskCard({ task, onPress, index = 0 }: SmallTaskCar
               <Text
                 style={[
                   styles.infoText,
-                  { color: colors.textSecondary, fontFamily: fontFamily.regular },
+                  { color: colors.textSecondary, fontFamily: fonts?.body || fontFamily },
                 ]}
               >
                 {task.bidCount} {t('bids')}

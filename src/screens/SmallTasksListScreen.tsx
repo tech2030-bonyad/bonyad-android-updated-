@@ -1,3 +1,23 @@
+/**
+ * SmallTasksListScreen - Displays a list of small tasks with filtering and search capabilities
+ * 
+ * Features:
+ * - Displays tasks based on filter: 'available', 'my-bids', 'in-progress', 'completed'
+ * - Search functionality to filter tasks by name, description, or address
+ * - Status filter dropdown to filter by task status (Pending, In Progress, Completed, etc.)
+ * - Pull-to-refresh to reload tasks
+ * - Handles both user and technician views
+ * - Safe taskType access with fallback values
+ * 
+ * Filter Behavior:
+ * - 'available': Shows PENDING or BID_RECEIVED tasks (for technicians)
+ * - 'my-bids': Shows tasks where technician has submitted bids
+ * - 'in-progress': Shows IN_PROGRESS or ACCEPTED tasks
+ * - 'completed': Shows COMPLETED tasks
+ * 
+ * For users: Shows their own created requests
+ * For technicians: Shows available tasks or their bids based on filter
+ */
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,

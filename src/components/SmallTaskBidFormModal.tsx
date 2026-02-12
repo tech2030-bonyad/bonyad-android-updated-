@@ -37,7 +37,7 @@ export default function SmallTaskBidFormModal({
 }: SmallTaskBidFormModalProps) {
   const { t, i18n } = useTranslation();
   const { colors, theme } = useTheme();
-  const { fontFamily } = useFontFamily();
+  const { fontFamily, fonts } = useFontFamily();
   const isRTL = i18n.language === 'ar';
   const isDarkMode = theme === 'dark';
 
@@ -170,7 +170,11 @@ export default function SmallTaskBidFormModal({
 
   if (!task) return null;
 
-  const taskName = isRTL ? task.taskType.nameAr : task.taskType.nameEn;
+  const taskName = task.taskType
+    ? isRTL
+      ? task.taskType?.nameAr || t('Task')
+      : task.taskType?.nameEn || t('Task')
+    : t('Task');
   const riyalLogo = isDarkMode
     ? require('../../assets/saudi_riyal_logo_dark.svg')
     : require('../../assets/saudi_riyal_logo.svg');
@@ -206,7 +210,7 @@ export default function SmallTaskBidFormModal({
         >
           {/* Header */}
           <View style={[styles.header, { borderBottomColor: colors.border }]}>
-            <Text style={[styles.title, { color: colors.text, fontFamily: fontFamily.bold }]}>
+            <Text style={[styles.title, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '700' }]}>
               {t('Submit Bid')}
             </Text>
             <TouchableOpacity onPress={handleClose} disabled={isSubmitting}>
@@ -222,16 +226,16 @@ export default function SmallTaskBidFormModal({
                   <Ionicons name="construct" size={20} color={colors.primary} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.taskName, { color: colors.text, fontFamily: fontFamily.semiBold }]}>
+                  <Text style={[styles.taskName, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>
                     {taskName}
                   </Text>
                   {task.budget && (
                     <View style={[styles.budgetRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-                      <Text style={[styles.budgetLabel, { color: colors.textSecondary, fontFamily: fontFamily.regular }]}>
+                      <Text style={[styles.budgetLabel, { color: colors.textSecondary, fontFamily: fonts?.body || fontFamily }]}>
                         {t('Budget')}:
                       </Text>
                       <ExpoImage source={riyalLogo} style={styles.riyalLogoSmall} contentFit="contain" />
-                      <Text style={[styles.budgetValue, { color: colors.primary, fontFamily: fontFamily.bold }]}>
+                      <Text style={[styles.budgetValue, { color: colors.primary, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '700' }]}>
                         {new Intl.NumberFormat('en-US').format(task.budget)}
                       </Text>
                     </View>
@@ -242,7 +246,7 @@ export default function SmallTaskBidFormModal({
 
             {/* Amount Input */}
             <View style={styles.inputGroup}>
-              <Text style={[styles.label, { color: colors.text, fontFamily: fontFamily.semiBold }]}>
+              <Text style={[styles.label, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>
                 {t('Your Bid Amount (SAR)')} *
               </Text>
               <View style={[styles.inputWithIcon, { backgroundColor: colors.background, borderColor: colors.border }]}>
@@ -252,7 +256,7 @@ export default function SmallTaskBidFormModal({
                     styles.input,
                     {
                       color: colors.text,
-                      fontFamily: fontFamily.regular,
+                      fontFamily: fonts?.body || fontFamily,
                       textAlign: isRTL ? 'right' : 'left',
                     },
                   ]}
@@ -268,7 +272,7 @@ export default function SmallTaskBidFormModal({
 
             {/* Hours Input */}
             <View style={styles.inputGroup}>
-              <Text style={[styles.label, { color: colors.text, fontFamily: fontFamily.semiBold }]}>
+              <Text style={[styles.label, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>
                 {t('Estimated Hours')} *
               </Text>
               <View style={[styles.inputWithIcon, { backgroundColor: colors.background, borderColor: colors.border }]}>
@@ -278,7 +282,7 @@ export default function SmallTaskBidFormModal({
                     styles.input,
                     {
                       color: colors.text,
-                      fontFamily: fontFamily.regular,
+                      fontFamily: fonts?.body || fontFamily,
                       textAlign: isRTL ? 'right' : 'left',
                     },
                   ]}
@@ -294,7 +298,7 @@ export default function SmallTaskBidFormModal({
 
             {/* Description Input */}
             <View style={styles.inputGroup}>
-              <Text style={[styles.label, { color: colors.text, fontFamily: fontFamily.semiBold }]}>
+              <Text style={[styles.label, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>
                 {t('Description')} *
               </Text>
               <TextInput
@@ -304,7 +308,7 @@ export default function SmallTaskBidFormModal({
                     backgroundColor: colors.background,
                     color: colors.text,
                     borderColor: colors.border,
-                    fontFamily: fontFamily.regular,
+                    fontFamily: fonts?.body || fontFamily,
                     textAlign: isRTL ? 'right' : 'left',
                   },
                 ]}
@@ -326,7 +330,7 @@ export default function SmallTaskBidFormModal({
               onPress={handleClose}
               disabled={isSubmitting}
             >
-              <Text style={[styles.buttonText, { color: colors.text, fontFamily: fontFamily.semiBold }]}>
+              <Text style={[styles.buttonText, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>
                 {t('Cancel')}
               </Text>
             </TouchableOpacity>
@@ -339,7 +343,7 @@ export default function SmallTaskBidFormModal({
               {isSubmitting ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={[styles.buttonText, { color: '#fff', fontFamily: fontFamily.semiBold }]}>
+                <Text style={[styles.buttonText, { color: '#fff', fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>
                   {t('Submit Bid')}
                 </Text>
               )}

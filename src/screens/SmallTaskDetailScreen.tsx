@@ -39,7 +39,7 @@ export default function SmallTaskDetailScreen({
 }: SmallTaskDetailScreenProps) {
   const { t, i18n } = useTranslation();
   const { colors, theme } = useTheme();
-  const { fontFamily } = useFontFamily();
+  const { fontFamily, fonts } = useFontFamily();
   const insets = useSafeAreaInsets();
   const isRTL = i18n.language === 'ar';
   const isDarkMode = theme === 'dark';
@@ -47,7 +47,7 @@ export default function SmallTaskDetailScreen({
   const [taskDetails, setTaskDetails] = useState<SmallTaskRequest | null>(task);
   const [bids, setBids] = useState<SmallTaskBid[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [currentStatus, setCurrentStatus] = useState(task.status || 'PENDING');
+  const [currentStatus, setCurrentStatus] = useState<'PENDING' | 'ASSIGNED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED'>(task.status || 'PENDING');
   const [showBidModal, setShowBidModal] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [userRole, setUserRole] = useState<'user' | 'technician'>('user');
@@ -172,7 +172,9 @@ export default function SmallTaskDetailScreen({
   };
 
   const handleStatusChange = (status: string) => {
-    setCurrentStatus(status);
+    if (status === 'PENDING' || status === 'ASSIGNED' || status === 'IN_PROGRESS' || status === 'COMPLETED' || status === 'CANCELLED') {
+      setCurrentStatus(status);
+    }
   };
 
   const handleUpdateStatus = async (newStatus: 'IN_PROGRESS' | 'COMPLETED') => {
@@ -309,8 +311,10 @@ export default function SmallTaskDetailScreen({
     );
   };
 
-  const taskName = taskDetails?.taskType 
-    ? (i18n.language === 'ar' ? taskDetails.taskType.nameAr : taskDetails.taskType.nameEn)
+  const taskName = taskDetails?.taskType
+    ? i18n.language === 'ar'
+      ? taskDetails.taskType?.nameAr || t('Task')
+      : taskDetails.taskType?.nameEn || t('Task')
     : t('Task');
 
   if (isLoading) {
@@ -452,14 +456,14 @@ export default function SmallTaskDetailScreen({
             <View style={[styles.section, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
               <View style={[styles.sectionHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
                 <Ionicons name="people-outline" size={18} color={colors.primary} />
-                <Text style={[styles.sectionTitle, { color: colors.text, fontFamily: fontFamily.semiBold }]}>
+                <Text style={[styles.sectionTitle, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>
                   {t('Bids')} ({bids.length})
                 </Text>
               </View>
               {bids.map((bid) => (
                 <View key={bid.id} style={[styles.bidCard, { borderColor: colors.border }]}>
                   <View style={[styles.bidHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-                    <Text style={[styles.bidTechnicianName, { color: colors.text, fontFamily: fontFamily.semiBold }]}>
+                    <Text style={[styles.bidTechnicianName, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>
                       {bid.technicianName}
                     </Text>
                     <View style={[styles.bidAmountContainer, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
@@ -468,18 +472,18 @@ export default function SmallTaskDetailScreen({
                         style={styles.riyalLogoSmall}
                         contentFit="contain"
                       />
-                      <Text style={[styles.bidAmount, { color: colors.primary, fontFamily: fontFamily.bold }]}>
+                      <Text style={[styles.bidAmount, { color: colors.primary, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '700' }]}>
                         {formatBudget(bid.amount)}
                       </Text>
                     </View>
                   </View>
                   {bid.description && (
-                    <Text style={[styles.bidMessage, { color: colors.textSecondary, textAlign: isRTL ? 'right' : 'left', fontFamily: fontFamily.regular }]}>
+                    <Text style={[styles.bidMessage, { color: colors.textSecondary, textAlign: isRTL ? 'right' : 'left', fontFamily: fonts?.body || fontFamily }]}>
                       {bid.description}
                     </Text>
                   )}
                   <View style={[styles.bidFooterRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-                    <Text style={[styles.bidDate, { color: colors.textSecondary, textAlign: isRTL ? 'right' : 'left', fontFamily: fontFamily.regular }]}>
+                    <Text style={[styles.bidDate, { color: colors.textSecondary, textAlign: isRTL ? 'right' : 'left', fontFamily: fonts?.body || fontFamily }]}>
                       {formatDate(bid.createdAt)}
                     </Text>
                     {/* User can accept/reject bids */}
@@ -490,7 +494,7 @@ export default function SmallTaskDetailScreen({
                           onPress={() => handleRejectBid(bid.id)}
                         >
                           <Ionicons name="close" size={16} color="#F44336" />
-                          <Text style={[styles.bidActionText, { color: '#F44336', fontFamily: fontFamily.semiBold }]}>
+                          <Text style={[styles.bidActionText, { color: '#F44336', fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>
                             {t('Reject')}
                           </Text>
                         </TouchableOpacity>
@@ -499,7 +503,7 @@ export default function SmallTaskDetailScreen({
                           onPress={() => handleAcceptBid(bid.id)}
                         >
                           <Ionicons name="checkmark" size={16} color="#fff" />
-                          <Text style={[styles.bidActionText, { color: '#fff', fontFamily: fontFamily.semiBold }]}>
+                          <Text style={[styles.bidActionText, { color: '#fff', fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>
                             {t('Accept')}
                           </Text>
                         </TouchableOpacity>
@@ -552,7 +556,7 @@ export default function SmallTaskDetailScreen({
             activeOpacity={0.8}
           >
             <Ionicons name="pricetag" size={20} color="#fff" />
-            <Text style={[styles.floatingButtonText, { fontFamily: fontFamily.semiBold }]}>
+            <Text style={[styles.floatingButtonText, { fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>
               {t('Submit Bid')}
             </Text>
           </TouchableOpacity>
@@ -588,7 +592,7 @@ export default function SmallTaskDetailScreen({
               ) : (
                 <>
                   <Ionicons name="play-circle" size={20} color="#fff" />
-                  <Text style={[styles.floatingButtonText, { fontFamily: fontFamily.semiBold }]}>
+                  <Text style={[styles.floatingButtonText, { fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>
                     {t('Start Work')}
                   </Text>
                 </>
@@ -606,7 +610,7 @@ export default function SmallTaskDetailScreen({
               ) : (
                 <>
                   <Ionicons name="checkmark-circle" size={20} color="#fff" />
-                  <Text style={[styles.floatingButtonText, { fontFamily: fontFamily.semiBold }]}>
+                  <Text style={[styles.floatingButtonText, { fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>
                     {t('Mark Complete')}
                   </Text>
                 </>

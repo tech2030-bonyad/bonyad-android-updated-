@@ -51,6 +51,10 @@ import ProjectTypeSelectionScreen from './ProjectTypeSelectionScreen';
 import SmallTaskTypeSelectionScreen from './SmallTaskTypeSelectionScreen';
 import SmallTaskRequestForm from './SmallTaskRequestForm';
 import SmallTaskDetailScreen from './SmallTaskDetailScreen';
+import PendingSmallTaskScreen from './PendingSmallTaskScreen';
+import AssignedSmallTaskScreen from './AssignedSmallTaskScreen';
+import InProgressSmallTaskScreen from './InProgressSmallTaskScreen';
+import CompletedSmallTaskScreen from './CompletedSmallTaskScreen';
 import AnimatedProjectTypeToggle from '../components/AnimatedProjectTypeToggle';
 
 interface ProjectsScreenProps {
@@ -153,7 +157,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', onOpenCha
   const [selectedTaskType, setSelectedTaskType] = useState<any>(null);
   const [smallTasksRefreshTrigger, setSmallTasksRefreshTrigger] = useState(0);
   // New pages for technicians and users
-  const [currentPage, setCurrentPage] = useState<'list' | 'contract-signing' | 'progress' | 'user-phase-view' | 'user-contract-signing' | 'user-progress' | 'completed-project' | 'technician-profile' | 'project-detail' | 'owner-edit' | 'project-detail-screen' | 'pending-project' | 'bid-received-project' | 'technician-pending-project' | 'technician-bid-received' | 'approved-project' | 'technician-approved-project' | 'new-project' | 'project-type-selection' | 'small-task-type-selection' | 'small-task-request-form' | 'ai-form' | 'manual-form' | 'small-tasks-list' | 'small-task-detail'>('list');
+  const [currentPage, setCurrentPage] = useState<'list' | 'contract-signing' | 'progress' | 'user-phase-view' | 'user-contract-signing' | 'user-progress' | 'completed-project' | 'technician-profile' | 'project-detail' | 'owner-edit' | 'project-detail-screen' | 'pending-project' | 'bid-received-project' | 'technician-pending-project' | 'technician-bid-received' | 'approved-project' | 'technician-approved-project' | 'new-project' | 'project-type-selection' | 'small-task-type-selection' | 'small-task-request-form' | 'ai-form' | 'manual-form' | 'small-tasks-list' | 'small-task-detail' | 'pending-small-task' | 'assigned-small-task' | 'in-progress-small-task' | 'completed-small-task'>('list');
   const [selectedTechnicianId, setSelectedTechnicianId] = useState<number | null>(null);
   
   // Android Filter Dropdown State
@@ -1309,7 +1313,24 @@ export default function ProjectsScreen({ onBack, filter = 'available', onOpenCha
               <SmallTasksListScreen
                 onBack={onBack}
                 onTaskPress={(task) => {
-                  setCurrentPage('small-task-detail');
+                  // Route to appropriate status screen based on task status
+                  const status = (task.status || 'PENDING').toUpperCase();
+                  switch (status) {
+                    case 'PENDING':
+                      setCurrentPage('pending-small-task');
+                      break;
+                    case 'ASSIGNED':
+                      setCurrentPage('assigned-small-task');
+                      break;
+                    case 'IN_PROGRESS':
+                      setCurrentPage('in-progress-small-task');
+                      break;
+                    case 'COMPLETED':
+                      setCurrentPage('completed-small-task');
+                      break;
+                    default:
+                      setCurrentPage('small-task-detail');
+                  }
                   setSelectedProject(task as any);
                 }}
                 filter={localFilter === 'available' ? 'available' : localFilter === 'running' ? 'in-progress' : localFilter === 'completed' ? 'completed' : 'available'}
@@ -1897,7 +1918,87 @@ export default function ProjectsScreen({ onBack, filter = 'available', onOpenCha
         />
       )}
 
-      {/* Small Task Detail Screen */}
+      {/* Small Task Status Screens */}
+      {currentPage === 'pending-small-task' && selectedProject && (
+        <PendingSmallTaskScreen
+          task={selectedProject as any}
+          onBack={() => {
+            setCurrentPage('list');
+            setSelectedProject(null);
+          }}
+          onSuccess={() => {
+            setSmallTasksRefreshTrigger(prev => prev + 1);
+            setCurrentPage('list');
+          }}
+          isTechnician={userRole?.toUpperCase() === 'TECHNICIAN'}
+          onViewTechnician={(technicianId) => {
+            setSelectedTechnicianId(technicianId);
+            setCurrentPage('technician-profile');
+          }}
+        />
+      )}
+
+      {currentPage === 'assigned-small-task' && selectedProject && (
+        <AssignedSmallTaskScreen
+          task={selectedProject as any}
+          onBack={() => {
+            setCurrentPage('list');
+            setSelectedProject(null);
+          }}
+          onSuccess={() => {
+            setSmallTasksRefreshTrigger(prev => prev + 1);
+            setCurrentPage('list');
+          }}
+          isTechnician={userRole?.toUpperCase() === 'TECHNICIAN'}
+          onOpenChat={onOpenChat}
+          onViewTechnician={(technicianId) => {
+            setSelectedTechnicianId(technicianId);
+            setCurrentPage('technician-profile');
+          }}
+        />
+      )}
+
+      {currentPage === 'in-progress-small-task' && selectedProject && (
+        <InProgressSmallTaskScreen
+          task={selectedProject as any}
+          onBack={() => {
+            setCurrentPage('list');
+            setSelectedProject(null);
+          }}
+          onSuccess={() => {
+            setSmallTasksRefreshTrigger(prev => prev + 1);
+            setCurrentPage('list');
+          }}
+          isTechnician={userRole?.toUpperCase() === 'TECHNICIAN'}
+          onOpenChat={onOpenChat}
+        />
+      )}
+
+      {currentPage === 'completed-small-task' && selectedProject && (
+        <CompletedSmallTaskScreen
+          task={selectedProject as any}
+          onBack={() => {
+            setCurrentPage('list');
+            setSelectedProject(null);
+          }}
+          onSuccess={() => {
+            setSmallTasksRefreshTrigger(prev => prev + 1);
+            setCurrentPage('list');
+          }}
+          isTechnician={userRole?.toUpperCase() === 'TECHNICIAN'}
+          onOpenChat={onOpenChat}
+          onViewTechnician={(technicianId) => {
+            setSelectedTechnicianId(technicianId);
+            setCurrentPage('technician-profile');
+          }}
+          onViewAllTasks={() => {
+            setCurrentPage('list');
+            setSelectedProject(null);
+          }}
+        />
+      )}
+
+      {/* Small Task Detail Screen (Fallback) */}
       {currentPage === 'small-task-detail' && selectedProject && (
         <SmallTaskDetailScreen
           task={selectedProject as any}
