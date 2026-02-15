@@ -21,7 +21,7 @@ export interface SmallTaskRequest {
   address: string;
   latitude: number;
   longitude: number;
-  status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' | 'ASSIGNED';
+  status: 'PENDING' | 'ACCEPTED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' | 'ASSIGNED';
   createdAt: string;
   bidCount?: number;
   budget?: number;
@@ -80,6 +80,6 @@ export interface TaskTypeRequest {
   technicianName?: string;
 }
 
-export type SmallTaskStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' | 'ASSIGNED';
+export type SmallTaskStatus = 'PENDING' | 'ACCEPTED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' | 'ASSIGNED';
 export type BidStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'WITHDRAWN';
 export type SuggestionStatus = 'PENDING' | 'APPROVED' | 'REJECTED';

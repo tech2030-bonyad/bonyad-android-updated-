@@ -47,7 +47,7 @@ export default function SmallTaskDetailScreen({
   const [taskDetails, setTaskDetails] = useState<SmallTaskRequest | null>(task);
   const [bids, setBids] = useState<SmallTaskBid[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [currentStatus, setCurrentStatus] = useState<'PENDING' | 'ASSIGNED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED'>(task.status || 'PENDING');
+  const [currentStatus, setCurrentStatus] = useState<'PENDING' | 'ACCEPTED' | 'ASSIGNED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED'>(task.status || 'PENDING');
   const [showBidModal, setShowBidModal] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [userRole, setUserRole] = useState<'user' | 'technician'>('user');
@@ -172,7 +172,7 @@ export default function SmallTaskDetailScreen({
   };
 
   const handleStatusChange = (status: string) => {
-    if (status === 'PENDING' || status === 'ASSIGNED' || status === 'IN_PROGRESS' || status === 'COMPLETED' || status === 'CANCELLED') {
+    if (status === 'PENDING' || status === 'ACCEPTED' || status === 'ASSIGNED' || status === 'IN_PROGRESS' || status === 'COMPLETED' || status === 'CANCELLED') {
       setCurrentStatus(status);
     }
   };
@@ -240,8 +240,7 @@ export default function SmallTaskDetailScreen({
             return;
           }
 
-          // Note: This endpoint needs to be confirmed with backend team
-          const url = `${buildApiUrl('/small-tasks/bids')}/${bidId}/accept`;
+          const url = buildApiUrlWithParams(API_ENDPOINTS.SMALL_TASKS.ACCEPT_BID, { bidId });
           console.log('✅ Accepting bid:', url);
 
           const response = await fetch(url, {
@@ -282,8 +281,7 @@ export default function SmallTaskDetailScreen({
             return;
           }
 
-          // Note: This endpoint needs to be confirmed with backend team
-          const url = `${buildApiUrl('/small-tasks/bids')}/${bidId}/reject`;
+          const url = buildApiUrlWithParams(API_ENDPOINTS.SMALL_TASKS.REJECT_BID, { bidId });
           console.log('❌ Rejecting bid:', url);
 
           const response = await fetch(url, {
@@ -564,7 +562,7 @@ export default function SmallTaskDetailScreen({
       )}
 
       {/* Status Update Buttons for Technician */}
-      {userRole === 'technician' && (currentStatus === 'ASSIGNED' || currentStatus === 'IN_PROGRESS') && (
+      {userRole === 'technician' && (currentStatus === 'ACCEPTED' || currentStatus === 'ASSIGNED' || currentStatus === 'IN_PROGRESS') && (
         <Animated.View
           style={[
             styles.floatingButtonContainer,
@@ -581,7 +579,7 @@ export default function SmallTaskDetailScreen({
             },
           ]}
         >
-          {currentStatus === 'ASSIGNED' && (
+          {(currentStatus === 'ACCEPTED' || currentStatus === 'ASSIGNED') && (
             <TouchableOpacity
               style={[styles.floatingButton, { backgroundColor: colors.primary }]}
               onPress={() => handleUpdateStatus('IN_PROGRESS')}
@@ -649,6 +647,9 @@ export default function SmallTaskDetailScreen({
     switch (statusUpper) {
       case 'PENDING':
         return '#FFB703';
+      case 'ACCEPTED':
+      case 'ASSIGNED':
+        return '#10B981';
       case 'IN_PROGRESS':
         return colors.primary;
       case 'COMPLETED':
@@ -663,6 +664,8 @@ export default function SmallTaskDetailScreen({
   function getStatusLabel(status: string): string {
     const statusMap: { [key: string]: string } = {
       'PENDING': t('Pending'),
+      'ACCEPTED': t('Accepted'),
+      'ASSIGNED': t('Assigned'),
       'IN_PROGRESS': t('In Progress'),
       'COMPLETED': t('Completed'),
       'CANCELLED': t('Cancelled'),

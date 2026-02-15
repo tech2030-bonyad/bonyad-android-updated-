@@ -140,7 +140,7 @@ export default function AssignedSmallTaskScreen({
       if (!token) return;
 
       // GET /api/small-tasks/requests/{id}
-      const url = buildApiUrl(`/small-tasks/requests/${task.id}`);
+      const url = buildApiUrlWithParams(API_ENDPOINTS.SMALL_TASKS.REQUEST_DETAILS, { id: task.id });
       const response = await fetch(url, {
         method: 'GET',
         headers: {

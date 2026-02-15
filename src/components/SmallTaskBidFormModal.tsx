@@ -131,9 +131,9 @@ export default function SmallTaskBidFormModal({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          amount: parseFloat(amount),
-          description: description.trim(),
-          estimatedHours: parseFloat(estimatedHours),
+          price: parseFloat(amount),
+          estimatedDuration: Math.round(parseFloat(estimatedHours) * 60), // Convert hours to minutes
+          notes: description.trim(),
         }),
       });
 

@@ -52,7 +52,7 @@ export const forgotPassword = async (phoneNumber: string, role: 'USER' | 'TECHNI
  */
 export const resendForgotPasswordOTP = async (phoneNumber: string, role: 'USER' | 'TECHNICIAN'): Promise<{ message: string }> => {
   try {
-    const url = 'https://bonyad-hub.com/api/auth/forgot-password/resend';
+    const url = buildApiUrl(API_ENDPOINTS.AUTH.FORGOT_PASSWORD_RESEND);
     
     console.log('📤 [AuthService] Resending password reset OTP...');
     console.log('   Phone:', phoneNumber);
@@ -104,7 +104,7 @@ export const resetPassword = async (
   confirmPassword: string
 ): Promise<{ message: string }> => {
   try {
-    const url = 'https://bonyad-hub.com/api/auth/reset-password';
+    const url = buildApiUrl(API_ENDPOINTS.AUTH.RESET_PASSWORD);
     
     console.log('📤 [AuthService] Resetting password...');
     console.log('   Phone:', phoneNumber);

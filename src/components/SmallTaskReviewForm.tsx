@@ -17,10 +17,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
-import { API_ENDPOINTS, buildApiUrl } from '../config/api';
-import { storage } from '../utils/storage';
 import { SmallTaskRequest } from '../types/smallTasks';
 import AlertPopup, { useAlertPopup } from './AlertPopup';
+import { 
+  getRatingCategories, 
+  createReviewWithCategories,
+  RatingCategory,
+  CategoryRating 
+} from '../services/RatingService';
+import CategoryRatingComponent from './CategoryRatingComponent';
 
 const COLORS = {
   amber60: '#FFB703',
@@ -50,9 +55,12 @@ export default function SmallTaskReviewForm({
   const { fontFamily, fonts } = useFontFamily();
   const isDarkMode = theme === 'dark';
 
-  const [rating, setRating] = useState(0);
+  const [overallRating, setOverallRating] = useState(0);
   const [comment, setComment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingCategories, setIsLoadingCategories] = useState(false);
+  const [categories, setCategories] = useState<RatingCategory[]>([]);
+  const [categoryRatings, setCategoryRatings] = useState<Record<number, number>>({});
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
@@ -62,6 +70,7 @@ export default function SmallTaskReviewForm({
 
   useEffect(() => {
     if (visible) {
+      loadCategories();
       Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 1,
@@ -85,58 +94,98 @@ export default function SmallTaskReviewForm({
       fadeAnim.setValue(0);
       scaleAnim.setValue(0.9);
       slideAnim.setValue(50);
-      setRating(0);
+      setOverallRating(0);
       setComment('');
+      setCategoryRatings({});
     }
   }, [visible]);
 
+  const loadCategories = async () => {
+    try {
+      setIsLoadingCategories(true);
+      const loadedCategories = await getRatingCategories();
+      setCategories(loadedCategories);
+    } catch (error: any) {
+      console.error('Error loading categories:', error);
+      showError(error.message || t('Failed to load rating categories'), t('Error'));
+    } finally {
+      setIsLoadingCategories(false);
+    }
+  };
+
+  const handleCategoryRatingChange = (categoryId: number, rating: number) => {
+    setCategoryRatings(prev => {
+      const newRatings = { ...prev, [categoryId]: rating };
+      // Calculate overall rating as average
+      const ratedCategories = Object.values(newRatings).filter(r => r > 0);
+      if (ratedCategories.length > 0) {
+        const average = ratedCategories.reduce((sum, r) => sum + r, 0) / ratedCategories.length;
+        setOverallRating(Math.round(average * 10) / 10);
+      } else {
+        setOverallRating(0);
+      }
+      return newRatings;
+    });
+  };
+
   const handleSubmit = async () => {
-    if (rating === 0) {
+    // Validate required categories
+    const requiredCategories = categories.filter(cat => cat.isRequired && cat.isActive);
+    for (const category of requiredCategories) {
+      if (!categoryRatings[category.id] || categoryRatings[category.id] === 0) {
+        const categoryName = t('category'); // You can improve this with i18n
+        showError(t('Please rate all required categories'), t('Validation Error'));
+        return;
+      }
+    }
+
+    if (overallRating === 0) {
       showError(t('Please select a rating'), t('Validation Error'));
       return;
     }
 
-    if (comment.trim().length < 10) {
-      showError(t('Please write at least 10 characters'), t('Validation Error'));
+    if (overallRating < 3.0 && (!comment || comment.trim().length === 0)) {
+      showError(t('Comment is mandatory for ratings below 3.0'), t('Validation Error'));
       return;
     }
 
     setIsSubmitting(true);
     try {
-      const token = await storage.getAuthToken();
-      if (!token) {
-        showError(t('Please login again'), t('Error'));
-        return;
-      }
-
-      // POST /api/reviews
-      const url = buildApiUrl(API_ENDPOINTS.REVIEWS.CREATE);
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          technicianId,
-          projectId: task.id,
-          rating,
-          comment: comment.trim(),
-        }),
+      const requiredCategories = categories.filter(cat => cat.isRequired && cat.isActive);
+      const categoryRatingsArray: CategoryRating[] = requiredCategories.map(cat => ({
+        ratingCategoryId: cat.id,
+        ratingValue: categoryRatings[cat.id] || 0,
+      }));
+      
+      // Include optional categories that were rated
+      const optionalCategories = categories.filter(
+        cat => !cat.isRequired && cat.isActive && categoryRatings[cat.id] && categoryRatings[cat.id] > 0
+      );
+      optionalCategories.forEach(cat => {
+        categoryRatingsArray.push({
+          ratingCategoryId: cat.id,
+          ratingValue: categoryRatings[cat.id],
+        });
       });
 
-      if (response.ok) {
-        showSuccess(t('Review submitted successfully'), t('Success'));
-        setTimeout(() => {
-          onSuccess();
-        }, 1500);
-      } else {
-        const errorData = await response.json().catch(() => ({}));
-        showError(errorData.message || t('Failed to submit review'), t('Error'));
-      }
-    } catch (error) {
+      const request = {
+        reviewType: 'SMALL_TASK_REVIEW' as const,
+        smallTaskRequestId: task.id,
+        reviewedUserId: technicianId,
+        rating: overallRating,
+        comment: comment.trim() || undefined,
+        categoryRatings: categoryRatingsArray,
+      };
+
+      await createReviewWithCategories(request);
+      
+      showSuccess(t('Review submitted successfully'), t('Success'));
+      setTimeout(() => {
+        onSuccess();
+      }, 1500);
+    } catch (error: any) {
       console.error('Error submitting review:', error);
-      showError(t('Error submitting review'), t('Error'));
+      showError(error.message || t('Error submitting review'), t('Error'));
     } finally {
       setIsSubmitting(false);
     }
@@ -148,14 +197,23 @@ export default function SmallTaskReviewForm({
         {[1, 2, 3, 4, 5].map((star) => (
           <TouchableOpacity
             key={star}
-            onPress={() => setRating(star)}
+            onPress={() => {
+              // When user sets overall rating, distribute to all categories
+              setOverallRating(star);
+              const activeCategories = categories.filter(cat => cat.isActive);
+              const newRatings: Record<number, number> = {};
+              activeCategories.forEach(cat => {
+                newRatings[cat.id] = star;
+              });
+              setCategoryRatings(newRatings);
+            }}
             activeOpacity={0.7}
             style={styles.starButton}
           >
             <Ionicons
-              name={star <= rating ? 'star' : 'star-outline'}
+              name={star <= overallRating ? 'star' : 'star-outline'}
               size={40}
-              color={star <= rating ? COLORS.amber60 : colors.textSecondary}
+              color={star <= overallRating ? COLORS.amber60 : colors.textSecondary}
             />
           </TouchableOpacity>
         ))}
@@ -228,26 +286,69 @@ export default function SmallTaskReviewForm({
                 {t('How was your experience with this task?')}
               </Text>
 
-              {/* Stars */}
+              {/* Overall Rating Stars */}
+              <Text style={[styles.sectionTitle, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600', marginBottom: 12 }]}>
+                {t('Overall Rating')}
+              </Text>
               {renderStars()}
 
-              {rating > 0 && (
+              {overallRating > 0 && (
                 <View style={styles.ratingTextContainer}>
                   <Text style={[styles.ratingText, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>
-                    {rating === 5 && t('Excellent')}
-                    {rating === 4 && t('Very Good')}
-                    {rating === 3 && t('Good')}
-                    {rating === 2 && t('Fair')}
-                    {rating === 1 && t('Poor')}
+                    {overallRating >= 4.5 && t('Excellent')}
+                    {overallRating >= 3.5 && overallRating < 4.5 && t('Very Good')}
+                    {overallRating >= 2.5 && overallRating < 3.5 && t('Good')}
+                    {overallRating >= 1.5 && overallRating < 2.5 && t('Fair')}
+                    {overallRating < 1.5 && t('Poor')}
                   </Text>
+                </View>
+              )}
+
+              {/* Category Ratings */}
+              {isLoadingCategories ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="small" color={COLORS.amber60} />
+                  <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+                    {t('Loading categories...')}
+                  </Text>
+                </View>
+              ) : categories.length > 0 && (
+                <View style={styles.categorySection}>
+                  <Text style={[styles.sectionTitle, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600', marginBottom: 12 }]}>
+                    {t('Rate by Category')}
+                  </Text>
+                  {categories
+                    .filter(cat => cat.isActive)
+                    .map((category) => (
+                      <CategoryRatingComponent
+                        key={category.id}
+                        category={category}
+                        rating={categoryRatings[category.id] || 0}
+                        onRatingChange={handleCategoryRatingChange}
+                        required={category.isRequired}
+                      />
+                    ))}
                 </View>
               )}
 
               {/* Comment Input */}
               <View style={styles.commentSection}>
                 <Text style={[styles.commentLabel, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>
-                  {t('Write a Review')} {rating > 0 && '*'}
+                  {t('Write a Review')}
+                  {overallRating > 0 && overallRating < 3.0 && (
+                    <Text style={{ color: colors.error }}> *</Text>
+                  )}
+                  {overallRating >= 3.0 && (
+                    <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                      {' '}({t('Optional')})
+                    </Text>
+                  )}
                 </Text>
+                {overallRating > 0 && overallRating < 3.0 && (
+                  <Text style={[styles.warningText, { color: colors.error }]}>
+                    {t('Comment is required for ratings below 3.0')}
+                  </Text>
+                )}
                 <TextInput
                   style={[
                     styles.commentInput,
@@ -287,12 +388,12 @@ export default function SmallTaskReviewForm({
                   style={[
                     styles.submitButton,
                     {
-                      backgroundColor: rating > 0 ? COLORS.amber60 : colors.border,
-                      opacity: rating > 0 ? 1 : 0.5,
+                      backgroundColor: overallRating > 0 ? COLORS.amber60 : colors.border,
+                      opacity: overallRating > 0 ? 1 : 0.5,
                     },
                   ]}
                   onPress={handleSubmit}
-                  disabled={isSubmitting || rating === 0}
+                  disabled={isSubmitting || overallRating === 0}
                 >
                   {isSubmitting ? (
                     <ActivityIndicator color={COLORS.textWhite} size="small" />
@@ -441,5 +542,26 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: COLORS.textWhite,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  categorySection: {
+    marginBottom: 24,
+  },
+  loadingContainer: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 8,
+    fontSize: 14,
+  },
+  warningText: {
+    fontSize: 12,
+    marginBottom: 8,
+    fontStyle: 'italic',
   },
 });

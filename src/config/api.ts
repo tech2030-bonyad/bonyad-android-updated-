@@ -4,8 +4,8 @@
 import { Platform } from 'react-native';
 
 const getBaseUrl = () => {
-  // API URL - Production API endpoint
-  return 'https://www.bonyad-hub.com/api';
+  // API URL - ngrok development endpoint
+  return 'https://glynda-unvexatious-felisa.ngrok-free.dev/api';
 };
 
 export const API_BASE_URL = getBaseUrl();
@@ -136,6 +136,11 @@ export const API_ENDPOINTS = {
     REVIEW_DETAIL: '/reviews/:reviewId',
   },
   
+  // Rating Categories
+  RATING_CATEGORIES: {
+    LIST: '/rating-categories',
+  },
+  
   // Phases
   PHASES: {
     LIST: '/phases/project/:projectId',
@@ -220,10 +225,14 @@ export const API_ENDPOINTS = {
     CREATE_REQUEST: '/small-tasks/requests',
     REQUESTS_AVAILABLE: '/small-tasks/requests/available',
     MY_REQUESTS: '/small-tasks/requests/my-requests',
+    REQUEST_DETAILS: '/small-tasks/requests/:id',
     REQUEST_BID: '/small-tasks/requests/:id/bids',
     MY_BIDS: '/small-tasks/bids/my-bids',
     WITHDRAW_BID: '/small-tasks/bids/:id/withdraw',
     UPDATE_STATUS: '/small-tasks/requests/:id/status',
+    PAY: '/small-tasks/:requestId/pay', // Payment for small task
+    ACCEPT_BID: '/small-tasks/bids/:bidId/accept',
+    REJECT_BID: '/small-tasks/bids/:bidId/reject',
   },
   
   // Technician Services
@@ -245,6 +254,28 @@ export const API_ENDPOINTS = {
   TASK_TYPE_REQUESTS: {
     CREATE: '/small-tasks/request-type',
     MY_REQUESTS: '/small-tasks/request-type/my-requests',
+  },
+  
+  // Payments
+  PAYMENTS: {
+    MY_TRANSACTIONS: '/payments/my-transactions',
+    TRANSACTION: '/payments/transactions/:id',
+    REFUND_REQUEST: '/payments/transactions/:transactionId/refund-request',
+    MY_REFUND_REQUESTS: '/payments/my-refund-requests',
+    CREATE_CHECKOUT: '/payments/create-checkout', // Note: Backend may use '/api/payment/checkout' (singular) - verify and update if needed
+    PREPARE_CHECKOUT: '/payments/prepare-checkout',
+    STATUS: '/payments/status/:checkoutId', // Note: Backend may use '/api/payment/status/:checkoutId' (singular) - verify and update if needed
+  },
+  
+  // Admin - Payments
+  ADMIN: {
+    PAYMENTS: {
+      REFUND_REQUESTS: '/admin/payments/refund-requests',
+      REFUND_REQUEST: '/admin/payments/refund-requests/:id',
+      APPROVE_REFUND: '/admin/payments/refund-requests/:id/approve',
+      REJECT_REFUND: '/admin/payments/refund-requests/:id/reject',
+      PROCESS_REFUND: '/admin/payments/refund-requests/:id/process',
+    },
   },
 };
 
@@ -274,3 +305,56 @@ export const buildApiUrlWithParams = (endpoint: string, params: Record<string, s
   return url;
 };
 
+// Helper function to get default headers (includes ngrok header)
+export const getDefaultHeaders = (additionalHeaders?: Record<string, string>): Record<string, string> => {
+  const defaultHeaders: Record<string, string> = {
+    'ngrok-skip-browser-warning': 'true',
+  };
+  
+  if (additionalHeaders) {
+    return { ...defaultHeaders, ...additionalHeaders };
+  }
+  
+  return defaultHeaders;
+};
+
+// Wrapper function for fetch that automatically includes ngrok header
+export const apiFetch = async (
+  url: string,
+  options?: RequestInit
+): Promise<Response> => {
+  const headers = getDefaultHeaders(options?.headers as Record<string, string> | undefined);
+  
+  return fetch(url, {
+    ...options,
+    headers: {
+      ...headers,
+      ...(options?.headers || {}),
+    },
+  });
+};
+
+// Override global fetch to automatically include ngrok header for all API requests
+// This ensures ALL fetch calls in the app include the ngrok header
+const originalFetch = global.fetch;
+global.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+  // Only add ngrok header if the URL is for our API
+  const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : (input as Request).url;
+  const serverBaseUrl = getServerBaseUrl();
+  const isApiRequest = url.includes(API_BASE_URL) || url.includes(serverBaseUrl);
+  
+  if (isApiRequest) {
+    const headers = getDefaultHeaders(init?.headers as Record<string, string> | undefined);
+    
+    return originalFetch(input, {
+      ...init,
+      headers: {
+        ...headers,
+        ...(init?.headers || {}),
+      },
+    });
+  }
+  
+  // For non-API requests, use original fetch
+  return originalFetch(input, init);
+};

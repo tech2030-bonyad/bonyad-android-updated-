@@ -236,7 +236,7 @@ export default function PendingSmallTaskScreen({
             return;
           }
 
-          const url = `${buildApiUrl('/small-tasks/bids')}/${bidId}/accept`;
+          const url = buildApiUrlWithParams(API_ENDPOINTS.SMALL_TASKS.ACCEPT_BID, { bidId });
           const response = await fetch(url, {
             method: 'PATCH',
             headers: {
@@ -271,7 +271,7 @@ export default function PendingSmallTaskScreen({
             return;
           }
 
-          const url = `${buildApiUrl('/small-tasks/bids')}/${bidId}/reject`;
+          const url = buildApiUrlWithParams(API_ENDPOINTS.SMALL_TASKS.REJECT_BID, { bidId });
           const response = await fetch(url, {
             method: 'PATCH',
             headers: {

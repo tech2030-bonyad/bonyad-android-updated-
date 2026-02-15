@@ -105,7 +105,7 @@ export default function IconExamples() {
           <AntDesign name="notification" size={iconSize} color={iconColor} />
           <AntDesign name="user" size={iconSize} color={iconColor} />
           <AntDesign name="setting" size={iconSize} color={iconColor} />
-          <AntDesign name="search1" size={iconSize} color={iconColor} />
+          <AntDesign name="search" size={iconSize} color={iconColor} />
           <AntDesign name="heart" size={iconSize} color={iconColor} />
           <AntDesign name="mail" size={iconSize} color={iconColor} />
         </View>

@@ -1,5 +1,5 @@
 import { storage } from '../utils/storage';
-import { buildApiUrlWithParams, buildApiUrl } from '../config/api';
+import { buildApiUrlWithParams, buildApiUrl, getServerBaseUrl } from '../config/api';
 import { Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 
@@ -270,13 +270,14 @@ export const getUserProfile = async (): Promise<any> => {
     console.log('✅ [ProfileService] Profile loaded:', profile.name);
     
     // Construct full URL for profile image
+    const baseUrl = getServerBaseUrl();
     if (profile.profileImage && !profile.profileImage.startsWith('http')) {
-      profile.profileImage = `https://bonyad-hub.com${profile.profileImage}`;
+      profile.profileImage = `${baseUrl}${profile.profileImage}`;
     }
     
     // Also check avatar field
     if (profile.avatar && !profile.avatar.startsWith('http')) {
-      profile.avatar = `https://bonyad-hub.com${profile.avatar}`;
+      profile.avatar = `${baseUrl}${profile.avatar}`;
     }
     
     console.log('🖼️ [ProfileService] Profile Image URL:', profile.profileImage || profile.avatar || 'No image');
@@ -363,9 +364,10 @@ export const uploadProfileImage = async (imageAsset: ImagePicker.ImagePickerAsse
     console.log('📥 [ProfileService] Response:', data);
     
     // Construct full URL
+    const baseUrl = getServerBaseUrl();
     let fullImageUrl = data.profileImage || data.avatar;
     if (fullImageUrl && !fullImageUrl.startsWith('http')) {
-      fullImageUrl = `https://bonyad-hub.com${fullImageUrl}`;
+      fullImageUrl = `${baseUrl}${fullImageUrl}`;
     }
     
     console.log('✅ [ProfileService] Profile image uploaded successfully');

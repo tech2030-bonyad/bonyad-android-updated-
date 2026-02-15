@@ -42,7 +42,7 @@ import SmallTaskDetailScreen from './SmallTaskDetailScreen';
 import ServiceSuggestionFormScreen from './ServiceSuggestionFormScreen';
 import MyServiceSuggestionsScreen from './MyServiceSuggestionsScreen';
 import Footer from '../components/Footer';
-import { buildApiUrl, API_ENDPOINTS } from '../config/api';
+import { buildApiUrl, API_ENDPOINTS, getServerBaseUrl } from '../config/api';
 import { storage } from '../utils/storage';
 import { checkHasPortfolio } from '../services/PortfolioService';
 import TechnicalHomeScreenContent from './home/TechnicalHomeScreen';
@@ -211,7 +211,7 @@ export default function TechnicianHomeScreen({
         if (response.ok) {
           const data = await response.json();
           // Construct full URL for profile image
-          const baseUrl = 'https://bonyad-hub.com';
+          const baseUrl = getServerBaseUrl();
           if (data.profileImage && !data.profileImage.startsWith('http')) {
             data.profileImage = `${baseUrl}${data.profileImage}`;
           }

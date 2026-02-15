@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { API_ENDPOINTS, buildApiUrl } from '../config/api';
+import { API_ENDPOINTS, buildApiUrl, buildApiUrlWithParams } from '../config/api';
 import { storage } from '../utils/storage';
 import SmallTaskPhaseBar from '../components/SmallTaskPhaseBar';
 import SmallTaskStatusTimeline from '../components/SmallTaskStatusTimeline';
@@ -153,7 +153,7 @@ export default function CompletedSmallTaskScreen({
       const token = await storage.getAuthToken();
       if (!token) return;
 
-      const url = buildApiUrl(`/small-tasks/requests/${task.id}`);
+      const url = buildApiUrlWithParams(API_ENDPOINTS.SMALL_TASKS.REQUEST_DETAILS, { id: task.id });
       const response = await fetch(url, {
         method: 'GET',
         headers: {
@@ -179,8 +179,9 @@ export default function CompletedSmallTaskScreen({
       const token = await storage.getAuthToken();
       if (!token) return;
 
-      // Check if review exists
-      const reviewUrl = buildApiUrl(`/reviews/project/${task.id}/status`);
+      // Check if review exists for small task
+      // Note: This endpoint may need to be added to the API - using small task request ID
+      const reviewUrl = buildApiUrl(`/reviews/small-task/${task.id}/status`);
       const response = await fetch(reviewUrl, {
         method: 'GET',
         headers: {

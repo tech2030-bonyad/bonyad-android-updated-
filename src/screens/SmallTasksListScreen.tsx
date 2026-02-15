@@ -190,15 +190,24 @@ export default function SmallTasksListScreen({
   });
 
   const loadTasks = async () => {
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('🔄 [SmallTasksListScreen] Loading small tasks...');
+    console.log('═══════════════════════════════════════════════════════════');
+    
     try {
       setIsLoading(true);
       const token = await storage.getAuthToken();
       const role = await storage.getUserRole();
       const isTechnician = role?.toUpperCase() === 'TECHNICIAN';
 
+      console.log('📋 [SmallTasksListScreen] Filter:', filter);
+      console.log('👤 [SmallTasksListScreen] User Role:', role);
+      console.log('🔧 [SmallTasksListScreen] Is Technician:', isTechnician);
+      console.log('🔑 [SmallTasksListScreen] Has Token:', !!token);
+
       // Token is required for authenticated endpoints
       if (!token) {
-        console.error('No authentication token found');
+        console.error('❌ [SmallTasksListScreen] No authentication token found');
         setTasks([]);
         setIsLoading(false);
         return;
@@ -213,31 +222,50 @@ export default function SmallTasksListScreen({
       if (filter === 'available' && isTechnician) {
         // Technicians see available tasks
         url = buildApiUrl(API_ENDPOINTS.SMALL_TASKS.REQUESTS_AVAILABLE);
+        console.log('📡 [SmallTasksListScreen] Endpoint: REQUESTS_AVAILABLE (Technician)');
       } else if (filter === 'my-bids' && isTechnician) {
         // Technicians see their bids
         url = buildApiUrl(API_ENDPOINTS.SMALL_TASKS.MY_BIDS);
+        console.log('📡 [SmallTasksListScreen] Endpoint: MY_BIDS (Technician)');
       } else if (!isTechnician) {
         // Users see their own created requests - requires token
         url = buildApiUrl(API_ENDPOINTS.SMALL_TASKS.MY_REQUESTS);
+        console.log('📡 [SmallTasksListScreen] Endpoint: MY_REQUESTS (User)');
       } else {
         // Default: available endpoint
         url = buildApiUrl(API_ENDPOINTS.SMALL_TASKS.REQUESTS_AVAILABLE);
+        console.log('📡 [SmallTasksListScreen] Endpoint: REQUESTS_AVAILABLE (Default)');
       }
+
+      console.log('🌐 [SmallTasksListScreen] URL:', url);
+      console.log('📤 [SmallTasksListScreen] Method: GET');
+      console.log('📤 [SmallTasksListScreen] Headers:', {
+        'Content-Type': headers['Content-Type'],
+        'Authorization': `Bearer ${token.substring(0, 20)}...`,
+      });
 
       const response = await fetch(url, {
         method: 'GET',
         headers,
       });
 
+      console.log('📥 [SmallTasksListScreen] Response Status:', response.status);
+      console.log('📥 [SmallTasksListScreen] Response OK:', response.ok);
+
       if (response.ok) {
         const data = await response.json();
+        console.log('📦 [SmallTasksListScreen] Response Data:', JSON.stringify(data, null, 2));
+        
         let allTasks: SmallTaskRequest[] = [];
         
         if (filter === 'my-bids') {
+          console.log('🔄 [SmallTasksListScreen] Transforming bids to requests...');
+          console.log('📊 [SmallTasksListScreen] Bids Count:', data.bids?.length || 0);
+          
           // Transform bids to requests
           allTasks = data.bids?.map((bid: any) => ({
-            id: bid.requestId,
-            taskType: bid.request?.taskType || { nameEn: 'Task', nameAr: 'مهمة' },
+            id: bid.smallTaskRequestId || bid.requestId,
+            taskType: bid.request?.taskType || bid.taskType || { nameEn: 'Task', nameAr: 'مهمة' },
             description: bid.request?.description || bid.description || '',
             address: bid.request?.address || '',
             latitude: bid.request?.latitude || 0,
@@ -245,45 +273,99 @@ export default function SmallTasksListScreen({
             status: bid.request?.status || bid.status || 'PENDING',
             createdAt: bid.createdAt || '',
             bidCount: 0,
-            amount: bid.amount,
+            amount: bid.price || bid.amount,
+            estimatedDuration: bid.estimatedDuration,
           })) || [];
+          
+          console.log('✅ [SmallTasksListScreen] Transformed Tasks Count:', allTasks.length);
         } else {
+          console.log('🔄 [SmallTasksListScreen] Processing requests...');
+          console.log('📊 [SmallTasksListScreen] Requests Count:', data.requests?.length || data.count || 0);
+          
           // Ensure all tasks have a valid taskType
           allTasks = (data.requests || []).map((task: any) => ({
             ...task,
             taskType: task.taskType || { nameEn: 'Task', nameAr: 'مهمة' },
           }));
+          
+          console.log('✅ [SmallTasksListScreen] Processed Tasks Count:', allTasks.length);
         }
 
+        // Log task statuses before filtering
+        const statusCounts: { [key: string]: number } = {};
+        allTasks.forEach(task => {
+          const status = (task.status || 'UNKNOWN').toUpperCase();
+          statusCounts[status] = (statusCounts[status] || 0) + 1;
+        });
+        console.log('📊 [SmallTasksListScreen] Task Status Distribution:', statusCounts);
+
         // Filter by status based on filter prop
+        // Note: We load all tasks and let the dropdown handle status filtering
+        // This ensures that when a user selects a specific status from dropdown, 
+        // all tasks of that status are available to be shown
         let filteredByStatus = allTasks;
         if (filter === 'in-progress') {
+          // For in-progress filter, show tasks that are actively being worked on
+          // But include all statuses so dropdown can filter them
           filteredByStatus = allTasks.filter(task => {
             const status = (task.status || '').toUpperCase();
-            return status === 'IN_PROGRESS' || status === 'ACCEPTED';
+            // Include all active statuses, not just IN_PROGRESS
+            return status === 'IN_PROGRESS' || status === 'ACCEPTED' || 
+                   status === 'ASSIGNED' || status === 'PENDING' || 
+                   status === 'BID_RECEIVED';
           });
+          console.log('🔍 [SmallTasksListScreen] Filtered (in-progress):', filteredByStatus.length);
         } else if (filter === 'completed') {
+          // For completed filter, only show completed tasks
           filteredByStatus = allTasks.filter(task => {
             const status = (task.status || '').toUpperCase();
             return status === 'COMPLETED';
           });
+          console.log('🔍 [SmallTasksListScreen] Filtered (completed):', filteredByStatus.length);
         } else if (filter === 'available') {
+          // For available filter, load ALL non-completed tasks
+          // This ensures ACCEPTED/ASSIGNED tasks are available when selected from dropdown
           filteredByStatus = allTasks.filter(task => {
             const status = (task.status || '').toUpperCase();
-            return status === 'PENDING' || status === 'BID_RECEIVED';
+            // Include all statuses except COMPLETED and CANCELLED
+            return status !== 'COMPLETED' && status !== 'CANCELLED';
           });
+          console.log('🔍 [SmallTasksListScreen] Filtered (available):', filteredByStatus.length);
+        } else if (filter === 'my-bids') {
+          // For my-bids, show all bids regardless of status (dropdown will filter)
+          filteredByStatus = allTasks;
+          console.log('🔍 [SmallTasksListScreen] Filtered (my-bids):', filteredByStatus.length);
+        } else {
+          // Default: show all tasks, let dropdown handle filtering
+          filteredByStatus = allTasks;
+          console.log('🔍 [SmallTasksListScreen] No status filter applied - showing all tasks');
         }
 
+        console.log('✅ [SmallTasksListScreen] Final Tasks Count:', filteredByStatus.length);
+        console.log('📋 [SmallTasksListScreen] Tasks:', filteredByStatus.map(t => ({
+          id: t.id,
+          taskType: t.taskType?.nameEn || 'Unknown',
+          status: t.status,
+        })));
+
         setTasks(filteredByStatus);
+        console.log('✅ [SmallTasksListScreen] Tasks loaded successfully');
       } else {
+        const errorText = await response.text().catch(() => 'Unable to read error');
+        console.error('❌ [SmallTasksListScreen] Response not OK:', response.status);
+        console.error('❌ [SmallTasksListScreen] Error Response:', errorText);
         setTasks([]);
       }
-    } catch (error) {
-      console.error('Error loading small tasks:', error);
+    } catch (error: any) {
+      console.error('❌ [SmallTasksListScreen] Error loading small tasks:', error);
+      console.error('❌ [SmallTasksListScreen] Error Message:', error.message);
+      console.error('❌ [SmallTasksListScreen] Error Stack:', error.stack);
       setTasks([]);
     } finally {
       setIsLoading(false);
       setRefreshing(false);
+      console.log('🏁 [SmallTasksListScreen] Loading completed');
+      console.log('═══════════════════════════════════════════════════════════');
     }
   };
 

@@ -2,6 +2,7 @@
 import { Platform } from 'react-native';
 import { ChatMessage } from '../types/chat';
 import { storage } from '../utils/storage';
+import { getServerBaseUrl } from '../config/api';
 
 // Use mqtt.js for all platforms (Web, Android, iOS)
 // mqtt.js supports TCP connections on all platforms
@@ -164,27 +165,34 @@ class MqttChatService {
   private currentRoomId: string | null = null;
 
   // MQTT Configuration - Matching Swift CocoaMQTT implementation
-  // Host: www.bonyad-hub.com
   // Port: 1883 (TCP for native)
   // Port: 8084 (Secure WebSocket WSS for web - browsers can't use raw TCP)
   // Note: Web browsers cannot use raw TCP, so we use Secure WebSocket (WSS) for MQTT on web
   // The MQTT protocol is the same, just transported over Secure WebSocket instead of TCP
-  private readonly HOST = 'www.bonyad-hub.com';
   private readonly PORT = 1883; // TCP port (for native, like Swift)
   private readonly WEB_PORT = 8084; // Secure WebSocket port (WSS for web)
   private readonly KEEP_ALIVE = 60; // KeepAlive: 60 (like Swift: keepAlive = 60)
   private readonly QOS_LEVEL = 1; // At least once delivery
   
+  // Get host from API config
+  private getHost(): string {
+    const serverBaseUrl = getServerBaseUrl();
+    // Extract hostname from URL (remove protocol)
+    const url = new URL(serverBaseUrl);
+    return url.hostname;
+  }
+  
   // Get broker URL based on platform
-  // Web: Use Secure WebSocket on port 8084 (wss://www.bonyad-hub.com:8084)
-  // Native: Use TCP on port 1883 (tcp://www.bonyad-hub.com:1883)
+  // Web: Use Secure WebSocket on port 8084
+  // Native: Use TCP on port 1883
   private getBrokerUrl(): string {
+    const host = this.getHost();
     if (Platform.OS === 'web') {
       // Web: Use Secure WebSocket (WSS) on port 8084
-      return `wss://${this.HOST}:${this.WEB_PORT}`;
+      return `wss://${host}:${this.WEB_PORT}`;
     } else {
       // Native: Use TCP (like Swift CocoaMQTT: port 1883)
-      return `tcp://${this.HOST}:${this.PORT}`;
+      return `tcp://${host}:${this.PORT}`;
     }
   }
 
@@ -244,8 +252,9 @@ class MqttChatService {
         options.rejectUnauthorized = true; // Verifies SSL certificate
       }
       
+      const host = this.getHost();
       console.log('🔌 [MQTT] Connecting to broker:');
-      console.log('   Host:', this.HOST);
+      console.log('   Host:', host);
       console.log('   Port:', Platform.OS === 'web' ? this.WEB_PORT : this.PORT);
       console.log('   Protocol:', Platform.OS === 'web' ? 'Secure WebSocket (wss)' : 'TCP');
       console.log('   URL:', connectionUrl);

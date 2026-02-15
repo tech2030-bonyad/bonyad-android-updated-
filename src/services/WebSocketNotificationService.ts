@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import { API_BASE_URL } from '../config/api';
+import { getServerBaseUrl } from '../config/api';
 
 // Import SockJS and STOMP only on web
 let SockJS: any = null;
@@ -71,17 +71,18 @@ class WebSocketNotificationService {
     // Determine WebSocket URL based on environment
     // SockJS requires HTTP/HTTPS URLs, not ws:/wss: schemes
     let wsUrl: string;
+    const serverBaseUrl = getServerBaseUrl();
     if (typeof window !== 'undefined') {
       if (window.location.protocol === 'https:') {
         // Production: Use relative URL (Nginx will proxy to backend)
         wsUrl = '/ws';
       } else {
-        // Development: Use production HTTPS URL
-        wsUrl = 'https://www.bonyad-hub.com/ws';
+        // Development: Use configured server URL
+        wsUrl = `${serverBaseUrl}/ws`;
       }
     } else {
       // Fallback for non-web environments
-      wsUrl = 'https://www.bonyad-hub.com/ws';
+      wsUrl = `${serverBaseUrl}/ws`;
     }
 
     console.log('🔌 [Notifications] Connecting to WebSocket:', wsUrl);

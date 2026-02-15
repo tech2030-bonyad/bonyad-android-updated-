@@ -165,6 +165,16 @@ export default function ProjectsScreen({ onBack, filter = 'available', onOpenCha
   const dropdownAnimation = useRef(new Animated.Value(0)).current;
   const rotateAnimation = useRef(new Animated.Value(0)).current;
   
+  // Calculate fixed dropdown height for ScrollView
+  const getFixedDropdownHeight = () => {
+    const uniqueStatuses = getUniqueStatuses();
+    const optionCount = 1 + uniqueStatuses.length; // "All" + statuses
+    const screenHeight = Dimensions.get('window').height;
+    const maxVisibleHeight = Math.min(screenHeight * 0.5, 300);
+    const totalHeight = optionCount * 48; // 48px per option
+    return totalHeight > maxVisibleHeight ? maxVisibleHeight : totalHeight;
+  };
+  
   // Custom popup hooks
   const { alertState, showError, showSuccess, hideAlert } = useAlertPopup();
   const { confirmState, showDeleteConfirmation, hideConfirmation } = useConfirmationPopup();
@@ -319,7 +329,17 @@ export default function ProjectsScreen({ onBack, filter = 'available', onOpenCha
   const getDropdownHeight = () => {
     const uniqueStatuses = getUniqueStatuses();
     const optionCount = 1 + uniqueStatuses.length; // "All" + statuses
-    return Math.min(optionCount * 48, 240); // 48px per option, max 240px (5 items visible)
+    const screenHeight = Dimensions.get('window').height;
+    // Show up to 6 items visible (288px), then enable scrolling
+    // Max 50% of screen height to ensure it doesn't take too much space
+    const maxVisibleHeight = Math.min(screenHeight * 0.5, 300);
+    const totalHeight = optionCount * 48; // 48px per option
+    
+    // If we have more than 6 items, use maxVisibleHeight to enable scrolling
+    if (totalHeight > maxVisibleHeight) {
+      return maxVisibleHeight;
+    }
+    return totalHeight;
   };
 
   const dropdownHeight = dropdownAnimation.interpolate({
@@ -1383,9 +1403,13 @@ export default function ProjectsScreen({ onBack, filter = 'available', onOpenCha
                 ]}
               >
                 <ScrollView
-                  style={styles.androidFilterDropdownContent}
+                  style={[styles.androidFilterDropdownContent, { maxHeight: getFixedDropdownHeight() }]}
+                  contentContainerStyle={styles.androidFilterDropdownContentContainer}
                   nestedScrollEnabled={true}
-                  showsVerticalScrollIndicator={false}
+                  showsVerticalScrollIndicator={true}
+                  bounces={false}
+                  scrollEnabled={true}
+                  keyboardShouldPersistTaps="handled"
                 >
                   {/* All Option */}
                   <TouchableOpacity
@@ -1735,14 +1759,16 @@ export default function ProjectsScreen({ onBack, filter = 'available', onOpenCha
         />
       )}
 
-      {/* Floating Action Button - Add New Project */}
-      <TouchableOpacity
-        style={styles.figmaFab}
-                onPress={() => setCurrentPage('project-type-selection')}
-        activeOpacity={0.8}
-      >
-        <Ionicons name="add" size={24} color={FIGMA_COLORS.amber60} />
-      </TouchableOpacity>
+      {/* Floating Action Button - Add New Project (Only for Users, not Technicians) */}
+      {userRole?.toUpperCase() !== 'TECHNICIAN' && (
+        <TouchableOpacity
+          style={styles.figmaFab}
+          onPress={() => setCurrentPage('project-type-selection')}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="add" size={24} color={FIGMA_COLORS.amber60} />
+        </TouchableOpacity>
+      )}
             </>
           )}
         </>
@@ -2599,9 +2625,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 5,
+    zIndex: 1000,
   },
   androidFilterDropdownContent: {
-    maxHeight: 200,
+    flex: 1,
+  },
+  androidFilterDropdownContentContainer: {
+    paddingVertical: 4,
+    flexGrow: 1,
   },
   androidFilterOption: {
     flexDirection: 'row',
