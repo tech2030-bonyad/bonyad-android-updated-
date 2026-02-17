@@ -236,9 +236,9 @@ export default function PendingSmallTaskScreen({
             return;
           }
 
-          const url = buildApiUrlWithParams(API_ENDPOINTS.SMALL_TASKS.ACCEPT_BID, { bidId });
+          const url = buildApiUrlWithParams(API_ENDPOINTS.SMALL_TASKS.ACCEPT_BID, { requestId: task.id, bidId });
           const response = await fetch(url, {
-            method: 'PATCH',
+            method: 'POST',
             headers: {
               'Authorization': `Bearer ${token}`,
             },
@@ -301,12 +301,12 @@ export default function PendingSmallTaskScreen({
         return;
       }
 
-      const url = buildApiUrlWithParams(API_ENDPOINTS.SMALL_TASKS.CREATE_REQUEST, { id: task.id });
-      const deleteUrl = url.replace('/requests', `/requests/${task.id}`);
-      const response = await fetch(deleteUrl, {
-        method: 'DELETE',
+      const url = buildApiUrlWithParams(API_ENDPOINTS.SMALL_TASKS.CANCEL, { id: task.id });
+      const response = await fetch(url, {
+        method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
         },
       });
 
@@ -315,7 +315,8 @@ export default function PendingSmallTaskScreen({
         onSuccess?.();
         onBack();
       } else {
-        showError(t('Failed to cancel request'), t('Error'));
+        const data = await response.json().catch(() => ({}));
+        showError(data.message || t('Failed to cancel request'), t('Error'));
       }
     } catch (error) {
       console.error('Error cancelling request:', error);

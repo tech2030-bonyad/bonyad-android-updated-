@@ -16,23 +16,7 @@ import {
 import { Image } from 'expo-image';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
-import { 
-  Button, 
-  Input, 
-  Text as TamaguiText, 
-  YStack, 
-  XStack, 
-  Card, 
-  Separator,
-  H2,
-  H3,
-  Paragraph,
-  Switch,
-  Label
-} from 'tamagui';
 import { Colors } from '../constants/Colors';
-import { useFCMToken } from '../utils/useFCMToken';
-import { ThemeToggle } from '../components/ThemeToggle';
 import * as ImagePicker from 'expo-image-picker';
 import { API_ENDPOINTS, buildApiUrl } from '../config/api';
 
@@ -45,8 +29,7 @@ export default function SignupScreen({
   onNavigateToOTP: (phone: string, role: 'user' | 'technician') => void;
 }) {
   const { t, i18n } = useTranslation();
-  const fcmToken = useFCMToken(); // Get real FCM token
-  
+
   // Toggle language and RTL
   const toggleLanguage = () => {
     const newLang = i18n.language === 'en' ? 'ar' : 'en';
@@ -134,9 +117,10 @@ export default function SignupScreen({
         setSelectedRegion(fallbackRegions[0]);
       }
     } catch (error) {
-      console.error('❌ Error fetching regions:', error);
-      console.error('   Error message:', error.message);
-      console.error('   Error stack:', error.stack);
+      const err = error instanceof Error ? error : new Error(String(error));
+      console.error('❌ Error fetching regions:', err);
+      console.error('   Error message:', err.message);
+      console.error('   Error stack:', err.stack);
       
       // Fallback: Use sample regions if API fails
       const fallbackRegions = [

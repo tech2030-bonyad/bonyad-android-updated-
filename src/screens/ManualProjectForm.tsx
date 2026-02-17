@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Platform,
   Image,
   useWindowDimensions,
+  Animated,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,6 +25,7 @@ import ProjectCreationFlow from '../components/ProjectCreationFlow';
 import { API_ENDPOINTS, buildApiUrl } from '../config/api';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
 import { globalAlertManager } from '../utils/globalAlertManager';
+import { getCategories, getSubcategories, ServiceCategory as ApiServiceCategory, ServiceSubcategory } from '../services/ServiceService';
 
 interface ManualProjectFormProps {
   technician?: any;
@@ -33,10 +35,10 @@ interface ManualProjectFormProps {
 
 interface ServiceCategory {
   id: number;
-  nameAr: string;
+  nameAr?: string;
   nameEn: string;
-  description: string;
-  imageUrl: string;
+  description?: string;
+  imageUrl?: string;
 }
 
 // Design system colors from Figma
@@ -78,8 +80,10 @@ export default function ManualProjectForm({
 
   // Form state
   const [description, setDescription] = useState('');
-  const [selectedServiceId, setSelectedServiceId] = useState<number>(0);
-  const [category, setCategory] = useState('');
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number>(0);
+  const [categoryDisplay, setCategoryDisplay] = useState('');
+  const [selectedSubcategoryId, setSelectedSubcategoryId] = useState<number>(0);
+  const [subcategoryDisplay, setSubcategoryDisplay] = useState('');
   const [budget, setBudget] = useState('');
   const [budgetUnspecified, setBudgetUnspecified] = useState(false);
   const [address, setAddress] = useState('');
@@ -87,9 +91,16 @@ export default function ManualProjectForm({
   const [longitude, setLongitude] = useState<number | null>(null);
   const [photos, setPhotos] = useState<string[]>([]);
 
-  // Service categories
+  // Service categories & subcategories
   const [serviceCategories, setServiceCategories] = useState<ServiceCategory[]>([]);
+  const [subcategories, setSubcategories] = useState<ServiceSubcategory[]>([]);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  const [showSubcategoryPicker, setShowSubcategoryPicker] = useState(false);
+  const [subcategoriesLoading, setSubcategoriesLoading] = useState(false);
+
+  const DROPDOWN_MAX_HEIGHT = 250;
+  const categoryDropdownAnim = useRef(new Animated.Value(0)).current;
+  const subcategoryDropdownAnim = useRef(new Animated.Value(0)).current;
 
   // UI state
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -101,21 +112,90 @@ export default function ManualProjectForm({
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [bidsCloseAt, setBidsCloseAt] = useState<string>('');
 
-  // Fetch service categories
+  // Fetch service categories (GET /services/categories)
   useEffect(() => {
-    const loadCategories = async () => {
-      try {
-        const response = await fetch(buildApiUrl(API_ENDPOINTS.SERVICES.LIST));
-        const data = await response.json();
-        if (data && Array.isArray(data)) {
-          setServiceCategories(data);
-        }
-      } catch (error) {
-        console.error('Error loading categories:', error);
-      }
-    };
-    loadCategories();
+    getCategories()
+      .then((list) => setServiceCategories(list as ServiceCategory[]))
+      .catch((err) => console.error('Error loading categories:', err));
   }, []);
+
+  // Fetch subcategories when category is selected (GET /services/:categoryId/subcategories)
+  useEffect(() => {
+    if (!selectedCategoryId) {
+      setSubcategories([]);
+      setSelectedSubcategoryId(0);
+      setSubcategoryDisplay('');
+      return;
+    }
+    setSubcategoriesLoading(true);
+    getSubcategories(selectedCategoryId)
+      .then((list) => {
+        setSubcategories(list);
+        setSelectedSubcategoryId(0);
+        setSubcategoryDisplay('');
+      })
+      .catch((err) => {
+        console.error('Error loading subcategories:', err);
+        setSubcategories([]);
+      })
+      .finally(() => setSubcategoriesLoading(false));
+  }, [selectedCategoryId]);
+
+  const openCategoryDropdown = () => {
+    setShowSubcategoryPicker(false);
+    categoryDropdownAnim.setValue(0);
+    setShowCategoryPicker(true);
+  };
+  const closeCategoryDropdown = () => {
+    Animated.timing(categoryDropdownAnim, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: false,
+    }).start(({ finished }) => {
+      if (finished) {
+        setShowCategoryPicker(false);
+      }
+    });
+  };
+
+  const openSubcategoryDropdown = () => {
+    setShowCategoryPicker(false);
+    subcategoryDropdownAnim.setValue(0);
+    setShowSubcategoryPicker(true);
+  };
+  const closeSubcategoryDropdown = () => {
+    Animated.timing(subcategoryDropdownAnim, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: false,
+    }).start(({ finished }) => {
+      if (finished) {
+        setShowSubcategoryPicker(false);
+      }
+    });
+  };
+
+  useEffect(() => {
+    if (showCategoryPicker) {
+      categoryDropdownAnim.setValue(0);
+      Animated.timing(categoryDropdownAnim, {
+        toValue: DROPDOWN_MAX_HEIGHT,
+        duration: 250,
+        useNativeDriver: false,
+      }).start();
+    }
+  }, [showCategoryPicker]);
+
+  useEffect(() => {
+    if (showSubcategoryPicker) {
+      subcategoryDropdownAnim.setValue(0);
+      Animated.timing(subcategoryDropdownAnim, {
+        toValue: DROPDOWN_MAX_HEIGHT,
+        duration: 250,
+        useNativeDriver: false,
+      }).start();
+    }
+  }, [showSubcategoryPicker]);
 
   // Pick images
   const pickImages = async () => {
@@ -209,8 +289,8 @@ export default function ManualProjectForm({
       return;
     }
 
-    if (!selectedServiceId) {
-      showError('Please select a service category');
+    if (!selectedCategoryId) {
+      showError(t('Please select a service category'));
       return;
     }
 
@@ -232,11 +312,14 @@ export default function ManualProjectForm({
         return;
       }
 
-      // Create form data
+      // Create form data - use serviceCategoryId + optional serviceSubcategoryId (new API)
       const formData = new FormData();
 
       formData.append('description', description);
-      formData.append('serviceId', selectedServiceId.toString());
+      formData.append('serviceCategoryId', selectedCategoryId.toString());
+      if (selectedSubcategoryId) {
+        formData.append('serviceSubcategoryId', selectedSubcategoryId.toString());
+      }
       
       // Budget handling
       if (budgetUnspecified) {
@@ -400,7 +483,7 @@ export default function ManualProjectForm({
         </View>
 
         {/* Service Category Selection - Dropdown */}
-        <View style={[styles.section, { zIndex: 100 }]}>
+        <View style={[styles.section, { zIndex: 102 }]}>
           <View style={styles.sectionHeader}>
             <Ionicons name="grid-outline" size={14} color={FIGMA_COLORS.bluePrimary80} />
             <Text style={[styles.sectionLabel, { color: FIGMA_COLORS.bluePrimary80 }]}>
@@ -418,26 +501,31 @@ export default function ManualProjectForm({
                   borderWidth: showCategoryPicker ? 1.5 : 1,
                 }
               ]}
-              onPress={() => setShowCategoryPicker(!showCategoryPicker)}
+              onPress={() => { showCategoryPicker ? closeCategoryDropdown() : openCategoryDropdown(); }}
             >
-              <Text 
+              <Text
                 style={[
-                  styles.selectButtonText, 
-                  { color: category ? textBody : textSecondary }
+                  styles.selectButtonText,
+                  { color: categoryDisplay ? textBody : textSecondary },
                 ]}
               >
-                {category || t('Select category')}
+                {categoryDisplay || t('Select category')}
               </Text>
-              <Ionicons 
-                name={showCategoryPicker ? "chevron-up" : "chevron-down"} 
-                size={20} 
-                color={showCategoryPicker ? primaryBlue : textSecondary} 
+              <Ionicons
+                name={showCategoryPicker ? 'chevron-up' : 'chevron-down'}
+                size={20}
+                color={showCategoryPicker ? primaryBlue : textSecondary}
               />
             </TouchableOpacity>
-            
-            {/* Dropdown Options */}
-            {showCategoryPicker && (
-              <View style={[styles.dropdownList, { backgroundColor: cardBg, borderColor: borderColor }]}>
+
+            {showCategoryPicker ? (
+              <Animated.View
+                style={[
+                  styles.dropdownList,
+                  { backgroundColor: cardBg, borderColor: borderColor },
+                  { maxHeight: categoryDropdownAnim, overflow: 'hidden' },
+                ]}
+              >
                 <ScrollView style={styles.dropdownScroll} nestedScrollEnabled>
                   {serviceCategories.map((cat) => (
                     <TouchableOpacity
@@ -445,27 +533,118 @@ export default function ManualProjectForm({
                       style={[
                         styles.dropdownOption,
                         { borderBottomColor: borderColor },
-                        selectedServiceId === cat.id && { backgroundColor: lightBlueBg },
+                        selectedCategoryId === cat.id ? { backgroundColor: lightBlueBg } : undefined,
                       ]}
                       onPress={() => {
-                        setSelectedServiceId(cat.id);
-                        setCategory(isRTL ? cat.nameAr : cat.nameEn);
-                        setShowCategoryPicker(false);
+                        setSelectedCategoryId(cat.id);
+                        setCategoryDisplay(isRTL && cat.nameAr ? cat.nameAr : (cat.nameEn || ''));
+                        closeCategoryDropdown();
                       }}
                     >
-                      <Text style={[styles.dropdownOptionText, { color: textBody }]}>
-                        {isRTL ? cat.nameAr : cat.nameEn}
+                      <Text style={[styles.dropdownOptionText, { color: textBody }]} numberOfLines={1}>
+                        {isRTL && cat.nameAr ? cat.nameAr : (cat.nameEn || '')}
                       </Text>
-                      {selectedServiceId === cat.id && (
+                      {selectedCategoryId === cat.id ? (
                         <Ionicons name="checkmark" size={18} color={primaryBlue} />
-                      )}
+                      ) : null}
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
-              </View>
-            )}
+              </Animated.View>
+            ) : null}
           </View>
         </View>
+
+        {/* Service Subcategory (optional) - shown when category has subcategories */}
+        {selectedCategoryId !== 0 && (subcategories.length > 0 || subcategoriesLoading) ? (
+          <View style={[styles.section, { zIndex: 101 }]}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="layers-outline" size={14} color={FIGMA_COLORS.bluePrimary80} />
+              <Text style={[styles.sectionLabel, { color: FIGMA_COLORS.bluePrimary80 }]}>
+                {t('Service Subcategory')} ({t('Optional')})
+              </Text>
+            </View>
+            <View style={styles.dropdownContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.selectButton,
+                  styles.editableInput,
+                  { 
+                    backgroundColor: cardBg, 
+                    borderColor: showSubcategoryPicker ? primaryBlue : borderColor,
+                    borderWidth: showSubcategoryPicker ? 1.5 : 1,
+                  }
+                ]}
+                onPress={() => { showSubcategoryPicker ? closeSubcategoryDropdown() : openSubcategoryDropdown(); }}
+                disabled={subcategoriesLoading}
+              >
+                <Text
+                  style={[
+                    styles.selectButtonText,
+                    { color: subcategoryDisplay ? textBody : textSecondary },
+                  ]}
+                >
+                  {subcategoriesLoading ? t('Loading...') : (subcategoryDisplay || t('Select subcategory'))}
+                </Text>
+                <Ionicons
+                  name={showSubcategoryPicker ? 'chevron-up' : 'chevron-down'}
+                  size={20}
+                  color={showSubcategoryPicker ? primaryBlue : textSecondary}
+                />
+              </TouchableOpacity>
+
+              {showSubcategoryPicker && !subcategoriesLoading ? (
+                <Animated.View
+                  style={[
+                    styles.dropdownList,
+                    { backgroundColor: cardBg, borderColor: borderColor },
+                    { maxHeight: subcategoryDropdownAnim, overflow: 'hidden' },
+                  ]}
+                >
+                  <ScrollView style={styles.dropdownScroll} nestedScrollEnabled>
+                    <TouchableOpacity
+                      style={[
+                        styles.dropdownOption,
+                        { borderBottomColor: borderColor },
+                        !selectedSubcategoryId ? { backgroundColor: lightBlueBg } : undefined,
+                      ]}
+                      onPress={() => {
+                        setSelectedSubcategoryId(0);
+                        setSubcategoryDisplay('');
+                        closeSubcategoryDropdown();
+                      }}
+                    >
+                      <Text style={[styles.dropdownOptionText, { color: textBody }]}>{t('None')}</Text>
+                      {!selectedSubcategoryId ? <Ionicons name="checkmark" size={18} color={primaryBlue} /> : null}
+                    </TouchableOpacity>
+                    {subcategories.map((sub) => (
+                      <TouchableOpacity
+                        key={sub.id}
+                        style={[
+                          styles.dropdownOption,
+                          { borderBottomColor: borderColor },
+                          selectedSubcategoryId === sub.id ? { backgroundColor: lightBlueBg } : undefined,
+                        ]}
+                        onPress={() => {
+                          setSelectedSubcategoryId(sub.id);
+                          setSubcategoryDisplay(isRTL && sub.nameAr ? sub.nameAr : (sub.nameEn || ''));
+                          closeSubcategoryDropdown();
+                        }}
+                      >
+                        <Text style={[styles.dropdownOptionText, { color: textBody }]} numberOfLines={1}>
+                          {isRTL && sub.nameAr ? sub.nameAr : (sub.nameEn || '')}
+                        </Text>
+                        {selectedSubcategoryId === sub.id ? (
+                          <Ionicons name="checkmark" size={18} color={primaryBlue} />
+                        ) : null}
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </Animated.View>
+              ) : null}
+            </View>
+          </View>
+        ) : null}
 
         {/* Description */}
         <View style={styles.section}>
@@ -651,7 +830,7 @@ export default function ManualProjectForm({
                 </TouchableOpacity>
               </View>
             ))}
-            {photos.length < 5 && (
+            {photos.length < 5 ? (
               <TouchableOpacity
                 style={[styles.addPhotoButton, { borderColor: primaryBlue, backgroundColor: lightBlueBg }]}
                 onPress={pickImages}
@@ -659,7 +838,7 @@ export default function ManualProjectForm({
                 <Ionicons name="add" size={28} color={primaryBlue} />
                 <Text style={[styles.addPhotoText, { color: primaryBlue }]}>{t('Add')}</Text>
               </TouchableOpacity>
-            )}
+            ) : null}
           </View>
         </View>
 
@@ -668,10 +847,10 @@ export default function ManualProjectForm({
           style={[
             styles.submitButton,
             { backgroundColor: primaryBlue },
-            (isSubmitting || !description.trim() || !selectedServiceId) && styles.submitButtonDisabled
+            (isSubmitting || !description.trim() || !selectedCategoryId) ? styles.submitButtonDisabled : undefined
           ]}
           onPress={submitProject}
-          disabled={isSubmitting || !description.trim() || !selectedServiceId}
+          disabled={isSubmitting || !description.trim() || !selectedCategoryId}
         >
           {isSubmitting ? (
             <ActivityIndicator color={FIGMA_COLORS.white} size="small" />

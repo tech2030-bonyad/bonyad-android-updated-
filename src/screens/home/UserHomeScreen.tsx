@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,11 +6,22 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
+  Image,
+  ActivityIndicator,
 } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
+import { getCategories, ServiceCategory } from '../../services/ServiceService';
+import { getServerBaseUrl } from '../../config/api';
 
 type ProjectStatus = 'pending' | 'running' | 'completed';
+
+export interface CategoryInfo {
+  id: number;
+  nameEn: string;
+  nameAr?: string;
+}
 
 interface UserHomeScreenProps {
   onPressSearch?: (query: string) => void;
@@ -24,6 +35,7 @@ interface UserHomeScreenProps {
   onPressInfo?: () => void;
   onPressFab?: () => void;
   onPressProjectStatus?: (status: ProjectStatus) => void;
+  onPressCategory?: (category: CategoryInfo) => void;
 }
 
 const colors = {
@@ -102,6 +114,15 @@ const shadows = {
   },
 };
 
+function resolveCategoryImage(cat: ServiceCategory) {
+  const c = cat.imageUrl || (cat as any).image;
+  if (!c || typeof c !== 'string') return null;
+  const s = c.trim();
+  if (s.startsWith('http://') || s.startsWith('https://')) return { uri: s };
+  const base = getServerBaseUrl();
+  return { uri: `${base}${s.startsWith('/') ? s : '/' + s}` };
+}
+
 const UserHomeScreen: React.FC<UserHomeScreenProps> = ({
   onPressSearch,
   onPressOpenServices,
@@ -114,10 +135,23 @@ const UserHomeScreen: React.FC<UserHomeScreenProps> = ({
   onPressInfo,
   onPressFab,
   onPressProjectStatus,
+  onPressCategory,
 }) => {
+  const { t, i18n } = useTranslation();
   const { colors: themeColors, theme } = useTheme();
   const isDarkMode = theme === 'dark';
   const [searchText, setSearchText] = React.useState('');
+  const [categories, setCategories] = useState<ServiceCategory[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    getCategories()
+      .then((list) => { if (mounted) setCategories(list); })
+      .catch(() => { if (mounted) setCategories([]); })
+      .finally(() => { if (mounted) setCategoriesLoading(false); });
+    return () => { mounted = false; };
+  }, []);
 
   // Dynamic colors based on theme
   const dynamicColors = {
@@ -203,13 +237,59 @@ const UserHomeScreen: React.FC<UserHomeScreenProps> = ({
           </TouchableOpacity>
         </View>
 
+        {/* Available Services - Category cards */}
+        <View style={styles.sectionHeaderSimple}>
+          <Text style={[styles.sectionTitle, { color: dynamicColors.text }]}>{t('Available Services')}</Text>
+        </View>
+
+        {categoriesLoading ? (
+          <View style={[styles.categoriesLoader, { backgroundColor: dynamicColors.cardBackground }]}>
+            <ActivityIndicator size="small" color={dynamicColors.primary} />
+            <Text style={[styles.loaderText, { color: dynamicColors.textSecondary }]}>{t('Loading categories...')}</Text>
+          </View>
+        ) : (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.providersScrollContent}
+          >
+            {categories.map((cat) => {
+              const imgSrc = resolveCategoryImage(cat);
+              const name = i18n.language === 'ar' && cat.nameAr ? cat.nameAr : cat.nameEn;
+              return (
+                <TouchableOpacity
+                  key={cat.id}
+                  style={[styles.categoryCard, { backgroundColor: dynamicColors.cardBackground }]}
+                  activeOpacity={0.8}
+                  onPress={() => onPressCategory ? onPressCategory({ id: cat.id, nameEn: cat.nameEn, nameAr: cat.nameAr }) : onPressProjectStatus?.('pending')}
+                >
+                  <View style={[styles.categoryCardImageWrap, { backgroundColor: dynamicColors.primary + '15' }]}>
+                    {imgSrc ? (
+                      <Image source={imgSrc} style={styles.categoryCardImage} resizeMode="cover" />
+                    ) : (
+                      <MaterialCommunityIcons
+                        name="briefcase-outline"
+                        size={40}
+                        color={dynamicColors.primary}
+                      />
+                    )}
+                  </View>
+                  <Text style={[styles.categoryCardTitle, { color: dynamicColors.text }]} numberOfLines={2}>
+                    {name}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        )}
+
         <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: dynamicColors.text }]}>Service Providers</Text>
+          <Text style={[styles.sectionTitle, { color: dynamicColors.text }]}>{t('Service Providers')}</Text>
           <TouchableOpacity
             activeOpacity={0.7}
             onPress={onPressServiceProvidersAll}
           >
-            <Text style={[styles.sectionLink, { color: dynamicColors.primary }]}>All services</Text>
+            <Text style={[styles.sectionLink, { color: dynamicColors.primary }]}>{t('All services')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -231,7 +311,7 @@ const UserHomeScreen: React.FC<UserHomeScreenProps> = ({
               />
             </View>
             <Text style={[styles.providerTitle, { color: dynamicColors.text }]}>
-              Design Services{'\n'}(Architectural / Inte
+              {t('Design Services')}{'\n'}(Architectural / Inte
             </Text>
           </TouchableOpacity>
 
@@ -248,7 +328,7 @@ const UserHomeScreen: React.FC<UserHomeScreenProps> = ({
               />
             </View>
             <Text style={[styles.providerTitle, { color: dynamicColors.text }]}>
-              Technical /{'\n'}ineering Consult...
+              {t('Technical /')}{'\n'}ineering Consult...
             </Text>
           </TouchableOpacity>
         </ScrollView>
@@ -432,6 +512,51 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: spacing.md,
+    overflow: 'hidden',
+  },
+  providerCircleImage: {
+    width: '100%',
+    height: '100%',
+  },
+  categoryCard: {
+    width: 180,
+    height: 220,
+    borderRadius: borderRadius.lg,
+    padding: 0,
+    marginRight: spacing.md,
+    overflow: 'hidden',
+    ...shadows.small,
+  },
+  categoryCardImageWrap: {
+    width: '100%',
+    height: '70%',
+    minHeight: 154,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  categoryCardImage: {
+    width: '100%',
+    height: '100%',
+  },
+  categoryCardTitle: {
+    padding: spacing.md,
+    paddingTop: spacing.sm,
+    textAlign: 'center',
+    ...typography.bodyMedium,
+    flex: 1,
+  },
+  categoriesLoader: {
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.lg,
+    paddingVertical: spacing.xxl,
+    borderRadius: borderRadius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loaderText: {
+    marginTop: spacing.sm,
+    ...typography.bodySmall,
   },
   providerTitle: {
     textAlign: 'center',

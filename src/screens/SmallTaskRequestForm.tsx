@@ -124,36 +124,16 @@ export default function SmallTaskRequestForm({
         return;
       }
 
-      if (latitude === null || longitude === null) {
-        showError(t('Please select a location on the map'), t('Validation Error'));
-        setIsSubmitting(false);
-        return;
-      }
-
-      if (!budget.trim() || parseFloat(budget) <= 0) {
-        showError(t('Please enter a valid budget amount'), t('Validation Error'));
-        setIsSubmitting(false);
-        return;
-      }
-
-      if (!duration.trim() || parseFloat(duration) <= 0) {
-        showError(t('Please enter a valid duration in hours'), t('Validation Error'));
-        setIsSubmitting(false);
-        return;
-      }
-
-      // Convert hours to minutes for API
-      const durationInMinutes = parseFloat(duration) * 60;
-
-      const requestBody = {
+      // API requires only taskTypeId, description, address; optional latitude, longitude (README)
+      const requestBody: Record<string, unknown> = {
         taskTypeId: taskType.id,
         description: description.trim(),
         address: address.trim(),
-        latitude: latitude,
-        longitude: longitude,
-        budget: parseFloat(budget),
-        estimatedDuration: durationInMinutes,
       };
+      if (latitude != null && longitude != null) {
+        requestBody.latitude = latitude;
+        requestBody.longitude = longitude;
+      }
 
       const response = await fetch(url, {
         method: 'POST',

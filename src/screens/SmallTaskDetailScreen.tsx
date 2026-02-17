@@ -240,11 +240,11 @@ export default function SmallTaskDetailScreen({
             return;
           }
 
-          const url = buildApiUrlWithParams(API_ENDPOINTS.SMALL_TASKS.ACCEPT_BID, { bidId });
+          const url = buildApiUrlWithParams(API_ENDPOINTS.SMALL_TASKS.ACCEPT_BID, { requestId: task.id, bidId });
           console.log('✅ Accepting bid:', url);
 
           const response = await fetch(url, {
-            method: 'PATCH',
+            method: 'POST',
             headers: {
               'Authorization': `Bearer ${token}`,
             },
@@ -471,13 +471,13 @@ export default function SmallTaskDetailScreen({
                         contentFit="contain"
                       />
                       <Text style={[styles.bidAmount, { color: colors.primary, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '700' }]}>
-                        {formatBudget(bid.amount)}
+                        {formatBudget(bid.price ?? bid.amount ?? 0)}
                       </Text>
                     </View>
                   </View>
-                  {bid.description && (
+                  {(bid.notes ?? bid.description) && (
                     <Text style={[styles.bidMessage, { color: colors.textSecondary, textAlign: isRTL ? 'right' : 'left', fontFamily: fonts?.body || fontFamily }]}>
-                      {bid.description}
+                      {bid.notes ?? bid.description}
                     </Text>
                   )}
                   <View style={[styles.bidFooterRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>

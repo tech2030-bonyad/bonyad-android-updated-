@@ -97,10 +97,10 @@ export default function SmallTaskTypeSelectionScreen({
     if (!searchQuery.trim()) return true;
     const query = searchQuery.toLowerCase();
     const name = i18n.language === 'ar' ? taskType.nameAr : taskType.nameEn;
-    const description = taskType.description || '';
+    const desc = taskType.description ?? (i18n.language === 'ar' ? (taskType as any).descriptionAr : (taskType as any).descriptionEn) ?? '';
     return (
       name.toLowerCase().includes(query) ||
-      description.toLowerCase().includes(query)
+      (desc && String(desc).toLowerCase().includes(query))
     );
   });
 

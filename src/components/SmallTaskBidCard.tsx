@@ -152,7 +152,7 @@ export default function SmallTaskBidCard({
         </View>
         <View style={styles.statBox}>
           <Text style={[styles.statValue, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>
-            {bid.estimatedHours} {t('hours')}
+            {(bid.estimatedDuration ?? bid.estimatedHours) != null ? `${bid.estimatedDuration ?? bid.estimatedHours} ${bid.estimatedDuration != null ? t('min') : t('hours')}` : null}
           </Text>
           <Text style={[styles.statLabel, { color: colors.textSecondary }]}>{t('Duration')}</Text>
         </View>
@@ -166,18 +166,18 @@ export default function SmallTaskBidCard({
       <View style={styles.amountRow}>
         <Text style={[styles.amountLabel, { color: colors.textSecondary }]}>{t('Bid Amount')}</Text>
         <Text style={[styles.amountValue, { color: colors.primary, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '700' }]}>
-          {formatBudget(bid.amount)}
+          {formatBudget(bid.price ?? bid.amount ?? 0)}
         </Text>
       </View>
 
       {/* Proposal */}
-      {bid.description && (
+      {(bid.notes ?? bid.description) && (
         <View style={styles.proposalSection}>
           <Text style={[styles.proposalTitle, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>
             {t('Proposal')}
           </Text>
           <Text style={[styles.proposalText, { color: colors.textSecondary, fontFamily: fonts?.body || fontFamily }]}>
-            {bid.description}
+            {bid.notes ?? bid.description}
           </Text>
         </View>
       )}

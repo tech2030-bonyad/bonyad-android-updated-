@@ -53,6 +53,7 @@ import SmallTaskRequestForm from './SmallTaskRequestForm';
 import SmallTaskDetailScreen from './SmallTaskDetailScreen';
 import PendingSmallTaskScreen from './PendingSmallTaskScreen';
 import AssignedSmallTaskScreen from './AssignedSmallTaskScreen';
+import SmallTaskPaymentScreen from './SmallTaskPaymentScreen';
 import InProgressSmallTaskScreen from './InProgressSmallTaskScreen';
 import CompletedSmallTaskScreen from './CompletedSmallTaskScreen';
 import AnimatedProjectTypeToggle from '../components/AnimatedProjectTypeToggle';
@@ -60,6 +61,8 @@ import AnimatedProjectTypeToggle from '../components/AnimatedProjectTypeToggle';
 interface ProjectsScreenProps {
   onBack?: () => void;
   filter?: 'all' | 'available' | 'running' | 'completed' | 'bid_received' | 'direct_offers';
+  /** When set, filter available projects by this service category id (e.g. from Home → Category → View available projects) */
+  initialServiceCategoryId?: number | null;
   onOpenChat?: (roomId: string, receiverId: number, receiverName: string, projectId?: number | null) => void;
   onViewTechnician?: (technicianId: number) => void;
   onBookAppointment?: (technicianId: number, technicianName: string, projectId?: number) => void;
@@ -76,6 +79,8 @@ interface Project {
   serviceNameEn: string;
   serviceNameAr: string;
   serviceId: number;
+  /** Category (main service group) when using category/subcategory API */
+  serviceCategory?: { id: number; nameEn?: string; nameAr?: string } | null;
   createdAt: string;
   timeRequiredDays?: number;
   requirements?: string[];
@@ -134,7 +139,7 @@ const FIGMA_COLORS = {
   white: '#FFFFFF',
 };
 
-export default function ProjectsScreen({ onBack, filter = 'available', onOpenChat, onViewTechnician, onBookAppointment, onRequestVisit, onFilterChange }: ProjectsScreenProps) {
+export default function ProjectsScreen({ onBack, filter = 'available', initialServiceCategoryId, onOpenChat, onViewTechnician, onBookAppointment, onRequestVisit, onFilterChange }: ProjectsScreenProps) {
   const { t, i18n } = useTranslation();
   const { colors, theme } = useTheme();
   const { fontFamily, scaledSize } = useFontFamily();
@@ -145,6 +150,8 @@ export default function ProjectsScreen({ onBack, filter = 'available', onOpenCha
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('All');
+  /** When set, list is filtered by this category id (from Home → Category → View available projects) */
+  const [serviceCategoryFilterId, setServiceCategoryFilterId] = useState<number | null>(initialServiceCategoryId ?? null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [showProjectDetail, setShowProjectDetail] = useState(false);
@@ -157,8 +164,9 @@ export default function ProjectsScreen({ onBack, filter = 'available', onOpenCha
   const [selectedTaskType, setSelectedTaskType] = useState<any>(null);
   const [smallTasksRefreshTrigger, setSmallTasksRefreshTrigger] = useState(0);
   // New pages for technicians and users
-  const [currentPage, setCurrentPage] = useState<'list' | 'contract-signing' | 'progress' | 'user-phase-view' | 'user-contract-signing' | 'user-progress' | 'completed-project' | 'technician-profile' | 'project-detail' | 'owner-edit' | 'project-detail-screen' | 'pending-project' | 'bid-received-project' | 'technician-pending-project' | 'technician-bid-received' | 'approved-project' | 'technician-approved-project' | 'new-project' | 'project-type-selection' | 'small-task-type-selection' | 'small-task-request-form' | 'ai-form' | 'manual-form' | 'small-tasks-list' | 'small-task-detail' | 'pending-small-task' | 'assigned-small-task' | 'in-progress-small-task' | 'completed-small-task'>('list');
+  const [currentPage, setCurrentPage] = useState<'list' | 'contract-signing' | 'progress' | 'user-phase-view' | 'user-contract-signing' | 'user-progress' | 'completed-project' | 'technician-profile' | 'project-detail' | 'owner-edit' | 'project-detail-screen' | 'pending-project' | 'bid-received-project' | 'technician-pending-project' | 'technician-bid-received' | 'approved-project' | 'technician-approved-project' | 'new-project' | 'project-type-selection' | 'small-task-type-selection' | 'small-task-request-form' | 'ai-form' | 'manual-form' | 'small-tasks-list' | 'small-task-detail' | 'pending-small-task' | 'assigned-small-task' | 'small-task-payment' | 'in-progress-small-task' | 'completed-small-task'>('list');
   const [selectedTechnicianId, setSelectedTechnicianId] = useState<number | null>(null);
+  const [smallTaskPaymentAmount, setSmallTaskPaymentAmount] = useState<number>(0);
   
   // Android Filter Dropdown State
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
@@ -183,6 +191,13 @@ export default function ProjectsScreen({ onBack, filter = 'available', onOpenCha
   useEffect(() => {
     setLocalFilter(filter);
   }, [filter]);
+
+  // When navigating from Home → Category → View available projects, apply category filter
+  useEffect(() => {
+    if (initialServiceCategoryId != null) {
+      setServiceCategoryFilterId(initialServiceCategoryId);
+    }
+  }, [initialServiceCategoryId]);
 
   // Calculate responsive breakpoints
   const IS_WEB = Platform.OS === 'web';
@@ -369,7 +384,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', onOpenCha
 
   useEffect(() => {
     filterProjects();
-  }, [selectedCategory, projects, userRole, localFilter, searchQuery]);
+  }, [selectedCategory, projects, userRole, localFilter, searchQuery, serviceCategoryFilterId]);
 
   const loadServices = async () => {
     try {
@@ -529,78 +544,77 @@ export default function ProjectsScreen({ onBack, filter = 'available', onOpenCha
     const isAndroid = Platform.OS === 'android';
 
     // Step 1: Apply localFilter status filtering (available/running/completed/etc.)
-    // This determines which projects to show based on the tab/filter selected
-    if (localFilter === 'available') {
-      if (isTechnician) {
-        // For technicians: Available Projects - show PENDING projects (available to bid on)
-        filtered = filtered.filter(p => (p.status || '').toUpperCase() === 'PENDING');
-      } else {
-        // For users: Available Projects - show PENDING and BID_RECEIVED projects
-        filtered = filtered.filter(p => {
-          const status = (p.status || '').toUpperCase();
-          return status === 'PENDING' || status === 'BID_RECEIVED';
-        });
+    // On Android we skip this so all projects show; user filters via the status dropdown only.
+    if (!isAndroid) {
+      if (localFilter === 'available') {
+        if (isTechnician) {
+          filtered = filtered.filter(p => (p.status || '').toUpperCase() === 'PENDING');
+        } else {
+          filtered = filtered.filter(p => {
+            const status = (p.status || '').toUpperCase();
+            return status === 'PENDING' || status === 'BID_RECEIVED';
+          });
+        }
+      } else if (localFilter === 'running') {
+        if (userRole?.toUpperCase() === 'TECHNICIAN') {
+          filtered = filtered.filter(p => {
+            const status = (p.status || '').toUpperCase();
+            return status !== 'PENDING' && status !== 'COMPLETED';
+          });
+        } else {
+          const runningStatuses = [
+            'APPROVED',
+            'PHASE_PLANNING',
+            'PHASE_PLANNING_APPROVED',
+            'CONTRACT_SIGNING',
+            'IN_PROGRESS'
+          ];
+          filtered = filtered.filter(p => {
+            const status = (p.status || '').toUpperCase();
+            return runningStatuses.includes(status);
+          });
+        }
+      } else if (localFilter === 'completed') {
+        filtered = filtered.filter(p => 
+          (p.status || '').toUpperCase() === 'COMPLETED'
+        );
+      } else if (localFilter === 'bid_received') {
+        filtered = filtered;
+      } else if (localFilter === 'direct_offers') {
+        filtered = filtered;
       }
-    } else if (localFilter === 'running') {
-      // For technicians: Running Projects - exclude PENDING and COMPLETED
-      // For users: Running Projects - filter by statuses that support phases
-      if (userRole?.toUpperCase() === 'TECHNICIAN') {
-        // Technician: All projects except PENDING and COMPLETED
-        filtered = filtered.filter(p => {
-          const status = (p.status || '').toUpperCase();
-          return status !== 'PENDING' && status !== 'COMPLETED';
-        });
-      } else {
-        // User: Running Projects - filter by statuses that support phases
-        const runningStatuses = [
-          'APPROVED',              // Technician can plan phases
-          'PHASE_PLANNING',        // User reviewing phases
-          'PHASE_PLANNING_APPROVED', // Phases approved, contract signing
-          'CONTRACT_SIGNING',      // Contract signing phase
-          'IN_PROGRESS'            // Work in progress
-        ];
-        filtered = filtered.filter(p => {
-          const status = (p.status || '').toUpperCase();
-          return runningStatuses.includes(status);
-        });
-      }
-    } else if (localFilter === 'completed') {
-      // Completed Projects - filter by COMPLETED status
-      filtered = filtered.filter(p => 
-        (p.status || '').toUpperCase() === 'COMPLETED'
-      );
-    } else if (localFilter === 'bid_received') {
-      // My Bids - for technicians, these are already bids transformed to projects
-      // Show all bids (they're already filtered by the API)
-      // No additional status filtering needed - API returns only bids
-      filtered = filtered;
-    } else if (localFilter === 'direct_offers') {
-      // Direct Offers - for technicians
-      // The API /projects/my-assigned?type=DIRECT_ASSIGNMENT already filters correctly
-      // No additional status filtering needed
-      filtered = filtered;
     }
-    // If localFilter is 'all' or undefined, show all projects (no filtering)
 
     // Step 2: Apply additional filters based on platform
     if (isAndroid) {
       // Android: Filter by project status from dropdown (if a specific status is selected)
+      console.log('🔍 [filterProjects] Android - selectedCategory:', selectedCategory, 'projects count:', filtered.length);
       if (selectedCategory !== 'All') {
         filtered = filtered.filter(p => {
           const projectStatus = (p.status || '').toUpperCase().trim();
           const selectedStatus = selectedCategory.toUpperCase().trim();
-          return projectStatus === selectedStatus;
+          const matches = projectStatus === selectedStatus;
+          console.log('🔍 [filterProjects] Comparing:', projectStatus, 'vs', selectedStatus, '=', matches);
+          return matches;
         });
       }
-      // If "All" is selected, keep the localFilter results
+      console.log('🔍 [filterProjects] After filter:', filtered.length, 'projects');
     } else {
-      // Non-Android: Filter by service category
-    if (selectedCategory !== 'All') {
-      const serviceId = parseInt(selectedCategory);
-      if (!isNaN(serviceId)) {
-        filtered = filtered.filter(p => p.serviceId === serviceId);
+      // Non-Android: Filter by service category (dropdown)
+      if (selectedCategory !== 'All') {
+        const serviceId = parseInt(selectedCategory);
+        if (!isNaN(serviceId)) {
+          filtered = filtered.filter(p => p.serviceId === serviceId);
         }
       }
+    }
+
+    // Step 2b: Filter by service category when opened from Home → Category → View available projects
+    if (serviceCategoryFilterId != null) {
+      filtered = filtered.filter(p => {
+        const categoryId = (p as Project).serviceCategory?.id;
+        return categoryId === serviceCategoryFilterId;
+      });
     }
 
     // Step 3: Apply search query filter (applies to all platforms)
@@ -687,90 +701,97 @@ export default function ProjectsScreen({ onBack, filter = 'available', onOpenCha
   const handleProjectCardPress = (item: Project) => {
     const status = item.status?.toUpperCase();
     const isTechnician = userRole?.toUpperCase() === 'TECHNICIAN';
+    const isAndroid = Platform.OS === 'android';
     
-    // For technicians in running projects, navigate to specific pages based on status
+    console.log('🔵 [ProjectsScreen] Card pressed - Status:', status, 'isTechnician:', isTechnician, 'isAndroid:', isAndroid);
+    setSelectedProject(item);
+
+    // On Android: Route purely by project status (no localFilter tabs)
+    if (isAndroid) {
+      if (status === 'PENDING') {
+        if (isTechnician) {
+          setCurrentPage('technician-pending-project');
+        } else {
+          setCurrentPage('pending-project');
+        }
+      } else if (status === 'BID_RECEIVED') {
+        if (isTechnician) {
+          setCurrentPage('technician-bid-received');
+        } else {
+          setCurrentPage('bid-received-project');
+        }
+      } else if (status === 'APPROVED' || status === 'PHASE_PLANNING' || status === 'PHASE_PLANNING_APPROVED') {
+        if (isTechnician) {
+          setCurrentPage('technician-approved-project');
+        } else {
+          setCurrentPage('approved-project');
+        }
+      } else if (status === 'CONTRACT_SIGNING') {
+        if (isTechnician) {
+          setCurrentPage('contract-signing');
+        } else {
+          setCurrentPage('user-contract-signing');
+        }
+      } else if (status === 'IN_PROGRESS') {
+        if (isTechnician) {
+          setCurrentPage('progress');
+        } else {
+          setCurrentPage('user-progress');
+        }
+      } else if (status === 'COMPLETED') {
+        setCurrentPage('completed-project');
+      } else {
+        // Fallback to ProjectDetailModal for unknown statuses
+        setShowProjectDetail(true);
+      }
+      return;
+    }
+    
+    // Non-Android: Route based on localFilter + status (original logic)
     if (isTechnician && localFilter === 'running') {
       console.log('🔵 [ProjectsScreen] Technician clicked on running project');
-      console.log('🔵 [ProjectsScreen] Project Status:', status);
-      setSelectedProject(item);
-      
       if (status === 'APPROVED') {
-        console.log('🔵 [ProjectsScreen] Navigating to ApprovedProjectScreen (Technician)');
         setCurrentPage('technician-approved-project');
       } else if (status === 'PHASE_PLANNING') {
-        console.log('🔵 [ProjectsScreen] Navigating to ApprovedProjectScreen with Phase Management (Technician)');
         setCurrentPage('technician-approved-project');
       } else if (status === 'CONTRACT_SIGNING') {
-        console.log('🔵 [ProjectsScreen] Navigating to ContractSigningPage');
         setCurrentPage('contract-signing');
       } else if (status === 'IN_PROGRESS') {
-        console.log('🔵 [ProjectsScreen] Navigating to ProjectProgressPage');
         setCurrentPage('progress');
       } else {
-        // Fallback to ProjectDetailModal for other statuses
         setShowProjectDetail(true);
       }
     } 
-    // For users in running projects, navigate to specific pages based on status
     else if (!isTechnician && localFilter === 'running') {
       console.log('🔵 [ProjectsScreen] User clicked on running project');
-      console.log('🔵 [ProjectsScreen] Project Status:', status);
-      setSelectedProject(item);
-      
       if (status === 'APPROVED') {
-        console.log('🔵 [ProjectsScreen] Navigating to ApprovedProjectScreen (User)');
         setCurrentPage('approved-project');
       } else if (status === 'PHASE_PLANNING') {
-        console.log('🔵 [ProjectsScreen] Navigating to ApprovedProjectScreen (User - Phase Planning)');
         setCurrentPage('approved-project');
       } else if (status === 'CONTRACT_SIGNING') {
-        console.log('🔵 [ProjectsScreen] Navigating to UserContractSigningPage');
         setCurrentPage('user-contract-signing');
       } else if (status === 'IN_PROGRESS') {
-        console.log('🔵 [ProjectsScreen] Navigating to UserProjectProgressPage');
         setCurrentPage('user-progress');
       } else {
-        // For other statuses, use ProjectDetailModal
         setShowProjectDetail(true);
       }
     }
-    // For users and technicians in completed projects, navigate to CompletedProjectScreen
     else if (localFilter === 'completed' || status === 'COMPLETED') {
-      console.log('🔵 [ProjectsScreen] Clicked on completed project');
-      console.log('🔵 [ProjectsScreen] Project Status:', status);
-      console.log('🔵 [ProjectsScreen] Is Technician:', isTechnician);
-      setSelectedProject(item);
       setCurrentPage('completed-project');
     }
-    // For technicians in available filter, use PendingProjectScreen with isTechnician
     else if (isTechnician && localFilter === 'available') {
-      console.log('🔵 [ProjectsScreen] Technician clicked on available project');
-      console.log('🔵 [ProjectsScreen] Project Status:', status);
-      setSelectedProject(item);
       setCurrentPage('technician-pending-project');
     }
-    // For technicians in bid_received filter (My Bids), use BidReceivedProjectScreen
     else if (isTechnician && localFilter === 'bid_received') {
-      console.log('🔵 [ProjectsScreen] Technician clicked on bid_received project (My Bids)');
-      console.log('🔵 [ProjectsScreen] Project Status:', status);
-      setSelectedProject(item);
       setCurrentPage('technician-bid-received');
     }
-    // For users in available filter with PENDING status, use PendingProjectScreen
     else if (!isTechnician && localFilter === 'available' && status === 'PENDING') {
-      console.log('🔵 [ProjectsScreen] User clicked on PENDING project');
-      setSelectedProject(item);
       setCurrentPage('pending-project');
     }
-    // For users in available filter with BID_RECEIVED status, use BidReceivedProjectScreen
     else if (!isTechnician && localFilter === 'available' && status === 'BID_RECEIVED') {
-      console.log('🔵 [ProjectsScreen] User clicked on BID_RECEIVED project');
-      setSelectedProject(item);
       setCurrentPage('bid-received-project');
     }
-    // For other filters or cases, use ProjectDetailModal
     else {
-      setSelectedProject(item);
       setShowProjectDetail(true);
     }
   };
@@ -979,7 +1000,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', onOpenCha
       
       {/* Approved Project Screen - Technician View (handles both APPROVED and PHASE_PLANNING) */}
       {userRole?.toUpperCase() === 'TECHNICIAN' && 
-       localFilter === 'running' && 
+       (Platform.OS === 'android' || localFilter === 'running') && 
        selectedProject && 
        currentPage === 'technician-approved-project' && (
         <ApprovedProjectScreen
@@ -999,7 +1020,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', onOpenCha
       )}
 
       {userRole?.toUpperCase() === 'TECHNICIAN' && 
-       localFilter === 'running' && 
+       (Platform.OS === 'android' || localFilter === 'running') && 
        selectedProject && 
        currentPage === 'contract-signing' && (
         <ContractSigningProjectScreen
@@ -1020,7 +1041,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', onOpenCha
       )}
 
       {userRole?.toUpperCase() === 'TECHNICIAN' && 
-       localFilter === 'running' && 
+       (Platform.OS === 'android' || localFilter === 'running') && 
        selectedProject && 
        currentPage === 'progress' && (
         <InProgressProjectScreen
@@ -1045,7 +1066,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', onOpenCha
       
       {/* Approved Project Screen - User View */}
       {userRole?.toUpperCase() !== 'TECHNICIAN' && 
-       localFilter === 'running' && 
+       (Platform.OS === 'android' || localFilter === 'running') && 
        selectedProject && 
        currentPage === 'approved-project' && (
         <ApprovedProjectScreen
@@ -1071,7 +1092,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', onOpenCha
 
       {/* Legacy UserPhaseViewPage - kept for backwards compatibility */}
       {userRole?.toUpperCase() !== 'TECHNICIAN' && 
-       localFilter === 'running' && 
+       (Platform.OS === 'android' || localFilter === 'running') && 
        selectedProject && 
        currentPage === 'user-phase-view' && (
         <UserPhaseViewPage
@@ -1093,7 +1114,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', onOpenCha
       {/* UserPhaseReviewPage removed - PHASE_PLANNING now uses ApprovedProjectScreen */}
 
       {userRole?.toUpperCase() !== 'TECHNICIAN' && 
-       localFilter === 'running' && 
+       (Platform.OS === 'android' || localFilter === 'running') && 
        selectedProject && 
        currentPage === 'user-contract-signing' && (
         <ContractSigningProjectScreen
@@ -1114,7 +1135,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', onOpenCha
       )}
 
       {userRole?.toUpperCase() !== 'TECHNICIAN' && 
-       localFilter === 'running' && 
+       (Platform.OS === 'android' || localFilter === 'running') && 
        selectedProject && 
        currentPage === 'user-progress' && (
         <InProgressProjectScreen
@@ -1307,39 +1328,42 @@ export default function ProjectsScreen({ onBack, filter = 'available', onOpenCha
       {/* Android Design - New Redesign */}
       {Platform.OS === 'android' ? (
         <View style={styles.androidContainer}>
-          {/* Content Area */}
-          <ScrollView 
-            style={styles.androidContent}
-            contentContainerStyle={styles.androidContentContainer}
-            showsVerticalScrollIndicator={false}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                tintColor="#1e5a9e"
-              />
-            }
-          >
-            {/* Project Type Selector - Toggle */}
-            <View style={styles.androidProjectTypeSelector}>
-              <AnimatedProjectTypeToggle
-                selectedType={projectType}
-                onTypeChange={setProjectType}
-              />
-            </View>
+          {/* Project Type Selector - Toggle (always visible) */}
+          <View style={styles.androidProjectTypeSelector}>
+            <AnimatedProjectTypeToggle
+              selectedType={projectType}
+              onTypeChange={setProjectType}
+            />
+          </View>
 
-            {/* Show Small Tasks or Large Projects */}
-            {projectType === 'small' ? (
+          {/* Show Small Tasks or Large Projects */}
+          {projectType === 'small' ? (
+            <ScrollView
+              style={styles.androidContent}
+              contentContainerStyle={styles.androidContentContainer}
+              showsVerticalScrollIndicator={false}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  tintColor="#1e5a9e"
+                />
+              }
+            >
               <SmallTasksListScreen
                 onBack={onBack}
                 onTaskPress={(task) => {
                   // Route to appropriate status screen based on task status
+                  // Per README: PENDING → ACCEPTED (after bid acceptance) → IN_PROGRESS (after payment) → COMPLETED
                   const status = (task.status || 'PENDING').toUpperCase();
                   switch (status) {
                     case 'PENDING':
                       setCurrentPage('pending-small-task');
                       break;
+                    case 'ACCEPTED':
                     case 'ASSIGNED':
+                      // ACCEPTED = bid accepted, payment required (per README)
+                      // ASSIGNED = legacy status, treat same as ACCEPTED
                       setCurrentPage('assigned-small-task');
                       break;
                     case 'IN_PROGRESS':
@@ -1347,6 +1371,10 @@ export default function ProjectsScreen({ onBack, filter = 'available', onOpenCha
                       break;
                     case 'COMPLETED':
                       setCurrentPage('completed-small-task');
+                      break;
+                    case 'CANCELLED':
+                      // Show detail screen for cancelled tasks
+                      setCurrentPage('small-task-detail');
                       break;
                     default:
                       setCurrentPage('small-task-detail');
@@ -1356,144 +1384,62 @@ export default function ProjectsScreen({ onBack, filter = 'available', onOpenCha
                 filter={localFilter === 'available' ? 'available' : localFilter === 'running' ? 'in-progress' : localFilter === 'completed' ? 'completed' : 'available'}
                 refreshTrigger={smallTasksRefreshTrigger}
               />
-            ) : (
-              <>
-                {/* Title Section */}
+            </ScrollView>
+          ) : (
+            <View style={{ flex: 1 }}>
+              {/* Header Section - Outside FlatList */}
+              <View style={styles.androidHeaderSection}>
                 <View style={styles.androidTitleSection}>
                   <Text style={styles.androidPageTitle}>{t('My Projects')}</Text>
                   <Text style={styles.androidProjectCount}>
                     {filteredProjects.length} {t('Total Projects')}
                   </Text>
                 </View>
-
-            {/* Search Bar */}
-            <View style={styles.androidSearchContainer}>
-              <Feather name="search" size={20} color="#9ca3af" />
-              <TextInput
-                style={styles.androidSearchInput}
-                placeholder="search for project.."
-                placeholderTextColor="#9ca3af"
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-              />
-            </View>
-
-            {/* Filter Dropdown */}
-            <View style={styles.androidFilterContainer}>
-              <TouchableOpacity
-                style={styles.androidFilterButton}
-                onPress={toggleFilterDropdown}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.androidFilterButtonText}>
-                  {getStatusFilterLabel(selectedCategory)}
-                </Text>
-                <Animated.View style={{ transform: [{ rotate: rotateInterpolate }] }}>
-                  <Feather name="chevron-down" size={20} color="#1e5a9e" />
-                </Animated.View>
-              </TouchableOpacity>
-
-              <Animated.View
-                style={[
-                  styles.androidFilterDropdown,
-                  {
-                    maxHeight: dropdownHeight,
-                    opacity: dropdownOpacity,
-                  },
-                ]}
-              >
-                <ScrollView
-                  style={[styles.androidFilterDropdownContent, { maxHeight: getFixedDropdownHeight() }]}
-                  contentContainerStyle={styles.androidFilterDropdownContentContainer}
-                  nestedScrollEnabled={true}
-                  showsVerticalScrollIndicator={true}
-                  bounces={false}
-                  scrollEnabled={true}
-                  keyboardShouldPersistTaps="handled"
-                >
-                  {/* All Option */}
+                <View style={styles.androidSearchContainer}>
+                  <Feather name="search" size={20} color="#9ca3af" />
+                  <TextInput
+                    style={styles.androidSearchInput}
+                    placeholder="search for project.."
+                    placeholderTextColor="#9ca3af"
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                  />
+                </View>
+                <View style={styles.androidFilterContainer}>
                   <TouchableOpacity
-                    style={[
-                      styles.androidFilterOption,
-                      selectedCategory === 'All' && styles.androidFilterOptionActive,
-                    ]}
-                    onPress={() => handleStatusSelect('All')}
+                    style={styles.androidFilterButton}
+                    onPress={toggleFilterDropdown}
+                    activeOpacity={0.7}
                   >
-                    <Text
-                      style={[
-                        styles.androidFilterOptionText,
-                        selectedCategory === 'All' && styles.androidFilterOptionTextActive,
-                      ]}
-                    >
-                      {t('All')}
+                    <Text style={styles.androidFilterButtonText}>
+                      {getStatusFilterLabel(selectedCategory)}
                     </Text>
-                    {selectedCategory === 'All' && (
-                      <Feather name="check" size={16} color="#1e5a9e" />
-                    )}
+                    <Animated.View style={{ transform: [{ rotate: rotateInterpolate }] }}>
+                      <Feather name="chevron-down" size={20} color="#1e5a9e" />
+                    </Animated.View>
                   </TouchableOpacity>
-
-                  {/* Project Statuses */}
-                  {getUniqueStatuses().map((status) => (
-                    <TouchableOpacity
-                      key={status}
-                      style={[
-                        styles.androidFilterOption,
-                        selectedCategory === status && styles.androidFilterOptionActive,
-                      ]}
-                      onPress={() => handleStatusSelect(status)}
-                    >
-                      <Text
-                        style={[
-                          styles.androidFilterOptionText,
-                          selectedCategory === status && styles.androidFilterOptionTextActive,
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {getStatusLabel(status)}
-                      </Text>
-                      {selectedCategory === status && (
-                        <Feather name="check" size={16} color="#1e5a9e" />
-                      )}
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </Animated.View>
-            </View>
-
-            {/* View All Link */}
-            <View style={styles.androidViewAllContainer}>
-              <TouchableOpacity>
-                <Text style={styles.androidViewAllText}>{t('View All')} &gt;</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Project Grid */}
-            {filteredProjects.length === 0 ? (
-              <View style={styles.androidEmptyContainer}>
-                <Ionicons name="folder-outline" size={80} color="#9ca3af" />
-                <Text style={styles.androidEmptyText}>
-                  {t('No projects found')}
-                </Text>
+                </View>
               </View>
-            ) : (
-              <View style={styles.androidProjectGrid}>
-                {filteredProjects.map((project) => {
-                  // Truncate description to first 7 words
+
+              {/* Project Cards List */}
+              <FlatList
+                data={filteredProjects}
+                extraData={[selectedCategory, searchQuery]}
+                keyExtractor={(item) => item.id.toString()}
+                renderItem={({ item: project }) => {
                   const truncateDescription = (text: string): string => {
                     if (!text) return t('project description');
                     const words = text.trim().split(/\s+/);
                     if (words.length <= 7) return text;
                     return words.slice(0, 7).join(' ') + '...';
                   };
-
                   const statusLabel = getStatusLabel(project.status || '');
                   const statusColor = getStatusColor(project.status || '');
-
                   return (
                     <TouchableOpacity
-                      key={project.id}
                       style={styles.androidProjectCard}
                       onPress={() => handleProjectCardPress(project)}
+                      activeOpacity={0.7}
                     >
                       <View style={styles.androidCardHeader}>
                         <Text style={styles.androidProjectTitle}>
@@ -1510,8 +1456,6 @@ export default function ProjectsScreen({ onBack, filter = 'available', onOpenCha
                       <Text style={styles.androidProjectDescription}>
                         {truncateDescription(project.description || '')}
                       </Text>
-                      
-                      {/* Price Section */}
                       <View style={styles.androidPriceContainer}>
                         <ExpoImage
                           source={riyalLogo}
@@ -1524,12 +1468,96 @@ export default function ProjectsScreen({ onBack, filter = 'available', onOpenCha
                       </View>
                     </TouchableOpacity>
                   );
-                })}
-              </View>
+                }}
+                ListEmptyComponent={
+                  <View style={styles.androidEmptyContainer}>
+                    <Ionicons name="folder-outline" size={80} color="#9ca3af" />
+                    <Text style={styles.androidEmptyText}>
+                      {t('No projects found')}
+                    </Text>
+                  </View>
+                }
+                contentContainerStyle={[styles.androidListContentContainer, filteredProjects.length === 0 && styles.androidListEmptyContent]}
+                style={styles.androidContent}
+                showsVerticalScrollIndicator={true}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={onRefresh}
+                    tintColor="#1e5a9e"
+                  />
+                }
+              />
+
+              {/* Filter Dropdown Overlay - Rendered at container level for proper z-index */}
+              {showFilterDropdown && (
+                <View style={styles.androidDropdownOverlay}>
+                  <TouchableOpacity 
+                    style={styles.androidDropdownBackdrop} 
+                    activeOpacity={1} 
+                    onPress={() => setShowFilterDropdown(false)}
+                  />
+                  <Animated.View
+                    style={[
+                      styles.androidFilterDropdownOverlay,
+                      { opacity: dropdownOpacity },
+                    ]}
+                  >
+                    <ScrollView
+                      style={{ maxHeight: getFixedDropdownHeight() }}
+                      contentContainerStyle={styles.androidFilterDropdownContentContainer}
+                      nestedScrollEnabled={true}
+                      showsVerticalScrollIndicator={true}
+                      bounces={false}
+                    >
+                      <TouchableOpacity
+                        style={[
+                          styles.androidFilterOption,
+                          selectedCategory === 'All' && styles.androidFilterOptionActive,
+                        ]}
+                        onPress={() => handleStatusSelect('All')}
+                      >
+                        <Text
+                          style={[
+                            styles.androidFilterOptionText,
+                            selectedCategory === 'All' && styles.androidFilterOptionTextActive,
+                          ]}
+                        >
+                          {t('All')}
+                        </Text>
+                        {selectedCategory === 'All' && (
+                          <Feather name="check" size={16} color="#1e5a9e" />
+                        )}
+                      </TouchableOpacity>
+                      {getUniqueStatuses().map((status) => (
+                        <TouchableOpacity
+                          key={status}
+                          style={[
+                            styles.androidFilterOption,
+                            selectedCategory === status && styles.androidFilterOptionActive,
+                          ]}
+                          onPress={() => handleStatusSelect(status)}
+                        >
+                          <Text
+                            style={[
+                              styles.androidFilterOptionText,
+                              selectedCategory === status && styles.androidFilterOptionTextActive,
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {getStatusLabel(status)}
+                          </Text>
+                          {selectedCategory === status && (
+                            <Feather name="check" size={16} color="#1e5a9e" />
+                          )}
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </Animated.View>
+                </View>
+              )}
+            </View>
             )}
-              </>
-            )}
-          </ScrollView>
 
           {/* FAB - Floating Action Button */}
           <TouchableOpacity
@@ -1980,6 +2008,26 @@ export default function ProjectsScreen({ onBack, filter = 'available', onOpenCha
           onViewTechnician={(technicianId) => {
             setSelectedTechnicianId(technicianId);
             setCurrentPage('technician-profile');
+          }}
+          onPay={(task, amount) => {
+            setSelectedProject(task as any);
+            setSmallTaskPaymentAmount(amount);
+            setCurrentPage('small-task-payment');
+          }}
+        />
+      )}
+
+      {currentPage === 'small-task-payment' && selectedProject && (
+        <SmallTaskPaymentScreen
+          task={selectedProject as any}
+          amount={smallTaskPaymentAmount}
+          onBack={() => {
+            setCurrentPage('assigned-small-task');
+          }}
+          onSuccess={() => {
+            setSmallTasksRefreshTrigger(prev => prev + 1);
+            setCurrentPage('list');
+            setSelectedProject(null);
           }}
         />
       )}
@@ -2544,6 +2592,49 @@ const styles = StyleSheet.create({
   androidContentContainer: {
     padding: 16,
     paddingBottom: 100,
+    flexGrow: 1,
+  },
+  androidListContentContainer: {
+    padding: 16,
+    paddingBottom: 100,
+  },
+  androidListEmptyContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  androidHeaderSection: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    backgroundColor: '#f8fafc',
+  },
+  androidDropdownOverlay: {
+    position: 'absolute',
+    top: 130, // Position below the filter button
+    left: 16,
+    right: 16,
+    zIndex: 9999,
+    elevation: 999,
+  },
+  androidDropdownBackdrop: {
+    position: 'absolute',
+    top: -200,
+    left: -100,
+    right: -100,
+    bottom: -1000,
+    backgroundColor: 'transparent',
+  },
+  androidFilterDropdownOverlay: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 10,
   },
   androidTitleSection: {
     marginBottom: 8,

@@ -6,7 +6,9 @@ import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 
 interface SmallTaskStatusTimelineProps {
-  currentStatus: 'PENDING' | 'ASSIGNED' | 'IN_PROGRESS' | 'COMPLETED';
+  // Per README: PENDING → ACCEPTED (bid accepted, payment required) → IN_PROGRESS (payment done) → COMPLETED
+  // ASSIGNED is legacy status, treated as ACCEPTED
+  currentStatus: 'PENDING' | 'ACCEPTED' | 'ASSIGNED' | 'IN_PROGRESS' | 'COMPLETED';
   assignedTechnicianName?: string;
   completedAt?: string;
 }
@@ -20,23 +22,28 @@ export default function SmallTaskStatusTimeline({
   const { colors } = useTheme();
   const { fontFamily, fonts } = useFontFamily();
 
+  // Per README: PENDING → ACCEPTED (payment required) → IN_PROGRESS (paid) → COMPLETED
   const statuses = [
     { status: 'PENDING', label: t('Pending'), icon: 'time-outline' },
-    { status: 'ASSIGNED', label: t('Assigned'), icon: 'checkmark-circle-outline' },
+    { status: 'ACCEPTED', label: t('Accepted'), icon: 'card-outline' }, // Payment required
     { status: 'IN_PROGRESS', label: t('In Progress'), icon: 'construct-outline' },
     { status: 'COMPLETED', label: t('Completed'), icon: 'checkmark-done-circle-outline' },
   ];
 
   const getStatusIndex = (status: string) => {
-    return statuses.findIndex((s) => s.status === status);
+    // Handle both ACCEPTED and ASSIGNED (legacy) as the same status
+    const normalizedStatus = status === 'ASSIGNED' ? 'ACCEPTED' : status;
+    return statuses.findIndex((s) => s.status === normalizedStatus);
   };
 
-  const currentIndex = getStatusIndex(currentStatus);
+  // Normalize status for display (ASSIGNED → ACCEPTED)
+  const normalizedCurrentStatus = currentStatus === 'ASSIGNED' ? 'ACCEPTED' : currentStatus;
+  const currentIndex = getStatusIndex(normalizedCurrentStatus);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.cardBackground }]}>
       {statuses.map((item, index) => {
-        const isActive = item.status === currentStatus;
+        const isActive = item.status === normalizedCurrentStatus;
         const isPast = currentIndex > index;
         const isFuture = currentIndex < index;
 
@@ -91,7 +98,7 @@ export default function SmallTaskStatusTimeline({
             </Text>
 
             {/* Additional Info */}
-            {item.status === 'ASSIGNED' && isActive && assignedTechnicianName && (
+            {item.status === 'ACCEPTED' && isActive && assignedTechnicianName && (
               <Text style={[styles.additionalInfo, { color: colors.textSecondary }]} numberOfLines={1}>
                 {assignedTechnicianName}
               </Text>

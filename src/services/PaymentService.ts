@@ -409,7 +409,7 @@ export interface SmallTaskPaymentRequest {
   amount: number;
   currency: string;
   paymentType: 'DB' | 'PA';
-  paymentBrand: PaymentBrand;
+  paymentBrand?: PaymentBrand;
   merchantTransactionId: string;
   customer: {
     email: string;
@@ -423,16 +423,17 @@ export interface SmallTaskPaymentRequest {
     country: string;
     postcode: string;
   };
+  shopperResultUrl?: string;
 }
 
 /**
  * Create checkout for small task payment
- * POST /api/small-tasks/{requestId}/pay
- * 
+ * POST /api/small-tasks/requests/{requestId}/pay
+ *
  * Validation:
  * - Task must be in ACCEPTED status
  * - Payment status must be PENDING
- * - Amount must match accepted bid amount
+ * - Amount must match accepted bid amount exactly
  * - User must own the task request
  */
 export const createSmallTaskPayment = async (
@@ -452,7 +453,6 @@ export const createSmallTaskPayment = async (
     console.log('📤 [PaymentService] Creating small task payment checkout');
     console.log('   Request ID:', requestId);
     console.log('   Amount:', request.amount);
-    console.log('   Payment Brand:', request.paymentBrand);
 
     const response = await fetch(url, {
       method: 'POST',
@@ -470,12 +470,48 @@ export const createSmallTaskPayment = async (
 
     const data = await response.json();
     console.log('✅ [PaymentService] Small task payment checkout created:', data.checkoutId);
-    console.log('   Transaction ID:', data.transactionId);
-    console.log('   Commission:', data.commissionAmount);
-    console.log('   Net Amount:', data.netAmount);
+    if (data.transactionId != null) console.log('   Transaction ID:', data.transactionId);
+    if (data.commissionAmount != null) console.log('   Commission:', data.commissionAmount);
+    if (data.netAmount != null) console.log('   Net Amount:', data.netAmount);
     return data;
   } catch (error: any) {
     console.error('❌ [PaymentService] Create small task payment error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Check small task payment status (production)
+ * GET /api/payments/prod/status/{checkoutId}
+ * Use after user completes payment on HyperPay redirect.
+ */
+export const getPaymentStatusProd = async (checkoutId: string): Promise<PaymentStatusResponse> => {
+  try {
+    const token = await storage.getAuthToken();
+    const url = buildApiUrlWithParams(API_ENDPOINTS.PAYMENTS.STATUS_PROD, { checkoutId });
+
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const response = await fetch(url, { method: 'GET', headers });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.message || `Failed to get payment status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return {
+      success: data.success,
+      isPaymentResult: data.paymentResult ?? data.isPaymentResult ?? false,
+      code: data.code ?? '',
+      description: data.description ?? '',
+      transactionId: data.transactionId ?? '',
+      paymentBrand: data.paymentBrand ?? 'VISA',
+      status: data.status === 'COMPLETED' || data.paymentResult === true ? 'COMPLETED' : data.status === 'FAILED' || data.paymentResult === false ? 'FAILED' : 'PENDING',
+    };
+  } catch (error: any) {
+    console.error('❌ [PaymentService] getPaymentStatusProd error:', error);
     throw error;
   }
 };

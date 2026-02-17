@@ -30,6 +30,8 @@ const COLORS = {
   primary10: '#E6EFF7',
   green80: '#008B3E',
   green10: '#E6F5EC',
+  amber60: '#FFB703',
+  amber10: '#FFF8E6',
   textHeader: '#003867',
   textBody: '#383838',
   textSecondary: '#A3A3A3',
@@ -44,6 +46,8 @@ interface AssignedSmallTaskScreenProps {
   isTechnician?: boolean;
   onOpenChat?: (roomId: string, receiverId: number, receiverName: string) => void;
   onViewTechnician?: (technicianId: number) => void;
+  /** When user must pay (ACCEPTED + payment PENDING), parent can open payment screen */
+  onPay?: (task: SmallTaskRequest, amount: number) => void;
 }
 
 export default function AssignedSmallTaskScreen({
@@ -53,6 +57,7 @@ export default function AssignedSmallTaskScreen({
   isTechnician = false,
   onOpenChat,
   onViewTechnician,
+  onPay,
 }: AssignedSmallTaskScreenProps) {
   const { t, i18n } = useTranslation();
   const { colors, theme } = useTheme();
@@ -343,7 +348,8 @@ export default function AssignedSmallTaskScreen({
         >
           {/* Phase Bar */}
           <View style={styles.phaseBarContainer}>
-            <SmallTaskPhaseBar currentStatus="ASSIGNED" onStatusChange={() => {}} />
+            {/* Per README: ACCEPTED status = bid accepted, payment required */}
+            <SmallTaskPhaseBar currentStatus="ACCEPTED" onStatusChange={() => {}} />
           </View>
 
           {/* Status Timeline */}
@@ -396,14 +402,14 @@ export default function AssignedSmallTaskScreen({
                 <View style={styles.bidAmountRow}>
                   <ExpoImage source={riyalLogo} style={styles.riyalLogo} contentFit="contain" />
                   <Text style={[styles.bidAmount, { color: colors.primary, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '700' }]}>
-                    {formatBudget(acceptedBid.amount)}
+                    {formatBudget(acceptedBid.price ?? acceptedBid.amount ?? 0)}
                   </Text>
                 </View>
-                {acceptedBid.estimatedHours && (
+                {(acceptedBid.estimatedDuration != null || acceptedBid.estimatedHours != null) && (
                   <View style={styles.estimatedTimeRow}>
                     <Ionicons name="time-outline" size={16} color={colors.textSecondary} />
                     <Text style={[styles.estimatedTimeText, { color: colors.textSecondary }]}>
-                      {t('Estimated')}: {acceptedBid.estimatedHours} {t('hours')}
+                      {t('Estimated')}: {acceptedBid.estimatedDuration ?? acceptedBid.estimatedHours} {acceptedBid.estimatedDuration != null ? t('min') : t('hours')}
                     </Text>
                   </View>
                 )}
@@ -443,8 +449,29 @@ export default function AssignedSmallTaskScreen({
             </View>
           </View>
 
-          {/* Waiting Message */}
-          {!isTechnician && (
+          {/* User: Pay button when payment pending */}
+          {!isTechnician && (taskDetails.paymentStatus === 'PENDING' || taskDetails.paymentStatus === null) && acceptedBid && onPay && (
+            <View style={[styles.messageSection, styles.messageSectionColumn, { backgroundColor: COLORS.amber10 }]}>
+              <View style={styles.messageRow}>
+                <Ionicons name="card-outline" size={24} color={COLORS.amber60} />
+                <Text style={[styles.messageText, { color: COLORS.primary80, fontFamily: fonts?.body || fontFamily }]}>
+                  {t('Payment required before the technician can start work.')}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.payButton, { backgroundColor: colors.primary }]}
+                onPress={() => onPay(taskDetails, acceptedBid.price ?? acceptedBid.amount ?? 0)}
+              >
+                <Ionicons name="card" size={20} color={COLORS.textWhite} />
+                <Text style={[styles.payButtonText, { fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>
+                  {t('Pay')} {formatBudget(acceptedBid.price ?? acceptedBid.amount ?? 0)}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Waiting Message - user, after payment */}
+          {!isTechnician && taskDetails.paymentStatus === 'PAID' && (
             <View style={[styles.messageSection, { backgroundColor: COLORS.primary10 }]}>
               <Ionicons name="time-outline" size={24} color={COLORS.primary80} />
               <Text style={[styles.messageText, { color: COLORS.primary80, fontFamily: fonts?.body || fontFamily }]}>
@@ -452,11 +479,21 @@ export default function AssignedSmallTaskScreen({
               </Text>
             </View>
           )}
+
+          {/* Technician: waiting for user to pay */}
+          {isTechnician && (taskDetails.paymentStatus === 'PENDING' || taskDetails.paymentStatus === null) && (
+            <View style={[styles.messageSection, { backgroundColor: COLORS.amber10 }]}>
+              <Ionicons name="card-outline" size={24} color={COLORS.amber60} />
+              <Text style={[styles.messageText, { color: COLORS.primary80, fontFamily: fonts?.body || fontFamily }]}>
+                {t('Waiting for the user to complete payment. You can start work after payment.')}
+              </Text>
+            </View>
+          )}
         </ScrollView>
       </Animated.View>
 
-      {/* Floating Action Button - For Technicians */}
-      {isTechnician && (
+      {/* Floating Action Button - For Technicians (only after user has paid) */}
+      {isTechnician && taskDetails.paymentStatus === 'PAID' && (
         <Animated.View
           style={[
             styles.floatingButtonContainer,
@@ -710,10 +747,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
+  messageSectionColumn: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+  },
+  messageRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   messageText: {
     flex: 1,
     fontSize: 14,
     lineHeight: 20,
+  },
+  payButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    marginTop: 12,
+  },
+  payButtonText: {
+    color: COLORS.textWhite,
+    fontSize: 16,
   },
   floatingButtonContainer: {
     position: 'absolute',

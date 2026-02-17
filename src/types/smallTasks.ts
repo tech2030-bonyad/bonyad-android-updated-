@@ -4,26 +4,35 @@ export interface SmallTaskType {
   id: number;
   nameAr: string;
   nameEn: string;
-  description: string;
-  basePrice: number;
-  estimatedDuration: number;
+  description?: string;
+  descriptionAr?: string;
+  descriptionEn?: string;
+  basePrice?: number;
+  estimatedDuration?: number;
   isActive: boolean;
 }
 
+export type SmallTaskPaymentStatus = 'PENDING' | 'PAID' | 'FAILED';
+
 export interface SmallTaskRequest {
   id: number;
-  taskType: {
+  taskType?: {
     id: number;
     nameAr: string;
     nameEn: string;
   };
+  taskTypeId?: number;
+  taskTypeNameEn?: string;
+  taskTypeNameAr?: string;
   description: string;
   address: string;
-  latitude: number;
-  longitude: number;
+  latitude?: number;
+  longitude?: number;
   status: 'PENDING' | 'ACCEPTED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' | 'ASSIGNED';
+  paymentStatus?: SmallTaskPaymentStatus | null;
   createdAt: string;
   bidCount?: number;
+  bidsCount?: number;
   budget?: number;
   amount?: number;
   estimatedDuration?: number;
@@ -31,19 +40,26 @@ export interface SmallTaskRequest {
   userName?: string;
   assignedTechnicianId?: number;
   assignedTechnicianName?: string;
+  acceptedBidId?: number;
+  acceptedTechnicianId?: number;
+  acceptedTechnicianName?: string;
 }
 
 export interface SmallTaskBid {
   id: number;
-  requestId: number;
+  requestId?: number;
+  smallTaskRequestId?: number;
   technicianId: number;
   technicianName: string;
   technicianPhone?: string;
   technicianAvatar?: string;
-  amount: number;
-  description: string;
-  estimatedHours: number;
-  status: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'WITHDRAWN';
+  amount?: number;
+  price?: number;
+  description?: string;
+  notes?: string;
+  estimatedHours?: number;
+  estimatedDuration?: number;
+  status: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'WITHDRAWN' | 'CANCELLED';
   createdAt: string;
   updatedAt?: string;
   request?: SmallTaskRequest;

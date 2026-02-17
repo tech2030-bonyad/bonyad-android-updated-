@@ -145,7 +145,7 @@ export default function InProgressSmallTaskScreen({
       const token = await storage.getAuthToken();
       if (!token) return;
 
-      const url = buildApiUrl(`/small-tasks/requests/${task.id}`);
+      const url = buildApiUrlWithParams(API_ENDPOINTS.SMALL_TASKS.REQUEST_DETAILS, { id: task.id });
       const response = await fetch(url, {
         method: 'GET',
         headers: {

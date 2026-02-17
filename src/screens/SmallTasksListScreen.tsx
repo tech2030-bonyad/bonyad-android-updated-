@@ -127,7 +127,13 @@ export default function SmallTasksListScreen({
     setShowFilterDropdown(!showFilterDropdown);
   };
 
-  // Get unique task statuses from tasks
+  // Get all possible task statuses (per README flow)
+  // PENDING → ACCEPTED (bid accepted, payment required) → IN_PROGRESS (paid) → COMPLETED
+  const getAllStatuses = () => {
+    return ['PENDING', 'ACCEPTED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'];
+  };
+
+  // Get unique task statuses from tasks (for reference/counting)
   const getUniqueStatuses = () => {
     const statuses = new Set<string>();
     tasks.forEach(task => {
@@ -169,9 +175,9 @@ export default function SmallTasksListScreen({
 
   // Calculate dropdown height based on number of status options
   const getDropdownHeight = () => {
-    const uniqueStatuses = getUniqueStatuses();
-    const optionCount = 1 + uniqueStatuses.length; // "All" + statuses
-    return Math.min(optionCount * 48, 240); // 48px per option, max 240px (5 items visible)
+    const allStatuses = getAllStatuses();
+    const optionCount = 1 + allStatuses.length; // "All" + statuses
+    return Math.min(optionCount * 48, 288); // 48px per option, max 288px (6 items visible)
   };
 
   const dropdownHeight = dropdownAnimation.interpolate({
@@ -381,8 +387,14 @@ export default function SmallTasksListScreen({
   const filteredTasks = tasks.filter(task => {
     // Filter by status
     if (selectedCategory !== 'All') {
-      const taskStatus = (task.status || '').trim().toUpperCase();
+      let taskStatus = (task.status || '').trim().toUpperCase();
       const selectedStatus = selectedCategory.toUpperCase().trim();
+      
+      // Normalize ASSIGNED to ACCEPTED (legacy status handling)
+      if (taskStatus === 'ASSIGNED') {
+        taskStatus = 'ACCEPTED';
+      }
+      
       if (taskStatus !== selectedStatus) {
         return false;
       }
@@ -519,8 +531,8 @@ export default function SmallTasksListScreen({
                 )}
               </TouchableOpacity>
 
-              {/* Task Statuses */}
-              {getUniqueStatuses().map((status, index, array) => (
+              {/* Task Statuses - Show all possible statuses per README flow */}
+              {getAllStatuses().map((status, index, array) => (
                 <TouchableOpacity
                   key={status}
                   style={[

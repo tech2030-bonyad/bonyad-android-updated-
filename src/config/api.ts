@@ -86,10 +86,11 @@ export const API_ENDPOINTS = {
     MARK_ALL_READ: '/chat/rooms/:roomId/mark-all-read',
   },
   
-  // Services
+  // Services (categories & subcategories)
   SERVICES: {
     LIST: '/services',
     CATEGORIES: '/services/categories',
+    SUBCATEGORIES: '/services/:categoryId/subcategories',
   },
   
   // Technicians
@@ -219,7 +220,7 @@ export const API_ENDPOINTS = {
     MAP_PROJECTS: '/ai/map/projects',
   },
   
-  // Small Tasks
+  // Small Tasks (see Small Tasks Implementation README)
   SMALL_TASKS: {
     TYPES: '/small-tasks/types',
     CREATE_REQUEST: '/small-tasks/requests',
@@ -230,9 +231,10 @@ export const API_ENDPOINTS = {
     MY_BIDS: '/small-tasks/bids/my-bids',
     WITHDRAW_BID: '/small-tasks/bids/:id/withdraw',
     UPDATE_STATUS: '/small-tasks/requests/:id/status',
-    PAY: '/small-tasks/:requestId/pay', // Payment for small task
-    ACCEPT_BID: '/small-tasks/bids/:bidId/accept',
+    PAY: '/small-tasks/requests/:requestId/pay',
+    ACCEPT_BID: '/small-tasks/requests/:requestId/bids/:bidId/accept',
     REJECT_BID: '/small-tasks/bids/:bidId/reject',
+    CANCEL: '/small-tasks/requests/:id/cancel',
   },
   
   // Technician Services
@@ -262,9 +264,10 @@ export const API_ENDPOINTS = {
     TRANSACTION: '/payments/transactions/:id',
     REFUND_REQUEST: '/payments/transactions/:transactionId/refund-request',
     MY_REFUND_REQUESTS: '/payments/my-refund-requests',
-    CREATE_CHECKOUT: '/payments/create-checkout', // Note: Backend may use '/api/payment/checkout' (singular) - verify and update if needed
+    CREATE_CHECKOUT: '/payments/create-checkout',
     PREPARE_CHECKOUT: '/payments/prepare-checkout',
-    STATUS: '/payments/status/:checkoutId', // Note: Backend may use '/api/payment/status/:checkoutId' (singular) - verify and update if needed
+    STATUS: '/payments/status/:checkoutId',
+    STATUS_PROD: '/payments/prod/status/:checkoutId', // Production small-task payment status per README
   },
   
   // Admin - Payments

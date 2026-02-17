@@ -53,6 +53,8 @@ import { buildApiUrl, API_ENDPOINTS, getApiUrl, getServerBaseUrl } from '../conf
 import { storage } from '../utils/storage';
 import { FontFamily, FontWeights } from '../constants/Fonts';
 import UserHomeScreenContent from './home/UserHomeScreen';
+import type { CategoryInfo } from './home/UserHomeScreen';
+import CategorySubcategoryScreen from './CategorySubcategoryScreen';
 
 interface UserHomeScreenProps {
   onShowProfile: () => void;
@@ -124,6 +126,8 @@ export default function UserHomeScreen({
   const [serviceTechniciansView, setServiceTechniciansView] = useState<{ serviceId: number; serviceName?: string; source?: 'search' | 'lookForBonyaders' } | null>(null);
   const [selectedTechnicianId, setSelectedTechnicianId] = useState<number | null>(null);
   const [hiringTechnician, setHiringTechnician] = useState<{ id: number; name?: string } | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<CategoryInfo | null>(null);
+  const [projectsScreenCategoryId, setProjectsScreenCategoryId] = useState<number | null>(null);
   const insets = useSafeAreaInsets();
   const [userProfile, setUserProfile] = useState<{ name?: string; avatar?: string; profileImage?: string } | null>(null);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
@@ -151,6 +155,12 @@ export default function UserHomeScreen({
     }
     if (activeTab !== 'new') {
       setHiringTechnician(null);
+    }
+    if (activeTab !== 'home') {
+      setSelectedCategory(null);
+    }
+    if (activeTab !== 'projects') {
+      setProjectsScreenCategoryId(null);
     }
   }, [activeTab, chatReturnContext]);
 
@@ -828,45 +838,59 @@ export default function UserHomeScreen({
 
       {/* Render content based on active tab */}
       {activeTab === 'home' && (
-        <UserHomeScreenContent
-          onPressSearch={(query) => {
-            setSearchText(query);
-            if (query.trim().length > 0) {
-              setShowSearchResults(true);
-            }
-          }}
-          onPressOpenServices={() => setShowServicesList(true)}
-          onPressServiceProvidersAll={() => setShowServicesList(true)}
-          onPressMyProjects={() => {
-            setActiveTab('projects');
-            setCurrentProjectsFilter('running');
-          }}
-          onPressMyTasks={() => {
-            setActiveTab('projects');
-            setCurrentProjectsFilter('available');
-          }}
-          onPressPremiumUpgrade={() => {
-            setActiveTab('profile');
-            setProfileSubView('subscription');
-          }}
-          onPressNotifications={() => onShowNotifications?.()}
-          onPressMessages={() => onShowChat?.()}
-          onPressInfo={() => {}}
-          onPressFab={() => {
-            setActiveTab('new');
-            setNewProjectSubView('ai');
-          }}
-          onPressProjectStatus={(status) => {
-            if (status === 'pending') {
+        selectedCategory ? (
+          <CategorySubcategoryScreen
+            category={selectedCategory}
+            onBack={() => setSelectedCategory(null)}
+            onViewProjects={(categoryId) => {
+              setProjectsScreenCategoryId(categoryId);
+              setSelectedCategory(null);
               setCurrentProjectsFilter('available');
-            } else if (status === 'running') {
+              setActiveTab('projects');
+            }}
+          />
+        ) : (
+          <UserHomeScreenContent
+            onPressSearch={(query) => {
+              setSearchText(query);
+              if (query.trim().length > 0) {
+                setShowSearchResults(true);
+              }
+            }}
+            onPressOpenServices={() => setShowServicesList(true)}
+            onPressServiceProvidersAll={() => setShowServicesList(true)}
+            onPressMyProjects={() => {
+              setActiveTab('projects');
               setCurrentProjectsFilter('running');
-            } else if (status === 'completed') {
-              setCurrentProjectsFilter('completed');
-            }
-            setActiveTab('projects');
-          }}
-        />
+            }}
+            onPressMyTasks={() => {
+              setActiveTab('projects');
+              setCurrentProjectsFilter('available');
+            }}
+            onPressPremiumUpgrade={() => {
+              setActiveTab('profile');
+              setProfileSubView('subscription');
+            }}
+            onPressNotifications={() => onShowNotifications?.()}
+            onPressMessages={() => onShowChat?.()}
+            onPressInfo={() => {}}
+            onPressFab={() => {
+              setActiveTab('new');
+              setNewProjectSubView('ai');
+            }}
+            onPressProjectStatus={(status) => {
+              if (status === 'pending') {
+                setCurrentProjectsFilter('available');
+              } else if (status === 'running') {
+                setCurrentProjectsFilter('running');
+              } else if (status === 'completed') {
+                setCurrentProjectsFilter('completed');
+              }
+              setActiveTab('projects');
+            }}
+            onPressCategory={(cat) => setSelectedCategory(cat)}
+          />
+        )
       )}
 
       {/* Keep search results modal for backward compatibility */}
@@ -1287,6 +1311,7 @@ export default function UserHomeScreen({
         <View style={{ flex: 1 }}>
           <ProjectsScreen
             filter={currentProjectsFilter}
+            initialServiceCategoryId={projectsScreenCategoryId}
             onFilterChange={(newFilter) => {
               setCurrentProjectsFilter(newFilter as any);
             }}
@@ -1870,45 +1895,59 @@ export default function UserHomeScreen({
         {/* Main content - Render based on active tab */}
       <View style={styles.desktopMainContentWrapper}>
         {activeTab === 'home' && (
-          <UserHomeScreenContent
-            onPressSearch={(query) => {
-              setSearchText(query);
-              if (query.trim().length > 0) {
-                setShowSearchResults(true);
-              }
-            }}
-            onPressOpenServices={() => setShowServicesList(true)}
-            onPressServiceProvidersAll={() => setShowServicesList(true)}
-            onPressMyProjects={() => {
-              setActiveTab('projects');
-              setCurrentProjectsFilter('running');
-            }}
-            onPressMyTasks={() => {
-              setActiveTab('projects');
-              setCurrentProjectsFilter('available');
-            }}
-            onPressPremiumUpgrade={() => {
-              setActiveTab('profile');
-              setProfileSubView('subscription');
-            }}
-            onPressNotifications={() => onShowNotifications?.()}
-            onPressMessages={() => onShowChat?.()}
-            onPressInfo={() => {}}
-            onPressFab={() => {
-              setActiveTab('new');
-              setNewProjectSubView('ai');
-            }}
-            onPressProjectStatus={(status) => {
-              if (status === 'pending') {
+          selectedCategory ? (
+            <CategorySubcategoryScreen
+              category={selectedCategory}
+              onBack={() => setSelectedCategory(null)}
+              onViewProjects={(categoryId) => {
+                setProjectsScreenCategoryId(categoryId);
+                setSelectedCategory(null);
                 setCurrentProjectsFilter('available');
-              } else if (status === 'running') {
+                setActiveTab('projects');
+              }}
+            />
+          ) : (
+            <UserHomeScreenContent
+              onPressSearch={(query) => {
+                setSearchText(query);
+                if (query.trim().length > 0) {
+                  setShowSearchResults(true);
+                }
+              }}
+              onPressOpenServices={() => setShowServicesList(true)}
+              onPressServiceProvidersAll={() => setShowServicesList(true)}
+              onPressMyProjects={() => {
+                setActiveTab('projects');
                 setCurrentProjectsFilter('running');
-              } else if (status === 'completed') {
-                setCurrentProjectsFilter('completed');
-              }
-              setActiveTab('projects');
-            }}
-          />
+              }}
+              onPressMyTasks={() => {
+                setActiveTab('projects');
+                setCurrentProjectsFilter('available');
+              }}
+              onPressPremiumUpgrade={() => {
+                setActiveTab('profile');
+                setProfileSubView('subscription');
+              }}
+              onPressNotifications={() => onShowNotifications?.()}
+              onPressMessages={() => onShowChat?.()}
+              onPressInfo={() => {}}
+              onPressFab={() => {
+                setActiveTab('new');
+                setNewProjectSubView('ai');
+              }}
+              onPressProjectStatus={(status) => {
+                if (status === 'pending') {
+                  setCurrentProjectsFilter('available');
+                } else if (status === 'running') {
+                  setCurrentProjectsFilter('running');
+                } else if (status === 'completed') {
+                  setCurrentProjectsFilter('completed');
+                }
+                setActiveTab('projects');
+              }}
+              onPressCategory={(cat) => setSelectedCategory(cat)}
+            />
+          )
         )}
 
         {/* Keep old desktop content for reference - disabled */}
@@ -2196,6 +2235,7 @@ export default function UserHomeScreen({
             <View style={styles.mainContentWrapper}>
               <ProjectsScreen
                 filter={currentProjectsFilter}
+                initialServiceCategoryId={projectsScreenCategoryId}
                 onFilterChange={(newFilter) => {
                   setCurrentProjectsFilter(newFilter as any);
                 }}

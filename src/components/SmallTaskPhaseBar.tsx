@@ -24,8 +24,10 @@ interface SmallTaskPhaseBarProps {
   statuses?: PhaseBarItem[];
 }
 
+// Per README: PENDING → ACCEPTED (bid accepted, payment required) → IN_PROGRESS (payment done) → COMPLETED
 const DEFAULT_STATUSES: PhaseBarItem[] = [
   { status: 'PENDING', label: 'Pending', icon: 'time-outline' },
+  { status: 'ACCEPTED', label: 'Accepted', icon: 'card-outline' }, // Payment required
   { status: 'IN_PROGRESS', label: 'In Progress', icon: 'construct-outline' },
   { status: 'COMPLETED', label: 'Completed', icon: 'checkmark-circle-outline' },
 ];
@@ -66,10 +68,14 @@ export default function SmallTaskPhaseBar({
   };
 
   const getStatusIndex = (status: string) => {
-    return statuses.findIndex(s => s.status === status);
+    // Handle both ACCEPTED and ASSIGNED (legacy) as the same status
+    const normalizedStatus = status === 'ASSIGNED' ? 'ACCEPTED' : status;
+    return statuses.findIndex(s => s.status === normalizedStatus);
   };
 
-  const currentIndex = getStatusIndex(currentStatus);
+  // Normalize status for display (ASSIGNED → ACCEPTED)
+  const normalizedCurrentStatus = currentStatus === 'ASSIGNED' ? 'ACCEPTED' : currentStatus;
+  const currentIndex = getStatusIndex(normalizedCurrentStatus);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.cardBackground }]}>
@@ -81,7 +87,7 @@ export default function SmallTaskPhaseBar({
         style={styles.scrollView}
       >
         {statuses.map((item, index) => {
-          const isActive = item.status === currentStatus;
+          const isActive = item.status === normalizedCurrentStatus;
           const isPast = currentIndex > index;
           const isFuture = currentIndex < index;
 
