@@ -103,7 +103,7 @@ export const useFCMToken = () => {
           name: 'default',
           importance: Notifications.AndroidImportance.MAX,
           vibrationPattern: [0, 250, 250, 250],
-          lightColor: '#0080E0',
+          lightColor: '#00549B',
         });
         console.log('✅ Android notification channel configured!');
       }
@@ -181,7 +181,7 @@ export async function registerForPushNotificationsAsync() {
         name: 'default',
         importance: Notifications.AndroidImportance.MAX,
         vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#0080E0',
+        lightColor: '#00549B',
       });
     }
 

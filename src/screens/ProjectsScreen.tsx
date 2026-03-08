@@ -1399,7 +1399,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
                   <Feather name="search" size={20} color="#9ca3af" />
                   <TextInput
                     style={styles.androidSearchInput}
-                    placeholder="search for project.."
+                    placeholder={t('search for project..')}
                     placeholderTextColor="#9ca3af"
                     value={searchQuery}
                     onChangeText={setSearchQuery}

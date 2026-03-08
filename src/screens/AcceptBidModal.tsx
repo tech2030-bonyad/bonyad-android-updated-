@@ -18,6 +18,7 @@ import { API_ENDPOINTS, buildApiUrlWithParams } from '../config/api';
 import { storage } from '../utils/storage';
 import { showError, showSuccess } from '../utils/alert';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
+import RialIcon from '../components/RialIcon';
 
 interface AcceptBidModalProps {
   visible: boolean;
@@ -135,9 +136,12 @@ export default function AcceptBidModal({ visible, bid, onClose, onSuccess }: Acc
                     {t('Bid Price')}
                   </Text>
                 </View>
-                <Text style={[styles.summaryValue, { color: colors.primary, fontSize: scaledSize(18) }]}>
-                  {formatPrice(bid.price)} {t('SAR')}
-                </Text>
+                <View style={styles.priceRow}>
+                  <Text style={[styles.summaryValue, { color: colors.primary, fontSize: scaledSize(18) }]}>
+                    {formatPrice(bid.price)}
+                  </Text>
+                  <RialIcon size={scaledSize(16)} variant="primary" color={colors.primary} />
+                </View>
               </View>
 
               {/* Description */}
@@ -331,6 +335,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     flex: 1,
+  },
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   summaryLabel: {
     fontSize: 14,

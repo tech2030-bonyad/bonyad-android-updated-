@@ -493,7 +493,7 @@ export default function OwnerProjectEditScreen({ projectId, onBack, onSuccess }:
             style={[styles.input, { backgroundColor: colors.cardBackground, color: colors.text, borderColor: colors.border }]}
             value={budget}
             onChangeText={setBudget}
-            placeholder="0"
+            placeholder={t('Enter amount')}
             placeholderTextColor={colors.textSecondary}
             keyboardType="numeric"
           />

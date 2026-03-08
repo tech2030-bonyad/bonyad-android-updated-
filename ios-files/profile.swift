@@ -329,7 +329,7 @@ Spacer()
        }
        
        // ✅ New token-based endpoint (no userId needed)
-       let apiURL = "https://glynda-unvexatious-felisa.ngrok-free.dev/api/users/profile"
+       let apiURL = "https://bonyad-app-nyayeditqq-ww.a.run.app/api/users/profile"
        
        print("🔐 DEBUG: Fetching user profile (ProfileView)")
        print("   Token: \(token.prefix(20))...")
@@ -363,7 +363,7 @@ Spacer()
                    let profileImagePath = decoded.profileImage ?? decoded.avatar
                    if let avatarPath = profileImagePath, !avatarPath.isEmpty {
                        if !avatarPath.starts(with: "http") {
-                           decoded.avatar = "https://glynda-unvexatious-felisa.ngrok-free.dev\(avatarPath)"
+                           decoded.avatar = "https://bonyad-app-nyayeditqq-ww.a.run.app\(avatarPath)"
                            print("🖼️ Constructed full image URL: \(decoded.avatar ?? "")")
                        } else {
                            decoded.avatar = avatarPath
@@ -376,7 +376,7 @@ Spacer()
                            let path = cert.name
                            if !path.isEmpty && !path.starts(with: "http") {
                                var updatedCert = cert
-                               updatedCert.name = "https://glynda-unvexatious-felisa.ngrok-free.dev\(path)"
+                               updatedCert.name = "https://bonyad-app-nyayeditqq-ww.a.run.app\(path)"
                                return updatedCert
                            }
                            return cert

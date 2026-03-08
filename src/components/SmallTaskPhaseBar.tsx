@@ -25,19 +25,20 @@ interface SmallTaskPhaseBarProps {
 }
 
 // Per README: PENDING → ACCEPTED (bid accepted, payment required) → IN_PROGRESS (payment done) → COMPLETED
-const DEFAULT_STATUSES: PhaseBarItem[] = [
-  { status: 'PENDING', label: 'Pending', icon: 'time-outline' },
-  { status: 'ACCEPTED', label: 'Accepted', icon: 'card-outline' }, // Payment required
-  { status: 'IN_PROGRESS', label: 'In Progress', icon: 'construct-outline' },
-  { status: 'COMPLETED', label: 'Completed', icon: 'checkmark-circle-outline' },
+const getDefaultStatuses = (t: (key: string) => string): PhaseBarItem[] => [
+  { status: 'PENDING', label: t('Pending'), icon: 'time-outline' },
+  { status: 'ACCEPTED', label: t('Accepted'), icon: 'card-outline' }, // Payment required
+  { status: 'IN_PROGRESS', label: t('In Progress'), icon: 'construct-outline' },
+  { status: 'COMPLETED', label: t('Completed'), icon: 'checkmark-circle-outline' },
 ];
 
 export default function SmallTaskPhaseBar({
   currentStatus,
   onStatusChange,
-  statuses = DEFAULT_STATUSES,
+  statuses,
 }: SmallTaskPhaseBarProps) {
   const { t } = useTranslation();
+  const resolvedStatuses = statuses || getDefaultStatuses(t);
   const { colors } = useTheme();
   const scrollViewRef = useRef<ScrollView>(null);
   const itemRefs = useRef<{ [key: string]: View | null }>({});
@@ -70,7 +71,7 @@ export default function SmallTaskPhaseBar({
   const getStatusIndex = (status: string) => {
     // Handle both ACCEPTED and ASSIGNED (legacy) as the same status
     const normalizedStatus = status === 'ASSIGNED' ? 'ACCEPTED' : status;
-    return statuses.findIndex(s => s.status === normalizedStatus);
+    return resolvedStatuses.findIndex(s => s.status === normalizedStatus);
   };
 
   // Normalize status for display (ASSIGNED → ACCEPTED)
@@ -86,7 +87,7 @@ export default function SmallTaskPhaseBar({
         contentContainerStyle={styles.scrollContent}
         style={styles.scrollView}
       >
-        {statuses.map((item, index) => {
+        {resolvedStatuses.map((item, index) => {
           const isActive = item.status === normalizedCurrentStatus;
           const isPast = currentIndex > index;
           const isFuture = currentIndex < index;

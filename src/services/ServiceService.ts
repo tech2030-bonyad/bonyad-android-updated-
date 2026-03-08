@@ -1,9 +1,14 @@
 /**
  * Service Categories & Subcategories API
- * Base: https://www.bonyad-hub.com/api
+ * Base: https://bonyad-app-nyayeditqq-ww.a.run.app/api
+ * 
+ * Endpoints:
+ * - GET /api/services - Get all services (categories + subcategories)
+ * - GET /api/services/categories - Get only main categories
+ * - GET /api/services/{categoryId}/subcategories - Get subcategories for a category
  */
 
-import { buildApiUrl, buildApiUrlWithParams, API_ENDPOINTS } from '../config/api';
+import { buildApiUrl, buildApiUrlWithParams, getServerBaseUrl, API_ENDPOINTS } from '../config/api';
 
 export interface ParentService {
   id: number;
@@ -18,11 +23,17 @@ export interface ServiceCategoryOrSub {
   description?: string;
   descriptionEn?: string;
   descriptionAr?: string;
-  imageUrl?: string;
+  imageUrl?: string | null;
+  svgUrl?: string | null;
+  useSvg: boolean;
+  isActive: boolean;
   isCategory: boolean;
   parentService?: ParentService | null;
-  isActive?: boolean;
+  displayOrder?: number;
+  iconUrl?: string | null;
+  icon?: string;
   createdAt?: string;
+  updatedAt?: string;
 }
 
 /** Only categories (isCategory = true) from GET /services/categories */
@@ -30,6 +41,22 @@ export type ServiceCategory = ServiceCategoryOrSub;
 
 /** Subcategories (isCategory = false) from GET /services/:categoryId/subcategories */
 export type ServiceSubcategory = ServiceCategoryOrSub;
+
+/**
+ * Helper function to get the active image URL for a service
+ * Uses useSvg flag to determine whether to use SVG or photo
+ */
+export function getServiceImageUrl(service: ServiceCategoryOrSub): string | null {
+  const baseUrl = getServerBaseUrl();
+  
+  if (service.useSvg && service.svgUrl) {
+    return `${baseUrl}${service.svgUrl}`;
+  } else if (service.imageUrl) {
+    return `${baseUrl}${service.imageUrl}`;
+  }
+  
+  return null;
+}
 
 /**
  * Get all services (categories + subcategories).

@@ -20,19 +20,14 @@ Now imports and uses the centralized API configuration.
 
 ## 🔧 How to Update API URL
 
-### For Development (ngrok):
+### For Development/Production:
 1. Open `src/config/api.ts`
 2. Update line 4:
    ```typescript
-   export const API_BASE_URL = 'https://your-ngrok-url.ngrok-free.dev/api';
+   export const API_BASE_URL = 'https://bonyad-app-nyayeditqq-ww.a.run.app/api';
    ```
 
-### For Production:
-1. Open `src/config/api.ts`
-2. Update line 4:
-   ```typescript
-   export const API_BASE_URL = 'https://your-production-domain.com/api';
-   ```
+
 
 ## 📝 Available Endpoints in Config
 

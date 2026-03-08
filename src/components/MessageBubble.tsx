@@ -6,6 +6,7 @@ import { ChatMessage } from '../types/chat';
 import { formatMessageTime } from '../utils/chatUtils';
 import { API_BASE_URL } from '../config/api';
 import ReadReceipt from './ReadReceipt';
+import { useTranslation } from 'react-i18next';
 
 // For web, use browser's native Audio; for native, use Expo Audio
 const Audio = Platform.OS === 'web' 
@@ -20,6 +21,7 @@ interface MessageBubbleProps {
 }
 
 export default function MessageBubble({ message, isMine }: MessageBubbleProps) {
+  const { t } = useTranslation();
   const normalizedFileType = message.fileType?.toLowerCase?.() ?? '';
   const hasFile = Boolean(message.fileUrl);
   const fullFileUrl = message.fileUrl?.startsWith('http')
@@ -66,7 +68,7 @@ export default function MessageBubble({ message, isMine }: MessageBubbleProps) {
             >
               <Ionicons name="document-attach" size={24} color="#FF0000" />
               <Text style={styles.pdfText}>{displayFileName}</Text>
-              <Text style={styles.tapText}>Tap to view</Text>
+              <Text style={styles.tapText}>{t('Tap to view')}</Text>
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
@@ -77,7 +79,7 @@ export default function MessageBubble({ message, isMine }: MessageBubbleProps) {
               <Text style={styles.genericFileName}>
                 {displayFileName}
               </Text>
-              <Text style={styles.tapText}>Tap to open</Text>
+              <Text style={styles.tapText}>{t('Tap to open')}</Text>
             </TouchableOpacity>
           )}
         </View>

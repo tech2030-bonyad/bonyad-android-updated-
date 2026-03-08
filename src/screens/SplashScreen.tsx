@@ -62,7 +62,7 @@ export default function SplashScreen({ onComplete, onNavigateToOverview }: Splas
             },
           ]}
         >
-          <BonyadLogo width={166} height={73} />
+          <BonyadLogo size="xlarge" variant="dark" />
         </Animated.View>
       </ImageBackground>
     </View>

@@ -134,7 +134,7 @@ Use Expo Push Tool:
 
 **1. User Registration**
 ```http
-POST https://glynda-unvexatious-felisa.ngrok-free.dev/api/users/register
+POST https://bonyad-app-nyayeditqq-ww.a.run.app/api/users/register
 
 Request Body:
 {
@@ -185,7 +185,7 @@ Response: 200 OK
 
 **1. Login Attempt**
 ```http
-POST https://glynda-unvexatious-felisa.ngrok-free.dev/api/auth/login
+POST https://bonyad-app-nyayeditqq-ww.a.run.app/api/auth/login
 
 Request Body:
 {
@@ -212,7 +212,7 @@ Response: 200 OK (but token is null)
 ### Login Flow (Already Verified)
 
 ```http
-POST https://glynda-unvexatious-felisa.ngrok-free.dev/api/auth/login
+POST https://bonyad-app-nyayeditqq-ww.a.run.app/api/auth/login
 
 Request Body:
 {

@@ -9,7 +9,6 @@ import {
   KeyboardAvoidingView,
   Dimensions,
 } from 'react-native';
-import { Image } from 'expo-image';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from 'react-native-paper';
@@ -18,6 +17,7 @@ import { useFontFamily } from '../context/FontContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { forgotPassword } from '../services/AuthService';
 import { showAlert, showError } from '../utils/alert';
+import BonyadLogo from '../components/BonyadLogo';
 import AnimatedRoleToggle from '../components/AnimatedRoleToggle';
 import { PhoneInput } from '../components/CustomInput';
 
@@ -100,11 +100,7 @@ export default function ForgotPasswordScreen({ onBack, onOTPSent }: ForgotPasswo
             <TouchableOpacity onPress={onBack} style={styles.backButton}>
               <Ionicons name="arrow-back" size={24} color={colors.text} />
             </TouchableOpacity>
-            <Image
-              source={require('../../assets/bonyad-logo.svg')}
-              style={styles.logo}
-              contentFit="contain"
-            />
+            <BonyadLogo size="small" />
             <Text style={[styles.title, { color: colors.text, fontSize: scaledSize(24) }]}>{t('Forgot Password?')}</Text>
             <Text style={[styles.subtitle, { color: colors.textSecondary, fontSize: scaledSize(14) }]}>
               {t('Enter your phone number to receive OTP')}
@@ -165,11 +161,7 @@ export default function ForgotPasswordScreen({ onBack, onOTPSent }: ForgotPasswo
             <TouchableOpacity onPress={onBack} style={styles.desktopBackButton}>
               <Ionicons name="arrow-back" size={24} color={colors.text} />
             </TouchableOpacity>
-            <Image
-              source={require('../../assets/bonyad-logo.svg')}
-              style={styles.desktopLogo}
-              contentFit="contain"
-            />
+            <BonyadLogo size="medium" />
             <Text style={[styles.desktopTitle, { color: colors.text, fontSize: scaledSize(28) }]}>{t('Forgot Password?')}</Text>
             <Text style={[styles.desktopSubtitle, { color: colors.textSecondary, fontSize: scaledSize(16) }]}>
               {t('Enter your phone number to receive OTP')}

@@ -70,7 +70,7 @@ export default function NotificationsScreen({
       const token = await storage.getAuthToken();
       if (!token) {
         console.error('❌ No auth token found');
-        Alert.alert('Error', 'Not authenticated');
+        Alert.alert(t('Error'), t('Not authenticated'));
         onBack?.();
         return;
       }
@@ -120,7 +120,7 @@ export default function NotificationsScreen({
         console.log(`📊 Unread count calculated: ${unreadCount}`);
         onUnreadCountChange?.(unreadCount);
       } else if (response.status === 401) {
-        Alert.alert('Error', 'Session expired');
+        Alert.alert(t('Error'), t('Session expired'));
         onBack?.();
       } else {
         const errorText = await response.text();
@@ -130,7 +130,7 @@ export default function NotificationsScreen({
       }
     } catch (error) {
       console.error('❌ Failed to fetch notifications:', error);
-      Alert.alert('Error', 'Failed to load notifications');
+      Alert.alert(t('Error'), t('Failed to load notifications'));
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -185,7 +185,7 @@ export default function NotificationsScreen({
         const errorText = await response.text();
         console.error(`❌ Failed to mark as read. Status: ${response.status}`);
         console.error(`   Error: ${errorText}`);
-        Alert.alert('Error', 'Failed to mark notification as read');
+        Alert.alert(t('Error'), t('Failed to mark notification as read'));
       }
     } catch (error) {
       console.error('❌ Failed to mark as read:', error);
@@ -232,7 +232,7 @@ export default function NotificationsScreen({
         const errorText = await response.text();
         console.error(`❌ Failed to mark all as read. Status: ${response.status}`);
         console.error(`   Error: ${errorText}`);
-        Alert.alert('Error', 'Failed to mark all notifications as read');
+        Alert.alert(t('Error'), t('Failed to mark all notifications as read'));
       }
     } catch (error) {
       console.error('❌ Failed to mark all as read:', error);
@@ -266,7 +266,7 @@ export default function NotificationsScreen({
       }
     } catch (error) {
       console.error('❌ Failed to delete notification:', error);
-      Alert.alert('Error', 'Failed to delete notification');
+      Alert.alert(t('Error'), t('Failed to delete notification'));
     }
   };
 
@@ -322,10 +322,10 @@ export default function NotificationsScreen({
   const groupNotificationsByTime = (notifs: Notification[]) => {
     const now = new Date();
     const groups: { [key: string]: Notification[] } = {
-      Today: [],
-      Yesterday: [],
-      '1 Week Ago': [],
-      '1 Month Ago': [],
+      [t('Today')]: [],
+      [t('Yesterday')]: [],
+      [t('1 Week Ago')]: [],
+      [t('1 Month Ago')]: [],
     };
 
     notifs.forEach((notif) => {
@@ -334,13 +334,13 @@ export default function NotificationsScreen({
       const diffDays = Math.floor(diffMs / 86400000);
 
       if (diffDays === 0) {
-        groups['Today'].push(notif);
+        groups[t('Today')].push(notif);
       } else if (diffDays === 1) {
-        groups['Yesterday'].push(notif);
+        groups[t('Yesterday')].push(notif);
       } else if (diffDays <= 7) {
-        groups['1 Week Ago'].push(notif);
+        groups[t('1 Week Ago')].push(notif);
       } else {
-        groups['1 Month Ago'].push(notif);
+        groups[t('1 Month Ago')].push(notif);
       }
     });
 
@@ -520,9 +520,9 @@ function NotificationCard({ notification, onTap, onDelete }: NotificationCardPro
     const diffMins = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMs / 3600000);
 
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins} mins ago`;
-    if (diffHours < 24) return `${diffHours} hours ago`;
+    if (diffMins < 1) return t('Just now');
+    if (diffMins < 60) return `${diffMins} ${t('mins ago')}`;
+    if (diffHours < 24) return `${diffHours} ${t('hours ago')}`;
     
     return date.toLocaleDateString();
   };

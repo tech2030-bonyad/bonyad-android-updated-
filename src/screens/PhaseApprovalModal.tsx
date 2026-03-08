@@ -18,6 +18,7 @@ import { useFontFamily } from '../context/FontContext';
 import { API_ENDPOINTS, buildApiUrlWithParams, buildApiUrl } from '../config/api';
 import { storage } from '../utils/storage';
 import { showAlert, showError, showSuccess } from '../utils/alert';
+import RialIcon from '../components/RialIcon';
 
 // ===== DESIGN TOKENS (match Approved/Phase Planning screens) =====
 const COLORS = {
@@ -912,9 +913,12 @@ export default function PhaseApprovalModal({
         </View>
         <View style={styles.detailItem}>
           <Ionicons name="cash-outline" size={16} color={COLORS.textSecondary} />
-          <Text style={styles.detailText}>
-            {formatBudget(phase.moneySpent)} {t('SAR')}
-          </Text>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailText}>
+              {formatBudget(phase.moneySpent)}
+            </Text>
+            <RialIcon size={12} variant="dark" />
+          </View>
         </View>
       </View>
 
@@ -1701,6 +1705,11 @@ const styles = StyleSheet.create({
   detailText: {
     fontSize: 12,
     color: COLORS.textSecondary,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
   },
   statusIndicators: {
     flexDirection: 'row',

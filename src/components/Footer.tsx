@@ -129,8 +129,7 @@ export default function Footer({ style }: FooterProps) {
         <View style={[styles.leftColumn, isMobile && styles.leftColumnMobile]}>
           {/* Description */}
           <Text style={styles.description}>
-            {t('Connecting clients with trusted service providers. Get quality services delivered by verified professionals.') ||
-              'Connecting clients with trusted service providers. Get quality services delivered by verified professionals.'}
+            {t('footer.description')}
           </Text>
 
           {/* Contact Information */}

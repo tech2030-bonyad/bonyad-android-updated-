@@ -107,7 +107,7 @@ export default function PortfolioManagement({
     regenerate: false,
     companyName: '',
     preferredStyle: '',
-    headerColor: '#0080E0',
+    headerColor: '#00549B',
     textColor: '#2C3E50',
     backgroundColor: '#F8F9FA',
   });
@@ -1388,7 +1388,7 @@ export default function PortfolioManagement({
               
               <ColorPicker
                 label={`${t('Header Color')} (${t('Optional')})`}
-                value={pdfOptions.headerColor || '#0080E0'}
+                value={pdfOptions.headerColor || '#00549B'}
                 onChange={(color) => setPdfOptions({ ...pdfOptions, headerColor: color })}
               />
               

@@ -1,10 +1,10 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import { useTranslation } from 'react-i18next';
+import BonyadLogo from './BonyadLogo';
 
 interface WebFooterProps {
   onNavigateToHome?: () => void;
@@ -35,11 +35,7 @@ export default function WebFooter({
       <View style={styles.footerContent}>
         {/* Company Info */}
         <View style={styles.footerSection}>
-          <Image 
-            source={require('../../assets/bonyad-logo.svg')}
-            style={styles.footerLogo}
-            resizeMode="contain"
-          />
+          <BonyadLogo size="small" />
           <Text style={[styles.footerDescription, { color: colors.textSecondary }]}>
             {i18n.language === 'en' 
               ? 'Connecting skilled technicians with homeowners for quality home improvements.'
@@ -283,7 +279,7 @@ const styles = StyleSheet.create({
       web: {
         transition: 'color 0.2s',
         ':hover': {
-          color: '#0080E0',
+          color: '#00549B',
         },
       } as any,
     }),

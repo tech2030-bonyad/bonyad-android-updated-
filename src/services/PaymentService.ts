@@ -285,14 +285,17 @@ export const getMyRefundRequests = async (
 export const createCheckout = async (
   request: CreateCheckoutRequest
 ): Promise<CreateCheckoutResponse> => {
+  console.log('🔥 [PaymentService] createCheckout called');
+  console.log('   Request amount:', request.amount);
+  console.log('   Request currency:', request.currency);
+  console.log('   merchantTransactionId:', request.merchantTransactionId);
+  
   try {
     const token = await storage.getAuthToken();
-    // Token is optional for public payments
+    console.log('🔑 [PaymentService] Token:', token ? 'present' : 'missing');
 
     const url = buildApiUrl(API_ENDPOINTS.PAYMENTS.CREATE_CHECKOUT);
-
-    console.log('📤 [PaymentService] Creating checkout');
-    console.log('   Request:', JSON.stringify(request, null, 2));
+    console.log('🌐 [PaymentService] API URL:', url);
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -302,22 +305,29 @@ export const createCheckout = async (
       headers['Authorization'] = `Bearer ${token}`;
     }
 
+    console.log('📤 [PaymentService] Sending POST request...');
     const response = await fetch(url, {
       method: 'POST',
       headers,
       body: JSON.stringify(request),
     });
 
+    console.log('📥 [PaymentService] Response status:', response.status);
+
     if (!response.ok) {
-      const errorData = await response.json();
+      const errorData = await response.json().catch(() => ({}));
+      console.error('❌ [PaymentService] Response not OK:', errorData);
       throw new Error(errorData.message || `Failed to create checkout: ${response.status}`);
     }
 
     const data = await response.json();
-    console.log('✅ [PaymentService] Checkout created:', data.checkoutId);
+    console.log('✅ [PaymentService] Checkout created successfully!');
+    console.log('   checkoutId:', data.checkoutId);
+    console.log('   shopperUrl:', data.shopperUrl);
+    console.log('   transactionId:', data.transactionId);
     return data;
   } catch (error: any) {
-    console.error('❌ [PaymentService] Create checkout error:', error);
+    console.error('❌ [PaymentService] Create checkout error:', error.message);
     throw error;
   }
 };

@@ -1,11 +1,12 @@
 import { useEffect, useCallback } from 'react';
 import { Platform } from 'react-native';
 
-type Screen = 'splash' | 'welcome' | 'overview' | 'about' | 'contact' | 'introToApp' | 'login' | 'signup' | 'otp' | 'forgotPassword' | 'otpVerification' | 'resetPassword' | 'home' | 'profile' | 'editProfile' | 'myData' | 'changePhone' | 'changePassword' | 'portfolio' | 'services' | 'availability' | 'subscription' | 'newProject' | 'manualForm' | 'aiForm' | 'projects' | 'runningProjects' | 'chatRooms' | 'chatDetail' | 'notifications' | 'appointments' | 'booking' | 'technicianProfile' | 'technicianOnboarding' | 'roomDesign' | 'voiceAI' | 'costExplorer' | 'roomVisualizer' | 'askBonyadAI' | 'projectsMap';
+type Screen = 'splash' | 'onboarding' | 'welcome' | 'overview' | 'about' | 'contact' | 'introToApp' | 'login' | 'signup' | 'otp' | 'forgotPassword' | 'otpVerification' | 'resetPassword' | 'home' | 'profile' | 'editProfile' | 'myData' | 'changePhone' | 'changePassword' | 'portfolio' | 'services' | 'availability' | 'subscription' | 'newProject' | 'manualForm' | 'aiForm' | 'projects' | 'runningProjects' | 'chatRooms' | 'chatDetail' | 'notifications' | 'appointments' | 'booking' | 'technicianProfile' | 'technicianOnboarding' | 'technicianCompleteProfile' | 'roomDesign' | 'voiceAI' | 'costExplorer' | 'roomVisualizer' | 'askBonyadAI' | 'projectsMap' | 'chatbot' | 'supportChat' | 'ticketList' | 'createTicket' | 'ticketDetail' | 'serviceProviders';
 
 // Screen to path mapping
 const screenToPath: Record<Screen, string> = {
   splash: '/',
+  onboarding: '/intro',
   welcome: '/welcome',
   overview: '/overview',
   about: '/about',
@@ -45,11 +46,19 @@ const screenToPath: Record<Screen, string> = {
   roomVisualizer: '/features/visualizer',
   askBonyadAI: '/features/ai',
   projectsMap: '/features/map',
+  technicianCompleteProfile: '/technician/complete-profile',
+  chatbot: '/chatbot',
+  supportChat: '/support-chat',
+  ticketList: '/tickets',
+  createTicket: '/tickets/create',
+  ticketDetail: '/tickets/detail',
+  serviceProviders: '/service-providers',
 };
 
 // Path to screen mapping (reverse)
 const pathToScreen: Record<string, Screen> = {
   '/': 'welcome', // Root goes to welcome on web
+  '/intro': 'onboarding',
   '/welcome': 'welcome',
   '/overview': 'overview',
   '/about': 'about',
@@ -87,6 +96,13 @@ const pathToScreen: Record<string, Screen> = {
   '/features/visualizer': 'roomVisualizer',
   '/features/ai': 'askBonyadAI',
   '/features/map': 'projectsMap',
+  '/technician/complete-profile': 'technicianCompleteProfile',
+  '/chatbot': 'chatbot',
+  '/support-chat': 'supportChat',
+  '/tickets': 'ticketList',
+  '/tickets/create': 'createTicket',
+  '/tickets/detail': 'ticketDetail',
+  '/service-providers': 'serviceProviders',
 };
 
 const isWeb = Platform.OS === 'web';

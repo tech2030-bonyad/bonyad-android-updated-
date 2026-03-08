@@ -166,7 +166,7 @@ Clean exports for easy imports
 
 **Login API Call:**
 ```typescript
-fetch('https://glynda-unvexatious-felisa.ngrok-free.dev/api/auth/login', {
+fetch('https://bonyad-app-nyayeditqq-ww.a.run.app/api/auth/login', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
@@ -183,7 +183,7 @@ fetch('https://glynda-unvexatious-felisa.ngrok-free.dev/api/auth/login', {
 
 **Signup API Call:**
 ```typescript
-fetch('https://glynda-unvexatious-felisa.ngrok-free.dev/api/auth/register', {
+fetch('https://bonyad-app-nyayeditqq-ww.a.run.app/api/auth/register', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
@@ -462,12 +462,12 @@ npm run web
 
 **Login:**
 ```
-POST https://glynda-unvexatious-felisa.ngrok-free.dev/api/auth/login
+POST https://bonyad-app-nyayeditqq-ww.a.run.app/api/auth/login
 ```
 
 **Signup:**
 ```
-POST https://glynda-unvexatious-felisa.ngrok-free.dev/api/auth/register
+POST https://bonyad-app-nyayeditqq-ww.a.run.app/api/auth/register
 ```
 
 **Request Format:**

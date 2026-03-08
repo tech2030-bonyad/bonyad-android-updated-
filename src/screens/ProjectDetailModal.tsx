@@ -21,6 +21,7 @@ import ContractViewerModal from './ContractViewerModal';
 import LocationPicker from '../components/LocationPicker';
 import { generateRoomId } from '../utils/chatUtils';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
+import RialIcon from '../components/RialIcon';
 
 interface ProjectDetailModalProps {
   visible: boolean;
@@ -456,7 +457,7 @@ export default function ProjectDetailModal({ visible, project, onClose, onOpenCh
               <Text style={[styles.budgetAmount, { color: colors.primary }]}>
                 {formatBudget(selectedProject.budget)}
               </Text>
-              <Text style={[styles.budgetCurrency, { color: colors.textSecondary }]}>SAR</Text>
+              <RialIcon size={16} variant="dark" style={{ marginLeft: 4 }} />
             </View>
           </View>
 

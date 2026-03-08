@@ -11,6 +11,7 @@ import {
   Animated,
   Image,
 } from 'react-native';
+import { CopilotStep, walkthroughable, useCopilot } from 'react-native-copilot';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/Colors';
@@ -36,6 +37,7 @@ import SubscriptionScreen from './SubscriptionScreen';
 import ServiceManagementScreen from './ServiceManagementScreen';
 import AvailabilityScreen from './AvailabilityScreen';
 import CommissionPaymentScreen from './CommissionPaymentScreen';
+import PaymentCheckoutScreen from './PaymentCheckoutScreen';
 import AvailableSmallTasksScreen from './AvailableSmallTasksScreen';
 import MySmallTaskBidsScreen from './MySmallTaskBidsScreen';
 import SmallTaskDetailScreen from './SmallTaskDetailScreen';
@@ -56,6 +58,10 @@ interface TechnicianHomeScreenProps {
   onShowRunningProjects?: () => void;
   onShowNotifications?: () => void;
   onShowAppointments?: () => void;
+  onShowChatbot?: () => void;
+  onShowSupportTickets?: () => void;
+  onShowServiceProviders?: () => void;
+  onShowCommissionPayment?: () => void;
   userName?: string;
   // Props for embedded screens
   userId?: number;
@@ -69,14 +75,18 @@ interface TechnicianHomeScreenProps {
   projectsFilter?: 'available' | 'running' | 'completed' | 'bid_received' | 'direct_offers';
 }
 
-export default function TechnicianHomeScreen({ 
-  onLogout, 
-  onShowProfile, 
-  onShowProjects, 
-  onShowChat, 
-  onShowRunningProjects, 
-  onShowNotifications, 
-  onShowAppointments, 
+export default function TechnicianHomeScreen({
+  onLogout,
+  onShowProfile,
+  onShowProjects,
+  onShowChat,
+  onShowRunningProjects,
+  onShowNotifications,
+  onShowAppointments,
+  onShowChatbot,
+  onShowSupportTickets,
+  onShowServiceProviders,
+  onShowCommissionPayment,
   userName,
   userId = 0,
   authToken = '',
@@ -105,19 +115,27 @@ export default function TechnicianHomeScreen({
   const [hasPortfolio, setHasPortfolio] = useState<boolean | null>(null);
   const [userProfile, setUserProfile] = useState<{ name?: string; avatar?: string; profileImage?: string } | null>(null);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
-  
+
   // Small Tasks state
   const [smallTasksView, setSmallTasksView] = useState<'list' | 'myBids' | 'detail' | 'serviceSuggestion' | 'mySuggestions' | null>(null);
   const [selectedSmallTask, setSelectedSmallTask] = useState<SmallTaskRequest | null>(null);
   const [smallTasksRefreshTrigger, setSmallTasksRefreshTrigger] = useState(0);
-  
+
+  // Commission Payment state
+  const [showCommissionPayment, setShowCommissionPayment] = useState(false);
+  const [commissionCheckoutRequest, setCommissionCheckoutRequest] = useState<any>(null);
+  const [commissionCheckoutDescription, setCommissionCheckoutDescription] = useState('');
+
+  // Copilot coach guide
+  const { start: startCoachTour } = useCopilot();
+
   // Animation values for dropdowns
   const mobileDropdownAnim = useRef(new Animated.Value(0)).current;
   const desktopDropdownAnim = useRef(new Animated.Value(0)).current;
-  
+
   // RTL detection
   const isRTL = i18n.language === 'ar';
-  
+
   // Update document direction on web when language changes
   useEffect(() => {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
@@ -160,7 +178,7 @@ export default function TechnicianHomeScreen({
       useNativeDriver: false,
     }).start();
   }, [showProjectsDropdown, desktopDropdownAnim]);
-  
+
   // Reset sub-views when switching tabs
   useEffect(() => {
     if (activeTab !== 'profile') {
@@ -174,7 +192,7 @@ export default function TechnicianHomeScreen({
 
   // Responsive state - updates on window resize
   const [screenWidth, setScreenWidth] = useState(Dimensions.get('window').width);
-  
+
   // Update screen width on resize
   useEffect(() => {
     const subscription = Dimensions.addEventListener('change', ({ window }) => {
@@ -230,7 +248,7 @@ export default function TechnicianHomeScreen({
       }
     };
 
-    if (IS_WEB && screenWidth >= 1200) {
+    if (true) {
       fetchProfile();
     }
   }, [authToken, userName, screenWidth, IS_WEB]);
@@ -284,22 +302,22 @@ export default function TechnicianHomeScreen({
   useEffect(() => {
     let mounted = true;
     let intervalId: NodeJS.Timeout | null = null;
-    
+
     const loadCount = async () => {
       if (!mounted) return;
       await fetchUnreadCount();
     };
-    
+
     const timeoutId = setTimeout(() => {
       loadCount();
-      
+
       intervalId = setInterval(() => {
         if (mounted) {
           loadCount();
         }
       }, 30000);
     }, 500);
-    
+
     return () => {
       mounted = false;
       clearTimeout(timeoutId);
@@ -323,65 +341,42 @@ export default function TechnicianHomeScreen({
     }
   }, [activeTab]);
 
-  const activeJobs = [
-    { id: 1, customer: 'Ahmed Ali', service: 'Fix Leaky Faucet', location: 'Riyadh', price: '150 SAR', status: 'Active' },
-    { id: 2, customer: 'Sara Mohamed', service: 'Install AC Unit', location: 'Jeddah', price: '300 SAR', status: 'Active' },
-  ];
 
   // Render mobile layout
   if (shouldRenderMobile) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         {/* TOP BAR - Figma Design (Node 58:2467) */}
-        <View style={[styles.figmaTopBar, { 
-          paddingTop: Math.max(insets.top, 10), 
-          backgroundColor: isDarkMode ? colors.cardBackground : colors.primary 
+        <View style={[styles.figmaTopBar, {
+          paddingTop: Math.max(insets.top, 10),
+          backgroundColor: isDarkMode ? colors.cardBackground : colors.primary
         }]}>
           {/* Logo Section */}
           <View style={styles.figmaLogoContainer}>
-            {/* 3D Cube Logo */}
-            <View style={styles.figmaLogoIcon}>
-              <ExpoImage
-                source={require('../../assets/bonyad-cube-logo.svg')}
-                style={{
-                  width: 53,
-                  height: 64,
-                } as any}
-                contentFit="contain"
-              />
-            </View>
-            {/* Logo Text */}
-            <View style={styles.figmaLogoTextContainer}>
-              <Text style={[styles.figmaLogoText, { 
-                color: isDarkMode ? colors.text : '#E6EFF7' 
-              }]}>Bonyad</Text>
-              <Text style={[styles.figmaLogoTextArabic, { 
-                color: isDarkMode ? colors.text : '#E6EFF7' 
-              }]}>بُنيـــاد</Text>
-            </View>
+            <BonyadLogo size="medium" />
           </View>
           {/* Icons Section */}
           <View style={styles.figmaTopBarIcons}>
-            <TouchableOpacity style={styles.figmaIconButton}>
-              <Ionicons 
-                name="information-circle-outline" 
-                size={24} 
-                color={isDarkMode ? colors.text : '#E6EFF7'} 
+            <TouchableOpacity style={styles.figmaIconButton} onPress={() => onShowNotifications?.()}>
+              <Ionicons
+                name="notifications-outline"
+                size={24}
+                color={isDarkMode ? colors.text : '#E6EFF7'}
               />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.figmaIconButton} onPress={() => setActiveTab('notifications')}>
-              <View style={styles.figmaNotificationWrapper}>
-                <Ionicons 
-                  name="notifications-outline" 
-                  size={24} 
-                  color={isDarkMode ? colors.text : '#E6EFF7'} 
-                />
-                {unreadNotificationCount > 0 && (
-                  <View style={styles.figmaNotificationBadge}>
-                    <View style={styles.figmaNotificationDot} />
-                  </View>
-                )}
-              </View>
+            <TouchableOpacity style={styles.figmaIconButton} onPress={() => onShowChat?.()}>
+              <Ionicons
+                name="chatbubble-outline"
+                size={24}
+                color={isDarkMode ? colors.text : '#E6EFF7'}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.figmaIconButton} onPress={() => startCoachTour()}>
+              <Ionicons
+                name="information-circle-outline"
+                size={24}
+                color={isDarkMode ? colors.text : '#E6EFF7'}
+              />
             </TouchableOpacity>
           </View>
         </View>
@@ -389,6 +384,7 @@ export default function TechnicianHomeScreen({
         {/* Render tab content */}
         {activeTab === 'home' && !smallTasksView && (
           <TechnicalHomeScreenContent
+            userName={userProfile?.name}
             onPressAvailableProject={(status) => {
               if (status === 'small_tasks') {
                 setSmallTasksView('list');
@@ -414,11 +410,59 @@ export default function TechnicianHomeScreen({
               }
               setActiveTab('projects');
             }}
-            onPressNotifications={() => onShowNotifications?.()}
-            onPressMessages={() => onShowChat?.()}
-            onPressInfo={() => {}}
-            onPressReferAndEarn={() => {}}
-            onPressFab={() => {}}
+            onPressReferAndEarn={() => {
+              // Show commission payment screen within home tab
+              setShowCommissionPayment(true);
+            }}
+            onPressFab={() => {
+              // FAB - Quick action to view available small tasks
+              setSmallTasksView('list');
+            }}
+            onPressChatbot={onShowChatbot}
+            // Quick Actions
+            onPressPortfolio={() => {
+              // Navigate to portfolio management
+              setProfileSubView('portfolio');
+              setActiveTab('profile');
+            }}
+            onPressSchedule={() => {
+              // Navigate to availability/schedule
+              setProfileSubView('availability');
+              setActiveTab('profile');
+            }}
+            onPressAnalytics={() => {
+              // Show analytics - for now show a popup or navigate to a screen
+              // Using appointments as a placeholder for analytics dashboard
+              onShowAppointments?.();
+            }}
+            onPressSupport={() => {
+              // Navigate to support tickets
+              onShowSupportTickets?.();
+            }}
+          />
+        )}
+
+        {/* Commission Payment Screen */}
+        {activeTab === 'home' && showCommissionPayment && !commissionCheckoutRequest && (
+          <CommissionPaymentScreen
+            onBack={() => setShowCommissionPayment(false)}
+            onNavigateToCheckout={(request, description) => {
+              setCommissionCheckoutRequest(request);
+              setCommissionCheckoutDescription(description);
+            }}
+          />
+        )}
+
+        {/* Payment Checkout Screen */}
+        {activeTab === 'home' && showCommissionPayment && commissionCheckoutRequest && (
+          <PaymentCheckoutScreen
+            checkoutRequest={commissionCheckoutRequest}
+            onBack={() => setCommissionCheckoutRequest(null)}
+            onSuccess={(transactionId) => {
+              console.log('✅ Commission payment successful:', transactionId);
+              setCommissionCheckoutRequest(null);
+              setShowCommissionPayment(false);
+            }}
           />
         )}
 
@@ -489,7 +533,7 @@ export default function TechnicianHomeScreen({
               onFilterChange={(newFilter) => {
                 setCurrentProjectsFilter(newFilter as any);
               }}
-              onOpenChat={onNavigateToChatDetail || (() => {})}
+              onOpenChat={onNavigateToChatDetail || (() => { })}
             />
           </View>
         )}
@@ -524,20 +568,20 @@ export default function TechnicianHomeScreen({
                   },
                 ]}
               >
-              <ChatRoomsListScreen
-                onOpenChat={(roomId, receiverId, receiverName, projectId) => {
-                  setSelectedChat({ roomId, receiverId, receiverName, projectId: projectId ?? undefined });
-                  setShowChatList(IS_LARGE_WEB);
-                }}
+                <ChatRoomsListScreen
+                  onOpenChat={(roomId, receiverId, receiverName, projectId) => {
+                    setSelectedChat({ roomId, receiverId, receiverName, projectId: projectId ?? undefined });
+                    setShowChatList(IS_LARGE_WEB);
+                  }}
                   onBack={
                     IS_LARGE_WEB
                       ? undefined
                       : selectedChat
-                      ? () => {
+                        ? () => {
                           setSelectedChat(null);
                           setShowChatList(true);
                         }
-                      : undefined
+                        : undefined
                   }
                 />
               </View>
@@ -557,18 +601,18 @@ export default function TechnicianHomeScreen({
                   },
                 ]}
               >
-              <ChatDetailScreen
-                roomId={selectedChat.roomId}
-                receiverId={selectedChat.receiverId}
-                receiverName={selectedChat.receiverName}
+                <ChatDetailScreen
+                  roomId={selectedChat.roomId}
+                  receiverId={selectedChat.receiverId}
+                  receiverName={selectedChat.receiverName}
                   projectId={selectedChat.projectId ?? undefined}
                   onBack={
                     IS_LARGE_WEB
                       ? undefined
                       : () => {
-                          setSelectedChat(null);
-                          setShowChatList(true);
-                        }
+                        setSelectedChat(null);
+                        setShowChatList(true);
+                      }
                   }
                 />
               </View>
@@ -586,7 +630,13 @@ export default function TechnicianHomeScreen({
 
         {activeTab === 'wallet' && (
           <View style={{ flex: 1 }}>
-            <CommissionPaymentScreen />
+            <CommissionPaymentScreen
+              onBack={() => setActiveTab('home')}
+              onNavigateToCheckout={(request, description) => {
+                setCommissionCheckoutRequest(request);
+                setCommissionCheckoutDescription(description);
+              }}
+            />
           </View>
         )}
 
@@ -600,6 +650,10 @@ export default function TechnicianHomeScreen({
                 onNavigateToSubscription={() => setProfileSubView('subscription')}
                 onNavigateToServices={() => setProfileSubView('services')}
                 onNavigateToAvailability={() => setProfileSubView('availability')}
+                onNavigateToSupportTickets={() => {
+                  setProfileSubView(null);
+                  onShowSupportTickets?.();
+                }}
               />
             ) : profileSubView === 'myData' ? (
               <MyDataScreen
@@ -669,17 +723,17 @@ export default function TechnicianHomeScreen({
 
 
             {/* Calendar */}
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.figmaTabItem}
               onPress={() => setActiveTab('appointments')}
             >
-              <Ionicons 
-                name={activeTab === 'appointments' ? "calendar" : "calendar-outline"} 
-                size={24} 
-                color={activeTab === 'appointments' ? colors.primary : (isDarkMode ? colors.textSecondary : "#6E6E6E")} 
+              <Ionicons
+                name={activeTab === 'appointments' ? "calendar" : "calendar-outline"}
+                size={24}
+                color={activeTab === 'appointments' ? colors.primary : (isDarkMode ? colors.textSecondary : "#6E6E6E")}
               />
               <Text style={[
-                styles.figmaTabLabel, 
+                styles.figmaTabLabel,
                 { color: activeTab === 'appointments' ? colors.primary : (isDarkMode ? colors.textSecondary : "#383838"), fontSize: scaledSize(12) }
               ]}>
                 {t('Calendar')}
@@ -687,17 +741,17 @@ export default function TechnicianHomeScreen({
             </TouchableOpacity>
 
             {/* Home */}
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.figmaTabItem}
               onPress={() => setActiveTab('home')}
             >
-              <Ionicons 
-                name={activeTab === 'home' ? "home" : "home-outline"} 
-                size={24} 
-                color={activeTab === 'home' ? colors.primary : (isDarkMode ? colors.textSecondary : "#383838")} 
+              <Ionicons
+                name={activeTab === 'home' ? "home" : "home-outline"}
+                size={24}
+                color={activeTab === 'home' ? colors.primary : (isDarkMode ? colors.textSecondary : "#383838")}
               />
               <Text style={[
-                styles.figmaTabLabel, 
+                styles.figmaTabLabel,
                 { color: activeTab === 'home' ? colors.primary : (isDarkMode ? colors.textSecondary : "#383838"), fontSize: scaledSize(12) }
               ]}>
                 {t('Home')}
@@ -705,17 +759,17 @@ export default function TechnicianHomeScreen({
             </TouchableOpacity>
 
             {/* Payments/Wallet */}
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.figmaTabItem}
               onPress={() => setActiveTab('wallet')}
             >
-              <Ionicons 
-                name={activeTab === 'wallet' ? "card" : "card-outline"} 
-                size={24} 
-                color={activeTab === 'wallet' ? colors.primary : (isDarkMode ? colors.textSecondary : "#6E6E6E")} 
+              <Ionicons
+                name={activeTab === 'wallet' ? "card" : "card-outline"}
+                size={24}
+                color={activeTab === 'wallet' ? colors.primary : (isDarkMode ? colors.textSecondary : "#6E6E6E")}
               />
               <Text style={[
-                styles.figmaTabLabel, 
+                styles.figmaTabLabel,
                 { color: activeTab === 'wallet' ? colors.primary : (isDarkMode ? colors.textSecondary : "#383838"), fontSize: scaledSize(12) }
               ]}>
                 {t('Payments')}
@@ -723,17 +777,17 @@ export default function TechnicianHomeScreen({
             </TouchableOpacity>
 
             {/* Profile */}
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.figmaTabItem}
               onPress={() => setActiveTab('profile')}
             >
-              <Ionicons 
-                name={activeTab === 'profile' ? "person" : "person-outline"} 
-                size={24} 
-                color={activeTab === 'profile' ? colors.primary : (isDarkMode ? colors.textSecondary : "#6E6E6E")} 
+              <Ionicons
+                name={activeTab === 'profile' ? "person" : "person-outline"}
+                size={24}
+                color={activeTab === 'profile' ? colors.primary : (isDarkMode ? colors.textSecondary : "#6E6E6E")}
               />
               <Text style={[
-                styles.figmaTabLabel, 
+                styles.figmaTabLabel,
                 { color: activeTab === 'profile' ? colors.primary : (isDarkMode ? colors.textSecondary : "#383838"), fontSize: scaledSize(12) }
               ]}>
                 {t('Profile')}
@@ -741,6 +795,7 @@ export default function TechnicianHomeScreen({
             </TouchableOpacity>
           </View>
         </View>
+
       </View>
     );
   }
@@ -749,306 +804,304 @@ export default function TechnicianHomeScreen({
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* New Horizontal Navigation Bar - Figma Design */}
-      <View style={[styles.desktopNavBar, { 
-        backgroundColor: isDarkMode ? colors.cardBackground : colors.primary 
+      <View style={[styles.desktopNavBar, {
+        backgroundColor: isDarkMode ? colors.cardBackground : colors.primary
       }]}>
         {/* Logo Section */}
         <View style={styles.desktopNavLogoSection}>
-          <View style={styles.desktopNavLogoIcon}>
-            <ExpoImage
-              source={require('../../assets/bonyad-cube-logo.svg')}
-              style={{ width: 80, height: 97 } as any}
-              contentFit="contain"
-            />
-          </View>
-          <View style={styles.desktopNavLogoTextContainer}>
-            <Text style={[styles.desktopNavLogoText, { 
-              color: isDarkMode ? colors.text : '#E6EFF7' 
-            }]}>Bonyad</Text>
-            <Text style={[styles.desktopNavLogoTextArabic, { 
-              color: isDarkMode ? colors.text : '#E6EFF7' 
-            }]}>بُنياد</Text>
-          </View>
-          </View>
+          <BonyadLogo size="medium" />
+        </View>
 
         {/* Navigation Tabs */}
         <View style={styles.desktopNavTabs}>
-            <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.desktopNavTab, activeTab === 'home' && {
               ...styles.desktopNavTabActive,
               borderBottomColor: isDarkMode ? colors.primary : '#FFFFFF'
             }]}
-              onPress={() => setActiveTab('home')}
-            >
-            <Text style={[styles.desktopNavTabText, activeTab === 'home' && styles.desktopNavTabTextActive, { 
+            onPress={() => setActiveTab('home')}
+          >
+            <Text style={[styles.desktopNavTabText, activeTab === 'home' && styles.desktopNavTabTextActive, {
               fontSize: scaledSize(16),
-              color: activeTab === 'home' 
+              color: activeTab === 'home'
                 ? (isDarkMode ? colors.primary : '#FFFFFF')
                 : (isDarkMode ? colors.textSecondary : '#B3CEE6')
             }]}>
               {t('Dashboard')}
-              </Text>
-            </TouchableOpacity>
-              <TouchableOpacity 
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
             style={[styles.desktopNavTab, activeTab === 'projects' && {
               ...styles.desktopNavTabActive,
               borderBottomColor: isDarkMode ? colors.primary : '#FFFFFF'
             }]}
             onPress={() => setActiveTab('projects')}
-              >
-            <Text style={[styles.desktopNavTabText, activeTab === 'projects' && styles.desktopNavTabTextActive, { 
+          >
+            <Text style={[styles.desktopNavTabText, activeTab === 'projects' && styles.desktopNavTabTextActive, {
               fontSize: scaledSize(16),
-              color: activeTab === 'projects' 
+              color: activeTab === 'projects'
                 ? (isDarkMode ? colors.primary : '#FFFFFF')
                 : (isDarkMode ? colors.textSecondary : '#B3CEE6')
             }]}>
-                  {t('Projects')}
-                </Text>
-              </TouchableOpacity>
-                  <TouchableOpacity 
+              {t('Projects')}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
             style={[styles.desktopNavTab, activeTab === 'appointments' && {
               ...styles.desktopNavTabActive,
               borderBottomColor: isDarkMode ? colors.primary : '#FFFFFF'
             }]}
             onPress={() => setActiveTab('appointments')}
-                  >
-            <Text style={[styles.desktopNavTabText, activeTab === 'appointments' && styles.desktopNavTabTextActive, { 
+          >
+            <Text style={[styles.desktopNavTabText, activeTab === 'appointments' && styles.desktopNavTabTextActive, {
               fontSize: scaledSize(16),
-              color: activeTab === 'appointments' 
+              color: activeTab === 'appointments'
                 ? (isDarkMode ? colors.primary : '#FFFFFF')
                 : (isDarkMode ? colors.textSecondary : '#B3CEE6')
             }]}>
               {t('Appointments')}
-                    </Text>
-                  </TouchableOpacity>
+            </Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Icons Section */}
-        <View style={styles.desktopNavIcons}>
-          <TouchableOpacity style={styles.desktopNavIconButton}>
-            <Ionicons 
-              name="information-circle-outline" 
-              size={24} 
-              color={isDarkMode ? colors.text : '#E6EFF7'} 
-            />
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-            style={styles.desktopNavIconButton}
-            onPress={() => setActiveTab('chat')}
-                  >
-            <Ionicons 
-              name="chatbubble-outline" 
-              size={24} 
-              color={isDarkMode ? colors.text : '#E6EFF7'} 
-            />
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-            style={styles.desktopNavIconButton}
-            onPress={() => setActiveTab('notifications')}
-          >
-            <View style={styles.desktopNavNotificationWrapper}>
-              <Ionicons 
-                name="notifications-outline" 
-                size={24} 
-                color={isDarkMode ? colors.text : '#E6EFF7'} 
-              />
-              {unreadNotificationCount > 0 && (
-                <View style={styles.desktopNavNotificationBadge}>
-                  <View style={styles.desktopNavNotificationDot} />
-                </View>
-              )}
-            </View>
-                  </TouchableOpacity>
-            </View>
+        {/* Icons removed - now only in header -->
 
         {/* Profile Section */}
         <View style={styles.desktopNavProfileSection}>
-            <TouchableOpacity 
+          <TouchableOpacity
             style={styles.desktopNavProfileButton}
             onPress={() => setShowProfileDropdown(!showProfileDropdown)}
           >
             <View style={styles.desktopNavProfileAvatar}>
               {userProfile?.avatar || userProfile?.profileImage ? (
-                <Image 
-                  source={{ uri: userProfile.avatar || userProfile.profileImage }} 
+                <Image
+                  source={{ uri: userProfile.avatar || userProfile.profileImage }}
                   style={styles.desktopNavProfileAvatarImage}
                 />
               ) : (
-                <View style={[styles.desktopNavProfileAvatarPlaceholder, { 
-                backgroundColor: isDarkMode ? colors.primary : '#4D8EC5' 
-              }]}>
+                <View style={[styles.desktopNavProfileAvatarPlaceholder, {
+                  backgroundColor: isDarkMode ? colors.primary : '#4D8EC5'
+                }]}>
                   <Text style={styles.desktopNavProfileAvatarText}>
                     {(userProfile?.name || userName || 'T').charAt(0).toUpperCase()}
-              </Text>
-                  </View>
-                )}
-              </View>
+                  </Text>
+                </View>
+              )}
+            </View>
             <View style={styles.desktopNavProfileInfo}>
-              <Text style={[styles.desktopNavProfileName, { 
-                color: isDarkMode ? colors.text : '#FFFFFF' 
+              <Text style={[styles.desktopNavProfileName, {
+                color: isDarkMode ? colors.text : '#FFFFFF'
               }]}>
                 {userProfile?.name || userName || t('Technician')}
               </Text>
-              <Text style={[styles.desktopNavProfileRole, { 
-                color: isDarkMode ? colors.textSecondary : '#FFFFFF' 
+              <Text style={[styles.desktopNavProfileRole, {
+                color: isDarkMode ? colors.textSecondary : '#FFFFFF'
               }]}>{t('Technician')}</Text>
             </View>
-            <Ionicons 
-              name="chevron-down" 
-              size={24} 
-              color={isDarkMode ? colors.text : '#FFFFFF'} 
-              style={{ transform: [{ rotate: showProfileDropdown ? '180deg' : '0deg' }] }} 
+            <Ionicons
+              name="chevron-down"
+              size={24}
+              color={isDarkMode ? colors.text : '#FFFFFF'}
+              style={{ transform: [{ rotate: showProfileDropdown ? '180deg' : '0deg' }] }}
             />
-            </TouchableOpacity>
+          </TouchableOpacity>
 
           {/* Profile Dropdown */}
           {showProfileDropdown && (
             <View style={[styles.desktopNavProfileDropdown, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
-            <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.desktopNavProfileDropdownItem, { borderBottomColor: colors.border }]}
                 onPress={() => {
                   setShowProfileDropdown(false);
                   setActiveTab('profile');
                 }}
-            >
+              >
                 <Ionicons name="person-outline" size={20} color={colors.text} />
                 <Text style={[styles.desktopNavProfileDropdownText, { color: colors.text, fontSize: scaledSize(14) }]}>{t('Profile')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
+              </TouchableOpacity>
+              <TouchableOpacity
                 style={[styles.desktopNavProfileDropdownItem, { borderBottomColor: colors.border }]}
                 onPress={() => {
                   setShowProfileDropdown(false);
                   setActiveTab('wallet');
                 }}
-            >
+              >
                 <Ionicons name="wallet-outline" size={20} color={colors.text} />
                 <Text style={[styles.desktopNavProfileDropdownText, { color: colors.text, fontSize: scaledSize(14) }]}>{t('Pay')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
+              </TouchableOpacity>
+              <TouchableOpacity
                 style={styles.desktopNavProfileDropdownItem}
                 onPress={() => {
                   setShowProfileDropdown(false);
                   onLogout();
                 }}
-            >
+              >
                 <Ionicons name="log-out-outline" size={20} color={colors.textSecondary} />
                 <Text style={[styles.desktopNavProfileDropdownText, { color: colors.textSecondary, fontSize: scaledSize(14) }]}>{t('Logout')}</Text>
-            </TouchableOpacity>
-          </View>
+              </TouchableOpacity>
+            </View>
           )}
         </View>
-          </View>
+      </View>
 
       {/* Main Content Area */}
       <View style={styles.desktopMainContentWrapper}>
-          {/* Tab Content */}
-          {activeTab === 'home' && (
-            <TechnicalHomeScreenContent
-              onPressAvailableProject={(status) => {
-                if (status === 'approved' || status === 'pending') {
-                  setCurrentProjectsFilter(status === 'approved' ? 'available' : 'available');
-                  setActiveTab('projects');
-                } else {
-                  setCurrentProjectsFilter('available');
-                  setActiveTab('projects');
-                }
-              }}
-              onPressTaskCategory={(status) => {
-                if (status === 'approved') {
-                  setCurrentProjectsFilter('available');
-                } else if (status === 'direct') {
-                  setCurrentProjectsFilter('direct_offers');
-                } else if (status === 'in_progress') {
-                  setCurrentProjectsFilter('running');
-                } else if (status === 'bid_received') {
-                  setCurrentProjectsFilter('bid_received');
-                }
+        {/* Tab Content */}
+        {activeTab === 'home' && (
+          <TechnicalHomeScreenContent
+            userName={userProfile?.name}
+            onPressAvailableProject={(status) => {
+              if (status === 'approved' || status === 'pending') {
+                setCurrentProjectsFilter(status === 'approved' ? 'available' : 'available');
                 setActiveTab('projects');
-              }}
-              onPressNotifications={() => onShowNotifications?.()}
-              onPressMessages={() => onShowChat?.()}
-              onPressInfo={() => {}}
-              onPressReferAndEarn={() => {}}
-              onPressFab={() => {}}
-            />
-          )}
+              } else {
+                setCurrentProjectsFilter('available');
+                setActiveTab('projects');
+              }
+            }}
+            onPressTaskCategory={(status) => {
+              if (status === 'approved') {
+                setCurrentProjectsFilter('available');
+              } else if (status === 'direct') {
+                setCurrentProjectsFilter('direct_offers');
+              } else if (status === 'in_progress') {
+                setCurrentProjectsFilter('running');
+              } else if (status === 'bid_received') {
+                setCurrentProjectsFilter('bid_received');
+              }
+              setActiveTab('projects');
+            }}
+            onPressReferAndEarn={() => {
+              // Show commission payment screen within home tab
+              setShowCommissionPayment(true);
+            }}
+            onPressFab={() => {
+              // FAB - Quick action to view available small tasks
+              setSmallTasksView('list');
+            }}
+            onPressChatbot={onShowChatbot}
+            // Quick Actions
+            onPressPortfolio={() => {
+              // Navigate to portfolio management
+              setProfileSubView('portfolio');
+              setActiveTab('profile');
+            }}
+            onPressSchedule={() => {
+              // Navigate to availability/schedule
+              setProfileSubView('availability');
+              setActiveTab('profile');
+            }}
+            onPressAnalytics={() => {
+              // Show analytics - for now show appointments as placeholder
+              onShowAppointments?.();
+            }}
+            onPressSupport={() => {
+              // Navigate to support tickets
+              onShowSupportTickets?.();
+            }}
+          />
+        )}
 
-          {activeTab === 'projects' && (
-            <ScrollView 
-              style={styles.desktopMainContent} 
-              contentContainerStyle={styles.scrollContentWithFooter}
-              showsVerticalScrollIndicator={true}
-            >
-              <View style={styles.mainContentWrapper}>
-                <ProjectsScreen
+        {/* Commission Payment Screen - Desktop */}
+        {activeTab === 'home' && showCommissionPayment && !commissionCheckoutRequest && (
+          <CommissionPaymentScreen
+            onBack={() => setShowCommissionPayment(false)}
+            onNavigateToCheckout={(request, description) => {
+              setCommissionCheckoutRequest(request);
+              setCommissionCheckoutDescription(description);
+            }}
+          />
+        )}
+
+        {/* Payment Checkout Screen - Desktop */}
+        {activeTab === 'home' && showCommissionPayment && commissionCheckoutRequest && (
+          <PaymentCheckoutScreen
+            checkoutRequest={commissionCheckoutRequest}
+            onBack={() => setCommissionCheckoutRequest(null)}
+            onSuccess={(transactionId) => {
+              console.log('✅ Commission payment successful:', transactionId);
+              setCommissionCheckoutRequest(null);
+              setShowCommissionPayment(false);
+            }}
+          />
+        )}
+
+        {activeTab === 'projects' && (
+          <ScrollView
+            style={styles.desktopMainContent}
+            contentContainerStyle={styles.scrollContentWithFooter}
+            showsVerticalScrollIndicator={true}
+          >
+            <View style={styles.mainContentWrapper}>
+              <ProjectsScreen
                 onRequestVisit={(userId, userName, projectId) => {
                   // For technicians, requesting a visit means booking an appointment with the user
                   // This will be handled by the booking system
                   console.log('🔵 [TechnicianHomeScreen] Request visit for user:', userId, 'project:', projectId);
                   // TODO: Implement visit request flow for technicians
                 }}
-                  filter={currentProjectsFilter}
-                  onFilterChange={(newFilter) => {
-                    setCurrentProjectsFilter(newFilter as any);
-                  }}
-                  onOpenChat={onNavigateToChatDetail || (() => {})}
-                />
-              </View>
-              <Footer />
-            </ScrollView>
-          )}
+                filter={currentProjectsFilter}
+                onFilterChange={(newFilter) => {
+                  setCurrentProjectsFilter(newFilter as any);
+                }}
+                onOpenChat={onNavigateToChatDetail || (() => { })}
+              />
+            </View>
+            <Footer />
+          </ScrollView>
+        )}
 
-           {activeTab === 'appointments' && (
-             <ScrollView 
-               style={styles.desktopMainContent} 
-               contentContainerStyle={styles.scrollContentWithFooter}
-               showsVerticalScrollIndicator={true}
-             >
-               <View style={styles.mainContentWrapper}>
-                 <AppointmentsScreen />
-               </View>
-               <Footer />
-             </ScrollView>
-           )}
+        {activeTab === 'appointments' && (
+          <ScrollView
+            style={styles.desktopMainContent}
+            contentContainerStyle={styles.scrollContentWithFooter}
+            showsVerticalScrollIndicator={true}
+          >
+            <View style={styles.mainContentWrapper}>
+              <AppointmentsScreen />
+            </View>
+            <Footer />
+          </ScrollView>
+        )}
 
-          {activeTab === 'chat' && (
-            <View style={[styles.desktopMainContent, { flexDirection: selectedChat ? 'row' : 'column' }]}>
-              {/* Chat List - Always visible on left when chat is selected */}
+        {activeTab === 'chat' && (
+          <View style={[styles.desktopMainContent, { flexDirection: selectedChat ? 'row' : 'column' }]}>
+            {/* Chat List - Always visible on left when chat is selected */}
+            <View style={[
+              { flex: 1 },
+              selectedChat && {
+                flex: 0.35,
+                borderRightWidth: 1,
+                borderRightColor: colors.border,
+                ...Platform.select({
+                  web: {
+                    maxWidth: 400,
+                    minWidth: 300,
+                  } as any,
+                }),
+              }
+            ]}>
+              <ChatRoomsListScreen
+                onOpenChat={(roomId, receiverId, receiverName, projectId) => {
+                  setSelectedChat({ roomId, receiverId, receiverName, projectId: projectId ?? undefined });
+                  setShowChatList(IS_LARGE_WEB);
+                }}
+              />
+            </View>
+
+            {/* Chat Detail - Shows on right side when chat is selected */}
+            {selectedChat && (
               <View style={[
                 { flex: 1 },
-                selectedChat && {
-                  flex: 0.35,
-                  borderRightWidth: 1,
-                  borderRightColor: colors.border,
+                {
+                  flex: 0.65,
                   ...Platform.select({
                     web: {
-                      maxWidth: 400,
-                      minWidth: 300,
+                      minWidth: 400,
                     } as any,
                   }),
                 }
               ]}>
-                <ChatRoomsListScreen
-                  onOpenChat={(roomId, receiverId, receiverName, projectId) => {
-                    setSelectedChat({ roomId, receiverId, receiverName, projectId: projectId ?? undefined });
-                    setShowChatList(IS_LARGE_WEB);
-                  }}
-                />
-              </View>
-              
-              {/* Chat Detail - Shows on right side when chat is selected */}
-              {selectedChat && (
-                <View style={[
-                  { flex: 1 },
-                  {
-                    flex: 0.65,
-                    ...Platform.select({
-                      web: {
-                        minWidth: 400,
-                      } as any,
-                    }),
-                  }
-                ]}>
                 <ChatDetailScreen
                   roomId={selectedChat.roomId}
                   receiverId={selectedChat.receiverId}
@@ -1058,123 +1111,140 @@ export default function TechnicianHomeScreen({
                     IS_LARGE_WEB
                       ? undefined
                       : () => {
-                          setSelectedChat(null);
-                          setShowChatList(true);
-                        }
+                        setSelectedChat(null);
+                        setShowChatList(true);
+                      }
                   }
                 />
-                </View>
-              )}
+              </View>
+            )}
+          </View>
+        )}
+
+        {activeTab === 'notifications' && (
+          <ScrollView
+            style={styles.desktopMainContent}
+            contentContainerStyle={styles.scrollContentWithFooter}
+            showsVerticalScrollIndicator={true}
+          >
+            <View style={styles.mainContentWrapper}>
+              <NotificationsScreen
+                onUnreadCountChange={setUnreadNotificationCount}
+              />
             </View>
-          )}
+            <Footer />
+          </ScrollView>
+        )}
 
-          {activeTab === 'notifications' && (
-            <ScrollView 
-              style={styles.desktopMainContent} 
-              contentContainerStyle={styles.scrollContentWithFooter}
-              showsVerticalScrollIndicator={true}
-            >
-              <View style={styles.mainContentWrapper}>
-                <NotificationsScreen
-                  onUnreadCountChange={setUnreadNotificationCount}
+        {activeTab === 'wallet' && (
+          <ScrollView
+            style={styles.desktopMainContent}
+            contentContainerStyle={styles.scrollContentWithFooter}
+            showsVerticalScrollIndicator={true}
+          >
+            <View style={styles.mainContentWrapper}>
+              <CommissionPaymentScreen
+                onBack={() => setActiveTab('home')}
+                onNavigateToCheckout={(request, description) => {
+                  setCommissionCheckoutRequest(request);
+                  setCommissionCheckoutDescription(description);
+                }}
+              />
+            </View>
+            <Footer />
+          </ScrollView>
+        )}
+
+        {activeTab === 'profile' && (
+          <ScrollView
+            style={styles.desktopMainContent}
+            contentContainerStyle={styles.scrollContentWithFooter}
+            showsVerticalScrollIndicator={true}
+          >
+            <View style={styles.mainContentWrapper}>
+              {profileSubView === null ? (
+                <ProfileScreen
+                  onLogout={onLogout}
+                  onNavigateToEditProfile={() => setProfileSubView('myData')}
+                  onNavigateToPortfolio={() => setProfileSubView('portfolio')}
+                  onNavigateToSubscription={() => setProfileSubView('subscription')}
+                  onNavigateToServices={() => setProfileSubView('services')}
+                  onNavigateToAvailability={() => setProfileSubView('availability')}
                 />
-              </View>
-              <Footer />
-            </ScrollView>
-          )}
-
-          {activeTab === 'wallet' && (
-            <ScrollView 
-              style={styles.desktopMainContent} 
-              contentContainerStyle={styles.scrollContentWithFooter}
-              showsVerticalScrollIndicator={true}
-            >
-              <View style={styles.mainContentWrapper}>
-                <CommissionPaymentScreen />
-              </View>
-              <Footer />
-            </ScrollView>
-          )}
-
-          {activeTab === 'profile' && (
-            <ScrollView 
-              style={styles.desktopMainContent} 
-              contentContainerStyle={styles.scrollContentWithFooter}
-              showsVerticalScrollIndicator={true}
-            >
-              <View style={styles.mainContentWrapper}>
-                {profileSubView === null ? (
-                  <ProfileScreen
-                    onLogout={onLogout}
-                    onNavigateToEditProfile={() => setProfileSubView('myData')}
-                    onNavigateToPortfolio={() => setProfileSubView('portfolio')}
-                    onNavigateToSubscription={() => setProfileSubView('subscription')}
-                    onNavigateToServices={() => setProfileSubView('services')}
-                    onNavigateToAvailability={() => setProfileSubView('availability')}
-                  />
-                ) : profileSubView === 'myData' ? (
-                  <MyDataScreen
-                    onBack={() => setProfileSubView(null)}
-                    onEditProfile={() => setProfileSubView('editProfile')}
-                    onChangePhone={() => setProfileSubView('changePhone')}
-                    onChangePassword={() => setProfileSubView('changePassword')}
-                    onNavigateToSubscription={() => setProfileSubView('subscription')}
-                    onNavigateToServices={() => setProfileSubView('services')}
-                    onNavigateToAvailability={() => setProfileSubView('availability')}
-                    isTechnician={true}
-                  />
-                ) : profileSubView === 'editProfile' ? (
-                  <EditProfileScreen
-                    userDetails={{}}
-                    onBack={() => setProfileSubView('myData')}
-                    onSave={() => setProfileSubView('myData')}
-                  />
-                ) : profileSubView === 'portfolio' ? (
-                  <PortfolioManagement
-                    technicianId={userId}
-                    isOwnProfile={true}
-                  />
-                ) : profileSubView === 'subscription' ? (
-                  <SubscriptionScreen
-                    onBack={() => setProfileSubView(null)}
-                  />
-                ) : profileSubView === 'services' ? (
-                  <ServiceManagementScreen
-                    onBack={() => setProfileSubView(null)}
-                  />
-                ) : profileSubView === 'serviceSuggestions' ? (
-                  <MyServiceSuggestionsScreen
-                    onBack={() => setProfileSubView('services')}
-                    onAddNew={() => setSmallTasksView('serviceSuggestion')}
-                  />
-                ) : profileSubView === 'availability' ? (
-                  <AvailabilityScreen
-                    onBack={() => setProfileSubView(null)}
-                  />
-                ) : profileSubView === 'changePassword' ? (
-                  <ChangePasswordScreen
-                    onBack={() => setProfileSubView(null)}
-                  />
-                ) : profileSubView === 'changePhone' ? (
-                  <ChangePhoneScreen
-                    onBack={() => setProfileSubView(null)}
-                    onOTPSent={(newPhoneNumber) => {
-                      setPhoneChangeNumber(newPhoneNumber);
-                      setProfileSubView('verifyPhoneChange');
-                    }}
-                  />
-                ) : profileSubView === 'verifyPhoneChange' ? (
-                  <VerifyPhoneChangeScreen
-                    newPhoneNumber={phoneChangeNumber}
-                    onBack={() => setProfileSubView('changePhone')}
-                    onVerified={() => setProfileSubView(null)}
-                  />
-                ) : null}
-              </View>
-              <Footer />
-            </ScrollView>
-          )}
+              ) : profileSubView === 'myData' ? (
+                <MyDataScreen
+                  onBack={() => setProfileSubView(null)}
+                  onEditProfile={() => setProfileSubView('editProfile')}
+                  onChangePhone={() => setProfileSubView('changePhone')}
+                  onChangePassword={() => setProfileSubView('changePassword')}
+                  onNavigateToSubscription={() => setProfileSubView('subscription')}
+                  onNavigateToServices={() => setProfileSubView('services')}
+                  onNavigateToAvailability={() => setProfileSubView('availability')}
+                  isTechnician={true}
+                />
+              ) : profileSubView === 'editProfile' ? (
+                <EditProfileScreen
+                  userDetails={{}}
+                  onBack={() => setProfileSubView('myData')}
+                  onSave={() => setProfileSubView('myData')}
+                />
+              ) : profileSubView === 'portfolio' ? (
+                <PortfolioManagement
+                  technicianId={userId}
+                  isOwnProfile={true}
+                />
+              ) : profileSubView === 'subscription' ? (
+                <SubscriptionScreen
+                  onBack={() => setProfileSubView(null)}
+                />
+              ) : profileSubView === 'services' ? (
+                <ServiceManagementScreen
+                  onBack={() => setProfileSubView(null)}
+                />
+              ) : profileSubView === 'serviceSuggestions' ? (
+                <MyServiceSuggestionsScreen
+                  onBack={() => setProfileSubView('services')}
+                  onAddNew={() => setSmallTasksView('serviceSuggestion')}
+                />
+              ) : profileSubView === 'availability' ? (
+                <AvailabilityScreen
+                  onBack={() => setProfileSubView(null)}
+                />
+              ) : profileSubView === 'changePassword' ? (
+                <ChangePasswordScreen
+                  onBack={() => setProfileSubView(null)}
+                />
+              ) : profileSubView === 'changePhone' ? (
+                <ChangePhoneScreen
+                  onBack={() => setProfileSubView(null)}
+                  onOTPSent={(newPhoneNumber) => {
+                    setPhoneChangeNumber(newPhoneNumber);
+                    setProfileSubView('verifyPhoneChange');
+                  }}
+                />
+              ) : profileSubView === 'verifyPhoneChange' ? (
+                <VerifyPhoneChangeScreen
+                  newPhoneNumber={phoneChangeNumber}
+                  onBack={() => setProfileSubView('changePhone')}
+                  onVerified={() => setProfileSubView(null)}
+                />
+              ) : null}
+            </View>
+            <Footer />
+          </ScrollView>
+        )}
       </View>
+
+      {/* Floating Chatbot Button */}
+      {onShowChatbot && (
+        <TouchableOpacity
+          style={[styles.chatbotFab, { backgroundColor: colors.primary }]}
+          onPress={onShowChatbot}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="chatbubbles" size={28} color="#fff" />
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -1788,7 +1858,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 8,
     borderRadius: 25,
-    backgroundColor: '#0080E0',
+    backgroundColor: '#00549B',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
@@ -2306,6 +2376,31 @@ const styles = StyleSheet.create({
     ...Platform.select({
       web: {
         boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)' as any,
+      },
+    }),
+  },
+  chatbotFab: {
+    position: 'absolute',
+    right: 20,
+    bottom: 100,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 8,
+      },
+      web: {
+        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)' as any,
+        cursor: 'pointer' as any,
       },
     }),
   },

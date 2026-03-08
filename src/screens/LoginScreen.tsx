@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/Colors';
 import { FontFamily, UIFontSizes } from '../constants/Fonts';
+import BonyadLogo from '../components/BonyadLogo';
 import { storage } from '../utils/storage';
 import { Button, Card, Surface } from 'react-native-paper';
 import { useFCMNotifications } from '../utils/useFCMNotifications';
@@ -172,7 +173,20 @@ export default function LoginScreen({
         }),
       });
 
-      const data = await response.json();
+      // Get response text first to debug non-JSON responses
+      const responseText = await response.text();
+      console.log('📥 Login Response Status:', response.status);
+      console.log('📥 Login Response Text:', responseText.substring(0, 500));
+
+      // Try to parse JSON
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('❌ Failed to parse login response as JSON');
+        console.error('   Response text:', responseText);
+        throw new Error('Invalid server response. Please check your connection.');
+      }
 
       console.log('📥 Login Response:', data);
 
@@ -278,19 +292,7 @@ export default function LoginScreen({
                 {/* Logo Section - Figma Style: Cube + Text */}
               <View style={styles.mobileLogoSection}>
                 <View style={styles.mobileLogoContainer}>
-                  <Image
-                    source={require('../../assets/bonyad-cube-logo.svg')}
-                    style={styles.mobileCubeLogo}
-                    contentFit="contain"
-                  />
-                  <View style={styles.mobileLogoTextContainer}>
-                    <Text style={[styles.mobileLogoText, { color: isDarkMode ? colors.text : figmaMobileColors.buttonBlue, fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif' }]}>
-                      Bonyad
-                    </Text>
-                    <Text style={[styles.mobileLogoArabic, { color: isDarkMode ? colors.textSecondary : figmaMobileColors.buttonBlue, fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif' }]}>
-                      بُنيـــاد
-                    </Text>
-                  </View>
+                  <BonyadLogo size="medium" variant="dark" />
                 </View>
               </View>
 
@@ -441,71 +443,19 @@ export default function LoginScreen({
               },
             ]}
           >
-            {/* Figma Layout: Cube Logo + Text Side by Side - NEVER FLIP */}
+            {/* New Bonyad Logo */}
             <Animated.View 
               style={[
                 styles.desktopBranding,
                 {
                   opacity: fadeAnim,
                   transform: [{ scale: scaleAnim }],
-                  flexDirection: 'row', // Always LTR - logo should not flip
                   alignItems: 'center',
-                  gap: 33, // Figma: gap-[33px]
+                  justifyContent: 'center',
                 }
               ]}
             >
-              {/* Bonyad 3D Cube Logo - Figma: 221x265px */}
-              <Image
-                source={require('../../assets/bonyad-cube-logo.svg')}
-                style={{
-                  width: 221,
-                  height: 265,
-                } as any}
-                contentFit="contain"
-              />
-              
-              {/* Brand Text Container - Figma: w-[414px], gap-[19px] */}
-              <View style={{ 
-                flexDirection: 'column', 
-                gap: 19, // Figma: gap-[19px]
-                alignItems: 'flex-start', // Always left-aligned
-                width: 414, // Figma: w-[414px]
-              }}>
-                {/* "Bonyad" Text - Figma: 96px, Extra Bold, #005DAC */}
-                <Animated.Text 
-                  style={[
-                    {
-                      opacity: fadeAnim,
-                      color: isDarkMode ? colors.text : figmaColors.primaryBlue,
-                      fontSize: 96, // Figma: text-[96px]
-                      fontWeight: '800', // Figma: font-extrabold
-                      letterSpacing: -1,
-                      lineHeight: 96,
-                      fontFamily: Platform.OS === 'web' ? 'system-ui, -apple-system, BlinkMacSystemFont, sans-serif' : undefined,
-                    }
-                  ]}
-                >
-                  Bonyad
-                </Animated.Text>
-                
-                {/* Arabic "بُنياد" Text - Figma: ~64px styled text, #005DAC */}
-                <Animated.Text 
-                  style={[
-                    {
-                      opacity: fadeAnim,
-                      color: isDarkMode ? colors.textSecondary : figmaColors.primaryBlue,
-                      fontSize: 72, // Scaled to match Figma proportions
-                      fontWeight: '700',
-                      letterSpacing: 8, // Add letter spacing for Arabic styling
-                      lineHeight: 116, // Figma: h-[116px]
-                      textAlign: 'left', // Always left-aligned
-                      fontFamily: Platform.OS === 'web' ? 'system-ui, -apple-system, BlinkMacSystemFont, sans-serif' : undefined,
-                    }
-                  ]}
-                >
-                  بُنيـــاد
-                </Animated.Text>
-              </View>
+              <BonyadLogo size="large" variant="dark" />
             </Animated.View>
           </Animated.View>
         )}

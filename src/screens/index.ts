@@ -1,6 +1,7 @@
 // 📁 SCREENS INDEX: Export all screens for easy imports
 
 export { default as SplashScreen } from './SplashScreen';
+export { default as OnboardingScreen } from './OnboardingScreen';
 export { default as WelcomeScreen } from './WelcomeScreen';
 export { default as OverviewScreen } from './OverviewScreen';
 export { default as AboutScreen } from './AboutScreen';
@@ -60,3 +61,14 @@ export { default as RefundRequestScreen } from './RefundRequestScreen';
 export { default as PaymentCheckoutScreen } from './PaymentCheckoutScreen';
 export { default as AdminRefundManagementScreen } from './AdminRefundManagementScreen';
 export { default as PaymentResultScreen } from './PaymentResultScreen';
+export { default as TechnicianCompleteProfileScreen } from './TechnicianCompleteProfileScreen';
+export { default as ChatbotScreen } from './ChatbotScreen';
+export { default as SupportChatScreen } from './SupportChatScreen';
+export { default as TicketListScreen } from './TicketListScreen';
+export { default as CreateTicketScreen } from './CreateTicketScreen';
+export { default as TicketDetailScreen } from './TicketDetailScreen';
+export { default as ServiceProvidersScreen } from './ServiceProvidersScreen';
+export { default as CommissionPaymentScreen } from './CommissionPaymentScreen';
+export { default as CategorySubcategoryScreen } from './CategorySubcategoryScreen';
+export { default as CreationMethodScreen } from './CreationMethodScreen';
+

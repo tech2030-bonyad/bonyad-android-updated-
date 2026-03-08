@@ -5,6 +5,7 @@ import * as Location from 'expo-location';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 
 // Static libraries array to prevent LoadScript reload
 const LIBRARIES: ("places" | "drawing" | "geometry" | "localContext" | "visualization" | "marker")[] = ['places', 'marker'];
@@ -22,6 +23,7 @@ export default function LocationPicker({
   onLocationSelect, 
   onClose 
 }: LocationPickerProps) {
+  const { t } = useTranslation();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const [location, setLocation] = useState(initialLocation || { latitude: 0, longitude: 0 });
@@ -161,7 +163,7 @@ export default function LocationPicker({
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         console.log('❌ Location permission denied');
-        Alert.alert('Permission Required', 'Please enable location permissions to use this feature.');
+        Alert.alert(t('Permission Required'), t('Please enable location permissions to use this feature'));
         return;
       }
 
@@ -208,7 +210,7 @@ export default function LocationPicker({
       }
     } catch (error) {
       console.error('❌ Error getting location:', error);
-      Alert.alert('Error', 'Failed to get your current location. Please try again.');
+      Alert.alert(t('Error'), t('Failed to get your current location') + '. ' + t('Please try again') + '.');
     } finally {
       setIsGettingLocation(false);
     }
@@ -474,7 +476,7 @@ export default function LocationPicker({
       >
         <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top, paddingBottom: insets.bottom }]}>
           <View style={[styles.header, { backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
-            <Text style={[styles.title, { color: colors.text }]}>Select Location</Text>
+            <Text style={[styles.title, { color: colors.text }]}>{t('Select Location')}</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <Ionicons name="close" size={24} color={colors.text} />
             </TouchableOpacity>
@@ -485,7 +487,7 @@ export default function LocationPicker({
             <Ionicons name="search" size={20} color={colors.textSecondary} style={styles.searchIcon} />
             <TextInput
               style={[styles.searchInput, { color: colors.text, backgroundColor: colors.surface }]}
-              placeholder="Search for a location..."
+              placeholder={t('Search for a location...')}
               placeholderTextColor={colors.textTertiary}
               value={searchQuery}
               onChangeText={handleSearch}
@@ -498,7 +500,7 @@ export default function LocationPicker({
           {/* Search Results */}
           {searchResults.length > 0 && (
             <View style={[styles.searchResults, { backgroundColor: colors.cardBackground }]}>
-              <Text style={[styles.searchResultsTitle, { color: colors.textSecondary }]}>Search Results</Text>
+              <Text style={[styles.searchResultsTitle, { color: colors.textSecondary }]}>{t('Search Results')}</Text>
               {searchResults.map((result, index) => (
                 <TouchableOpacity
                   key={index}
@@ -546,13 +548,13 @@ export default function LocationPicker({
 
           <View style={[styles.footer, { backgroundColor: colors.cardBackground, borderTopColor: colors.border }]}>
             <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
-              <Text style={[styles.buttonText, { color: colors.text }]}>Cancel</Text>
+              <Text style={[styles.buttonText, { color: colors.text }]}>{t('Cancel')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.confirmButton, { backgroundColor: colors.primary }]}
               onPress={handleConfirm}
             >
-              <Text style={[styles.buttonText, { color: '#fff' }]}>Confirm</Text>
+              <Text style={[styles.buttonText, { color: '#fff' }]}>{t('Confirm')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -572,7 +574,7 @@ export default function LocationPicker({
     >
       <View style={[styles.container, { backgroundColor: colors.background, paddingBottom: insets.bottom }]}>
         <View style={[styles.header, { backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
-          <Text style={[styles.title, { color: colors.text }]}>Select Location</Text>
+          <Text style={[styles.title, { color: colors.text }]}>{t('Select Location')}</Text>
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
             <Ionicons name="close" size={24} color={colors.text} />
           </TouchableOpacity>
@@ -583,7 +585,7 @@ export default function LocationPicker({
           <Ionicons name="search" size={20} color={colors.textSecondary} style={styles.searchIcon} />
           <TextInput
             style={[styles.searchInput, { color: colors.text, backgroundColor: colors.surface }]}
-            placeholder="Search for a location..."
+            placeholder={t('Search for a location...')}
             placeholderTextColor={colors.textTertiary}
             value={searchQuery}
             onChangeText={handleSearch}
@@ -596,7 +598,7 @@ export default function LocationPicker({
         {/* Search Results */}
         {searchResults.length > 0 && (
           <View style={[styles.searchResults, { backgroundColor: colors.cardBackground }]}>
-            <Text style={[styles.searchResultsTitle, { color: colors.textSecondary }]}>Search Results</Text>
+            <Text style={[styles.searchResultsTitle, { color: colors.textSecondary }]}>{t('Search Results')}</Text>
             {searchResults.map((result, index) => (
               <TouchableOpacity
                 key={index}
@@ -730,13 +732,13 @@ export default function LocationPicker({
 
         <View style={[styles.footer, { backgroundColor: colors.cardBackground, borderTopColor: colors.border }]}>
           <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
-            <Text style={[styles.buttonText, { color: colors.text }]}>Cancel</Text>
+            <Text style={[styles.buttonText, { color: colors.text }]}>{t('Cancel')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.confirmButton, { backgroundColor: colors.primary }]}
             onPress={handleConfirm}
           >
-            <Text style={[styles.buttonText, { color: '#fff' }]}>Confirm</Text>
+            <Text style={[styles.buttonText, { color: '#fff' }]}>{t('Confirm')}</Text>
           </TouchableOpacity>
         </View>
       </View>

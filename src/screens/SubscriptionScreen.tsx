@@ -20,6 +20,7 @@ import { fetchSubscriptionPlans } from '../services/onboardingApi';
 import type { SubscriptionPlan as ApiSubscriptionPlan } from '../services/onboardingApi';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
 import ConfirmationPopup, { useConfirmationPopup } from '../components/ConfirmationPopup';
+import RialIcon from '../components/RialIcon';
 
 interface SubscriptionScreenProps {
   onBack: () => void;
@@ -352,7 +353,10 @@ export default function SubscriptionScreen({ onBack }: SubscriptionScreenProps) 
                 <View style={styles.cardHeader}>
                   <Text style={[styles.cardTitle, { fontSize: scaledSize(20) }]}>{subscriptionName}</Text>
                   {subscriptionPrice !== undefined && (
-                    <Text style={[styles.cardPrice, { fontSize: scaledSize(18) }]}>SAR {subscriptionPrice.toFixed(0)}</Text>
+                    <View style={styles.priceRow}>
+                      <RialIcon size={scaledSize(16)} variant="dark" />
+                      <Text style={[styles.cardPrice, { fontSize: scaledSize(18), marginLeft: 4 }]}>{subscriptionPrice.toFixed(0)}</Text>
+                    </View>
                   )}
                 </View>
 
@@ -486,7 +490,10 @@ export default function SubscriptionScreen({ onBack }: SubscriptionScreenProps) 
                           {displayName}
                         </Text>
                         <View style={styles.priceBadge}>
-                          <Text style={styles.priceText}>SAR {priceValue.toFixed(2)}</Text>
+                          <View style={styles.priceRow}>
+                            <RialIcon size={14} variant="dark" />
+                            <Text style={[styles.priceText, { marginLeft: 4 }]}>{priceValue.toFixed(2)}</Text>
+                          </View>
                           <Text style={styles.pricePeriod}>/month</Text>
                         </View>
                       </View>
@@ -697,6 +704,10 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '600',
     color: '#333333',
+  },
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   priceBadge: {
     flexDirection: 'row',

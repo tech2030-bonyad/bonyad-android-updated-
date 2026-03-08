@@ -5,9 +5,23 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  StatusBar,
+  Platform,
+  Dimensions,
 } from 'react-native';
-import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons, Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
+import { AnimatedStatTicker } from '../../components/AnimatedStatTicker';
+import { LinearGradient } from 'expo-linear-gradient';
+import { CopilotStep, walkthroughable } from 'react-native-copilot';
+
+// Walkthroughable component for coach guide
+const WalkableView = walkthroughable((props: any) => (
+  <View {...props} collapsable={false} />
+));
+
+const { width: screenWidth } = Dimensions.get('window');
 
 type ProjectStatus =
   | 'approved'
@@ -18,588 +32,691 @@ type ProjectStatus =
   | 'small_tasks';
 
 interface TechnicalHomeScreenProps {
+  userName?: string;
   onPressAvailableProject?: (status: ProjectStatus) => void;
   onPressTaskCategory?: (status: ProjectStatus) => void;
-  onPressNotifications?: () => void;
-  onPressMessages?: () => void;
-  onPressInfo?: () => void;
   onPressReferAndEarn?: () => void;
   onPressFab?: () => void;
+  onPressChatbot?: () => void;
+  onPressInfo?: () => void;
+  // Quick action handlers
+  onPressPortfolio?: () => void;
+  onPressSchedule?: () => void;
+  onPressAnalytics?: () => void;
+  onPressSupport?: () => void;
 }
 
-const colors = {
-  primary: '#3b82f6',
-  primaryDark: '#2563eb',
-  purple: '#7c3aed',
-  purpleDark: '#5b21b6',
-  purpleLight: '#f3e8ff',
-  purpleLighter: '#e9d5ff',
-  green: '#10b981',
-  greenDark: '#059669',
-  greenLight: '#d1fae5',
-  red: '#ef4444',
-  gray50: '#f8fafc',
-  gray100: '#f1f5f9',
-  gray200: '#e5e7eb',
-  gray300: '#cbd5e1',
-  gray400: '#94a3b8',
-  gray500: '#64748b',
-  gray600: '#6b7280',
-  gray900: '#1f2937',
-  amber50: '#fef3c7',
-  amber400: '#f59e0b',
-  amber900: '#92400e',
-  blue50: '#dbeafe',
-  white: '#ffffff',
-  black: '#000000',
-};
-
-const typography = {
-  logoTitle: { fontSize: 24, fontWeight: '600' as const },
-  logoSubtitle: { fontSize: 16, fontWeight: '500' as const },
-  h1: { fontSize: 22, fontWeight: '700' as const },
-  h2: { fontSize: 20, fontWeight: '700' as const },
-  h3: { fontSize: 18, fontWeight: '600' as const },
-  bodyLarge: { fontSize: 16, fontWeight: '600' as const },
-  bodyMedium: { fontSize: 14, fontWeight: '600' as const },
-  bodySmall: { fontSize: 12, fontWeight: '400' as const },
-  badge: { fontSize: 10, fontWeight: 'bold' as const },
-  badgeMedium: { fontSize: 12, fontWeight: 'bold' as const },
-};
-
-const spacing = {
-  xs: 4,
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 20,
-  xxl: 24,
-  xxxl: 32,
-};
-
-const borderRadius = {
-  sm: 4,
-  md: 8,
-  lg: 12,
-  xl: 16,
-  xxl: 20,
-  full: 50,
-};
-
-const shadows = {
-  small: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  medium: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-};
-
-const TechnicalHomeScreen: React.FC<TechnicalHomeScreenProps> = ({
+export default function TechnicalHomeScreen({
+  userName,
   onPressAvailableProject,
   onPressTaskCategory,
-  onPressNotifications,
-  onPressMessages,
-  onPressInfo,
   onPressReferAndEarn,
   onPressFab,
-}) => {
+  onPressChatbot,
+  onPressInfo,
+  onPressPortfolio,
+  onPressSchedule,
+  onPressAnalytics,
+  onPressSupport,
+}: TechnicalHomeScreenProps) {
+  const { t } = useTranslation();
   const { colors: themeColors, theme } = useTheme();
   const isDarkMode = theme === 'dark';
 
-  // Dynamic colors based on theme
-  const dynamicColors = {
+  const dc = {
     primary: themeColors.primary,
     primaryDark: themeColors.primaryDark,
-    purple: isDarkMode ? '#9d7af0' : '#7c3aed',
+    purple: isDarkMode ? '#a78bfa' : '#7c3aed',
     purpleDark: isDarkMode ? '#7c3aed' : '#5b21b6',
-    purpleLight: isDarkMode ? '#2d1b4e' : '#f3e8ff',
-    purpleLighter: isDarkMode ? '#3d2b5e' : '#e9d5ff',
     green: isDarkMode ? '#34d399' : '#10b981',
     greenDark: isDarkMode ? '#10b981' : '#059669',
-    greenLight: isDarkMode ? '#064e3b' : '#d1fae5',
+    greenLight: isDarkMode ? '#064e3b' : '#ecfdf5',
+    orange: isDarkMode ? '#fb923c' : '#f97316',
+    orangeLight: isDarkMode ? '#78350f' : '#fff7ed',
     red: themeColors.error,
     gray50: isDarkMode ? themeColors.background : '#f8fafc',
     gray100: isDarkMode ? themeColors.gray100 : '#f1f5f9',
-    gray200: isDarkMode ? themeColors.gray200 : '#e5e7eb',
+    gray200: isDarkMode ? themeColors.gray200 : '#e2e8f0',
     gray300: isDarkMode ? themeColors.gray300 : '#cbd5e1',
     gray400: isDarkMode ? themeColors.gray400 : '#94a3b8',
     gray500: isDarkMode ? themeColors.gray500 : '#64748b',
-    gray600: isDarkMode ? themeColors.textSecondary : '#6b7280',
-    gray900: isDarkMode ? themeColors.text : '#1f2937',
-    amber50: isDarkMode ? '#78350f' : '#fef3c7',
-    amber400: isDarkMode ? '#fbbf24' : '#f59e0b',
-    amber900: isDarkMode ? '#fef3c7' : '#92400e',
-    blue50: isDarkMode ? '#1e3a5f' : '#dbeafe',
+    gray600: isDarkMode ? themeColors.textSecondary : '#475569',
     white: themeColors.white,
-    black: themeColors.black,
     background: themeColors.background,
     cardBackground: themeColors.cardBackground,
     text: themeColors.text,
     textSecondary: themeColors.textSecondary,
   };
 
+  // Stats data for ticker - Includes Welcome message as first item
+  const stats = [
+    { label: t('Welcome back'), value: userName || t('Technician'), icon: 'account', color: '#fff', bgColor: 'rgba(255, 255, 255, 0.2)' },
+    { label: t('Earnings'), value: '12,500', icon: 'wallet', color: '#fff', bgColor: '#ffffff' },
+    { label: t('Projects'), value: '24', icon: 'briefcase', color: '#fff', bgColor: '#ffffff' },
+    { label: t('Rating'), value: '4.8', icon: 'star', color: '#fff', bgColor: '#ffffff' },
+  ];
+
+  // Quick actions with handlers
+  const quickActions = [
+    { label: t('Portfolio'), icon: 'folder-open', color: dc.purple, bgColor: dc.purple + '12', onPress: onPressPortfolio },
+    { label: t('Schedule'), icon: 'calendar', color: dc.primary, bgColor: dc.primary + '12', onPress: onPressSchedule },
+    { label: t('Analytics'), icon: 'chart-line', color: dc.green, bgColor: dc.green + '12', onPress: onPressAnalytics },
+    { label: t('Support'), icon: 'headset', color: dc.orange, bgColor: dc.orangeLight, onPress: onPressSupport },
+  ];
+
+  // Dummy project data
+  const projects = [
+    {
+      id: 1,
+      title: t('Apartment Painting - 3 Bedrooms'),
+      status: 'approved',
+      statusLabel: t('Approved'),
+      price: '﷼ 2,500',
+      location: t('Riyadh, Al Olaya'),
+    },
+    {
+      id: 2,
+      title: t('Bathroom Renovation'),
+      status: 'pending',
+      statusLabel: t('Pending'),
+      price: '﷼ 4,200',
+      location: t('Jeddah, Al Hamra'),
+    },
+    {
+      id: 3,
+      title: t('Kitchen Cabinet Installation'),
+      status: 'in_progress',
+      statusLabel: t('In Progress'),
+      price: '﷼ 3,800',
+      location: t('Dammam, Al Faisaliah'),
+    },
+    {
+      id: 4,
+      title: t('Flooring - Vinyl Planks'),
+      status: 'approved',
+      statusLabel: t('Approved'),
+      price: '﷼ 5,500',
+      location: t('Riyadh, Al Nakheel'),
+    },
+  ];
+
+  // Task categories with dummy data
+  const taskCategories = [
+    { 
+      id: 'small_tasks', 
+      label: t('Small Tasks'), 
+      icon: 'hammer', 
+      color: dc.primary, 
+      bgColor: dc.primary + '12',
+      count: 12,
+      description: t('Quick jobs under 2 hours')
+    },
+    { 
+      id: 'direct', 
+      label: t('Direct Offers'), 
+      icon: 'flash', 
+      color: dc.green, 
+      bgColor: dc.greenLight,
+      count: 5,
+      description: t('Direct client requests')
+    },
+    { 
+      id: 'bid_received', 
+      label: t('My Bids'), 
+      icon: 'gavel', 
+      color: dc.orange, 
+      bgColor: dc.orangeLight,
+      count: 8,
+      description: t('Pending bid responses')
+    },
+    { 
+      id: 'in_progress', 
+      label: t('Active Work'), 
+      icon: 'progress-wrench', 
+      color: dc.purple, 
+      bgColor: dc.purple + '12',
+      count: 3,
+      description: t('Ongoing projects')
+    },
+  ];
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'approved': return dc.green;
+      case 'in_progress': return dc.primary;
+      case 'pending': return dc.orange;
+      default: return dc.gray400;
+    }
+  };
+
+  const getStatusBg = (status: string) => {
+    switch (status) {
+      case 'approved': return dc.greenLight;
+      case 'in_progress': return dc.primary + '12';
+      case 'pending': return dc.orangeLight;
+      default: return dc.gray100;
+    }
+  };
+
   return (
-    <View style={[styles.root, { backgroundColor: dynamicColors.background }]}>
+    <View style={[styles.root, { backgroundColor: dc.background }]}>
+      <StatusBar barStyle="light-content" />
+
+      {/* ═══ Professional Header with Gradient ═══ */}
+      <LinearGradient
+        colors={isDarkMode ? ['#1e40af', '#3b82f6'] : ['#2563eb', '#3b82f6']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.headerGradient}
+      >
+        <View style={styles.headerContent}>
+          {/* Stats Ticker - Icons moved to top bar */}
+          <View style={{ marginTop: 10, marginBottom: 5, width: '100%' }}>
+            <AnimatedStatTicker stats={stats} />
+          </View>
+        </View>
+      </LinearGradient>
+
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
-        <TouchableOpacity
-          style={[styles.portfolioCard, {
-            backgroundColor: dynamicColors.purpleLight,
-            borderColor: dynamicColors.purple,
-          }]}
-          activeOpacity={0.8}
-        >
-          <View style={styles.portfolioLeft}>
-            <View style={styles.portfolioIcon}>
-              <Feather name="briefcase" size={32} color={dynamicColors.purple} />
+        {/* ═══ Quick Actions Grid ═══ */}
+        <CopilotStep key="quickActions" text={t('coachMark.quickActions', 'Access your portfolio, schedule, analytics, and support')} order={1} name="quickActions">
+          <WalkableView style={[styles.quickActionsCard, { backgroundColor: dc.cardBackground }]}>
+            <Text style={[styles.sectionTitle, { color: dc.text }]}>{t('Quick Actions')}</Text>
+            <View style={styles.quickActionsGrid}>
+              {quickActions.map((action, index) => (
+                <TouchableOpacity 
+                  key={index} 
+                  style={styles.quickActionItem} 
+                  onPress={action.onPress || (() => {})}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.quickActionIcon, { backgroundColor: action.bgColor }]}>
+                    <FontAwesome5 name={action.icon as any} size={20} color={action.color} />
+                  </View>
+                  <Text style={[styles.quickActionLabel, { color: dc.text }]}>{action.label}</Text>
+                </TouchableOpacity>
+              ))}
             </View>
-            <View>
-              <Text style={[styles.portfolioTitle, { color: dynamicColors.text }]}>Create Portfolio</Text>
-              <Text style={[styles.portfolioSubtitle, { color: dynamicColors.textSecondary }]}>Showcase your work</Text>
-            </View>
-          </View>
-          <View style={styles.portfolioRight}>
-            <View style={[styles.newBadge, { backgroundColor: dynamicColors.purpleDark }]}>
-              <Text style={styles.newBadgeText}>NEW!</Text>
-            </View>
-          </View>
-        </TouchableOpacity>
+          </WalkableView>
+        </CopilotStep>
 
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: dynamicColors.text }]}>Available Projects</Text>
-          <TouchableOpacity activeOpacity={0.7}>
-            <Text style={[styles.sectionLink, { color: dynamicColors.primary }]}>View All</Text>
-          </TouchableOpacity>
-        </View>
+        {/* ═══ Available Projects Section ═══ */}
+        <CopilotStep key="availableProjects" text={t('coachMark.availableProjects', 'Browse and bid on available projects in your area')} order={2} name="availableProjects">
+          <WalkableView style={styles.sectionWrapper}>
+            <View style={styles.sectionHeaderRow}>
+              <View style={styles.sectionTitleWrapper}>
+                <View style={[styles.sectionIcon, { backgroundColor: dc.primary + '12' }]}>
+                  <Feather name="folder" size={16} color={dc.primary} />
+                </View>
+                <Text style={[styles.sectionHeading, { color: dc.text }]}>
+                  {t('Available Projects')}
+                </Text>
+              </View>
+              <TouchableOpacity style={styles.seeAllBtn} onPress={() => onPressAvailableProject?.('pending')}>
+                <Text style={[styles.seeAllText, { color: dc.primary }]}>{t('View All')}</Text>
+                <Feather name="chevron-right" size={14} color={dc.primary} />
+              </TouchableOpacity>
+            </View>
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.projectsScrollContent}
-        >
-          <TouchableOpacity
-            style={[styles.projectCard, {
-              backgroundColor: dynamicColors.cardBackground,
-            }]}
-            activeOpacity={0.8}
-            onPress={() => onPressAvailableProject?.('approved')}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.projectsScroll}
           >
-            <View style={[styles.projectImagePlaceholder, { backgroundColor: dynamicColors.gray100 }]}>
-              <Feather
-                name="image"
-                size={24}
-                color={dynamicColors.gray300}
-              />
+            {projects.map((project, index) => {
+              const statusColor = getStatusColor(project.status);
+              const statusBg = getStatusBg(project.status);
+              return (
+                <TouchableOpacity
+                  key={project.id}
+                  style={[
+                    styles.projectCard,
+                    { backgroundColor: dc.cardBackground },
+                    index === 0 && { marginLeft: 20 }
+                  ]}
+                  activeOpacity={0.9}
+                  onPress={() => onPressAvailableProject?.(project.status as ProjectStatus)}
+                >
+                  {/* Status badge */}
+                  <View style={[styles.projectStatusBadge, { backgroundColor: statusBg }]}>
+                    <View style={[styles.projectStatusDot, { backgroundColor: statusColor }]} />
+                    <Text style={[styles.projectStatusLabel, { color: statusColor }]}>
+                      {project.statusLabel}
+                    </Text>
+                  </View>
+
+                  {/* Title */}
+                  <Text style={[styles.projectTitle, { color: dc.text }]} numberOfLines={2}>
+                    {project.title}
+                  </Text>
+
+                  {/* Location */}
+                  <View style={styles.projectLocationRow}>
+                    <Ionicons name="location-outline" size={12} color={dc.textSecondary} />
+                    <Text style={[styles.projectLocation, { color: dc.textSecondary }]}>
+                      {project.location}
+                    </Text>
+                  </View>
+
+                  {/* Footer */}
+                  <View style={styles.projectFooter}>
+                    <Text style={[styles.projectPrice, { color: dc.primary }]}>{project.price}</Text>
+                    <TouchableOpacity style={[styles.bidButton, { backgroundColor: dc.primary }]}>
+                      <Text style={styles.bidButtonText}>{t('Bid')}</Text>
+                      <Feather name="arrow-right" size={12} color="#fff" />
+                    </TouchableOpacity>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </WalkableView>
+        </CopilotStep>
+
+        {/* ═══ Small Tasks Section ═══ */}
+        <CopilotStep key="taskCategories" text={t('coachMark.taskCategories', 'Find quick jobs and manage your bids')} order={3} name="taskCategories">
+          <WalkableView style={styles.sectionWrapper}>
+            <View style={styles.sectionHeaderRow}>
+              <View style={styles.sectionTitleWrapper}>
+                <View style={[styles.sectionIcon, { backgroundColor: dc.green + '12' }]}>
+                  <Feather name="check-circle" size={16} color={dc.green} />
+                </View>
+                <Text style={[styles.sectionHeading, { color: dc.text }]}>
+                  {t('Task Categories')}
+                </Text>
+              </View>
+              <TouchableOpacity style={styles.seeAllBtn} onPress={() => onPressTaskCategory?.('small_tasks')}>
+                <Text style={[styles.seeAllText, { color: dc.green }]}>{t('View All')}</Text>
+                <Feather name="chevron-right" size={14} color={dc.green} />
+              </TouchableOpacity>
             </View>
-            <View style={styles.projectTextContainer}>
-              <Text style={[styles.projectTitle, { color: dynamicColors.text }]}>Design Services (A...</Text>
-              <Text style={[styles.projectPrice, { color: dynamicColors.text }]}>﷼ 4,500,000</Text>
-              <View style={[styles.statusBadge, { backgroundColor: dynamicColors.gray200 }]}>
-                <Text style={[styles.statusBadgeApprovedText, { color: dynamicColors.textSecondary }]}>APPROVED</Text>
+
+            <View style={styles.tasksGrid}>
+              {taskCategories.map((task) => (
+                <TouchableOpacity
+                  key={task.id}
+                  style={[styles.taskCard, { backgroundColor: dc.cardBackground }]}
+                  activeOpacity={0.9}
+                  onPress={() => onPressTaskCategory?.(task.id as ProjectStatus)}
+                >
+                  <View style={styles.taskTopRow}>
+                    <View style={[styles.taskIconContainer, { backgroundColor: task.bgColor }]}>
+                      <MaterialCommunityIcons name={task.icon as any} size={22} color={task.color} />
+                    </View>
+                    {task.count > 0 && (
+                      <View style={[styles.taskBadge, { backgroundColor: task.color }]}>
+                        <Text style={styles.taskBadgeText}>{task.count}</Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={[styles.taskLabel, { color: dc.text }]}>{task.label}</Text>
+                  <Text style={[styles.taskHint, { color: dc.textSecondary }]}>{task.description}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </WalkableView>
+        </CopilotStep>
+
+        {/* ═══ Refer & Earn Banner ═══ */}
+        <CopilotStep key="referAndEarn" text={t('coachMark.referAndEarn', 'Pay commission fees and earn rewards')} order={4} name="referAndEarn">
+          <WalkableView>
+            <TouchableOpacity
+              style={styles.referCard}
+              activeOpacity={0.9}
+              onPress={onPressReferAndEarn}
+            >
+          <LinearGradient
+            colors={isDarkMode ? ['#7c3aed', '#4c1d95'] : ['#7c3aed', '#6d28d9']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.referGradient}
+          >
+            <View style={styles.referContent}>
+              <View style={styles.referLeft}>
+                <View style={styles.referIconContainer}>
+                  <Feather name="users" size={24} color="#fff" />
+                </View>
+              </View>
+              <View style={styles.referRight}>
+                <View style={styles.referOfferRow}>
+                  <View style={styles.referOfferBadge}>
+                    <Text style={styles.referOfferText}>﷼ 100 {t('per referral')}</Text>
+                  </View>
+                </View>
+                <Text style={styles.referTitle}>{t('Refer & Earn')}</Text>
+                <Text style={styles.referDescription}>
+                  {t('Invite friends and earn cash rewards instantly')}
+                </Text>
+                <View style={styles.referButton}>
+                  <Text style={styles.referButtonText}>{t('Invite Now')}</Text>
+                  <Feather name="arrow-right" size={14} color="#fff" />
+                </View>
               </View>
             </View>
+          </LinearGradient>
           </TouchableOpacity>
+        </WalkableView>
+        </CopilotStep>
 
-          <TouchableOpacity
-            style={[styles.projectCard, {
-              backgroundColor: dynamicColors.cardBackground,
-            }]}
-            activeOpacity={0.8}
-            onPress={() => onPressAvailableProject?.('approved')}
-          >
-            <View style={[styles.projectImagePlaceholder, { backgroundColor: dynamicColors.gray100 }]}>
-              <Feather
-                name="image"
-                size={24}
-                color={dynamicColors.gray300}
-              />
-            </View>
-            <View style={styles.projectTextContainer}>
-              <Text style={[styles.projectTitle, { color: dynamicColors.text }]}>Design Services (A...</Text>
-              <Text style={[styles.projectPrice, { color: dynamicColors.text }]}>﷼ 30,000</Text>
-              <View style={[styles.statusBadge, { backgroundColor: dynamicColors.gray200 }]}>
-                <Text style={[styles.statusBadgeApprovedText, { color: dynamicColors.textSecondary }]}>APPROVED</Text>
-              </View>
-            </View>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.projectCard, {
-              backgroundColor: dynamicColors.cardBackground,
-            }]}
-            activeOpacity={0.8}
-            onPress={() => onPressAvailableProject?.('pending')}
-          >
-            <View style={[styles.projectImagePlaceholder, { backgroundColor: dynamicColors.gray100 }]}>
-              <Feather
-                name="image"
-                size={24}
-                color={dynamicColors.gray300}
-              />
-            </View>
-            <View style={styles.projectTextContainer}>
-              <Text style={[styles.projectTitle, { color: dynamicColors.text }]}>Desi...</Text>
-              <Text style={[styles.projectPrice, { color: dynamicColors.text }]}>﷼ 2,0...</Text>
-              <View style={[styles.statusBadge, { backgroundColor: dynamicColors.blue50 }]}>
-                <Text style={[styles.statusBadgeInProgressText, { color: dynamicColors.primary }]}>CON...</Text>
-              </View>
-            </View>
-          </TouchableOpacity>
-        </ScrollView>
-
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: dynamicColors.text }]}>Available Task Requests</Text>
-          <TouchableOpacity activeOpacity={0.7}>
-            <Text style={[styles.sectionLinkGreen, { color: dynamicColors.green }]}>My Bids</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={[styles.errorContainer, { backgroundColor: dynamicColors.amber50 }]}>
-          <View style={styles.errorIconWrapper}>
-            <Feather
-              name="alert-triangle"
-              size={20}
-              color={dynamicColors.amber400}
-            />
-          </View>
-          <Text style={[styles.errorText, { color: dynamicColors.amber900 }]}>
-            The operation couldn't be completed.
-            {'\n'}
-            (NSURLErrorDomain error -1011.)
-          </Text>
-        </View>
-
-        <View style={styles.tasksGrid}>
-          <TouchableOpacity
-            style={[styles.taskCard, { backgroundColor: dynamicColors.cardBackground }]}
-            activeOpacity={0.8}
-            onPress={() => onPressTaskCategory?.('approved')}
-          >
-            <Feather name="search" size={40} color={dynamicColors.primary} />
-            <Text style={[styles.taskTitle, { color: dynamicColors.text }]}>Tendered Projects</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.taskCard, { backgroundColor: dynamicColors.cardBackground }]}
-            activeOpacity={0.8}
-            onPress={() => onPressTaskCategory?.('direct')}
-          >
-            <MaterialCommunityIcons
-              name="hand-wave"
-              size={40}
-              color={dynamicColors.primary}
-            />
-            <Text style={[styles.taskTitle, { color: dynamicColors.text }]}>Direct</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.taskCard, { backgroundColor: dynamicColors.cardBackground }]}
-            activeOpacity={0.8}
-            onPress={() => onPressTaskCategory?.('in_progress')}
-          >
-            <Feather name="file-text" size={40} color={dynamicColors.primary} />
-            <Text style={[styles.taskTitle, { color: dynamicColors.text }]}>Active Projects</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.taskCard, { backgroundColor: dynamicColors.cardBackground }]}
-            activeOpacity={0.8}
-            onPress={() => onPressTaskCategory?.('bid_received')}
-          >
-            <MaterialCommunityIcons
-              name="text-box-check"
-              size={40}
-              color={dynamicColors.primary}
-            />
-            <Text style={[styles.taskTitle, { color: dynamicColors.text }]}>Bidded Projects</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.taskCard, styles.taskCardFullWidth, { backgroundColor: dynamicColors.cardBackground }]}
-            activeOpacity={0.8}
-            onPress={() => onPressTaskCategory?.('small_tasks')}
-          >
-            <MaterialCommunityIcons
-              name="format-list-checks"
-              size={40}
-              color={dynamicColors.primary}
-            />
-            <Text style={[styles.taskTitle, { color: dynamicColors.text }]}>My Small Tasks</Text>
-          </TouchableOpacity>
-        </View>
-
-        <TouchableOpacity
-          style={[styles.referCard, { backgroundColor: dynamicColors.green }]}
-          activeOpacity={0.9}
-          onPress={onPressReferAndEarn}
-        >
-          <View style={styles.referLeft}>
-            <View style={styles.referCircle}>
-              <Feather name="users" size={32} color={dynamicColors.white} />
-            </View>
-          </View>
-          <View style={styles.referRight}>
-            <Text style={styles.referTitle}>Refer &amp; Earn</Text>
-            <Text style={styles.referSubtitle}>SAR 100 per referral</Text>
-            <Text style={[styles.referDescription, { color: dynamicColors.greenLight }]}>
-              Invite friends and earn cash rewards
-            </Text>
-            <View style={styles.referButtonRow}>
-              <View style={styles.referButton}>
-                <Text style={styles.referButtonText}>Invite Now</Text>
-                <Feather
-                  name="arrow-right"
-                  size={16}
-                  color={dynamicColors.white}
-                />
-              </View>
-            </View>
-            <View style={styles.referDotsRow}>
-              <View style={styles.referDotActive} />
-              <View style={styles.referDot} />
-              <View style={styles.referDot} />
-            </View>
-          </View>
-        </TouchableOpacity>
+        {/* Bottom spacer - increased for FAB */}
+        <View style={{ height: 100 }} />
       </ScrollView>
 
+      {/* ═══ AI Assistant FAB ═══ */}
       <TouchableOpacity
-        style={[styles.fab, shadows.medium, { backgroundColor: dynamicColors.primary }]}
-        activeOpacity={0.8}
+        style={styles.fab}
+        activeOpacity={0.9}
         onPress={onPressFab}
       >
-        <MaterialCommunityIcons
-          name="robot"
-          size={28}
-          color={dynamicColors.white}
-        />
+        <LinearGradient
+          colors={[dc.primary, dc.primaryDark]}
+          style={styles.fabGradient}
+        >
+          <MaterialCommunityIcons name="robot" size={26} color="#fff" />
+        </LinearGradient>
       </TouchableOpacity>
     </View>
   );
-};
-
-export default TechnicalHomeScreen;
+}
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
+  root: { flex: 1 },
+  container: { flex: 1 },
+  contentContainer: { paddingBottom: 100 },
+  
+  // Header
+  headerGradient: {
+    paddingTop: Platform.OS === 'ios' ? 50 : 40,
+    paddingBottom: 20,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
   },
-  container: {
-    flex: 1,
+  headerContent: {
+    paddingHorizontal: 20,
   },
-  contentContainer: {
-    paddingBottom: spacing.xxxl * 2,
-  },
-  portfolioCard: {
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.lg,
-    padding: spacing.xl,
-    borderRadius: borderRadius.xl,
-    borderWidth: 2,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  portfolioLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  portfolioIcon: {
-    marginRight: spacing.md,
-  },
-  portfolioTitle: {
-    ...typography.h2,
-  },
-  portfolioSubtitle: {
-    marginTop: spacing.xs,
-    ...typography.bodyMedium,
-    fontWeight: '400',
-  },
-  portfolioRight: {},
-  newBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-  },
-  newBadgeText: {
-    color: colors.white,
-    ...typography.badgeMedium,
-  },
-  sectionHeader: {
-    marginTop: spacing.xxl,
-    marginHorizontal: spacing.lg,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+
+  // Quick Actions
+  quickActionsCard: {
+    margin: 16,
+    marginTop: 20,
+    padding: 16,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   sectionTitle: {
-    ...typography.h2,
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 16,
   },
-  sectionLink: {
-    ...typography.bodyMedium,
-  },
-  sectionLinkGreen: {
-    ...typography.bodyMedium,
-  },
-  projectsScrollContent: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-  },
-  projectCard: {
-    width: 160,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    marginRight: spacing.md,
-    ...shadows.small,
-  },
-  projectImagePlaceholder: {
-    height: 100,
-    borderRadius: borderRadius.md,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  projectTextContainer: {},
-  projectTitle: {
-    ...typography.bodyMedium,
-  },
-  projectPrice: {
-    marginTop: spacing.xs,
-    ...typography.bodyMedium,
-  },
-  statusBadge: {
-    marginTop: spacing.sm,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    alignSelf: 'flex-start',
-  },
-  statusBadgeApprovedText: {
-    ...typography.badge,
-  },
-  statusBadgeInProgressText: {
-    ...typography.badge,
-  },
-  errorContainer: {
-    marginTop: spacing.lg,
-    marginHorizontal: spacing.lg,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
+  quickActionsGrid: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  errorIconWrapper: {
-    marginRight: spacing.sm,
-    marginTop: 2,
-  },
-  errorText: {
-    flex: 1,
-    ...typography.bodySmall,
-  },
-  tasksGrid: {
-    marginTop: spacing.xl,
-    marginHorizontal: spacing.lg,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     justifyContent: 'space-between',
   },
-  taskCard: {
-    width: '47%',
-    minHeight: 120,
-    borderRadius: borderRadius.xl,
-    padding: spacing.xxl,
-    marginBottom: spacing.md,
-    justifyContent: 'center',
+  quickActionItem: {
     alignItems: 'center',
-    ...shadows.small,
+    width: '23%',
   },
-  taskCardFullWidth: {
-    width: '100%',
-  },
-  taskTitle: {
-    marginTop: spacing.md,
-    ...typography.bodyMedium,
-  },
-  referCard: {
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.xxl,
-    marginBottom: spacing.xxxl,
-    borderRadius: borderRadius.xxl,
-    padding: spacing.xxl,
-    flexDirection: 'row',
-  },
-  referLeft: {
-    marginRight: spacing.xl,
-    justifyContent: 'center',
-  },
-  referCircle: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
+  quickActionIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
     alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
   },
-  referRight: {
-    flex: 1,
+  quickActionLabel: {
+    fontSize: 12,
+    fontWeight: '600',
   },
-  referTitle: {
-    color: colors.white,
-    ...typography.h1,
+
+  // Sections
+  sectionWrapper: {
+    marginTop: 24,
   },
-  referSubtitle: {
-    marginTop: spacing.xs,
-    color: colors.white,
-    ...typography.bodyLarge,
-  },
-  referDescription: {
-    marginTop: spacing.sm,
-    ...typography.bodySmall,
-  },
-  referButtonRow: {
-    marginTop: spacing.lg,
+  sectionHeaderRow: {
     flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    marginBottom: 16,
   },
-  referButton: {
+  sectionTitleWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  sectionIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sectionHeading: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  seeAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  seeAllText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+
+  // Projects
+  projectsScroll: {
+    paddingRight: 20,
+    paddingBottom: 8,
+  },
+  projectCard: {
+    width: 280,
+    padding: 16,
+    borderRadius: 16,
+    marginRight: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  projectStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginBottom: 12,
+    gap: 6,
+  },
+  projectStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  projectStatusLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  projectTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    lineHeight: 22,
+    marginBottom: 8,
+    minHeight: 44,
+  },
+  projectLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 12,
+  },
+  projectLocation: {
+    fontSize: 12,
+  },
+  projectFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 'auto',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.05)',
+  },
+  projectPrice: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  bidButton: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    gap: 6,
   },
-  referButtonText: {
-    marginRight: spacing.sm,
-    color: colors.white,
-    ...typography.bodyMedium,
+  bidButtonText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
   },
-  referDotsRow: {
-    marginTop: spacing.lg,
+
+  // Task Categories
+  tasksGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 20,
+    gap: 12,
+  },
+  taskCard: {
+    width: (screenWidth - 52) / 2,
+    padding: 16,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  taskTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  taskIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  taskBadge: {
+    minWidth: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+  taskBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  taskLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  taskHint: {
+    fontSize: 12,
+  },
+
+  // Refer Card
+  referCard: {
+    marginHorizontal: 20,
+    marginTop: 28,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  referGradient: {
+    padding: 20,
+  },
+  referContent: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  referDotActive: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.white,
-    marginRight: spacing.xs,
+  referLeft: {
+    marginRight: 16,
   },
-  referDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    marginRight: spacing.xs,
+  referIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
+  referRight: {
+    flex: 1,
+  },
+  referOfferRow: {
+    marginBottom: 8,
+  },
+  referOfferBadge: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
+  },
+  referOfferText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  referTitle: {
+    color: '#fff',
+    fontSize: 22,
+    fontWeight: '800',
+    marginBottom: 6,
+  },
+  referDescription: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 14,
+    marginBottom: 14,
+    lineHeight: 20,
+  },
+  referButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 24,
+    gap: 8,
+  },
+  referButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+
+  // FAB
   fab: {
     position: 'absolute',
     right: 20,
@@ -607,8 +724,17 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  fabGradient: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 30,
     alignItems: 'center',
+    justifyContent: 'center',
   },
 });
-

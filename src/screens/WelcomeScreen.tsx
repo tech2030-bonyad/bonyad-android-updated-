@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import { useTranslation } from 'react-i18next';
+import BonyadLogo from '../components/BonyadLogo';
 
 interface WelcomeScreenProps {
   onComplete: () => void;
@@ -185,11 +186,7 @@ export default function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
 
       {/* Header */}
       <View style={styles.header}>
-        <Image
-          source={require('../../assets/bonyad-logo.svg')}
-          style={styles.logo}
-          resizeMode="contain"
-        />
+        <BonyadLogo size="large" />
       </View>
 
       <ScrollView

@@ -26,6 +26,7 @@ import {
   Service,
   SubscriptionPlan,
 } from '../services/onboardingApi';
+import RialIcon from '../components/RialIcon';
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -493,7 +494,7 @@ const AvailabilityStep: React.FC<AvailabilityStepProps> = ({
   colors,
   t,
 }) => {
-  const primaryColor = (colors.primary as string) || '#0080E0';
+  const primaryColor = (colors.primary as string) || '#00549B';
 
   const groupedSlots = useMemo(() => {
     return WEEK_DAYS.map(day => ({
@@ -663,7 +664,7 @@ const ServicesStep: React.FC<ServicesStepProps> = ({
             <View style={styles.emptyState}>
               <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>{t('onboarding.services.noServices')}</Text>
               <TouchableOpacity onPress={onRefresh} style={styles.retryButton}>
-                <Text style={[styles.retryButtonText, { color: (colors.primary as string) || '#0080E0' }]}>{t('onboarding.services.retry')}</Text>
+                <Text style={[styles.retryButtonText, { color: (colors.primary as string) || '#00549B' }]}>{t('onboarding.services.retry')}</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -679,7 +680,7 @@ const ServicesStep: React.FC<ServicesStepProps> = ({
                       backgroundColor: colors.surface || colors.cardBackground,
                       borderColor: colors.border || 'transparent',
                     },
-                    isActive && { borderColor: (colors.primary as string) || '#0080E0' },
+                    isActive && { borderColor: (colors.primary as string) || '#00549B' },
                   ]}
                   onPress={() => onToggleService(item.id)}
                 >
@@ -688,7 +689,7 @@ const ServicesStep: React.FC<ServicesStepProps> = ({
                     <Ionicons
                       name={isActive ? 'checkmark-circle' : 'ellipse-outline'}
                       size={20}
-                      color={isActive ? (colors.primary as string) || '#0080E0' : colors.textSecondary}
+                      color={isActive ? (colors.primary as string) || '#00549B' : colors.textSecondary}
                     />
                   </View>
                   {item.description ? (
@@ -780,9 +781,15 @@ const SubscriptionStep: React.FC<SubscriptionStepProps> = ({
                   </Text>
                 ) : null}
                 <View style={styles.planPriceRow}>
-                  <Text style={[styles.planPrice, { color: colors.primary }]}>SAR {plan.finalPrice.toFixed(2)}</Text>
+                  <View style={styles.priceWithIcon}>
+                    <RialIcon size={16} variant="primary" color={colors.primary} />
+                    <Text style={[styles.planPrice, { color: colors.primary, marginLeft: 4 }]}>{plan.finalPrice.toFixed(2)}</Text>
+                  </View>
                   {plan.hasActiveDiscount && plan.price > plan.finalPrice ? (
-                    <Text style={styles.planOriginalPrice}>SAR {plan.price.toFixed(2)}</Text>
+                    <View style={styles.priceWithIcon}>
+                      <RialIcon size={12} variant="dark" />
+                      <Text style={[styles.planOriginalPrice, { marginLeft: 2 }]}>{plan.price.toFixed(2)}</Text>
+                    </View>
                   ) : null}
                 </View>
                 {plan.hasLimitedTimeDiscount && plan.discountTimeRemainingSeconds ? (
@@ -800,7 +807,7 @@ const SubscriptionStep: React.FC<SubscriptionStepProps> = ({
 
       {plans.length === 0 && !refreshing ? (
         <TouchableOpacity onPress={onRefresh} style={styles.retryButton}>
-          <Text style={[styles.retryButtonText, { color: (colors.primary as string) || '#0080E0' }]}>{t('onboarding.subscription.reloadPlans')}</Text>
+          <Text style={[styles.retryButtonText, { color: (colors.primary as string) || '#00549B' }]}>{t('onboarding.subscription.reloadPlans')}</Text>
         </TouchableOpacity>
       ) : null}
 
@@ -991,8 +998,8 @@ const SelectableCard: React.FC<SelectableCardProps> = ({ title, description, act
         borderColor: colors.border || 'transparent',
       },
       active && {
-        borderColor: (colors.primary as string) || '#0080E0',
-        backgroundColor: `${(colors.primary as string) || '#0080E0'}15`,
+        borderColor: (colors.primary as string) || '#00549B',
+        backgroundColor: `${(colors.primary as string) || '#00549B'}15`,
       },
     ]}
   >
@@ -1001,7 +1008,7 @@ const SelectableCard: React.FC<SelectableCardProps> = ({ title, description, act
       <Ionicons
         name={active ? 'radio-button-on' : 'radio-button-off'}
         size={20}
-        color={active ? (colors.primary as string) || '#0080E0' : colors.textSecondary}
+        color={active ? (colors.primary as string) || '#00549B' : colors.textSecondary}
       />
     </View>
     <Text style={[styles.selectableCardDescription, { color: colors.textSecondary }]}>{description}</Text>
@@ -1022,7 +1029,7 @@ const PrimaryButton: React.FC<PrimaryButtonProps> = ({ label, onPress, disabled,
     style={[styles.primaryButtonWrapper, disabled && styles.primaryButtonWrapperDisabled]}
   >
     <View
-      style={[styles.primaryButton, { backgroundColor: disabled ? '#9E9E9E' : (colors.primary as string) || '#0080E0' }]}
+      style={[styles.primaryButton, { backgroundColor: disabled ? '#9E9E9E' : (colors.primary as string) || '#00549B' }]}
     >
       <Text style={styles.primaryButtonText}>{label}</Text>
     </View>
@@ -1036,7 +1043,7 @@ interface SecondaryButtonProps {
 }
 
 const SecondaryButton: React.FC<SecondaryButtonProps> = ({ label, onPress, colors }) => {
-  const primaryColor = (colors.primary as string) || '#0080E0';
+  const primaryColor = (colors.primary as string) || '#00549B';
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -1060,7 +1067,7 @@ interface OnboardingProgressProps {
 }
 
 const OnboardingProgress: React.FC<OnboardingProgressProps> = ({ current, colors, t }) => {
-  const primaryColor = (colors.primary as string) || '#0080E0';
+  const primaryColor = (colors.primary as string) || '#00549B';
   const steps = [
     { id: 1, label: t('onboarding.steps.availability') },
     { id: 2, label: t('onboarding.steps.services') },
@@ -1395,6 +1402,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 12,
     gap: 10,
+  },
+  priceWithIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   planPrice: {
     fontSize: 22,

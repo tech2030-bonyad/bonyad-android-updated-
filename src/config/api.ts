@@ -3,12 +3,11 @@
 
 import { Platform } from 'react-native';
 
-const getBaseUrl = () => {
-  // API URL - ngrok development endpoint
-  return 'https://glynda-unvexatious-felisa.ngrok-free.dev/api';
-};
+// Main Production API - Used for all APIs except Chatbot
+export const API_BASE_URL = 'https://bonyad-app-nyayeditqq-ww.a.run.app/api';
 
-export const API_BASE_URL = getBaseUrl();
+// Chatbot API - Ngrok endpoint (only for AI chat)
+export const CHATBOT_BASE_URL = 'https://glynda-unvexatious-felisa.ngrok-free.dev';
 
 export const API_ENDPOINTS = {
   // Authentication
@@ -25,7 +24,7 @@ export const API_ENDPOINTS = {
     REFRESH_TOKEN: '/auth/refresh-token',
     VALIDATE_TOKEN: '/auth/validate-token',
   },
-  
+
   // User Profile
   USER: {
     PROFILE: '/users/profile',
@@ -36,13 +35,15 @@ export const API_ENDPOINTS = {
     CHANGE_PHONE_VERIFY: '/users/:userId/change-phone-verify',
     CHANGE_PASSWORD: '/users/:userId/change-password',
     USER_DETAILS: '/user-details',
+    COMPLETE_PROFILE: '/users/complete-profile',
+    TECHNICIAN_STATUS: '/users/technician-status',
   },
-  
+
   // Zones (Regions)
   ZONES: {
     LIST: '/regions',
   },
-  
+
   // Projects
   PROJECTS: {
     LIST: '/projects',
@@ -57,7 +58,7 @@ export const API_ENDPOINTS = {
     MY_PROJECTS: '/projects/my',
     MY_ASSIGNED: '/projects/my-assigned',
   },
-  
+
   // Bids
   BIDS: {
     CREATE: '/bids/create',
@@ -67,7 +68,7 @@ export const API_ENDPOINTS = {
     DELETE: '/bids/:id',
     ACCEPT: '/bids/:id/accept',
   },
-  
+
   // Visit Requests
   VISIT_REQUESTS: {
     CREATE: '/visit-requests',
@@ -75,7 +76,7 @@ export const API_ENDPOINTS = {
     UPDATE: '/visit-requests/:id',
     DELETE: '/visit-requests/:id',
   },
-  
+
   // Chat
   CHAT: {
     MY_CHATS: '/chat/my-chats',
@@ -85,14 +86,14 @@ export const API_ENDPOINTS = {
     MARK_READ: '/chat/messages/:messageId/mark-read',
     MARK_ALL_READ: '/chat/rooms/:roomId/mark-all-read',
   },
-  
+
   // Services (categories & subcategories)
   SERVICES: {
     LIST: '/services',
     CATEGORIES: '/services/categories',
     SUBCATEGORIES: '/services/:categoryId/subcategories',
   },
-  
+
   // Technicians
   TECHNICIANS: {
     LIST: '/technicians',
@@ -113,7 +114,7 @@ export const API_ENDPOINTS = {
     SUBSCRIPTION_BIDS: '/users/subscription/bids',
     RESERVATIONS: '/technician/reservations/:id/:action',
   },
-  
+
   // Portfolio
   PORTFOLIO: {
     CREATE: '/portfolios/create',
@@ -127,7 +128,7 @@ export const API_ENDPOINTS = {
     USER_PROJECTS: '/portfolios/projects/user/:userId',
     UPLOAD_PHOTO: '/portfolios/projects/upload-photo',
   },
-  
+
   // Reviews
   REVIEWS: {
     CREATE: '/reviews',
@@ -136,12 +137,12 @@ export const API_ENDPOINTS = {
     MY_REVIEWS: '/reviews/my-reviews',
     REVIEW_DETAIL: '/reviews/:reviewId',
   },
-  
+
   // Rating Categories
   RATING_CATEGORIES: {
     LIST: '/rating-categories',
   },
-  
+
   // Phases
   PHASES: {
     LIST: '/phases/project/:projectId',
@@ -152,7 +153,7 @@ export const API_ENDPOINTS = {
     COMPLETE: '/phases/:phaseId/complete',
     PAY: '/phases/:phaseId/pay',
   },
-  
+
   // Feedbacks
   FEEDBACKS: {
     CREATE: '/feedbacks',
@@ -160,7 +161,7 @@ export const API_ENDPOINTS = {
     PENDING: '/feedbacks/project/:projectId/pending',
     RESOLVE: '/feedbacks/:feedbackId/resolve',
   },
-  
+
   // Contracts/Signatures
   CONTRACTS: {
     CREATE: '/signatures',
@@ -168,7 +169,7 @@ export const API_ENDPOINTS = {
     VIEW: '/contracts/:projectId',
     GENERATE_PDF: '/contracts/test/generate-pdf',
   },
-  
+
   // Notifications
   NOTIFICATIONS: {
     MY_NOTIFICATIONS: '/notifications/my-notifications',
@@ -177,7 +178,7 @@ export const API_ENDPOINTS = {
     MARK_ALL_READ: '/notifications/mark-all-read',
     DELETE: '/notifications/:id',
   },
-  
+
   // Appointments (Time Requests)
   APPOINTMENTS: {
     MY_REQUESTS: '/time-requests/my-requests',
@@ -191,7 +192,7 @@ export const API_ENDPOINTS = {
     DELETE: '/time-requests/:id',
     CREATE: '/time-requests',
   },
-  
+
   // Technician Availability (Public)
   TECHNICIAN_AVAILABILITY: '/technicians/:id/availability',
 
@@ -204,7 +205,7 @@ export const API_ENDPOINTS = {
     STATUS: '/onboarding/:userId',
     COMPLETE: '/onboarding/:userId/complete',
   },
-  
+
   // AI Features
   AI: {
     VOICE_TRANSCRIBE: '/ai/speech/transcribe',
@@ -219,7 +220,22 @@ export const API_ENDPOINTS = {
     MAP_SUMMARIZE: '/ai/map/summarize',
     MAP_PROJECTS: '/ai/map/projects',
   },
-  
+
+  // Chatbot & AI Support
+  AI_SUPPORT: {
+    CHAT: '/ai-support/chat',
+    CHAT_HISTORY: '/ai-support/chat/history',
+  },
+
+  // Live Agent Support
+  SUPPORT: {
+    REQUESTS: '/support/requests',
+    REQUEST_DETAILS: '/support/requests/:id',
+    MY_REQUESTS: '/support/requests/my',
+    CANCEL_REQUEST: '/support/requests/:id/cancel',
+    CATEGORIES: '/api/support/categories',
+  },
+
   // Small Tasks (see Small Tasks Implementation README)
   SMALL_TASKS: {
     TYPES: '/small-tasks/types',
@@ -236,7 +252,7 @@ export const API_ENDPOINTS = {
     REJECT_BID: '/small-tasks/bids/:bidId/reject',
     CANCEL: '/small-tasks/requests/:id/cancel',
   },
-  
+
   // Technician Services
   TECHNICIAN_SERVICES: {
     MY_SERVICES: '/technician/services/my-services',
@@ -245,19 +261,19 @@ export const API_ENDPOINTS = {
     REMOVE_SERVICE: '/technician/services/remove/:serviceId',
     OFFERING: '/technician/services/offering/:serviceId',
   },
-  
+
   // Service Suggestions
   SERVICE_SUGGESTIONS: {
     CREATE: '/suggestions/services',
     MY_REQUESTS: '/suggestions/services/my-requests',
   },
-  
+
   // Task Type Requests
   TASK_TYPE_REQUESTS: {
     CREATE: '/small-tasks/request-type',
     MY_REQUESTS: '/small-tasks/request-type/my-requests',
   },
-  
+
   // Payments
   PAYMENTS: {
     MY_TRANSACTIONS: '/payments/my-transactions',
@@ -269,7 +285,7 @@ export const API_ENDPOINTS = {
     STATUS: '/payments/status/:checkoutId',
     STATUS_PROD: '/payments/prod/status/:checkoutId', // Production small-task payment status per README
   },
-  
+
   // Admin - Payments
   ADMIN: {
     PAYMENTS: {
@@ -284,7 +300,7 @@ export const API_ENDPOINTS = {
 
 // Export getApiUrl for convenience
 export const getApiUrl = (): string => {
-  return getBaseUrl();
+  return API_BASE_URL;
 };
 
 // Helper function to get server base URL (without /api)
@@ -300,11 +316,11 @@ export const buildApiUrl = (endpoint: string): string => {
 // Helper function to build URL with parameters
 export const buildApiUrlWithParams = (endpoint: string, params: Record<string, string | number>): string => {
   let url = `${API_BASE_URL}${endpoint}`;
-  
+
   Object.entries(params).forEach(([key, value]) => {
     url = url.replace(`:${key}`, String(value));
   });
-  
+
   return url;
 };
 
@@ -313,11 +329,11 @@ export const getDefaultHeaders = (additionalHeaders?: Record<string, string>): R
   const defaultHeaders: Record<string, string> = {
     'ngrok-skip-browser-warning': 'true',
   };
-  
+
   if (additionalHeaders) {
     return { ...defaultHeaders, ...additionalHeaders };
   }
-  
+
   return defaultHeaders;
 };
 
@@ -327,7 +343,7 @@ export const apiFetch = async (
   options?: RequestInit
 ): Promise<Response> => {
   const headers = getDefaultHeaders(options?.headers as Record<string, string> | undefined);
-  
+
   return fetch(url, {
     ...options,
     headers: {
@@ -345,10 +361,10 @@ global.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Res
   const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : (input as Request).url;
   const serverBaseUrl = getServerBaseUrl();
   const isApiRequest = url.includes(API_BASE_URL) || url.includes(serverBaseUrl);
-  
+
   if (isApiRequest) {
     const headers = getDefaultHeaders(init?.headers as Record<string, string> | undefined);
-    
+
     return originalFetch(input, {
       ...init,
       headers: {
@@ -357,7 +373,7 @@ global.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Res
       },
     });
   }
-  
+
   // For non-API requests, use original fetch
   return originalFetch(input, init);
 };

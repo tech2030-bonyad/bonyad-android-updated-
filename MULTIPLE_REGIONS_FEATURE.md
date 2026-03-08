@@ -79,7 +79,7 @@ FormData:
 
 ### cURL Example:
 ```bash
-curl -X POST https://glynda-unvexatious-felisa.ngrok-free.dev/api/users/register-with-files \
+curl -X POST https://bonyad-app-nyayeditqq-ww.a.run.app/api/users/register-with-files \
   -F "name=John Doe" \
   -F "phoneNumber=+1234567890" \
   -F "email=john.doe@example.com" \

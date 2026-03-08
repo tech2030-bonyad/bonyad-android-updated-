@@ -44,6 +44,7 @@ interface ProfileScreenProps {
   onNavigateToSubscription?: () => void;
   onNavigateToServices?: () => void;
   onNavigateToAvailability?: () => void;
+  onNavigateToSupportTickets?: () => void;
 }
 
 interface UserDetails {
@@ -85,7 +86,8 @@ export default function ProfileScreen({
   onNavigateToPortfolio, 
   onNavigateToSubscription, 
   onNavigateToServices, 
-  onNavigateToAvailability 
+  onNavigateToAvailability,
+  onNavigateToSupportTickets,
 }: ProfileScreenProps) {
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -244,6 +246,7 @@ export default function ProfileScreen({
         showsVerticalScrollIndicator={false} 
         style={styles.scrollView}
         contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 120), paddingTop: 16 }}
+        keyboardShouldPersistTaps="handled"
       >
         {/* Page Title */}
         <View style={styles.pageTitleContainer}>
@@ -424,6 +427,43 @@ export default function ProfileScreen({
             </TouchableOpacity>
           </View>
         )}
+
+        {/* Support Center Card */}
+        <View style={[styles.userMenuCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}>
+          <TouchableOpacity 
+            style={[styles.menuItem, isRTL && styles.rowRTL]}
+            onPress={() => {
+              console.log('🎧 Support Center pressed, handler:', typeof onNavigateToSupportTickets);
+              if (onNavigateToSupportTickets) {
+                onNavigateToSupportTickets();
+              } else {
+                console.error('❌ onNavigateToSupportTickets is undefined!');
+              }
+            }}
+            activeOpacity={0.7}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <View style={[styles.settingIconContainer, { backgroundColor: iconBgColor }]}>
+              <Ionicons name="headset-outline" size={24} color={isDarkMode ? colors.textSecondary : '#666666'} />
+            </View>
+            <View style={[styles.settingTextContainer, isRTL && styles.textContainerRTL]}>
+              <Text style={[styles.settingTitle, { color: textColor, fontFamily, fontSize: scaledSize(16) }, isRTL && styles.textRTL]}>
+                {t('Support Center')}
+              </Text>
+              <Text style={[styles.settingSubtitle, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }, isRTL && styles.textRTL]}>
+                {t('Raise tickets, track progress, and review closed requests')}
+              </Text>
+            </View>
+            <Ionicons 
+              name={isRTL ? 'chevron-back' : 'chevron-forward'} 
+              size={24} 
+              color={primaryColor} 
+            />
+          </TouchableOpacity>
+
+
+        </View>
+
          <View style={[styles.settingsCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}>
           {/* Language */}
           <TouchableOpacity 
@@ -535,7 +575,7 @@ export default function ProfileScreen({
                 {isDarkMode ? t('On') : t('Off')}
               </Text>
             </View>
-            <TouchableOpacity onPress={handleToggleDarkMode}>
+            <TouchableOpacity onPress={handleToggleDarkMode} activeOpacity={0.7}>
               <View style={[styles.toggleSwitch, { backgroundColor: isDarkMode ? primaryColor : 'rgba(153, 153, 153, 0.5)' }]}>
                 <View style={[styles.toggleThumb, isDarkMode && styles.toggleThumbActive]} />
               </View>
@@ -562,22 +602,7 @@ export default function ProfileScreen({
             </View>
           )}
 
-          {/* Support Center */}
-          <TouchableOpacity style={[styles.settingItem, isRTL && styles.rowRTL]}>
-            <View style={[styles.settingIconContainer, { backgroundColor: iconBgColor }]}>
-              <Ionicons name="help-circle-outline" size={24} color={isDarkMode ? colors.textSecondary : '#666666'} />
-            </View>
-            <View style={[styles.settingTextContainer, isRTL && styles.textContainerRTL]}>
-              <Text style={[styles.settingTitle, { color: textColor, fontFamily, fontSize: scaledSize(16) }, isRTL && styles.textRTL]}>
-                {t('profile.supportCenter')}
-              </Text>
-              <Text style={[styles.settingSubtitle, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }, isRTL && styles.textRTL]}>
-                {t('profile.getHelpContactUs')}
-              </Text>
-            </View>
-          </TouchableOpacity>
         </View>
-
 
         {/* Logout Card */}
         <View style={[styles.logoutCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}>
@@ -861,6 +886,8 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
     padding: 16,
     gap: 16,
+    zIndex: 10,
+    elevation: 5,
   },
 
   // Menu Items
@@ -869,6 +896,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     width: '100%',
+    paddingVertical: 8,
+    zIndex: 20,
   },
 
   // Logout Card

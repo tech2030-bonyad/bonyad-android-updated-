@@ -9,22 +9,16 @@ import {
   Animated,
   Platform,
   TextInput,
+  Image,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { API_ENDPOINTS, buildApiUrl } from '../config/api';
+import { SmallTaskType, getSmallTaskTypeImageUrl } from '../services/SmallTaskService';
 
-interface TaskType {
-  id: number;
-  nameAr: string;
-  nameEn: string;
-  description?: string;
-  basePrice: number;
-  estimatedDuration: number;
-  isActive: boolean;
-}
+// Re-export TaskType as SmallTaskType from service
+export type TaskType = SmallTaskType;
 
 interface SmallTaskTypeSelectionScreenProps {
   onSelectTaskType: (taskType: TaskType) => void;
@@ -69,21 +63,9 @@ export default function SmallTaskTypeSelectionScreen({
   const loadTaskTypes = async () => {
     try {
       setIsLoading(true);
-      const url = buildApiUrl(API_ENDPOINTS.SMALL_TASKS.TYPES);
-      
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setTaskTypes(data.taskTypes || []);
-      } else {
-        setTaskTypes([]);
-      }
+      const { getSmallTaskTypes } = await import('../services/SmallTaskService');
+      const types = await getSmallTaskTypes();
+      setTaskTypes(types);
     } catch (error) {
       console.error('Error loading task types:', error);
       setTaskTypes([]);
@@ -322,6 +304,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
+    overflow: 'hidden',
+  },
+  taskTypeImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
   },
   taskTypeName: {
     fontSize: 16,
@@ -344,6 +332,8 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
 });
+
+
 
 // Separate component for animated card
 const TaskTypeCard = React.memo(({
@@ -372,6 +362,8 @@ const TaskTypeCard = React.memo(({
     }).start();
   }, []);
 
+  const imageUrl = getSmallTaskTypeImageUrl(taskType);
+
   return (
     <Animated.View
       style={{
@@ -399,7 +391,15 @@ const TaskTypeCard = React.memo(({
       >
         <View style={styles.taskTypeHeader}>
           <View style={[styles.iconContainer, { backgroundColor: colors.primary + '15' }]}>
-            <Ionicons name="construct" size={24} color={colors.primary} />
+            {imageUrl ? (
+              <Image
+                source={{ uri: imageUrl }}
+                style={styles.taskTypeImage}
+                resizeMode="cover"
+              />
+            ) : (
+              <Ionicons name="construct" size={24} color={colors.primary} />
+            )}
           </View>
           <Text style={[styles.taskTypeName, { color: colors.text }]} numberOfLines={2}>
             {name}

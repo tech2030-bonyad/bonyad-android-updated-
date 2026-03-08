@@ -28,6 +28,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { API_ENDPOINTS, buildApiUrl } from '../config/api';
 import { storage } from '../utils/storage';
 import { showSuccess, showError } from '../utils/alert';
+import RialIcon from '../components/RialIcon';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
 
 // ===== DESIGN TOKENS FROM FIGMA =====
@@ -258,7 +259,7 @@ export default function BidFormModal({ visible, project, onClose, onSuccess }: B
                     <View style={styles.priceInputContainer}>
                       <TextInput
                         style={styles.priceInput}
-                        placeholder="0"
+                        placeholder={t('Enter amount')}
                         placeholderTextColor={COLORS.textSecondary}
                         value={bidPrice}
                         onChangeText={setBidPrice}
@@ -266,7 +267,7 @@ export default function BidFormModal({ visible, project, onClose, onSuccess }: B
                         editable={!isSubmitting}
                       />
                       <View style={styles.currencyBadge}>
-                        <Text style={styles.currencyText}>SAR</Text>
+                        <RialIcon size={14} variant="light" />
                       </View>
                     </View>
                   </View>
@@ -281,7 +282,7 @@ export default function BidFormModal({ visible, project, onClose, onSuccess }: B
                     <View style={styles.durationInputContainer}>
                       <TextInput
                         style={styles.durationInput}
-                        placeholder="0"
+                        placeholder={t('Enter amount')}
                         placeholderTextColor={COLORS.textSecondary}
                         value={estimatedDays}
                         onChangeText={setEstimatedDays}

@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import { useTranslation } from 'react-i18next';
+import BonyadLogo from '../components/BonyadLogo';
 
 const REMOTE_OVERVIEW_IMAGE_URLS: string[] = [
   'https://images.unsplash.com/photo-1547036967-23d11aacaee0?w=400',
@@ -51,7 +52,6 @@ const LOCAL_OVERVIEW_IMAGE_SOURCES = [
   // Hero imagery and branding
   require('../../assets/pexels-mdamirumar-30320202.jpg'),
   require('../../assets/riyadh-night.jpg'),
-  require('../../assets/bonyad-logo.svg'),
 ] as const;
 
 interface OverviewScreenProps {
@@ -386,11 +386,7 @@ export default function OverviewScreen({ onNavigateToLogin, onNavigateToDesign, 
       <View style={[styles.navBar, { backgroundColor: cardBackground, borderBottomColor: borderColor }]}>
         <View style={styles.navContent}>
           <View style={styles.navLeft}>
-            <Image 
-              source={require('../../assets/bonyad-logo.svg')} 
-              style={styles.logoImage}
-              resizeMode="contain"
-            />
+            <BonyadLogo size="medium" />
           </View>
           {/* Desktop Navigation */}
           {screenWidth > 768 && (
@@ -513,7 +509,7 @@ export default function OverviewScreen({ onNavigateToLogin, onNavigateToDesign, 
                   style={styles.navItemWithIcon} 
                   onPress={() => setFeaturesMenuOpen(!featuresMenuOpen)}
                 >
-                  <Text style={[styles.navText, { color: textColor }]}>Features</Text>
+                  <Text style={[styles.navText, { color: textColor }]}>{t('Features')}</Text>
                   <Ionicons 
                     name={featuresMenuOpen ? 'chevron-up' : 'chevron-down'} 
                     size={16} 
@@ -528,28 +524,28 @@ export default function OverviewScreen({ onNavigateToLogin, onNavigateToDesign, 
                       onPress={() => { setFeaturesMenuOpen(false); onNavigateToVoiceAI?.(); }}
                     >
                       <Ionicons name="mic" size={20} color={config.primaryColor} />
-                      <Text style={[styles.dropdownText, { color: textColor }]}>Voice AI</Text>
+                      <Text style={[styles.dropdownText, { color: textColor }]}>{t('Voice AI')}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity 
                       style={styles.dropdownItem} 
                       onPress={() => { setFeaturesMenuOpen(false); onNavigateToCostExplorer?.(); }}
                     >
                       <Ionicons name="calculator" size={20} color={config.primaryColor} />
-                      <Text style={[styles.dropdownText, { color: textColor }]}>Cost Explorer</Text>
+                      <Text style={[styles.dropdownText, { color: textColor }]}>{t('Cost Explorer')}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity 
                       style={styles.dropdownItem} 
                       onPress={() => { setFeaturesMenuOpen(false); onNavigateToRoomVisualizer?.(); }}
                     >
                       <Ionicons name="color-palette" size={20} color={config.primaryColor} />
-                      <Text style={[styles.dropdownText, { color: textColor }]}>Room Visualizer</Text>
+                      <Text style={[styles.dropdownText, { color: textColor }]}>{t('Room Visualizer')}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity 
                       style={styles.dropdownItem} 
                       onPress={() => { setFeaturesMenuOpen(false); onNavigateToAskBonyadAI?.(); }}
                     >
                       <Ionicons name="chatbubbles" size={20} color={config.primaryColor} />
-                      <Text style={[styles.dropdownText, { color: textColor }]}>Ask Bonyad AI</Text>
+                      <Text style={[styles.dropdownText, { color: textColor }]}>{t('Ask Bonyad AI')}</Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -559,19 +555,19 @@ export default function OverviewScreen({ onNavigateToLogin, onNavigateToDesign, 
                 style={styles.navItem}
                 onPress={() => onNavigateToAbout?.()}
               >
-                <Text style={[styles.navText, { color: textColor }]}>About Us</Text>
+                <Text style={[styles.navText, { color: textColor }]}>{t('About Us')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.navItem}
                 onPress={() => onNavigateToContact?.()}
               >
-                <Text style={[styles.navText, { color: textColor }]}>Contact</Text>
+                <Text style={[styles.navText, { color: textColor }]}>{t('Contact')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.navItem}
                 onPress={() => onNavigateToIntroToApp?.()}
               >
-                <Text style={[styles.navText, { color: textColor }]}>Intro to the App</Text>
+                <Text style={[styles.navText, { color: textColor }]}>{t('Intro to the App')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.navButton, { backgroundColor: config.primaryColor }]}
@@ -643,7 +639,7 @@ export default function OverviewScreen({ onNavigateToLogin, onNavigateToDesign, 
           {/* Mobile Features Menu */}
           <View style={styles.mobileMenuItem}>
             <TouchableOpacity onPress={() => setFeaturesMenuOpen(!featuresMenuOpen)}>
-              <Text style={[styles.mobileMenuText, { color: textColor }]}>Features</Text>
+              <Text style={[styles.mobileMenuText, { color: textColor }]}>{t('Features')}</Text>
             </TouchableOpacity>
             {featuresMenuOpen && (
               <View style={styles.mobileFeaturesList}>
@@ -652,28 +648,28 @@ export default function OverviewScreen({ onNavigateToLogin, onNavigateToDesign, 
                   onPress={() => { setMobileMenuOpen(false); setFeaturesMenuOpen(false); onNavigateToVoiceAI?.(); }}
                 >
                   <Ionicons name="mic" size={20} color={config.primaryColor} />
-                  <Text style={[styles.mobileFeatureText, { color: textColor }]}>Voice AI</Text>
+                  <Text style={[styles.mobileFeatureText, { color: textColor }]}>{t('Voice AI')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity 
                   style={styles.mobileFeatureItem} 
                   onPress={() => { setMobileMenuOpen(false); setFeaturesMenuOpen(false); onNavigateToCostExplorer?.(); }}
                 >
                   <Ionicons name="calculator" size={20} color={config.primaryColor} />
-                  <Text style={[styles.mobileFeatureText, { color: textColor }]}>Cost Explorer</Text>
+                  <Text style={[styles.mobileFeatureText, { color: textColor }]}>{t('Cost Explorer')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity 
                   style={styles.mobileFeatureItem} 
                   onPress={() => { setMobileMenuOpen(false); setFeaturesMenuOpen(false); onNavigateToRoomVisualizer?.(); }}
                 >
                   <Ionicons name="color-palette" size={20} color={config.primaryColor} />
-                  <Text style={[styles.mobileFeatureText, { color: textColor }]}>Room Visualizer</Text>
+                  <Text style={[styles.mobileFeatureText, { color: textColor }]}>{t('Room Visualizer')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity 
                   style={styles.mobileFeatureItem} 
                   onPress={() => { setMobileMenuOpen(false); setFeaturesMenuOpen(false); onNavigateToAskBonyadAI?.(); }}
                 >
                   <Ionicons name="chatbubbles" size={20} color={config.primaryColor} />
-                  <Text style={[styles.mobileFeatureText, { color: textColor }]}>Ask Bonyad AI</Text>
+                  <Text style={[styles.mobileFeatureText, { color: textColor }]}>{t('Ask Bonyad AI')}</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -686,7 +682,7 @@ export default function OverviewScreen({ onNavigateToLogin, onNavigateToDesign, 
               onNavigateToAbout?.();
             }}
           >
-            <Text style={[styles.mobileMenuText, { color: textColor }]}>About Us</Text>
+            <Text style={[styles.mobileMenuText, { color: textColor }]}>{t('About Us')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.mobileMenuItem}
@@ -695,7 +691,7 @@ export default function OverviewScreen({ onNavigateToLogin, onNavigateToDesign, 
               onNavigateToContact?.();
             }}
           >
-            <Text style={[styles.mobileMenuText, { color: textColor }]}>Contact</Text>
+            <Text style={[styles.mobileMenuText, { color: textColor }]}>{t('Contact')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.mobileMenuItem}
@@ -704,7 +700,7 @@ export default function OverviewScreen({ onNavigateToLogin, onNavigateToDesign, 
               onNavigateToIntroToApp?.();
             }}
           >
-            <Text style={[styles.mobileMenuText, { color: textColor }]}>Intro to the App</Text>
+            <Text style={[styles.mobileMenuText, { color: textColor }]}>{t('Intro to the App')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.mobileMenuButton, { backgroundColor: config.primaryColor }]}
@@ -971,7 +967,7 @@ export default function OverviewScreen({ onNavigateToLogin, onNavigateToDesign, 
           <View style={styles.downloadButtons}>
                          <TouchableOpacity 
               style={[styles.downloadButton, { backgroundColor: '#000' }]}
-              onPress={() => Alert.alert('iOS Download', 'App will be available on the App Store soon!')}
+              onPress={() => Alert.alert(t('iOS Download'), t('App will be available on the App Store soon'))}
             >
               <Ionicons name="logo-apple" size={screenWidth <= 768 ? 24 : 28} color="#fff" />
               <View style={styles.downloadButtonText}>
@@ -981,7 +977,7 @@ export default function OverviewScreen({ onNavigateToLogin, onNavigateToDesign, 
             </TouchableOpacity>
             <TouchableOpacity 
               style={[styles.downloadButton, { backgroundColor: '#000' }]}
-              onPress={() => Alert.alert('Android Download', 'App will be available on Google Play soon!')}
+              onPress={() => Alert.alert(t('Android Download'), t('App will be available on Google Play soon'))}
             >
               <Ionicons name="logo-google-playstore" size={screenWidth <= 768 ? 24 : 28} color="#fff" />
               <View style={styles.downloadButtonText}>
@@ -997,11 +993,7 @@ export default function OverviewScreen({ onNavigateToLogin, onNavigateToDesign, 
           <View style={styles.footerContent}>
             {/* Company Info */}
             <View style={styles.footerSection}>
-              <Image 
-                source={require('../../assets/bonyad-logo.svg')} 
-                style={styles.footerLogo}
-                resizeMode="contain"
-              />
+              <BonyadLogo size="small" />
               <Text style={[styles.footerDescription, { color: textSecondaryColor }]}>
                 Connecting skilled technicians with homeowners for quality home improvements.
               </Text>
@@ -1011,16 +1003,16 @@ export default function OverviewScreen({ onNavigateToLogin, onNavigateToDesign, 
             <View style={styles.footerSection}>
               <Text style={[styles.footerSectionTitle, { color: textColor }]}>Quick Links</Text>
               <TouchableOpacity style={styles.footerLink}>
-                <Text style={[styles.footerLinkText, { color: textSecondaryColor }]}>Home</Text>
+                <Text style={[styles.footerLinkText, { color: textSecondaryColor }]}>{t('Home')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.footerLink}>
-                <Text style={[styles.footerLinkText, { color: textSecondaryColor }]}>Services</Text>
+                <Text style={[styles.footerLinkText, { color: textSecondaryColor }]}>{t('Services')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.footerLink}>
-                <Text style={[styles.footerLinkText, { color: textSecondaryColor }]}>About Us</Text>
+                <Text style={[styles.footerLinkText, { color: textSecondaryColor }]}>{t('About Us')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.footerLink}>
-                <Text style={[styles.footerLinkText, { color: textSecondaryColor }]}>Contact</Text>
+                <Text style={[styles.footerLinkText, { color: textSecondaryColor }]}>{t('Contact')}</Text>
               </TouchableOpacity>
             </View>
 
@@ -1052,7 +1044,7 @@ export default function OverviewScreen({ onNavigateToLogin, onNavigateToDesign, 
               <Text style={[styles.footerSectionTitle, { color: textColor }]}>Need Help?</Text>
               <TouchableOpacity
                 style={[styles.supportButton, { backgroundColor: config.primaryColor }]}
-                onPress={() => Alert.alert('Support', 'Contact support at support@bonyad.com')}
+                onPress={() => Alert.alert(t('Support'), t('Contact support at') + ' support@bonyad.com')}
               >
                 <Ionicons name="chatbubbles-outline" size={20} color="#fff" />
                 <Text style={styles.supportButtonText}>Get Support</Text>
@@ -1063,7 +1055,7 @@ export default function OverviewScreen({ onNavigateToLogin, onNavigateToDesign, 
           {/* Footer Bottom */}
           <View style={[styles.footerBottom, { borderTopColor: borderColor }]}>
             <Text style={[styles.footerCopyright, { color: textSecondaryColor }]}>
-              © 2024 Bonyad. All rights reserved.
+              © 2024 Bonyad. {t('All rights reserved')}.
             </Text>
             <View style={styles.socialLinks}>
               <TouchableOpacity style={styles.socialButton}>
@@ -1088,7 +1080,7 @@ export default function OverviewScreen({ onNavigateToLogin, onNavigateToDesign, 
         <View style={styles.floatingChatButton}>
           <TouchableOpacity 
             style={[styles.chatButton, { backgroundColor: config.primaryColor }]}
-            onPress={() => Alert.alert('Chat Support', 'Chat support feature coming soon!')}
+            onPress={() => Alert.alert(t('Chat Support'), t('Chat support feature coming soon'))}
             {...(Platform.OS === 'web' && {
               onMouseEnter: () => setIsHovering(true),
               onMouseLeave: () => setIsHovering(false),

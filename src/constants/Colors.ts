@@ -2,9 +2,9 @@
 
 export const LightColors = {
   // Primary
-  primary: '#0080E0',
-  primaryDark: '#0066B3',
-  primaryLight: '#33A3FF',
+  primary: '#00549B',
+  primaryDark: '#003d73',
+  primaryLight: '#3376af',
   
   // Background
   background: '#F5F7FA',
@@ -61,9 +61,9 @@ export const LightColors = {
 
 export const DarkColors = {
   // Primary - Brand Blue (consistent across light and dark mode)
-  primary: '#00A5F4',
-  primaryDark: '#0088CC',
-  primaryLight: '#33B8FF',
+  primary: '#00549B',
+  primaryDark: '#003d73',
+  primaryLight: '#3376af',
   
   // Background - Pure Black as specified
   background: '#000000',
@@ -125,7 +125,7 @@ export const DarkColors = {
 export const Colors = LightColors; // Default for backward compatibility
 
 export const Gradients = {
-  primary: ['#0080E0', '#0066B3'],
+  primary: ['#00549B', '#003d73'],
   success: ['#4CAF50', '#388E3C'],
   error: ['#F44336', '#D32F2F'],
   blue: ['#2196F3', '#1976D2'],

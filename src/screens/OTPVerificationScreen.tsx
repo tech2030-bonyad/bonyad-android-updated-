@@ -28,7 +28,7 @@ interface OTPVerificationPopupProps {
   visible: boolean;
   phoneNumber: string;
   role: 'user' | 'technician';
-  onVerificationSuccess: (token: string, userId: number, role: string) => void;
+  onVerificationSuccess: (token: string, userId: number, role: string, profileComplete?: boolean) => void;
   onClose: () => void;
 }
 
@@ -50,20 +50,20 @@ const figmaColors = {
   overlay: 'rgba(0, 0, 0, 0.5)',
 };
 
-export default function OTPVerificationPopup({ 
-  visible, 
-  phoneNumber, 
-  role, 
-  onVerificationSuccess, 
-  onClose 
+export default function OTPVerificationPopup({
+  visible,
+  phoneNumber,
+  role,
+  onVerificationSuccess,
+  onClose
 }: OTPVerificationPopupProps) {
   const { t, i18n } = useTranslation();
   const { colors, theme } = useTheme();
   const { fontFamily, scaledSize } = useFontFamily();
   const isDarkMode = theme === 'dark';
-  
+
   const [screenWidth, setScreenWidth] = useState(Dimensions.get('window').width);
-  
+
   useEffect(() => {
     const subscription = Dimensions.addEventListener('change', ({ window }) => {
       setScreenWidth(window.width);
@@ -92,7 +92,7 @@ export default function OTPVerificationPopup({
   const keyboardOffsetAnim = useRef(new Animated.Value(0)).current; // For keyboard avoidance
 
   // Pending success data to close popup after animation
-  const pendingSuccessData = useRef<{ token: string; userId: number; role: string } | null>(null);
+  const pendingSuccessData = useRef<{ token: string; userId: number; role: string; profileComplete?: boolean } | null>(null);
 
   // Keyboard handling for mobile
   useEffect(() => {
@@ -145,7 +145,7 @@ export default function OTPVerificationPopup({
       buttonShakeAnim.setValue(0);
       keyboardOffsetAnim.setValue(0);
       pendingSuccessData.current = null;
-      
+
       // Animate in
       Animated.parallel([
         Animated.timing(fadeAnim, {
@@ -221,7 +221,7 @@ export default function OTPVerificationPopup({
       const newOtp = [...otp];
       newOtp[index] = text.replace(/\D/g, '');
       setOtp(newOtp);
-      
+
       // Auto-focus next input
       if (text && index < 3) {
         inputRefs.current[index + 1]?.focus();
@@ -239,7 +239,7 @@ export default function OTPVerificationPopup({
   const animateTypewriter = (text: string, onComplete: () => void) => {
     setTypewriterText('');
     let currentIndex = 0;
-    
+
     const typeNextChar = () => {
       if (currentIndex < text.length) {
         setTypewriterText(text.substring(0, currentIndex + 1));
@@ -250,17 +250,17 @@ export default function OTPVerificationPopup({
         setTimeout(onComplete, 500);
       }
     };
-    
+
     typeNextChar();
   };
 
-  const animateButtonSuccess = (data: { token: string; userId: number; role: string }) => {
+  const animateButtonSuccess = (data: { token: string; userId: number; role: string; profileComplete?: boolean }) => {
     setButtonState('success');
     pendingSuccessData.current = data;
-    
+
     // Set color directly to green (no animation through intermediate colors)
     buttonColorAnim.setValue(1);
-    
+
     // Bounce effect
     Animated.sequence([
       Animated.spring(buttonScaleAnim, {
@@ -286,7 +286,8 @@ export default function OTPVerificationPopup({
             onVerificationSuccess(
               pendingSuccessData.current.token,
               pendingSuccessData.current.userId,
-              pendingSuccessData.current.role
+              pendingSuccessData.current.role,
+              pendingSuccessData.current.profileComplete
             );
           }
         });
@@ -296,10 +297,10 @@ export default function OTPVerificationPopup({
 
   const animateButtonError = () => {
     setButtonState('error');
-    
+
     // Set color directly to red (no animation through green)
     buttonColorAnim.setValue(2);
-    
+
     // Shake and scale animations
     Animated.parallel([
       // Shake animation
@@ -346,7 +347,7 @@ export default function OTPVerificationPopup({
 
     setIsLoading(true);
     setButtonState('loading');
-    
+
     // Store the loading animation reference so we can stop it
     const loadingAnimation = Animated.loop(
       Animated.sequence([
@@ -365,10 +366,10 @@ export default function OTPVerificationPopup({
       ])
     );
     loadingAnimation.start();
-    
+
     let isSuccess = false;
-    let successData: { token: string; userId: number; role: string } | null = null;
-    
+    let successData: { token: string; userId: number; role: string; profileComplete?: boolean } | null = null;
+
     try {
       const url = buildApiUrl(API_ENDPOINTS.AUTH.VERIFY_OTP);
       const response = await fetch(url, {
@@ -390,29 +391,34 @@ export default function OTPVerificationPopup({
 
       const data = await response.json();
       await storage.saveAuthData(data.token, data.user.role, data.user.id, '');
-      
+
       isSuccess = true;
-      successData = { token: data.token, userId: data.user.id, role: data.user.role };
-      
+      successData = {
+        token: data.token,
+        userId: data.user.id,
+        role: data.user.role,
+        profileComplete: data.user.profileComplete
+      };
+
     } catch (error: any) {
       isSuccess = false;
     }
-    
+
     // Stop loading animation and reset scale
     loadingAnimation.stop();
     buttonScaleAnim.setValue(1);
     setIsLoading(false);
-    
+
     // Delay to ensure clean transition before showing result
     await new Promise(resolve => setTimeout(resolve, 100));
-    
+
     if (isSuccess && successData) {
       // Animate to green and then close
       animateButtonSuccess(successData);
     } else {
       // Animate to red then back to blue
       animateButtonError();
-      
+
       // Clear OTP on error
       setOtp(['', '', '', '']);
       setTimeout(() => {
@@ -423,7 +429,7 @@ export default function OTPVerificationPopup({
 
   const handleResend = async () => {
     if (!canResend) return;
-    
+
     setIsLoading(true);
     try {
       const url = buildApiUrl(API_ENDPOINTS.AUTH.RESEND_OTP);
@@ -521,7 +527,7 @@ export default function OTPVerificationPopup({
       <TouchableWithoutFeedback onPress={handleClose}>
         <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
           <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
-            <Animated.View 
+            <Animated.View
               style={[
                 styles.popupCard,
                 IS_LARGE_WEB && styles.popupCardDesktop,
@@ -535,15 +541,15 @@ export default function OTPVerificationPopup({
               ]}
             >
               {/* Close Button */}
-              <TouchableOpacity 
-                onPress={handleClose} 
+              <TouchableOpacity
+                onPress={handleClose}
                 style={styles.closeButton}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
-                <Ionicons 
-                  name="close" 
-                  size={24} 
-                  color={isDarkMode ? colors.textSecondary : figmaColors.textDark} 
+                <Ionicons
+                  name="close"
+                  size={24}
+                  color={isDarkMode ? colors.textSecondary : figmaColors.textDark}
                 />
               </TouchableOpacity>
 
@@ -639,12 +645,12 @@ export default function OTPVerificationPopup({
                   onPress={handleResend}
                   disabled={!canResend || isLoading}
                 >
-                  <Text 
+                  <Text
                     style={[
                       styles.resendLink,
                       IS_LARGE_WEB && styles.resendLinkDesktop,
-                      { 
-                        color: canResend 
+                      {
+                        color: canResend
                           ? (isDarkMode ? colors.primary : figmaColors.resendPurple)
                           : (isDarkMode ? colors.textTertiary : '#999'),
                       }
@@ -806,32 +812,32 @@ const styles = StyleSheet.create({
   },
   verifyButtonText: {
     color: '#FFFFFF',
-    fontSize: UIFontSizes.buttonMedium, // Centralized: 18px
-    fontWeight: '600',
-    fontFamily: FontFamily.button,
+    fontSize: 16,
+    fontWeight: 'bold',
+    fontFamily: FontFamily.body,
   },
   verifyButtonTextDesktop: {
-    fontSize: UIFontSizes.buttonMedium, // Centralized: 20px
+    fontSize: 18,
   },
   resendContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 4,
+    gap: 8,
   },
   resendText: {
-    fontSize: UIFontSizes.body, // Centralized: 16px
-    fontWeight: '300',
+    fontSize: 14,
     fontFamily: FontFamily.body,
   },
   resendTextDesktop: {
-    fontSize: UIFontSizes.bodyLarge, // Centralized: 18px
+    fontSize: 16,
   },
   resendLink: {
-    fontSize: UIFontSizes.link, // Centralized: 16px
-    fontWeight: '600',
-    textDecorationLine: 'underline',
+    fontSize: 14,
+    fontWeight: 'bold',
     fontFamily: FontFamily.body,
   },
   resendLinkDesktop: {
-    fontSize: UIFontSizes.bodyLarge, // Centralized: 18px
+    fontSize: 16,
   },
 });

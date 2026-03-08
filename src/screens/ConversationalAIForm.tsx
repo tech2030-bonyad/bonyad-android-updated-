@@ -87,6 +87,7 @@ export default function ConversationalAIForm({
   const { colors } = useTheme();
   const { fontFamily, scaledSize } = useFontFamily();
   const insets = useSafeAreaInsets();
+  const isRTL = i18n.language === 'ar';
   const router = useRouter('aiForm', () => {});
   const { alertState, showError, showWarning, showAlert, hideAlert } = useAlertPopup();
   const { confirmState, showConfirmation, hideConfirmation } = useConfirmationPopup();
@@ -930,7 +931,7 @@ export default function ConversationalAIForm({
             {/* Figma Input Area */}
             <View style={styles.figmaInputContainer}>
               <TextInput
-                style={styles.figmaTextInput}
+                style={[styles.figmaTextInput, { textAlign: isRTL ? 'right' : 'left' }]}
                 multiline
                 value={description}
                 onChangeText={setDescription}
@@ -1019,7 +1020,7 @@ export default function ConversationalAIForm({
                   <Ionicons name="create" size={24} color={colors.primary} />
                 </Animated.View>
                 <TextInput
-                  style={[styles.answersTextArea, { color: colors.text, flex: 1 }]}
+                  style={[styles.answersTextArea, { color: colors.text, flex: 1, textAlign: isRTL ? 'right' : 'left' }]}
                   value={answersText}
                   onChangeText={setAnswersText}
                   placeholder={t('Provide details to answer the questions above...')}
@@ -1107,7 +1108,7 @@ export default function ConversationalAIForm({
                       </View>
                       <View style={[styles.inputContainer, styles.editableInput, { backgroundColor: FIGMA_COLORS.white, borderColor: FIGMA_COLORS.textDividers }]}>
                         <TextInput
-                          style={[styles.textArea, { color: FIGMA_COLORS.textBody, backgroundColor: FIGMA_COLORS.white }]}
+                          style={[styles.textArea, { color: FIGMA_COLORS.textBody, backgroundColor: FIGMA_COLORS.white, textAlign: isRTL ? 'right' : 'left' }]}
                           value={editedProject.title}
                           onChangeText={(text) => handleEditField('title', text)}
                           placeholder={t('Enter project title')}
@@ -1126,7 +1127,7 @@ export default function ConversationalAIForm({
                       </View>
                       <View style={[styles.inputContainer, styles.editableInput, { backgroundColor: FIGMA_COLORS.white, borderColor: FIGMA_COLORS.textDividers }]}>
                         <TextInput
-                          style={[styles.textArea, { color: FIGMA_COLORS.textBody, backgroundColor: FIGMA_COLORS.white, minHeight: 120 }]}
+                          style={[styles.textArea, { color: FIGMA_COLORS.textBody, backgroundColor: FIGMA_COLORS.white, minHeight: 120, textAlign: isRTL ? 'right' : 'left' }]}
                           value={editedProject.description}
                           onChangeText={(text) => handleEditField('description', text)}
                           multiline
@@ -1189,7 +1190,7 @@ export default function ConversationalAIForm({
                               style={[styles.budgetInput, { color: FIGMA_COLORS.textBody }]}
                               value={editedProject.budget?.toString() || ''}
                               onChangeText={(text) => handleEditField('budget', parseFloat(text) || 0)}
-                              placeholder="0"
+                              placeholder={t('Enter amount')}
                               placeholderTextColor={FIGMA_COLORS.textSecondary}
                               keyboardType="numeric"
                             />
@@ -1229,7 +1230,7 @@ export default function ConversationalAIForm({
                             style={[styles.budgetInput, { color: FIGMA_COLORS.textBody }]}
                             value={editedProject.durationWeeks?.toString() || ''}
                             onChangeText={(text) => handleEditField('durationWeeks', parseInt(text) || 1)}
-                            placeholder="0"
+                            placeholder={t('Enter duration')}
                             placeholderTextColor={FIGMA_COLORS.textSecondary}
                             keyboardType="numeric"
                           />
@@ -1713,7 +1714,7 @@ export default function ConversationalAIForm({
                     <View style={styles.phaseEditModalSection}>
                       <Text style={[styles.phaseEditModalLabel, { color: FIGMA_COLORS.primary80 }]}>{t('Title')}</Text>
                       <TextInput
-                        style={[styles.phaseEditModalInput, { backgroundColor: FIGMA_COLORS.primary10, color: FIGMA_COLORS.textBody, borderColor: FIGMA_COLORS.textDividers }]}
+                        style={[styles.phaseEditModalInput, { backgroundColor: FIGMA_COLORS.primary10, color: FIGMA_COLORS.textBody, borderColor: FIGMA_COLORS.textDividers, textAlign: isRTL ? 'right' : 'left' }]}
                         value={editingPhase.title}
                         onChangeText={(text) => handleUpdatePhaseField('title', text)}
                         placeholder={t('Phase title')}
@@ -1725,7 +1726,7 @@ export default function ConversationalAIForm({
                     <View style={styles.phaseEditModalSection}>
                       <Text style={[styles.phaseEditModalLabel, { color: FIGMA_COLORS.primary80 }]}>{t('Description')}</Text>
                       <TextInput
-                        style={[styles.phaseEditModalInput, { backgroundColor: FIGMA_COLORS.primary10, color: FIGMA_COLORS.textBody, borderColor: FIGMA_COLORS.textDividers, minHeight: 100 }]}
+                        style={[styles.phaseEditModalInput, { backgroundColor: FIGMA_COLORS.primary10, color: FIGMA_COLORS.textBody, borderColor: FIGMA_COLORS.textDividers, minHeight: 100, textAlign: isRTL ? 'right' : 'left' }]}
                         value={editingPhase.description}
                         onChangeText={(text) => handleUpdatePhaseField('description', text)}
                         placeholder={t('Phase description')}
@@ -1984,7 +1985,7 @@ export default function ConversationalAIForm({
                   <Ionicons name="sparkles" size={28} color={colors.primary} />
                 </Animated.View>
                 <TextInput
-                  style={[styles.desktopTextArea, { color: colors.text }]}
+                  style={[styles.desktopTextArea, { color: colors.text, textAlign: isRTL ? 'right' : 'left' }]}
                   multiline
                   numberOfLines={10}
                   value={description}
@@ -2076,7 +2077,7 @@ export default function ConversationalAIForm({
                     <Ionicons name="create" size={28} color={colors.primary} />
                   </Animated.View>
                   <TextInput
-                    style={[styles.desktopAnswersTextArea, { color: colors.text }]}
+                    style={[styles.desktopAnswersTextArea, { color: colors.text, textAlign: isRTL ? 'right' : 'left' }]}
                     value={answersText}
                     onChangeText={setAnswersText}
                     placeholder={t('Provide details to answer the questions above...')}
@@ -2149,7 +2150,7 @@ export default function ConversationalAIForm({
                       <View style={styles.desktopSection}>
                         <Text style={[styles.desktopLabel, { color: colors.text }]}>{t('Title')}</Text>
                         <TextInput
-                          style={[styles.desktopInput, { backgroundColor: colors.background, color: colors.text }]}
+                          style={[styles.desktopInput, { backgroundColor: colors.background, color: colors.text, textAlign: isRTL ? 'right' : 'left' }]}
                           value={editedProject.title}
                           onChangeText={(text) => handleEditField('title', text)}
                         />
@@ -2158,7 +2159,7 @@ export default function ConversationalAIForm({
                       <View style={styles.desktopSection}>
                         <Text style={[styles.desktopLabel, { color: colors.text }]}>{t('Description')}</Text>
                         <TextInput
-                          style={[styles.desktopTextArea, { backgroundColor: colors.background, color: colors.text }]}
+                          style={[styles.desktopTextArea, { backgroundColor: colors.background, color: colors.text, textAlign: isRTL ? 'right' : 'left' }]}
                           value={editedProject.description}
                           onChangeText={(text) => handleEditField('description', text)}
                           multiline
@@ -2179,7 +2180,7 @@ export default function ConversationalAIForm({
                             </TouchableOpacity>
                           </View>
                           <TextInput
-                            style={[styles.desktopInput, { backgroundColor: colors.background, color: colors.text }]}
+                            style={[styles.desktopInput, { backgroundColor: colors.background, color: colors.text, textAlign: isRTL ? 'right' : 'left' }]}
                             value={editedProject.address || ''}
                             onChangeText={(text) => handleEditField('address', text)}
                             placeholder={t('Enter project address')}
@@ -2210,7 +2211,7 @@ export default function ConversationalAIForm({
                           </View>
                           {!editedProject.budgetUnspecified && (
                             <TextInput
-                              style={[styles.desktopInput, { backgroundColor: colors.background, color: colors.text, marginTop: 12 }]}
+                              style={[styles.desktopInput, { backgroundColor: colors.background, color: colors.text, marginTop: 12, textAlign: isRTL ? 'right' : 'left' }]}
                               value={editedProject.budget?.toString() || ''}
                               onChangeText={(text) => handleEditField('budget', parseFloat(text) || 0)}
                               placeholder={t('Enter budget')}
@@ -2228,7 +2229,7 @@ export default function ConversationalAIForm({
                         <View style={[styles.desktopSection, { flex: 1, marginLeft: 16 }]}>
                           <Text style={[styles.desktopLabel, { color: colors.text }]}>{t('Duration (weeks)')}</Text>
                           <TextInput
-                            style={[styles.desktopInput, { backgroundColor: colors.background, color: colors.text }]}
+                            style={[styles.desktopInput, { backgroundColor: colors.background, color: colors.text, textAlign: isRTL ? 'right' : 'left' }]}
                             value={editedProject.durationWeeks?.toString() || ''}
                             onChangeText={(text) => handleEditField('durationWeeks', parseInt(text) || 1)}
                             placeholder={t('Enter duration')}
@@ -2319,7 +2320,7 @@ export default function ConversationalAIForm({
                                       
                                       <Text style={[styles.desktopLabel, { color: colors.text, marginBottom: 8 }]}>{t('Title')}</Text>
                                       <TextInput
-                                        style={[styles.desktopInput, { backgroundColor: colors.cardBackground, color: colors.text }]}
+                                        style={[styles.desktopInput, { backgroundColor: colors.cardBackground, color: colors.text, textAlign: isRTL ? 'right' : 'left' }]}
                                         value={editingPhase.title}
                                         onChangeText={(text) => handleUpdatePhaseField('title', text)}
                                         placeholder={t('Phase title')}
@@ -2328,7 +2329,7 @@ export default function ConversationalAIForm({
 
                                       <Text style={[styles.desktopLabel, { color: colors.text, marginTop: 12, marginBottom: 8 }]}>{t('Description')}</Text>
                                       <TextInput
-                                        style={[styles.desktopInput, { backgroundColor: colors.cardBackground, color: colors.text, minHeight: 100 }]}
+                                        style={[styles.desktopInput, { backgroundColor: colors.cardBackground, color: colors.text, minHeight: 100, textAlign: isRTL ? 'right' : 'left' }]}
                                         value={editingPhase.description}
                                         onChangeText={(text) => handleUpdatePhaseField('description', text)}
                                         placeholder={t('Phase description')}

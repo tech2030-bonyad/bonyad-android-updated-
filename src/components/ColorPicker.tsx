@@ -22,7 +22,7 @@ interface ColorPickerProps {
 
 // Predefined color palette
 const PRESET_COLORS = [
-  '#0080E0', '#0066B3', '#33A3FF', // Blues
+  '#00549B', '#003d73', '#3376af', // Blues
   '#2C3E50', '#34495E', '#7F8C8D', // Grays
   '#4CAF50', '#8BC34A', '#CDDC39', // Greens
   '#FF9800', '#FF5722', '#F44336', // Oranges/Red
@@ -37,7 +37,7 @@ export default function ColorPicker({ value, onChange, label }: ColorPickerProps
   const { colors } = useTheme();
   const { t } = useTranslation();
   const [showPicker, setShowPicker] = useState(false);
-  const defaultColor = value || '#0080E0';
+  const defaultColor = value || '#00549B';
   const [hexInput, setHexInput] = useState(defaultColor);
 
   const isValidHex = (hex: string) => {
@@ -134,7 +134,7 @@ export default function ColorPicker({ value, onChange, label }: ColorPickerProps
                     style={[styles.hexInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
                     value={hexInput}
                     onChangeText={handleHexChange}
-                    placeholder="#0080E0"
+                    placeholder="#00549B"
                     placeholderTextColor={colors.textSecondary}
                     maxLength={7}
                     autoCapitalize="none"

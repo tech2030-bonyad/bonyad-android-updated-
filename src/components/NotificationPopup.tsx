@@ -123,7 +123,7 @@ export default function NotificationPopup({
   const getNotificationColor = () => {
     switch (notification.type) {
       case 'PROJECT_CREATED':
-        return '#0080E0';
+        return '#00549B';
       case 'BID_RECEIVED':
       case 'BID_ACCEPTED':
         return '#4CAF50';

@@ -7,10 +7,12 @@ import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { FontProvider } from './src/context/FontContext';
 // Import API config early to ensure global fetch override is applied
 import './src/config/api';
-import { SplashScreen, WelcomeScreen, OverviewScreen, LoginScreen, SignupScreen, OTPVerificationScreen, ForgotPasswordScreen, ForgotPasswordOTPScreen, ResetPasswordScreen, UserHomeScreen, TechnicianHomeScreen, TechnicianOnboardingScreen, ProfileScreen, EditProfileScreen, MyDataScreen, ChangePhoneScreen, ChangePasswordScreen, PortfolioScreen, ServiceManagementScreen, AvailabilityScreen, SubscriptionScreen, NewProjectView, ManualProjectForm, ConversationalAIForm, ProjectsScreen, ChatRoomsListScreen, ChatDetailScreen, RunningProjectsScreen, NotificationsScreen, AppointmentsScreen, BookingScreen, TechnicianProfileViewScreen, RoomDesignScreen, VoiceAIScreen, CostExplorerScreen, RoomVisualizerScreen, AskBonyadAIScreen, ProjectsMapScreen, AboutScreen, ContactScreen, IntroToAppScreen } from './src/screens';
+import { SplashScreen, WelcomeScreen, OverviewScreen, LoginScreen, SignupScreen, OTPVerificationScreen, ForgotPasswordScreen, ForgotPasswordOTPScreen, ResetPasswordScreen, UserHomeScreen, TechnicianHomeScreen, TechnicianOnboardingScreen, ProfileScreen, EditProfileScreen, MyDataScreen, ChangePhoneScreen, ChangePasswordScreen, PortfolioScreen, ServiceManagementScreen, AvailabilityScreen, SubscriptionScreen, NewProjectView, ManualProjectForm, ConversationalAIForm, ProjectsScreen, ChatRoomsListScreen, ChatDetailScreen, RunningProjectsScreen, NotificationsScreen, AppointmentsScreen, BookingScreen, TechnicianProfileViewScreen, RoomDesignScreen, VoiceAIScreen, CostExplorerScreen, RoomVisualizerScreen, AskBonyadAIScreen, ProjectsMapScreen, AboutScreen, ContactScreen, IntroToAppScreen, OnboardingScreen, TechnicianCompleteProfileScreen, ChatbotScreen, SupportChatScreen, TicketListScreen, CreateTicketScreen, TicketDetailScreen, ServiceProvidersScreen, CommissionPaymentScreen, PaymentCheckoutScreen, CategorySubcategoryScreen, CreationMethodScreen } from './src/screens';
 import './src/localization/i18n'; // Initialize i18n
 import OnlineStatusService from './src/services/OnlineStatusService';
 import { storage } from './src/utils/storage';
+import CoachMarkProvider from './src/components/CoachMarkProvider';
+import { coachMarksStorage } from './src/utils/coachMarks';
 import { useRouter } from './src/utils/useRouter';
 import * as SplashScreenNative from 'expo-splash-screen';
 import * as Font from 'expo-font';
@@ -24,13 +26,14 @@ import { getOnboardingStatus } from './src/services/onboardingApi';
 import onboardingStorage from './src/services/onboardingStorage';
 import GlobalAlertProvider from './src/components/GlobalAlertProvider';
 import { globalAlertManager } from './src/utils/globalAlertManager';
+import { CreateCheckoutRequest } from './src/services/PaymentService';
 // import * as Notifications from 'expo-notifications';
 // import { registerForPushNotificationsAsync } from './src/utils/useFCMToken';
 
 // Keep native splash screen visible while we show custom splash
 SplashScreenNative.preventAutoHideAsync();
 
-type Screen = 'splash' | 'welcome' | 'overview' | 'about' | 'contact' | 'introToApp' | 'login' | 'signup' | 'otp' | 'forgotPassword' | 'otpVerification' | 'resetPassword' | 'home' | 'profile' | 'editProfile' | 'myData' | 'changePhone' | 'changePassword' | 'portfolio' | 'services' | 'availability' | 'subscription' | 'newProject' | 'manualForm' | 'aiForm' | 'projects' | 'runningProjects' | 'chatRooms' | 'chatDetail' | 'notifications' | 'appointments' | 'booking' | 'technicianProfile' | 'technicianOnboarding' | 'roomDesign' | 'voiceAI' | 'costExplorer' | 'roomVisualizer' | 'askBonyadAI' | 'projectsMap';
+type Screen = 'splash' | 'onboarding' | 'welcome' | 'overview' | 'about' | 'contact' | 'introToApp' | 'login' | 'signup' | 'otp' | 'forgotPassword' | 'otpVerification' | 'resetPassword' | 'home' | 'profile' | 'editProfile' | 'myData' | 'changePhone' | 'changePassword' | 'portfolio' | 'services' | 'availability' | 'subscription' | 'newProject' | 'manualForm' | 'aiForm' | 'projects' | 'runningProjects' | 'chatRooms' | 'chatDetail' | 'notifications' | 'appointments' | 'booking' | 'technicianProfile' | 'technicianOnboarding' | 'technicianCompleteProfile' | 'roomDesign' | 'voiceAI' | 'costExplorer' | 'roomVisualizer' | 'askBonyadAI' | 'projectsMap' | 'chatbot' | 'supportChat' | 'ticketList' | 'createTicket' | 'ticketDetail' | 'serviceProviders' | 'commissionPayment' | 'paymentCheckout' | 'categorySubcategories' | 'creationMethod';
 
 export default function App() {
   const initialScreen: Screen = Platform.OS === 'web' ? 'welcome' : 'splash';
@@ -46,7 +49,14 @@ export default function App() {
   const [forgotPasswordOTP, setForgotPasswordOTP] = useState('');
   const [expoPushToken, setExpoPushToken] = useState('');
   const [projectsFilter, setProjectsFilter] = useState<'available' | 'running' | 'completed'>('available');
+  
+  // Chatbot & Live Agent state
+  const [chatbotSubject, setChatbotSubject] = useState('');
+  const [chatbotAIHistory, setChatbotAIHistory] = useState<any[]>([]);
   const [chatRoomId, setChatRoomId] = useState<string | null>(null);
+  
+  // Support Ticket state
+  const [selectedTicketId, setSelectedTicketId] = useState<number>(0);
   const [chatReceiverId, setChatReceiverId] = useState<number>(0);
   const [chatReceiverName, setChatReceiverName] = useState<string>('');
   const [selectedRunningProject, setSelectedRunningProject] = useState<any>(null);
@@ -54,6 +64,7 @@ export default function App() {
   const [bookingTechnician, setBookingTechnician] = useState<{ id: number; name: string } | null>(null);
   const [bookingProjectId, setBookingProjectId] = useState<number | undefined>(undefined);
   const [viewTechnicianId, setViewTechnicianId] = useState<number | null>(null);
+  const [serviceProvidersBookingTechnician, setServiceProvidersBookingTechnician] = useState<{ id: number; name: string } | null>(null);
   const [overviewUserType, setOverviewUserType] = useState<'user' | 'provider'>('user'); // For overview page toggle
   const [showOTPPopup, setShowOTPPopup] = useState(false); // OTP verification popup state
   const [currentNotification, setCurrentNotification] = useState<any | null>(null);
@@ -62,8 +73,138 @@ export default function App() {
   const notificationCheckInterval = useRef<NodeJS.Timeout | null>(null); // Store interval reference
   const [isAppReady, setAppReady] = useState(false);
   
+  // Payment checkout state
+  const [checkoutRequest, setCheckoutRequest] = useState<CreateCheckoutRequest | null>(null);
+  const [checkoutDescription, setCheckoutDescription] = useState<string>('');
+  
+  // Category/Subcategory selection state for project creation flow
+  const [selectedCategory, setSelectedCategory] = useState<{ id: number; nameEn: string; nameAr?: string } | null>(null);
+  const [selectedSubcategory, setSelectedSubcategory] = useState<{ id: number; nameEn: string; nameAr?: string } | null>(null);
+  
   // Router hook for URL-based routing on web
   const router = useRouter(currentScreen, setCurrentScreen);
+
+  // Check session function - used by both useEffect and SplashScreen
+  const checkSession = useCallback(async () => {
+    try {
+      console.log('🔍 Checking for stored session and onboarding status...');
+
+      // Check login count (onboarding only shows if count is 0)
+      const loginCount = await storage.getLoginCount();
+      const hasSeenOnboarding = await storage.hasSeenOnboarding();
+      console.log('📱 Login count:', loginCount);
+      console.log('📱 Has seen onboarding:', hasSeenOnboarding);
+
+      // Only show onboarding for brand new users who have NEVER logged in or signed up
+      if (loginCount === 0 && !hasSeenOnboarding) {
+        console.log('📍 Brand new user - showing onboarding');
+        setCurrentScreen('onboarding');
+        return;
+      }
+
+      // Use checkAuthentication to validate token
+      const { checkAuthentication } = await import('./src/utils/authGuard');
+      const authResult = await checkAuthentication();
+
+      if (authResult) {
+        console.log('✅ Valid session found - loading user data');
+        console.log('   User ID:', authResult.userId);
+        console.log('   Role:', authResult.role);
+        console.log('   Onboarded:', authResult.onboarded);
+        console.log('   Profile Complete:', authResult.profileComplete);
+
+        // Set app state from validated token
+        setAuthToken(authResult.token);
+        setUserId(authResult.userId);
+        setUserRole(authResult.role.toLowerCase() as 'user' | 'technician');
+
+        // Connect to WebSocket services if authenticated
+        if (authResult.token) {
+          console.log('🔌 Connecting to WebSocket services...');
+          const connectionResult = await OnlineStatusService.connect(authResult.token);
+          if (connectionResult.connected) {
+            console.log('✅ WebSocket connected - User is now online');
+
+            // Connect to WebSocket notifications (web only)
+            if (Platform.OS === 'web') {
+              WebSocketNotificationService.connect(
+                authResult.token,
+                authResult.userId,
+                (notification) => {
+                  console.log('📬 [App] Notification received via WebSocket:', notification);
+                  setCurrentNotification(notification);
+                  setShowNotificationPopup(true);
+
+                  // Request browser notification permission and show notification
+                  if (typeof window !== 'undefined' && 'Notification' in window) {
+                    if (Notification.permission === 'granted') {
+                      new Notification(notification.title, {
+                        body: notification.message,
+                        icon: '/favicon.ico',
+                      });
+                    } else if (Notification.permission === 'default') {
+                      Notification.requestPermission().then((permission) => {
+                        if (permission === 'granted') {
+                          new Notification(notification.title, {
+                            body: notification.message,
+                            icon: '/favicon.ico',
+                          });
+                        }
+                      });
+                    }
+                  }
+                }
+              );
+            }
+          } else {
+            console.error('❌ Failed to connect WebSocket:', connectionResult.error);
+          }
+        }
+
+        // Navigate based on onboarded and profileComplete status
+        const role = authResult.role.toLowerCase() as 'user' | 'technician';
+
+        if (role === 'technician') {
+          if (!authResult.onboarded) {
+            console.log('📍 Technician not onboarded - redirecting to onboarding');
+            setCurrentScreen('technicianOnboarding');
+          } else if (!authResult.profileComplete) {
+            console.log('📍 Technician profile incomplete - redirecting to complete profile');
+            setCurrentScreen('technicianCompleteProfile');
+          } else {
+            console.log('📍 Technician fully onboarded - going to home');
+            setCurrentScreen('home');
+          }
+        } else {
+          // User role
+          if (!authResult.profileComplete) {
+            console.log('📍 User profile incomplete - redirecting to profile edit');
+            setCurrentScreen('editProfile');
+          } else {
+            console.log('📍 User profile complete - going to home');
+            setCurrentScreen('home');
+          }
+        }
+      } else {
+        console.log('❌ No valid session found - user needs to login');
+        // Clear any invalid auth state
+        setAuthToken('');
+        setUserId(0);
+        setUserRole('user');
+        // Navigate to login
+        setCurrentScreen('login');
+      }
+    } catch (error) {
+      console.error('❌ Error checking stored session:', error);
+      // Clear session on error
+      setAuthToken('');
+      setUserId(0);
+      setUserRole('user');
+      // Navigate to login on error
+      setCurrentScreen('login');
+    }
+  }, []);
+
   useEffect(() => {
     const prepareApp = async () => {
       try {
@@ -109,7 +250,7 @@ export default function App() {
     }
   }, [isAppReady]);
 
-  
+
   // Check for new notifications from API
   const checkForNewNotifications = async () => {
     if (!authToken || !userId) {
@@ -128,25 +269,25 @@ export default function App() {
 
       if (response.ok) {
         const notifications = await response.json();
-        
+
         // Filter for unread notifications
         const unreadNotifications = notifications.filter((n: any) => !n.read);
-        
+
         // If we have unread notifications and haven't checked before, or there's a new one
         if (unreadNotifications.length > 0) {
           // Sort by ID descending to get the latest
           unreadNotifications.sort((a: any, b: any) => b.id - a.id);
           const latestNotification = unreadNotifications[0];
-          
+
           // Check if this is a new notification (different from last checked)
           if (lastCheckedNotificationId.current === null || latestNotification.id > lastCheckedNotificationId.current) {
             console.log('📬 [App] New unread notification found:', latestNotification);
-            
+
             // Only show popup if we haven't shown it for this notification yet
             if (currentNotification?.id !== latestNotification.id) {
               setCurrentNotification(latestNotification);
               setShowNotificationPopup(true);
-              
+
               // Request browser notification permission and show notification (web only)
               if (Platform.OS === 'web' && typeof window !== 'undefined' && 'Notification' in window) {
                 if (Notification.permission === 'granted') {
@@ -166,7 +307,7 @@ export default function App() {
                 }
               }
             }
-            
+
             // Update last checked ID
             lastCheckedNotificationId.current = latestNotification.id;
           }
@@ -183,12 +324,12 @@ export default function App() {
     if (authToken && userId) {
       // Check immediately
       checkForNewNotifications();
-      
+
       // Then check every 30 seconds
       notificationCheckInterval.current = setInterval(() => {
         checkForNewNotifications();
       }, 30000); // 30 seconds
-      
+
       return () => {
         if (notificationCheckInterval.current) {
           clearInterval(notificationCheckInterval.current);
@@ -214,7 +355,7 @@ export default function App() {
 
   useEffect(() => {
     console.log('🚀 App mounted - Platform:', Platform.OS, 'Initial screen:', initialScreen);
-    
+
     // Allow screen rotation on all platforms
     if (Platform.OS !== 'web') {
       // Unlock screen orientation to allow rotation
@@ -233,97 +374,24 @@ export default function App() {
           console.warn('⚠️ ScreenOrientation unlock failed (manifest setting will handle rotation):', error?.message || error);
         }
       };
-      
+
       // Call after a small delay to ensure native modules are ready
       setTimeout(() => {
         unlockOrientation();
       }, 100);
     }
-    
-    const checkSession = async () => {
-      try {
-        console.log('🔍 Checking for stored session...');
-        
-        // Use checkAuthentication to validate token
-        const { checkAuthentication } = await import('./src/utils/authGuard');
-        const authResult = await checkAuthentication();
-        
-        if (authResult) {
-          console.log('✅ Valid session found - loading user data');
-          console.log('   User ID:', authResult.userId);
-          console.log('   Role:', authResult.role);
-          
-          // Set app state from validated token
-          setAuthToken(authResult.token);
-          setUserId(authResult.userId);
-          setUserRole(authResult.role.toLowerCase() as 'user' | 'technician');
-          
-          // Connect to WebSocket services if authenticated
-          if (authResult.token) {
-            console.log('🔌 Connecting to WebSocket services...');
-            const connectionResult = await OnlineStatusService.connect(authResult.token);
-            if (connectionResult.connected) {
-              console.log('✅ WebSocket connected - User is now online');
-              
-              // Connect to WebSocket notifications (web only)
-              if (Platform.OS === 'web') {
-                WebSocketNotificationService.connect(
-                  authResult.token,
-                  authResult.userId,
-                  (notification) => {
-                    console.log('📬 [App] Notification received via WebSocket:', notification);
-                    setCurrentNotification(notification);
-                    setShowNotificationPopup(true);
-                    
-                    // Request browser notification permission and show notification
-                    if (typeof window !== 'undefined' && 'Notification' in window) {
-                      if (Notification.permission === 'granted') {
-                        new Notification(notification.title, {
-                          body: notification.message,
-                          icon: '/favicon.ico',
-                        });
-                      } else if (Notification.permission === 'default') {
-                        Notification.requestPermission().then((permission) => {
-                          if (permission === 'granted') {
-                            new Notification(notification.title, {
-                              body: notification.message,
-                              icon: '/favicon.ico',
-                            });
-                          }
-                        });
-                      }
-                    }
-                  }
-                );
-              }
-            } else {
-              console.error('❌ Failed to connect WebSocket:', connectionResult.error);
-            }
-          }
-        } else {
-          console.log('❌ No valid session found - user needs to login');
-          // Clear any invalid auth state
-          setAuthToken('');
-          setUserId(0);
-          setUserRole('user');
-        }
-      } catch (error) {
-        console.error('❌ Error checking stored session:', error);
-        // Clear session on error
-        setAuthToken('');
-        setUserId(0);
-        setUserRole('user');
-      }
-    };
-    
-    checkSession();
-  }, []);
+
+    // Call checkSession on mount (only on native, web goes directly to welcome)
+    if (Platform.OS !== 'web') {
+      checkSession();
+    }
+  }, [checkSession]);
 
   // Handle app lifecycle for WebSocket (Android only) and check notifications on active
   useEffect(() => {
     const subscription = AppState.addEventListener('change', async (nextAppState) => {
       console.log('📱 AppState changed to:', nextAppState);
-      
+
       if (nextAppState === 'background' || nextAppState === 'inactive') {
         // App went to background - disconnect WebSocket (Android only)
         if (Platform.OS === 'android') {
@@ -337,17 +405,17 @@ export default function App() {
         // App came to foreground - reconnect WebSocket if user is authenticated (Android only)
         if (Platform.OS === 'android') {
           console.log('📱 App entering foreground');
-          
+
           // Add small delay to ensure app is fully active
           setTimeout(async () => {
             console.log('🔌 Checking WebSocket status...');
-            
+
             if (!OnlineStatusService.isConnected()) {
               console.log('🔌 WebSocket not connected, reconnecting...');
-              
+
               try {
                 const connectionResult = await OnlineStatusService.connect(authToken);
-                
+
                 if (connectionResult.connected) {
                   // Check after 2 seconds if we're connected
                   setTimeout(() => {
@@ -367,7 +435,7 @@ export default function App() {
             }
           }, 300); // Small delay to ensure app state is stable
         }
-        
+
         // Check for new notifications when app becomes active (all platforms)
         console.log('🔔 Checking for new notifications on app active...');
         checkForNewNotifications();
@@ -393,6 +461,9 @@ export default function App() {
     setAuthToken(token);
     setUserId(id);
 
+    // Increment login count (for onboarding logic - tracks logins and signups)
+    await storage.incrementLoginCount();
+
     let requiresOnboarding = false;
 
     if (role === 'technician') {
@@ -409,13 +480,13 @@ export default function App() {
         console.warn('⚠️ Failed to fetch onboarding status:', error);
       }
     }
-    
+
     // Connect to WebSocket for online status tracking
     console.log('🔌 Connecting to WebSocket after login...');
     const connectionResult = await OnlineStatusService.connect(token);
     if (connectionResult.connected) {
       console.log('✅ WebSocket connected - User is now online');
-      
+
       // Connect to WebSocket notifications (web only)
       if (Platform.OS === 'web') {
         WebSocketNotificationService.connect(
@@ -425,7 +496,7 @@ export default function App() {
             console.log('📬 [App] Notification received via WebSocket:', notification);
             setCurrentNotification(notification);
             setShowNotificationPopup(true);
-            
+
             // Request browser notification permission and show notification
             if (typeof window !== 'undefined' && 'Notification' in window) {
               if (Notification.permission === 'granted') {
@@ -450,7 +521,7 @@ export default function App() {
     } else {
       console.error('❌ Failed to connect WebSocket:', connectionResult.error);
     }
-    
+
     navigateToScreen(requiresOnboarding ? 'technicianOnboarding' : 'home');
   };
 
@@ -462,11 +533,21 @@ export default function App() {
   };
 
   // Handle successful OTP verification
-  const handleOTPVerificationSuccess = async (token: string, id: number, role: string) => {
+  const handleOTPVerificationSuccess = async (token: string, id: number, role: string, profileComplete?: boolean) => {
     setShowOTPPopup(false); // Close the OTP popup
     setAuthToken(token);
     setUserId(id);
     setUserRole(role.toLowerCase() as 'user' | 'technician');
+
+    // Increment login count (for onboarding logic - tracks logins and signups)
+    await storage.incrementLoginCount();
+
+    // Check profile completion for technicians
+    if (role.toLowerCase() === 'technician' && profileComplete === false) {
+      console.log('📍 Technician profile incomplete - redirecting to complete profile');
+      navigateToScreen('technicianCompleteProfile');
+      return;
+    }
 
     let requiresOnboarding = false;
 
@@ -484,13 +565,13 @@ export default function App() {
         console.warn('⚠️ Failed to fetch onboarding status (signup):', error);
       }
     }
-    
+
     // Connect to WebSocket for online status tracking
     console.log('🔌 Connecting to WebSocket after signup verification...');
     const connectionResult = await OnlineStatusService.connect(token);
     if (connectionResult.connected) {
       console.log('✅ WebSocket connected - User is now online');
-      
+
       // Connect to WebSocket notifications (web only)
       if (Platform.OS === 'web') {
         WebSocketNotificationService.connect(
@@ -500,7 +581,7 @@ export default function App() {
             console.log('📬 [App] Notification received via WebSocket:', notification);
             setCurrentNotification(notification);
             setShowNotificationPopup(true);
-            
+
             // Request browser notification permission and show notification
             if (typeof window !== 'undefined' && 'Notification' in window) {
               if (Notification.permission === 'granted') {
@@ -525,7 +606,7 @@ export default function App() {
     } else {
       console.error('❌ Failed to connect WebSocket:', connectionResult.error);
     }
-    
+
     navigateToScreen(requiresOnboarding ? 'technicianOnboarding' : 'home');
   };
 
@@ -537,32 +618,32 @@ export default function App() {
       notificationCheckInterval.current = null;
     }
     lastCheckedNotificationId.current = null;
-    
+
     // Disconnect WebSocket
     await OnlineStatusService.disconnect();
-    
+
     // Disconnect notification WebSocket (web only)
     if (Platform.OS === 'web') {
       WebSocketNotificationService.disconnect();
     }
-    
+
     // Clear notification popup
     setCurrentNotification(null);
     setShowNotificationPopup(false);
-    
+
     console.log('🔌 WebSocket disconnected - User is now offline');
-    
+
     // Clear auth data from storage
     await storage.clearAuthData();
     console.log('✅ Auth data cleared from storage');
 
     await onboardingStorage.clear();
-    
+
     // Clear auth data from state
     setAuthToken('');
     setUserId(0);
     setUserRole('user');
-    
+
     // Navigate based on platform using router
     if (Platform.OS === 'web') {
       router.navigate('welcome');
@@ -579,55 +660,61 @@ export default function App() {
   return (
     <ThemeProvider>
       <FontProvider>
-      <GlobalAlertProvider>
-        <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
-          <AppContent 
-          currentScreen={currentScreen}
-          setCurrentScreen={setCurrentScreen}
-          router={router}
-        showProfile={showProfile}
-        setShowProfile={setShowProfile}
-        userRole={userRole}
-        setUserRole={setUserRole}
-        phoneNumber={phoneNumber}
-        setPhoneNumber={setPhoneNumber}
-        userId={userId}
-        setUserId={setUserId}
-        authToken={authToken}
-        setAuthToken={setAuthToken}
-        handleLoginSuccess={handleLoginSuccess}
-        handleNavigateToOTP={handleNavigateToOTP}
-        handleOTPVerificationSuccess={handleOTPVerificationSuccess}
-        handleLogout={handleLogout}
-        projectsFilter={projectsFilter}
-        setProjectsFilter={setProjectsFilter}
-        chatRoomId={chatRoomId}
-        setChatRoomId={setChatRoomId}
-        chatReceiverId={chatReceiverId}
-        setChatReceiverId={setChatReceiverId}
-        chatReceiverName={chatReceiverName}
-        setChatReceiverName={setChatReceiverName}
-        bookingTechnician={bookingTechnician}
-        setBookingTechnician={setBookingTechnician}
-        bookingProjectId={bookingProjectId}
-        setBookingProjectId={setBookingProjectId}
-        viewTechnicianId={viewTechnicianId}
-        setViewTechnicianId={setViewTechnicianId}
-        showOTPPopup={showOTPPopup}
-        setShowOTPPopup={setShowOTPPopup}
-        currentNotification={currentNotification}
-        setCurrentNotification={setCurrentNotification}
-        showNotificationPopup={showNotificationPopup}
-        setShowNotificationPopup={setShowNotificationPopup}
-        forgotPasswordPhone={forgotPasswordPhone}
-        setForgotPasswordPhone={setForgotPasswordPhone}
-        forgotPasswordRole={forgotPasswordRole}
-        setForgotPasswordRole={setForgotPasswordRole}
-        forgotPasswordOTP={forgotPasswordOTP}
-        setForgotPasswordOTP={setForgotPasswordOTP}
-        />
-      </View>
-      </GlobalAlertProvider>
+        <GlobalAlertProvider>
+          <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
+            <AppContent
+              currentScreen={currentScreen}
+              setCurrentScreen={setCurrentScreen}
+              router={router}
+              showProfile={showProfile}
+              setShowProfile={setShowProfile}
+              userRole={userRole}
+              setUserRole={setUserRole}
+              phoneNumber={phoneNumber}
+              setPhoneNumber={setPhoneNumber}
+              userId={userId}
+              setUserId={setUserId}
+              authToken={authToken}
+              setAuthToken={setAuthToken}
+              handleLoginSuccess={handleLoginSuccess}
+              handleNavigateToOTP={handleNavigateToOTP}
+              handleOTPVerificationSuccess={handleOTPVerificationSuccess}
+              handleLogout={handleLogout}
+              projectsFilter={projectsFilter}
+              setProjectsFilter={setProjectsFilter}
+              chatRoomId={chatRoomId}
+              setChatRoomId={setChatRoomId}
+              chatReceiverId={chatReceiverId}
+              setChatReceiverId={setChatReceiverId}
+              chatReceiverName={chatReceiverName}
+              setChatReceiverName={setChatReceiverName}
+              bookingTechnician={bookingTechnician}
+              setBookingTechnician={setBookingTechnician}
+              bookingProjectId={bookingProjectId}
+              setBookingProjectId={setBookingProjectId}
+              viewTechnicianId={viewTechnicianId}
+              setViewTechnicianId={setViewTechnicianId}
+              showOTPPopup={showOTPPopup}
+              setShowOTPPopup={setShowOTPPopup}
+              currentNotification={currentNotification}
+              setCurrentNotification={setCurrentNotification}
+              showNotificationPopup={showNotificationPopup}
+              setShowNotificationPopup={setShowNotificationPopup}
+              forgotPasswordPhone={forgotPasswordPhone}
+              setForgotPasswordPhone={setForgotPasswordPhone}
+              forgotPasswordRole={forgotPasswordRole}
+              setForgotPasswordRole={setForgotPasswordRole}
+              forgotPasswordOTP={forgotPasswordOTP}
+              setForgotPasswordOTP={setForgotPasswordOTP}
+              chatbotSubject={chatbotSubject}
+              setChatbotSubject={setChatbotSubject}
+              chatbotAIHistory={chatbotAIHistory}
+              setChatbotAIHistory={setChatbotAIHistory}
+              selectedTicketId={selectedTicketId}
+              setSelectedTicketId={setSelectedTicketId}
+            />
+          </View>
+        </GlobalAlertProvider>
       </FontProvider>
     </ThemeProvider>
   );
@@ -679,12 +766,18 @@ function AppContent({
   setForgotPasswordRole,
   forgotPasswordOTP,
   setForgotPasswordOTP,
+  chatbotSubject,
+  setChatbotSubject,
+  chatbotAIHistory,
+  setChatbotAIHistory,
+  selectedTicketId,
+  setSelectedTicketId,
 }: any) {
   const { colors } = useTheme();
-  
+
   // Track screen width for responsive header on web
   const [screenWidth, setScreenWidth] = useState(Dimensions.get('window').width);
-  
+
   // Update screen width on resize
   useEffect(() => {
     const subscription = Dimensions.addEventListener('change', ({ window }) => {
@@ -695,10 +788,10 @@ function AppContent({
       subscription?.remove();
     };
   }, []);
-  
+
   // Calculate if we're on a small web screen (< 1024px)
   const IS_SMALL_WEB = Platform.OS === 'web' && screenWidth < 1024;
-  
+
   // Authentication guard - validates token for protected screens
   const { isCheckingAuth } = useAuthGuard(
     currentScreen,
@@ -709,7 +802,7 @@ function AppContent({
     setUserId,
     setUserRole,
   );
-  
+
   // Helper function to navigate - uses router on web, setCurrentScreen on mobile
   const navigate = (screen: Screen) => {
     if (Platform.OS === 'web' && router) {
@@ -718,7 +811,7 @@ function AppContent({
       setCurrentScreen(screen);
     }
   };
-  
+
   // Show loading state while checking authentication
   if (isCheckingAuth) {
     return (
@@ -738,7 +831,7 @@ function AppContent({
       <PaperProvider>
         <View style={[styles.container, { backgroundColor: colors.background }]}>
           <StatusBar style="auto" />
-          
+
           {/* Global Web Header - Only on Login and Signup screens, and only on small web screens (< 1024px) */}
           {Platform.OS === 'web' && (currentScreen === 'login' || currentScreen === 'signup') && IS_SMALL_WEB && (
             <WebHeader
@@ -754,437 +847,613 @@ function AppContent({
               onToggleChange={setOverviewUserType}
             />
           )}
-        
-        {currentScreen === 'splash' && Platform.OS !== 'web' && (
-          <SplashScreen
-            onComplete={() => {
-              console.log('✅ SplashScreen onComplete called - navigating to login');
-              navigate('login');
-            }}
-            onNavigateToOverview={() => {
-              console.log('🌐 SplashScreen onNavigateToOverview called - navigating to welcome');
-              navigate('welcome');
-            }}
-          />
-        )}
-        
-        {currentScreen === 'welcome' && (
-          <WelcomeScreen
-            onComplete={() => navigate('overview')}
-          />
-        )}
-        
-        {currentScreen === 'overview' && (
-          <OverviewScreen
-            onNavigateToLogin={() => navigate('login')}
-            onNavigateToDesign={() => navigate('roomDesign')}
-            onNavigateToVoiceAI={() => navigate('voiceAI')}
-            onNavigateToCostExplorer={() => navigate('costExplorer')}
-            onNavigateToRoomVisualizer={() => navigate('roomVisualizer')}
-            onNavigateToAskBonyadAI={() => navigate('askBonyadAI')}
-            onNavigateToProjectsMap={() => navigate('projectsMap')}
-            onNavigateToContact={() => navigate('contact')}
-            onNavigateToAbout={() => navigate('about')}
-            onNavigateToIntroToApp={() => navigate('introToApp')}
-          />
-        )}
-        
-        {currentScreen === 'about' && (
-          <AboutScreen
-            onBack={() => navigate('overview')}
-          />
-        )}
-        
-        {currentScreen === 'contact' && (
-          <ContactScreen
-            onBack={() => navigate('overview')}
-          />
-        )}
-        
-        {currentScreen === 'introToApp' && (
-          <IntroToAppScreen
-            onBack={() => navigate('overview')}
-          />
-        )}
-        
-        {currentScreen === 'voiceAI' && (
-          <VoiceAIScreen
-            onBack={() => navigate('overview')}
-          />
-        )}
-        
-        {currentScreen === 'costExplorer' && (
-          <CostExplorerScreen
-            onBack={() => navigate('overview')}
-          />
-        )}
-        
-        {currentScreen === 'roomVisualizer' && (
-          <RoomVisualizerScreen
-            onBack={() => navigate('overview')}
-          />
-        )}
-        
-        {currentScreen === 'askBonyadAI' && (
-          <AskBonyadAIScreen
-            onBack={() => navigate('overview')}
-          />
-        )}
-        
-        {currentScreen === 'projectsMap' && (
-          <ProjectsMapScreen
-            onBack={() => navigate('overview')}
-          />
-        )}
-        
-        {currentScreen === 'roomDesign' && (
-          <RoomDesignScreen
-            onBack={() => navigate('overview')}
-          />
-        )}
-        
-        {currentScreen === 'login' && (
-          <LoginScreen
-            onNavigateToSignup={() => navigate('signup')}
-            onNavigateToForgotPassword={() => navigate('forgotPassword')}
-            onLoginSuccess={handleLoginSuccess}
-            onNavigateToOTP={handleNavigateToOTP}
-            onNavigateToOverview={() => navigate('overview')}
-          />
-        )}
-        
-        {currentScreen === 'signup' && (
-          <SignupScreen
-            onNavigateToLogin={() => navigate('login')}
-            onNavigateToOTP={handleNavigateToOTP}
-            onNavigateToOverview={() => navigate('overview')}
-          />
-        )}
 
-        {/* OTP Verification Popup - shown on top of login/signup */}
-        <OTPVerificationScreen
-          visible={showOTPPopup}
-          phoneNumber={phoneNumber}
-          role={userRole}
-          onVerificationSuccess={handleOTPVerificationSuccess}
-          onClose={() => setShowOTPPopup(false)}
-        />
+          {currentScreen === 'splash' && Platform.OS !== 'web' && (
+            <SplashScreen
+              onComplete={async () => {
+                console.log('✅ SplashScreen onComplete called - checking session');
+                // Check if user has ever logged in before
+                const loginCount = await storage.getLoginCount();
+                const hasSeenOnboarding = await storage.hasSeenOnboarding();
 
-        {currentScreen === 'technicianOnboarding' && (
-          <TechnicianOnboardingScreen
-            token={authToken}
-            userId={userId}
-            onFinished={() => navigate('home')}
-          />
-        )}
-        
-        {currentScreen === 'forgotPassword' && (
-          <ForgotPasswordScreen
-            onBack={() => navigate('login')}
-            onOTPSent={(phone, role) => {
-              setForgotPasswordPhone(phone);
-              setForgotPasswordRole(role);
-              navigate('otpVerification');
-            }}
-          />
-        )}
-        
-        {currentScreen === 'otpVerification' && (
-          <ForgotPasswordOTPScreen
-            phoneNumber={forgotPasswordPhone}
-            role={forgotPasswordRole}
-            onBack={() => navigate('forgotPassword')}
-            onOTPVerified={(otpCode) => {
-              setForgotPasswordOTP(otpCode);
-              navigate('resetPassword');
-            }}
-          />
-        )}
-        
-        {currentScreen === 'resetPassword' && (
-          <ResetPasswordScreen
-            phoneNumber={forgotPasswordPhone}
-            role={forgotPasswordRole}
-            otpCode={forgotPasswordOTP}
-            onBack={() => navigate('otpVerification')}
-            onPasswordReset={() => {
-              // Reset forgot password state
-              setForgotPasswordPhone('');
-              setForgotPasswordRole('USER');
-              setForgotPasswordOTP('');
-              // Navigate to login
-              navigate('login');
-            }}
-          />
-        )}
-        
-        {currentScreen === 'home' && !showProfile && (
-          <>
-            {userRole === 'user' ? (
-              <UserHomeScreen
-                onLogout={handleLogout}
-                onShowProfile={() => setShowProfile(true)}
-                onRequestProject={() => navigate('newProject')}
-                onShowProjects={(filter) => {
-                  setProjectsFilter(filter);
-                }}
-                onShowChat={() => {}}
-                onShowNotifications={() => navigate('notifications')}
-                onShowAppointments={() => {}}
-                onShowBooking={(technicianId, technicianName, projectId) => {
-                  setBookingTechnician({ id: technicianId, name: technicianName });
-                  if (projectId) {
-                    setBookingProjectId(projectId);
-                  }
-                  navigate('booking');
-                }}
-                userId={userId}
-                authToken={authToken}
-                projectsFilter={projectsFilter}
-                onNavigateToChatDetail={(roomId, receiverId, receiverName) => {
-                  setChatRoomId(roomId);
-                  setChatReceiverId(receiverId);
-                  setChatReceiverName(receiverName);
-                  navigate('chatDetail');
-                }}
-                onNavigateToEditProfile={() => {
-                  setShowProfile(true);
-                  navigate('myData');
-                }}
-                onNavigateToPortfolio={() => navigate('portfolio')}
-                onNavigateToSubscription={() => navigate('subscription')}
-                onNavigateToServices={() => navigate('services')}
-                onNavigateToAvailability={() => navigate('availability')}
-                onNavigateToTechnicianProfile={(technicianId) => {
-                  setViewTechnicianId(technicianId);
-                  navigate('technicianProfile');
-                }}
-                onNavigateToAIForm={() => navigate('aiForm')}
-                onNavigateToManualForm={() => navigate('manualForm')}
-              />
-            ) : (
-              <TechnicianHomeScreen
-                onLogout={handleLogout}
-                onShowProfile={() => setShowProfile(true)}
-                onShowProjects={(filter) => {
-                  setProjectsFilter(filter || 'available');
-                  navigate('projects');
-                }}
-                onShowRunningProjects={() => navigate('runningProjects')}
-                onShowChat={() => navigate('chatRooms')}
-                onShowNotifications={() => navigate('notifications')}
-                onShowAppointments={() => navigate('appointments')}
-                userId={userId}
-                authToken={authToken}
-                projectsFilter={projectsFilter}
-                onNavigateToChatDetail={(roomId, receiverId, receiverName) => {
-                  setChatRoomId(roomId);
-                  setChatReceiverId(receiverId);
-                  setChatReceiverName(receiverName);
-                  navigate('chatDetail');
-                }}
-              />
-            )}
-          </>
-        )}
+                // Only show onboarding for brand new users who have NEVER logged in or signed up
+                if (loginCount === 0 && !hasSeenOnboarding) {
+                  console.log('📍 Brand new user - showing onboarding');
+                  setCurrentScreen('onboarding');
+                } else {
+                  // User has logged in before or seen onboarding, go to login
+                  setCurrentScreen('login');
+                }
+              }}
+              onNavigateToOverview={() => {
+                console.log('🌐 SplashScreen onNavigateToOverview called - navigating to welcome');
+                navigate('welcome');
+              }}
+            />
+          )}
 
-        {currentScreen === 'home' && showProfile && (
-          <ProfileScreen
-            onLogout={handleLogout}
-            onBack={() => setShowProfile(false)}
-            onNavigateToEditProfile={() => navigate('myData')}
-            onNavigateToPortfolio={() => navigate('portfolio')}
-            onNavigateToSubscription={() => navigate('subscription')}
-            onNavigateToServices={() => navigate('services')}
-            onNavigateToAvailability={() => navigate('availability')}
-          />
-        )}
+          {currentScreen === 'onboarding' && (
+            <OnboardingScreen
+              onFinish={async () => {
+                console.log('✅ Onboarding completed - navigating to login');
+                await storage.setOnboardingCompleted();
+                navigate('login');
+              }}
+            />
+          )}
 
-        {currentScreen === 'myData' && (
-          <MyDataScreen
-            onBack={() => navigate('home')}
-            onEditProfile={() => navigate('editProfile')}
-            onChangePhone={() => navigate('changePhone')}
-            onChangePassword={() => navigate('changePassword')}
-            onNavigateToSubscription={() => navigate('subscription')}
-            onNavigateToServices={() => navigate('services')}
-            onNavigateToAvailability={() => navigate('availability')}
-            isTechnician={userRole === 'technician'}
-          />
-        )}
+          {currentScreen === 'welcome' && (
+            <WelcomeScreen
+              onComplete={() => navigate('overview')}
+            />
+          )}
 
-        {currentScreen === 'editProfile' && (
-          <EditProfileScreen
-            userDetails={{ role: userRole }}
-            onBack={() => navigate('myData')}
-            onSave={() => navigate('myData')}
-          />
-        )}
+          {currentScreen === 'overview' && (
+            <OverviewScreen
+              onNavigateToLogin={() => navigate('login')}
+              onNavigateToDesign={() => navigate('roomDesign')}
+              onNavigateToVoiceAI={() => navigate('voiceAI')}
+              onNavigateToCostExplorer={() => navigate('costExplorer')}
+              onNavigateToRoomVisualizer={() => navigate('roomVisualizer')}
+              onNavigateToAskBonyadAI={() => navigate('askBonyadAI')}
+              onNavigateToProjectsMap={() => navigate('projectsMap')}
+              onNavigateToContact={() => navigate('contact')}
+              onNavigateToAbout={() => navigate('about')}
+              onNavigateToIntroToApp={() => navigate('introToApp')}
+            />
+          )}
 
-        {currentScreen === 'changePhone' && (
-          <ChangePhoneScreen
-            onBack={() => navigate('myData')}
-          />
-        )}
+          {currentScreen === 'about' && (
+            <AboutScreen
+              onBack={() => navigate('overview')}
+            />
+          )}
 
-        {currentScreen === 'changePassword' && (
-          <ChangePasswordScreen
-            onBack={() => navigate('myData')}
-          />
-        )}
+          {currentScreen === 'contact' && (
+            <ContactScreen
+              onBack={() => navigate('overview')}
+            />
+          )}
 
-        {currentScreen === 'portfolio' && (
-          <PortfolioScreen
-            userId={userId.toString()}
-            onBack={() => navigate('home')}
-          />
-        )}
+          {currentScreen === 'introToApp' && (
+            <IntroToAppScreen
+              onBack={() => navigate('overview')}
+            />
+          )}
 
-        {currentScreen === 'projects' && (
-          <ProjectsScreen
-            filter={projectsFilter}
-            onBack={() => navigate('home')}
-            onOpenChat={(roomId, receiverId, receiverName) => {
-              setChatRoomId(roomId);
-              setChatReceiverId(receiverId);
-              setChatReceiverName(receiverName);
-              navigate('chatDetail');
-            }}
-            onViewTechnician={(technicianId) => {
-              setViewTechnicianId(technicianId);
-              navigate('technicianProfile');
-            }}
-          />
-        )}
+          {currentScreen === 'voiceAI' && (
+            <VoiceAIScreen
+              onBack={() => navigate('overview')}
+            />
+          )}
 
-        {currentScreen === 'runningProjects' && (
-          <RunningProjectsScreen
-            onBack={() => navigate('home')}
-            isTechnician={userRole === 'technician'}
-            onShowProjectDetails={(project) => {
-              // Modal is now handled internally in RunningProjectsScreen
-            }}
-            onOpenChat={(roomId, receiverId, receiverName) => {
-              setChatRoomId(roomId);
-              setChatReceiverId(receiverId);
-              setChatReceiverName(receiverName);
-              navigate('chatDetail');
-            }}
-          />
-        )}
+          {currentScreen === 'costExplorer' && (
+            <CostExplorerScreen
+              onBack={() => navigate('overview')}
+            />
+          )}
 
-        {currentScreen === 'services' && (
-          <ServiceManagementScreen
-            onBack={() => navigate('home')}
-          />
-        )}
+          {currentScreen === 'roomVisualizer' && (
+            <RoomVisualizerScreen
+              onBack={() => navigate('overview')}
+            />
+          )}
 
-        {currentScreen === 'availability' && (
-          <AvailabilityScreen
-            onBack={() => navigate('home')}
-          />
-        )}
+          {currentScreen === 'askBonyadAI' && (
+            <AskBonyadAIScreen
+              onBack={() => navigate('overview')}
+            />
+          )}
 
-        {currentScreen === 'subscription' && (
-          <SubscriptionScreen
-            onBack={() => navigate('home')}
-          />
-        )}
+          {currentScreen === 'chatbot' && (
+            <ChatbotScreen
+              onBack={() => navigate('home')}
+              onRequestLiveAgent={(subject, aiHistory) => {
+                setChatbotSubject(subject);
+                setChatbotAIHistory(aiHistory);
+                navigate('supportChat');
+              }}
+            />
+          )}
 
-        {currentScreen === 'newProject' && (
-          <NewProjectView
-            onNavigateToAI={() => navigate('aiForm')}
-            onNavigateToManual={() => navigate('manualForm')}
-            onBack={() => navigate('home')}
-          />
-        )}
+          {currentScreen === 'supportChat' && (
+            <SupportChatScreen
+              onBack={() => navigate('home')}
+              initialSubject={chatbotSubject}
+              aiHistory={chatbotAIHistory}
+            />
+          )}
 
-        {currentScreen === 'manualForm' && (
-          <ManualProjectForm
-            onBack={() => navigate('newProject')}
-            onSuccess={() => {
-              navigate('home');
-              globalAlertManager.showSuccess('Project submitted successfully!', 'Success');
-            }}
-          />
-        )}
+          {currentScreen === 'ticketList' && (
+            <TicketListScreen
+              onBack={() => navigate('home')}
+              onCreateTicket={() => navigate('createTicket')}
+              onTicketPress={(ticket) => {
+                setSelectedTicketId(ticket.id);
+                navigate('ticketDetail');
+              }}
+            />
+          )}
 
-        {currentScreen === 'aiForm' && (
-          <ConversationalAIForm
-            onBack={() => navigate('newProject')}
-            onSuccess={() => {
-              navigate('home');
-              globalAlertManager.showSuccess('Project generated and submitted successfully!', 'Success');
-            }}
-          />
-        )}
+          {currentScreen === 'createTicket' && (
+            <CreateTicketScreen
+              onBack={() => navigate('ticketList')}
+              onSuccess={() => navigate('ticketList')}
+            />
+          )}
 
-        {currentScreen === 'chatRooms' && (
-          <ChatRoomsListScreen
-            onBack={() => navigate('home')}
-            onOpenChat={(roomId, receiverId, receiverName) => {
-              setChatRoomId(roomId);
-              setChatReceiverId(receiverId);
-              setChatReceiverName(receiverName);
-              navigate('chatDetail');
-            }}
-          />
-        )}
+          {currentScreen === 'serviceProviders' && (
+            <ServiceProvidersScreen
+              onBack={() => navigate('home')}
+              onNavigateToProfile={(technicianId) => {
+                setViewTechnicianId(technicianId);
+                navigate('technicianProfile');
+              }}
+              onBook={(technicianId, technicianName) => {
+                setServiceProvidersBookingTechnician({ id: technicianId, name: technicianName });
+                navigate('booking');
+              }}
+            />
+          )}
 
-        {currentScreen === 'chatDetail' && chatRoomId && (
-          <ChatDetailScreen
-            roomId={chatRoomId}
-            receiverId={chatReceiverId}
-            receiverName={chatReceiverName}
-            onBack={() => navigate('chatRooms')}
-          />
-        )}
+          {currentScreen === 'commissionPayment' && (
+            <CommissionPaymentScreen
+              onBack={() => navigate('home')}
+              onNavigateToCheckout={(request, description) => {
+                setCheckoutRequest(request);
+                setCheckoutDescription(description);
+                navigate('paymentCheckout');
+              }}
+            />
+          )}
 
-        {currentScreen === 'notifications' && (
-          <NotificationsScreen
-            onBack={() => navigate('home')}
-          />
-        )}
+          {currentScreen === 'paymentCheckout' && checkoutRequest && (
+            <PaymentCheckoutScreen
+              checkoutRequest={checkoutRequest}
+              onBack={() => navigate('commissionPayment')}
+              onSuccess={(transactionId) => {
+                console.log('✅ Payment successful:', transactionId);
+                navigate('home');
+              }}
+            />
+          )}
 
-        {currentScreen === 'appointments' && (
-          <AppointmentsScreen
-            onBack={() => navigate('home')}
-          />
-        )}
+          {currentScreen === 'ticketDetail' && (
+            <TicketDetailScreen
+              ticketId={selectedTicketId}
+              onBack={() => navigate('ticketList')}
+              onNavigateToChat={(roomId, adminName) => {
+                setChatRoomId(roomId);
+                setChatReceiverName(adminName);
+                navigate('chatDetail');
+              }}
+            />
+          )}
 
-        {currentScreen === 'booking' && bookingTechnician && (
-          <BookingScreen
-            technicianId={bookingTechnician.id}
-            technicianName={bookingTechnician.name}
-            projectId={bookingProjectId}
-            onBack={() => {
-              navigate('home');
-              setBookingTechnician(null);
-              setBookingProjectId(undefined);
-            }}
-            onSuccess={() => {
-              // Refresh appointments or show success message
-              console.log('✅ Booking successful');
-            }}
-          />
-        )}
+          {currentScreen === 'projectsMap' && (
+            <ProjectsMapScreen
+              onBack={() => navigate('overview')}
+            />
+          )}
 
-        {currentScreen === 'technicianProfile' && viewTechnicianId && (
-          <TechnicianProfileViewScreen
-            technicianId={viewTechnicianId}
-            onBack={() => {
-              navigate('home');
-              setViewTechnicianId(null);
-            }}
-            onBooking={(technicianId, technicianName) => {
-              setBookingTechnician({ id: technicianId, name: technicianName });
-              navigate('booking');
-            }}
+          {currentScreen === 'roomDesign' && (
+            <RoomDesignScreen
+              onBack={() => navigate('overview')}
+            />
+          )}
+
+          {currentScreen === 'login' && (
+            <LoginScreen
+              onNavigateToSignup={() => navigate('signup')}
+              onNavigateToForgotPassword={() => navigate('forgotPassword')}
+              onLoginSuccess={handleLoginSuccess}
+              onNavigateToOTP={handleNavigateToOTP}
+              onNavigateToOverview={() => navigate('overview')}
+            />
+          )}
+
+          {currentScreen === 'signup' && (
+            <SignupScreen
+              onNavigateToLogin={() => navigate('login')}
+              onNavigateToOTP={handleNavigateToOTP}
+              onNavigateToOverview={() => navigate('overview')}
+            />
+          )}
+
+          {/* OTP Verification Popup - shown on top of login/signup */}
+          <OTPVerificationScreen
+            visible={showOTPPopup}
+            phoneNumber={phoneNumber}
+            role={userRole}
+            onVerificationSuccess={handleOTPVerificationSuccess}
+            onClose={() => setShowOTPPopup(false)}
           />
-        )}
+
+          {currentScreen === 'technicianOnboarding' && (
+            <TechnicianOnboardingScreen
+              token={authToken}
+              userId={userId}
+              onFinished={() => navigate('home')}
+            />
+          )}
+
+          {currentScreen === 'technicianCompleteProfile' && (
+            <TechnicianCompleteProfileScreen
+              authToken={authToken}
+              userId={userId}
+              onSuccess={() => {
+                console.log('✅ Tech Profile Complete - Going to Onboarding');
+                navigate('technicianOnboarding');
+              }}
+            />
+          )}
+
+          {currentScreen === 'forgotPassword' && (
+            <ForgotPasswordScreen
+              onBack={() => navigate('login')}
+              onOTPSent={(phone, role) => {
+                setForgotPasswordPhone(phone);
+                setForgotPasswordRole(role);
+                navigate('otpVerification');
+              }}
+            />
+          )}
+
+          {currentScreen === 'otpVerification' && (
+            <ForgotPasswordOTPScreen
+              phoneNumber={forgotPasswordPhone}
+              role={forgotPasswordRole}
+              onBack={() => navigate('forgotPassword')}
+              onOTPVerified={(otpCode) => {
+                setForgotPasswordOTP(otpCode);
+                navigate('resetPassword');
+              }}
+            />
+          )}
+
+          {currentScreen === 'resetPassword' && (
+            <ResetPasswordScreen
+              phoneNumber={forgotPasswordPhone}
+              role={forgotPasswordRole}
+              otpCode={forgotPasswordOTP}
+              onBack={() => navigate('otpVerification')}
+              onPasswordReset={() => {
+                // Reset forgot password state
+                setForgotPasswordPhone('');
+                setForgotPasswordRole('USER');
+                setForgotPasswordOTP('');
+                // Navigate to login
+                navigate('login');
+              }}
+            />
+          )}
+
+          {currentScreen === 'home' && !showProfile && (
+            <>
+              {userRole === 'user' ? (
+                <CoachMarkProvider>
+                  <UserHomeScreen
+                    onLogout={handleLogout}
+                    onShowProfile={() => setShowProfile(true)}
+                    onRequestProject={() => navigate('newProject')}
+                    onShowProjects={(filter) => {
+                      setProjectsFilter(filter);
+                    }}
+                    onShowChat={() => { }}
+                    onShowNotifications={() => navigate('notifications')}
+                    onShowAppointments={() => { }}
+                    onShowBooking={(technicianId, technicianName, projectId) => {
+                      setBookingTechnician({ id: technicianId, name: technicianName });
+                      if (projectId) {
+                        setBookingProjectId(projectId);
+                      }
+                      navigate('booking');
+                    }}
+                    userId={userId}
+                    authToken={authToken}
+                    projectsFilter={projectsFilter}
+                    onNavigateToChatDetail={(roomId, receiverId, receiverName) => {
+                      setChatRoomId(roomId);
+                      setChatReceiverId(receiverId);
+                      setChatReceiverName(receiverName);
+                      navigate('chatDetail');
+                    }}
+                    onNavigateToEditProfile={() => {
+                      setShowProfile(true);
+                      navigate('myData');
+                    }}
+                    onNavigateToPortfolio={() => navigate('portfolio')}
+                    onNavigateToSubscription={() => navigate('subscription')}
+                    onNavigateToServices={() => navigate('services')}
+                    onNavigateToAvailability={() => navigate('availability')}
+                    onNavigateToTechnicianProfile={(technicianId) => {
+                      setViewTechnicianId(technicianId);
+                      navigate('technicianProfile');
+                    }}
+                    onNavigateToAIForm={() => navigate('aiForm')}
+                    onNavigateToManualForm={() => navigate('manualForm')}
+                    onShowChatbot={() => navigate('chatbot')}
+                    onShowSupportTickets={() => navigate('ticketList')}
+                    onShowServiceProviders={() => navigate('serviceProviders')}
+                    onPressCategory={(category) => {
+                      setSelectedCategory(category);
+                      navigate('categorySubcategories');
+                    }}
+                  />
+                </CoachMarkProvider>
+              ) : (
+                <CoachMarkProvider>
+                  <TechnicianHomeScreen
+                    onLogout={handleLogout}
+                    onShowProfile={() => setShowProfile(true)}
+                    onShowProjects={(filter) => {
+                      setProjectsFilter(filter || 'available');
+                      navigate('projects');
+                    }}
+                    onShowRunningProjects={() => navigate('runningProjects')}
+                    onShowChat={() => navigate('chatRooms')}
+                    onShowNotifications={() => navigate('notifications')}
+                    onShowAppointments={() => navigate('appointments')}
+                      onShowChatbot={() => navigate('chatbot')}
+                      onShowSupportTickets={() => navigate('ticketList')}
+                      onShowServiceProviders={() => navigate('serviceProviders')}
+                      onShowCommissionPayment={() => navigate('commissionPayment')}
+                      userId={userId}
+                    authToken={authToken}
+                    projectsFilter={projectsFilter}
+                    onNavigateToChatDetail={(roomId, receiverId, receiverName) => {
+                      setChatRoomId(roomId);
+                      setChatReceiverId(receiverId);
+                      setChatReceiverName(receiverName);
+                      navigate('chatDetail');
+                    }}
+                  />
+                </CoachMarkProvider>
+              )}
+            </>
+          )}
+
+          {currentScreen === 'home' && showProfile && (
+            <ProfileScreen
+              onLogout={handleLogout}
+              onBack={() => setShowProfile(false)}
+              onNavigateToEditProfile={() => navigate('myData')}
+              onNavigateToPortfolio={() => navigate('portfolio')}
+              onNavigateToSubscription={() => navigate('subscription')}
+              onNavigateToServices={() => navigate('services')}
+              onNavigateToAvailability={() => navigate('availability')}
+              onNavigateToSupportTickets={() => {
+                console.log('🎧 Navigating to Support Tickets...');
+                setShowProfile(false);
+                // Small delay to ensure profile modal closes before navigation
+                setTimeout(() => {
+                  navigate('ticketList');
+                }, 100);
+              }}
+            />
+          )}
+
+          {currentScreen === 'myData' && (
+            <MyDataScreen
+              onBack={() => navigate('home')}
+              onEditProfile={() => navigate('editProfile')}
+              onChangePhone={() => navigate('changePhone')}
+              onChangePassword={() => navigate('changePassword')}
+              onNavigateToSubscription={() => navigate('subscription')}
+              onNavigateToServices={() => navigate('services')}
+              onNavigateToAvailability={() => navigate('availability')}
+              isTechnician={userRole === 'technician'}
+            />
+          )}
+
+          {currentScreen === 'editProfile' && (
+            <EditProfileScreen
+              userDetails={{ role: userRole }}
+              onBack={() => navigate('myData')}
+              onSave={() => navigate('myData')}
+            />
+          )}
+
+          {currentScreen === 'changePhone' && (
+            <ChangePhoneScreen
+              onBack={() => navigate('myData')}
+            />
+          )}
+
+          {currentScreen === 'changePassword' && (
+            <ChangePasswordScreen
+              onBack={() => navigate('myData')}
+            />
+          )}
+
+          {currentScreen === 'portfolio' && (
+            <PortfolioScreen
+              userId={userId.toString()}
+              onBack={() => navigate('home')}
+            />
+          )}
+
+          {currentScreen === 'projects' && (
+            <ProjectsScreen
+              filter={projectsFilter}
+              onBack={() => navigate('home')}
+              onOpenChat={(roomId, receiverId, receiverName) => {
+                setChatRoomId(roomId);
+                setChatReceiverId(receiverId);
+                setChatReceiverName(receiverName);
+                navigate('chatDetail');
+              }}
+              onViewTechnician={(technicianId) => {
+                setViewTechnicianId(technicianId);
+                navigate('technicianProfile');
+              }}
+            />
+          )}
+
+          {currentScreen === 'runningProjects' && (
+            <RunningProjectsScreen
+              onBack={() => navigate('home')}
+              isTechnician={userRole === 'technician'}
+              onShowProjectDetails={(project) => {
+                // Modal is now handled internally in RunningProjectsScreen
+              }}
+              onOpenChat={(roomId, receiverId, receiverName) => {
+                setChatRoomId(roomId);
+                setChatReceiverId(receiverId);
+                setChatReceiverName(receiverName);
+                navigate('chatDetail');
+              }}
+            />
+          )}
+
+          {currentScreen === 'services' && (
+            <ServiceManagementScreen
+              onBack={() => navigate('home')}
+            />
+          )}
+
+          {currentScreen === 'availability' && (
+            <AvailabilityScreen
+              onBack={() => navigate('home')}
+            />
+          )}
+
+          {currentScreen === 'subscription' && (
+            <SubscriptionScreen
+              onBack={() => navigate('home')}
+            />
+          )}
+
+          {currentScreen === 'newProject' && (
+            <NewProjectView
+              onNavigateToAI={() => navigate('aiForm')}
+              onNavigateToManual={() => navigate('manualForm')}
+              onBack={() => navigate('home')}
+            />
+          )}
+
+          {currentScreen === 'manualForm' && (
+            <ManualProjectForm
+              onBack={() => navigate('newProject')}
+              onSuccess={() => {
+                navigate('home');
+                globalAlertManager.showSuccess('Project submitted successfully!', 'Success');
+              }}
+            />
+          )}
+
+          {currentScreen === 'aiForm' && (
+            <ConversationalAIForm
+              onBack={() => navigate('newProject')}
+              onSuccess={() => {
+                navigate('home');
+                globalAlertManager.showSuccess('Project generated and submitted successfully!', 'Success');
+              }}
+            />
+          )}
+
+          {currentScreen === 'categorySubcategories' && selectedCategory && (
+            <CategorySubcategoryScreen
+              category={selectedCategory}
+              onBack={() => {
+                setSelectedCategory(null);
+                navigate('home');
+              }}
+              onSelectSubcategory={(subcategory) => {
+                setSelectedSubcategory({
+                  id: subcategory.id,
+                  nameEn: subcategory.nameEn,
+                  nameAr: subcategory.nameAr,
+                });
+                navigate('creationMethod');
+              }}
+            />
+          )}
+
+          {currentScreen === 'creationMethod' && selectedCategory && selectedSubcategory && (
+            <CreationMethodScreen
+              category={selectedCategory}
+              subcategory={selectedSubcategory}
+              onBack={() => {
+                setSelectedSubcategory(null);
+                navigate('categorySubcategories');
+              }}
+              onChooseAI={(category, subcategory) => {
+                navigate('aiForm');
+              }}
+              onChooseManual={(category, subcategory) => {
+                navigate('manualForm');
+              }}
+            />
+          )}
+
+          {currentScreen === 'chatRooms' && (
+            <ChatRoomsListScreen
+              onBack={() => navigate('home')}
+              onOpenChat={(roomId, receiverId, receiverName) => {
+                setChatRoomId(roomId);
+                setChatReceiverId(receiverId);
+                setChatReceiverName(receiverName);
+                navigate('chatDetail');
+              }}
+            />
+          )}
+
+          {currentScreen === 'chatDetail' && chatRoomId && (
+            <ChatDetailScreen
+              roomId={chatRoomId}
+              receiverId={chatReceiverId}
+              receiverName={chatReceiverName}
+              onBack={() => navigate('chatRooms')}
+            />
+          )}
+
+          {currentScreen === 'notifications' && (
+            <NotificationsScreen
+              onBack={() => navigate('home')}
+            />
+          )}
+
+          {currentScreen === 'appointments' && (
+            <AppointmentsScreen
+              onBack={() => navigate('home')}
+            />
+          )}
+
+          {currentScreen === 'booking' && (bookingTechnician || serviceProvidersBookingTechnician) && (
+            <BookingScreen
+              technicianId={(bookingTechnician || serviceProvidersBookingTechnician)?.id}
+              technicianName={(bookingTechnician || serviceProvidersBookingTechnician)?.name}
+              projectId={bookingProjectId}
+              onBack={() => {
+                navigate('home');
+                setBookingTechnician(null);
+                setServiceProvidersBookingTechnician(null);
+                setBookingProjectId(undefined);
+              }}
+              onSuccess={() => {
+                // Refresh appointments or show success message
+                console.log('✅ Booking successful');
+              }}
+            />
+          )}
+
+          {currentScreen === 'technicianProfile' && viewTechnicianId && (
+            <TechnicianProfileViewScreen
+              technicianId={viewTechnicianId}
+              onBack={() => {
+                navigate('home');
+                setViewTechnicianId(null);
+              }}
+              onBooking={(technicianId, technicianName) => {
+                setBookingTechnician({ id: technicianId, name: technicianName });
+                navigate('booking');
+              }}
+            />
+          )}
         </View>
       </PaperProvider>
-      
+
       {/* Notification Popup - Web only */}
       {Platform.OS === 'web' && (
         <NotificationPopup

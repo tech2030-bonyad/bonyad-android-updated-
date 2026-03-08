@@ -5,6 +5,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import { Ionicons } from '@expo/vector-icons';
 import YoutubePlayer from 'react-native-youtube-iframe';
+import { useTranslation } from 'react-i18next';
 
 interface IntroToAppScreenProps {
   onBack?: () => void;
@@ -14,31 +15,31 @@ interface IntroToAppScreenProps {
 const VIDEOS = [
   {
     id: 'IDzG49s0xOA', // https://youtube.com/shorts/IDzG49s0xOA
-    title: 'Bonyad App Introduction - Part 1',
+    title: 'intro.video1',
   },
   {
     id: 'XORyEQRqn5g', // https://youtu.be/XORyEQRqn5g
-    title: 'Bonyad App Introduction - Part 2',
+    title: 'intro.video2',
   },
   {
     id: '8MW12hrdi50', // https://youtube.com/shorts/8MW12hrdi50
-    title: 'Bonyad App Introduction - Part 3',
+    title: 'intro.video3',
   },
   {
     id: 'pGQ35MXPbyM', // https://youtube.com/shorts/pGQ35MXPbyM
-    title: 'Bonyad App Introduction - Part 4',
+    title: 'intro.video4',
   },
   {
     id: 'YwXbfME4Oks', // https://youtube.com/shorts/YwXbfME4Oks
-    title: 'Bonyad App Introduction - Part 5',
+    title: 'intro.video5',
   },
   {
     id: 'ZBVwKwo9skU', // https://youtube.com/shorts/ZBVwKwo9skU
-    title: 'Bonyad App Introduction - Part 6',
+    title: 'intro.video6',
   },
   {
     id: 'b6BGGeC9mW8', // https://youtube.com/shorts/b6BGGeC9mW8
-    title: 'Bonyad App Introduction - Part 7',
+    title: 'intro.video7',
   },
 ];
 
@@ -66,6 +67,7 @@ const extractVideoId = (urlOrId: string): string => {
 };
 
 export default function IntroToAppScreen({ onBack }: IntroToAppScreenProps) {
+  const { t } = useTranslation();
   const { colors } = useTheme();
   const { fontFamily, scaledSize } = useFontFamily();
   const screenWidth = Dimensions.get('window').width;
@@ -96,9 +98,9 @@ export default function IntroToAppScreen({ onBack }: IntroToAppScreenProps) {
       <View style={styles.header}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <Ionicons name="arrow-back" size={22} color={colors.text} />
-          <Text style={[styles.backText, { color: colors.text, fontSize: scaledSize(16) }]}>Back</Text>
+          <Text style={[styles.backText, { color: colors.text, fontSize: scaledSize(16) }]}>{t('Back')}</Text>
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(20) }]}>Intro to the App</Text>
+        <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(20) }]}>{t('Intro to the App')}</Text>
         <View style={{ width: 60 }} />
       </View>
 
@@ -107,9 +109,9 @@ export default function IntroToAppScreen({ onBack }: IntroToAppScreenProps) {
         showsVerticalScrollIndicator={false}
       >
         <View style={[styles.introCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
-          <Text style={[styles.introTitle, { color: colors.text, fontSize: scaledSize(24) }]}>Learn About Bonyad</Text>
+          <Text style={[styles.introTitle, { color: colors.text, fontSize: scaledSize(24) }]}>{t('Learn About Bonyad')}</Text>
           <Text style={[styles.introText, { color: colors.textSecondary, fontSize: scaledSize(16) }]}>
-            Watch these videos to learn more about Bonyad and how to use our platform.
+            {t('intro.watchVideos')}
           </Text>
         </View>
 
@@ -129,7 +131,7 @@ export default function IntroToAppScreen({ onBack }: IntroToAppScreenProps) {
                 style={styles.accordionHeader}
               >
                 <Text style={[styles.videoTitle, { color: colors.text, fontSize: scaledSize(18) }]}>
-                  {video.title}
+                  {t(video.title)}
                 </Text>
                 {!isExpanded && (
                   <Ionicons 

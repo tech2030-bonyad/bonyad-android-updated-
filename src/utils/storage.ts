@@ -6,6 +6,8 @@ const STORAGE_KEYS = {
   DEVICE_TOKEN: '@bonyad_device_token',
   USER_ID: '@bonyad_user_id',
   FONT_SIZE: '@bonyad_font_size',
+  HAS_SEEN_ONBOARDING: '@bonyad_has_seen_onboarding',
+  LOGIN_COUNT: '@bonyad_login_count',
 };
 
 export const storage = {
@@ -105,6 +107,70 @@ export const storage = {
       console.log('✅ Font size saved:', fontSize);
     } catch (error) {
       console.error('❌ Error saving font size:', error);
+    }
+  },
+
+  // Check if user has seen onboarding
+  async hasSeenOnboarding(): Promise<boolean> {
+    try {
+      const value = await AsyncStorage.getItem(STORAGE_KEYS.HAS_SEEN_ONBOARDING);
+      return value === 'true';
+    } catch (error) {
+      console.error('❌ Error checking onboarding status:', error);
+      return false;
+    }
+  },
+
+  // Mark onboarding as completed
+  async setOnboardingCompleted() {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.HAS_SEEN_ONBOARDING, 'true');
+      console.log('✅ Onboarding marked as completed');
+    } catch (error) {
+      console.error('❌ Error saving onboarding status:', error);
+    }
+  },
+
+  // Clear onboarding status (for testing)
+  async clearOnboardingStatus() {
+    try {
+      await AsyncStorage.removeItem(STORAGE_KEYS.HAS_SEEN_ONBOARDING);
+      console.log('✅ Onboarding status cleared');
+    } catch (error) {
+      console.error('❌ Error clearing onboarding status:', error);
+    }
+  },
+
+  // Get login count (for onboarding logic - show onboarding only if count is 0)
+  async getLoginCount(): Promise<number> {
+    try {
+      const value = await AsyncStorage.getItem(STORAGE_KEYS.LOGIN_COUNT);
+      return value ? parseInt(value, 10) : 0;
+    } catch (error) {
+      console.error('❌ Error getting login count:', error);
+      return 0;
+    }
+  },
+
+  // Increment login count (called on every successful login or signup)
+  async incrementLoginCount() {
+    try {
+      const currentCount = await this.getLoginCount();
+      const newCount = currentCount + 1;
+      await AsyncStorage.setItem(STORAGE_KEYS.LOGIN_COUNT, newCount.toString());
+      console.log('✅ Login count incremented to:', newCount);
+    } catch (error) {
+      console.error('❌ Error incrementing login count:', error);
+    }
+  },
+
+  // Clear login count (for testing)
+  async clearLoginCount() {
+    try {
+      await AsyncStorage.removeItem(STORAGE_KEYS.LOGIN_COUNT);
+      console.log('✅ Login count cleared');
+    } catch (error) {
+      console.error('❌ Error clearing login count:', error);
     }
   },
 };

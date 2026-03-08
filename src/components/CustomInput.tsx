@@ -77,19 +77,19 @@ export const CustomTextInput: React.FC<CustomInputProps> = ({
   const { fontFamily } = useFontFamily();
   const isDarkMode = theme === 'dark';
   const [isFocused, setIsFocused] = useState(false);
-  
+
   // Check if current language is Arabic (RTL)
   const isRTL = i18n.language === 'ar';
-  
+
   // Use Figma colors for light mode, theme colors for dark mode
   // Applied to both web and mobile for consistency
   const useFigmaStyle = !isDarkMode;
-  
+
   const inputBgColor = useFigmaStyle ? figmaInputColors.inputBg : colors.cardBackground;
-  const inputBorderColor = error 
-    ? colors.error 
-    : (isFocused 
-      ? colors.primary 
+  const inputBorderColor = error
+    ? colors.error
+    : (isFocused
+      ? colors.primary
       : (useFigmaStyle ? figmaInputColors.inputBorder : colors.border));
   const labelColor = useFigmaStyle ? figmaInputColors.textDark : colors.text;
   // Placeholder with reduced opacity (50%) for lighter appearance
@@ -102,8 +102,8 @@ export const CustomTextInput: React.FC<CustomInputProps> = ({
       {/* Label above input - Figma style: 12px, #2D2D2D */}
       {label && (
         <Text style={[
-          styles.inputLabel, 
-          { 
+          styles.inputLabel,
+          {
             color: labelColor,
             textAlign: isRTL ? 'right' : 'left',
           }
@@ -295,12 +295,12 @@ export const CustomPicker: React.FC<CustomPickerProps> = ({
   const isDarkMode = theme === 'dark';
   const [isFocused, setIsFocused] = useState(false);
   const isRTL = i18n.language === 'ar';
-  
+
   // Use Figma colors for light mode
   const useFigmaStyle = !isDarkMode;
   const inputBgColor = useFigmaStyle ? figmaInputColors.inputBg : colors.cardBackground;
-  const inputBorderColor = error 
-    ? colors.error 
+  const inputBorderColor = error
+    ? colors.error
     : (isFocused ? colors.primary : (useFigmaStyle ? figmaInputColors.inputBorder : colors.border));
   const labelColor = useFigmaStyle ? figmaInputColors.textDark : colors.text;
   const textColor = useFigmaStyle ? figmaInputColors.textBlack : colors.text; // Black for selected text
@@ -313,8 +313,8 @@ export const CustomPicker: React.FC<CustomPickerProps> = ({
       {/* Label above picker - Figma style */}
       {label && (
         <Text style={[
-          styles.inputLabel, 
-          { 
+          styles.inputLabel,
+          {
             color: labelColor,
             textAlign: isRTL ? 'right' : 'left',
           }
@@ -397,12 +397,12 @@ export const UploadButton: React.FC<UploadButtonProps> = ({
   const isDarkMode = theme === 'dark';
   const [isFocused, setIsFocused] = useState(false);
   const isRTL = i18n.language === 'ar';
-  
+
   // Use Figma colors for light mode
   const useFigmaStyle = !isDarkMode;
   const inputBgColor = useFigmaStyle ? figmaInputColors.inputBg : colors.cardBackground;
-  const inputBorderColor = error 
-    ? colors.error 
+  const inputBorderColor = error
+    ? colors.error
     : (isFocused ? colors.primary : (useFigmaStyle ? figmaInputColors.inputBorder : colors.border));
   const labelColor = useFigmaStyle ? figmaInputColors.textDark : colors.text;
   const textColor = useFigmaStyle ? figmaInputColors.textBlack : colors.text; // Black for selected text
@@ -414,8 +414,8 @@ export const UploadButton: React.FC<UploadButtonProps> = ({
       {/* Label above upload button - Figma style */}
       {label && (
         <Text style={[
-          styles.inputLabel, 
-          { 
+          styles.inputLabel,
+          {
             color: labelColor,
             textAlign: isRTL ? 'right' : 'left',
           }
@@ -580,7 +580,7 @@ export const CustomCheckbox: React.FC<CustomCheckboxProps> = ({
 
   return (
     <View style={[
-      styles.checkboxContainer, 
+      styles.checkboxContainer,
       { flexDirection: isRTL ? 'row-reverse' : 'row' },
       style
     ]}>
@@ -608,20 +608,15 @@ export const CustomCheckbox: React.FC<CustomCheckboxProps> = ({
         )}
       </TouchableOpacity>
       {label && (
-        <TouchableOpacity
-          onPress={onPress}
-          disabled={disabled}
-          activeOpacity={0.7}
-          style={{ flex: 1 }}
-        >
+        <View style={{ flex: 1 }}>
           <Text style={[
-            styles.checkboxText, 
-            { 
+            styles.checkboxText,
+            {
               color: colors.textSecondary,
               textAlign: isRTL ? 'right' : 'left',
             }
           ]}>
-            {label}{' '}
+            <Text onPress={onPress}>{label}{' '}</Text>
             {linkText && (
               <Text
                 style={[styles.checkboxLink, { color: colors.primary }]}
@@ -631,13 +626,13 @@ export const CustomCheckbox: React.FC<CustomCheckboxProps> = ({
               </Text>
             )}
           </Text>
-        </TouchableOpacity>
+        </View>
       )}
       {error && (
         <Text style={[
-          styles.errorText, 
-          { 
-            color: colors.error, 
+          styles.errorText,
+          {
+            color: colors.error,
             marginTop: 4,
             textAlign: isRTL ? 'right' : 'left',
           }

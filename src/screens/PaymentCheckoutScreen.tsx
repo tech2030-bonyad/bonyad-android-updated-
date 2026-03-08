@@ -64,6 +64,9 @@ export default function PaymentCheckoutScreen({
   }, []);
 
   const initializeCheckout = async () => {
+    console.log('🔥 [PaymentCheckout] initializeCheckout called');
+    console.log('   checkoutRequest:', JSON.stringify(checkoutRequest, null, 2));
+    
     try {
       setIsLoading(true);
       const request: CreateCheckoutRequest = {
@@ -74,10 +77,12 @@ export default function PaymentCheckoutScreen({
         shopperResultUrl: `${getServerBaseUrl()}/payment/result?checkoutId={checkoutId}`,
       };
 
+      console.log('📤 [PaymentCheckout] Calling createCheckout API...');
       const response = await createCheckout(request);
+      console.log('✅ [PaymentCheckout] createCheckout response:', JSON.stringify(response, null, 2));
       setCheckoutData(response);
     } catch (error: any) {
-      console.error('Error creating checkout:', error);
+      console.error('❌ [PaymentCheckout] Error creating checkout:', error);
       showError(error.message || t('Failed to initialize payment'), t('Error'));
     } finally {
       setIsLoading(false);

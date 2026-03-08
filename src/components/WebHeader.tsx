@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import { useTheme } from '../context/ThemeContext';
+import BonyadLogo from './BonyadLogo';
 import { useFontFamily } from '../context/FontContext';
 import { useTranslation } from 'react-i18next';
 
@@ -57,7 +57,7 @@ export default function WebHeader({
   }
 
   const userConfig = {
-    primaryColor: '#0080E0',
+    primaryColor: '#00549B',
     secondaryColor: '#E3F2FD',
   };
 
@@ -80,11 +80,7 @@ export default function WebHeader({
           style={styles.logoContainer}
           onPress={onNavigateToHome || onNavigateToOverview}
         >
-          <Image 
-            source={require('../../assets/bonyad-logo.svg')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
+          <BonyadLogo size="medium" />
         </TouchableOpacity>
 
         {/* Navigation Links */}
@@ -273,6 +269,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   logo: {
+    width: 140,
+    height: 40,
+  },
+  logoSvg: {
     width: 140,
     height: 40,
   },

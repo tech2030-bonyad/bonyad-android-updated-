@@ -6,10 +6,13 @@ import { showError } from './alert';
 interface ValidateTokenResponse {
   valid: boolean;
   message: string;
+  token?: string;
   userId?: number;
   phoneNumber?: string;
   role?: string;
   status?: string;
+  onboarded?: boolean;
+  profileComplete?: boolean;
   user?: {
     id: number;
     userId: string;
@@ -17,6 +20,8 @@ interface ValidateTokenResponse {
     phoneNumber: string;
     role: string;
     status: string;
+    onboarded?: boolean;
+    profileComplete?: boolean;
     [key: string]: any;
   };
 }
@@ -24,7 +29,7 @@ interface ValidateTokenResponse {
 /**
  * Validates a JWT token with the backend API
  * @param token The JWT token to validate
- * @returns Promise with validation result
+ * @returns Promise with validation result and user data
  */
 export const validateToken = async (token: string): Promise<ValidateTokenResponse | null> => {
   try {
@@ -39,9 +44,22 @@ export const validateToken = async (token: string): Promise<ValidateTokenRespons
 
     const data = await response.json();
 
-    if (response.ok && data.valid) {
+    // API returns 200 with user data when token is valid
+    if (response.ok && data.user) {
       console.log('✅ Token validated successfully');
-      return data;
+      // Map API response to ValidateTokenResponse format
+      return {
+        valid: true,
+        message: data.message || 'Token is valid',
+        token: data.token || token,
+        userId: data.user?.id,
+        phoneNumber: data.user?.phoneNumber,
+        role: data.user?.role,
+        status: data.user?.status,
+        onboarded: data.user?.onboarded,
+        profileComplete: data.user?.profileComplete,
+        user: data.user,
+      };
     } else {
       console.log('❌ Token validation failed:', data.message);
       return null;
@@ -52,17 +70,21 @@ export const validateToken = async (token: string): Promise<ValidateTokenRespons
   }
 };
 
+export interface AuthResult {
+  token: string;
+  userId: number;
+  role: string;
+  user: any;
+  onboarded: boolean;
+  profileComplete: boolean;
+}
+
 /**
  * Checks if user is authenticated
  * Validates token with backend API and returns user data if valid
  * Returns null if no token exists or token is invalid
  */
-export const checkAuthentication = async (): Promise<{
-  token: string;
-  userId: number;
-  role: string;
-  user: any;
-} | null> => {
+export const checkAuthentication = async (): Promise<AuthResult | null> => {
   try {
     // Get token from storage
     const token = await storage.getAuthToken();
@@ -82,7 +104,7 @@ export const checkAuthentication = async (): Promise<{
       return null;
     }
 
-    // Token is valid - get user data from validation result or storage
+    // Token is valid - get user data from validation result
     const userId = validationResult.userId || validationResult.user?.id || await storage.getUserId() || 0;
     const role = validationResult.role || validationResult.user?.role || await storage.getUserRole() || '';
     
@@ -96,12 +118,18 @@ export const checkAuthentication = async (): Promise<{
       userRole = 'USER'; // Default to USER
     }
 
+    // Get onboarded and profileComplete from user data
+    const onboarded = validationResult.user?.onboarded ?? validationResult.onboarded ?? true;
+    const profileComplete = validationResult.user?.profileComplete ?? validationResult.profileComplete ?? true;
+
     console.log('✅ Token validated successfully');
     console.log('   User ID:', userId);
     console.log('   Role:', userRole);
+    console.log('   Onboarded:', onboarded);
+    console.log('   Profile Complete:', profileComplete);
     
     return {
-      token,
+      token: validationResult.token || token,
       userId,
       role: userRole,
       user: validationResult.user || {
@@ -110,7 +138,11 @@ export const checkAuthentication = async (): Promise<{
         phoneNumber: validationResult.phoneNumber || '',
         name: validationResult.user?.name || '',
         status: validationResult.status || validationResult.user?.status || 'ACTIVE',
+        onboarded,
+        profileComplete,
       },
+      onboarded,
+      profileComplete,
     };
   } catch (error) {
     console.error('❌ Error checking authentication:', error);

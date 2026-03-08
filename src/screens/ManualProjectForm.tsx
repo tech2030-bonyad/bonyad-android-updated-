@@ -31,6 +31,10 @@ interface ManualProjectFormProps {
   technician?: any;
   onBack: () => void;
   onSuccess?: () => void;
+  initialCategoryId?: number;
+  initialCategoryName?: string;
+  initialSubcategoryId?: number;
+  initialSubcategoryName?: string;
 }
 
 interface ServiceCategory {
@@ -63,6 +67,10 @@ export default function ManualProjectForm({
   technician,
   onBack,
   onSuccess,
+  initialCategoryId,
+  initialCategoryName,
+  initialSubcategoryId,
+  initialSubcategoryName,
 }: ManualProjectFormProps) {
   const { t, i18n } = useTranslation();
   const { colors, theme } = useTheme();
@@ -80,10 +88,10 @@ export default function ManualProjectForm({
 
   // Form state
   const [description, setDescription] = useState('');
-  const [selectedCategoryId, setSelectedCategoryId] = useState<number>(0);
-  const [categoryDisplay, setCategoryDisplay] = useState('');
-  const [selectedSubcategoryId, setSelectedSubcategoryId] = useState<number>(0);
-  const [subcategoryDisplay, setSubcategoryDisplay] = useState('');
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number>(initialCategoryId || 0);
+  const [categoryDisplay, setCategoryDisplay] = useState(initialCategoryName || '');
+  const [selectedSubcategoryId, setSelectedSubcategoryId] = useState<number>(initialSubcategoryId || 0);
+  const [subcategoryDisplay, setSubcategoryDisplay] = useState(initialSubcategoryName || '');
   const [budget, setBudget] = useState('');
   const [budgetUnspecified, setBudgetUnspecified] = useState(false);
   const [address, setAddress] = useState('');
@@ -696,7 +704,7 @@ export default function ManualProjectForm({
                   style={[styles.budgetInput, { color: textBody }]}
                   value={budget}
                   onChangeText={setBudget}
-                  placeholder="0"
+                  placeholder={t('Enter amount')}
                   placeholderTextColor={textSecondary}
                   keyboardType="numeric"
                 />

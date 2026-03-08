@@ -55,12 +55,12 @@ Added new translations for language toggle:
 ## API Endpoints Used
 
 ### Signup (User)
-- **URL**: `https://glynda-unvexatious-felisa.ngrok-free.dev/api/users/register`
+- **URL**: `https://bonyad-app-nyayeditqq-ww.a.run.app/api/users/register`}, {
 - **Method**: POST
 - **Status**: 201 (Created)
 
 ### Signup (Technician)
-- **URL**: `https://glynda-unvexatious-felisa.ngrok-free.dev/api/users/register-with-files`
+- **URL**: `https://bonyad-app-nyayeditqq-ww.a.run.app/api/users/register-with-files`}]}  ,  
 - **Method**: POST
 - **Status**: 201 (Created)
 

@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import { API_BASE_URL } from '../config/api';
 
 // OpenAI API Key (stored in environment variables in production)
-const OPENAI_API_KEY = '';
+const OPENAI_API_KEY = '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';
 
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 

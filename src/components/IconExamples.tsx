@@ -21,7 +21,7 @@ import {
  */
 export default function IconExamples() {
   const iconSize = 28;
-  const iconColor = '#0080E0';
+  const iconColor = '#00549B';
 
   return (
     <ScrollView style={styles.container}>
@@ -175,7 +175,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#0080E0',
+    color: '#00549B',
     marginBottom: 12,
   },
   iconRow: {
@@ -193,7 +193,7 @@ const styles = StyleSheet.create({
   },
   footerText: {
     fontSize: 14,
-    color: '#0080E0',
+    color: '#00549B',
     textAlign: 'center',
   },
 });

@@ -573,7 +573,7 @@ struct ConversationalAIForm: View {
             throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid service category"])
         }
         
-        let apiURL = "https://glynda-unvexatious-felisa.ngrok-free.dev/api/projects/create"
+        let apiURL = "https://bonyad-app-nyayeditqq-ww.a.run.app/api/projects/create"
         guard let url = URL(string: apiURL) else {
             throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])
         }
@@ -698,7 +698,7 @@ struct ConversationalAIForm: View {
         token: String
     ) async throws -> Int {
         
-        let apiURL = "https://glynda-unvexatious-felisa.ngrok-free.dev/api/phases"
+        let apiURL = "https://bonyad-app-nyayeditqq-ww.a.run.app/api/phases"
         guard let url = URL(string: apiURL) else {
             throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])
         }

@@ -4,6 +4,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking, Platform
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 
 interface ContactScreenProps {
   onBack?: () => void;
@@ -13,6 +14,7 @@ const CONTACT_EMAIL = 'support@bonyad.com';
 const CONTACT_PHONE = '+966111234567';
 
 export default function ContactScreen({ onBack }: ContactScreenProps) {
+  const { t } = useTranslation();
   const { colors } = useTheme();
   const { fontFamily, scaledSize } = useFontFamily();
 
@@ -29,22 +31,22 @@ export default function ContactScreen({ onBack }: ContactScreenProps) {
       <View style={styles.header}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <Ionicons name="arrow-back" size={22} color={colors.text} />
-          <Text style={[styles.backText, { color: colors.text, fontSize: scaledSize(16) }]}>Back</Text>
+          <Text style={[styles.backText, { color: colors.text, fontSize: scaledSize(16) }]}>{t('Back')}</Text>
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(20) }]}>Contact Us</Text>
+        <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(20) }]}>{t('Contact Us')}</Text>
         <View style={{ width: 60 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
-          <Text style={[styles.title, { color: colors.text, fontSize: scaledSize(22) }]}>We're here to help</Text>
+          <Text style={[styles.title, { color: colors.text, fontSize: scaledSize(22) }]}>{t("We're here to help")}</Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary, fontSize: scaledSize(16) }]}>
-            Reach out to the Bonyad team for support, partnerships, media inquiries, or general questions.
+            {t('contact.subtitle')}
           </Text>
         </View>
 
         <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
-          <Text style={[styles.sectionLabel, { color: colors.textSecondary, fontSize: scaledSize(12) }]}>Email</Text>
+          <Text style={[styles.sectionLabel, { color: colors.textSecondary, fontSize: scaledSize(12) }]}>{t('Email')}</Text>
           <TouchableOpacity onPress={handleEmailPress} style={styles.contactRow}>
             <Ionicons name="mail-outline" size={22} color={colors.primary} />
             <Text style={[styles.contactValue, { color: colors.text, fontSize: scaledSize(16) }]}>{CONTACT_EMAIL}</Text>
@@ -52,7 +54,7 @@ export default function ContactScreen({ onBack }: ContactScreenProps) {
 
           <View style={styles.divider} />
 
-          <Text style={[styles.sectionLabel, { color: colors.textSecondary, fontSize: scaledSize(12) }]}>Phone</Text>
+          <Text style={[styles.sectionLabel, { color: colors.textSecondary, fontSize: scaledSize(12) }]}>{t('Phone')}</Text>
           <TouchableOpacity onPress={handlePhonePress} style={styles.contactRow}>
             <Ionicons name="call-outline" size={22} color={colors.primary} />
             <Text style={[styles.contactValue, { color: colors.text, fontSize: scaledSize(16) }]}>{CONTACT_PHONE}</Text>
@@ -60,11 +62,11 @@ export default function ContactScreen({ onBack }: ContactScreenProps) {
         </View>
 
         <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
-          <Text style={[styles.sectionLabel, { color: colors.textSecondary, fontSize: scaledSize(12) }]}>Our Offices</Text>
+          <Text style={[styles.sectionLabel, { color: colors.textSecondary, fontSize: scaledSize(12) }]}>{t('Our Offices')}</Text>
           <View style={styles.officeRow}>
             <Ionicons name="location-outline" size={20} color={colors.primary} style={{ marginTop: 2 }} />
             <View style={styles.officeDetails}>
-              <Text style={[styles.officeTitle, { color: colors.text, fontSize: scaledSize(16) }]}>Riyadh Headquarters</Text>
+              <Text style={[styles.officeTitle, { color: colors.text, fontSize: scaledSize(16) }]}>{t('Riyadh Headquarters')}</Text>
               <Text style={[styles.officeAddress, { color: colors.textSecondary, fontSize: scaledSize(14) }]}>
                 King Fahd Road, Financial District{'\n'}Riyadh, Saudi Arabia
               </Text>
@@ -74,7 +76,7 @@ export default function ContactScreen({ onBack }: ContactScreenProps) {
           <View style={styles.officeRow}>
             <Ionicons name="location-outline" size={20} color={colors.primary} style={{ marginTop: 2 }} />
             <View style={styles.officeDetails}>
-              <Text style={[styles.officeTitle, { color: colors.text, fontSize: scaledSize(16) }]}>Jeddah Office</Text>
+              <Text style={[styles.officeTitle, { color: colors.text, fontSize: scaledSize(16) }]}>{t('Jeddah Office')}</Text>
               <Text style={[styles.officeAddress, { color: colors.textSecondary, fontSize: scaledSize(14) }]}>
                 Prince Sultan Street{'\n'}Jeddah, Saudi Arabia
               </Text>
@@ -83,12 +85,12 @@ export default function ContactScreen({ onBack }: ContactScreenProps) {
         </View>
 
         <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
-          <Text style={[styles.sectionLabel, { color: colors.textSecondary, fontSize: scaledSize(12) }]}>Business Hours</Text>
+          <Text style={[styles.sectionLabel, { color: colors.textSecondary, fontSize: scaledSize(12) }]}>{t('Business Hours')}</Text>
           <Text style={[styles.businessHours, { color: colors.text, fontSize: scaledSize(16) }]}>
-            Sunday - Thursday{'\n'}9:00 AM – 6:00 PM KSA Time
+            {t('contact.businessHours')}
           </Text>
           <Text style={[styles.note, { color: colors.textSecondary, fontSize: scaledSize(13) }]}>
-            Our team will respond within 24 hours. For urgent matters, please call our support line.
+            {t('contact.note')}
           </Text>
         </View>
       </ScrollView>

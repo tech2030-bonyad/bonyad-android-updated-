@@ -20,7 +20,7 @@ interface AnimatedProjectTypeToggleProps {
 
 // Blue Toggle Colors
 const blueToggleColors = {
-  blueActive: '#0080E0',        // Primary blue
+  blueActive: '#00549B',        // Primary blue
   blueBg: '#E6F2FF',         // Light blue background
   textDark: '#2D2D2D',       // Dark text color
 };
