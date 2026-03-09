@@ -16,8 +16,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { API_ENDPOINTS, buildApiUrl, buildApiUrlWithParams } from '../config/api';
+import { buildApiUrl } from '../config/api';
 import { storage } from '../utils/storage';
+import { getRequestDetails } from '../services/SmallTaskService';
 import SmallTaskPhaseBar from '../components/SmallTaskPhaseBar';
 import SmallTaskStatusTimeline from '../components/SmallTaskStatusTimeline';
 import SmallTaskReviewForm from '../components/SmallTaskReviewForm';
@@ -150,24 +151,15 @@ export default function CompletedSmallTaskScreen({
 
   const loadTaskDetails = async () => {
     try {
-      const token = await storage.getAuthToken();
-      if (!token) return;
-
-      const url = buildApiUrlWithParams(API_ENDPOINTS.SMALL_TASKS.REQUEST_DETAILS, { id: task.id });
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setTaskDetails(data);
-        if (data.completedAt || data.updatedAt) {
-          setCompletedAt(data.completedAt || data.updatedAt);
-        }
+      const data = await getRequestDetails(task.id);
+      setTaskDetails({
+        ...data,
+        taskType: data.taskTypeId
+          ? { id: data.taskTypeId, nameAr: data.taskTypeNameAr || '', nameEn: data.taskTypeNameEn || '' }
+          : undefined,
+      } as SmallTaskRequest);
+      if (data.completedAt || (data as { updatedAt?: string }).updatedAt) {
+        setCompletedAt(data.completedAt || (data as { updatedAt?: string }).updatedAt!);
       }
     } catch (error) {
       console.error('Error loading task details:', error);
@@ -378,17 +370,28 @@ export default function CompletedSmallTaskScreen({
 
           {/* Task Info - Direct Fields (No Card) */}
           <View style={styles.taskInfoSection}>
-            {/* Task Icon and Name */}
+            {/* Task Icon and Name + Request ID (same as web) */}
             <View style={styles.taskHeaderSection}>
               <View style={[styles.iconContainer, { backgroundColor: COLORS.green10 }]}>
                 <Ionicons name="checkmark-circle" size={32} color={COLORS.green80} />
               </View>
               <View style={styles.taskInfo}>
+                <Text style={[styles.requestIdText, { color: colors.textSecondary }]}>#{taskDetails.id}</Text>
                 <Text style={[styles.taskName, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '700' }]}>
                   {taskName}
                 </Text>
               </View>
             </View>
+
+            {/* Created date (same as web) */}
+            {taskDetails.createdAt && (
+              <View style={styles.fieldSection}>
+                <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{t('Created')}</Text>
+                <Text style={[styles.fieldValue, { color: colors.text }]}>
+                  {formatDate(taskDetails.createdAt)}
+                </Text>
+              </View>
+            )}
 
             {/* Description */}
             {taskDetails.description && (
@@ -648,6 +651,11 @@ const styles = StyleSheet.create({
   },
   taskInfo: {
     flex: 1,
+  },
+  requestIdText: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginBottom: 6,
   },
   taskName: {
     fontSize: 22,

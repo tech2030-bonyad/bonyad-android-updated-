@@ -1,22 +1,9 @@
 /**
- * SmallTasksListScreen - Displays a list of small tasks with filtering and search capabilities
- * 
- * Features:
- * - Displays tasks based on filter: 'available', 'my-bids', 'in-progress', 'completed'
- * - Search functionality to filter tasks by name, description, or address
- * - Status filter dropdown to filter by task status (Pending, In Progress, Completed, etc.)
- * - Pull-to-refresh to reload tasks
- * - Handles both user and technician views
- * - Safe taskType access with fallback values
- * 
- * Filter Behavior:
- * - 'available': Shows PENDING or BID_RECEIVED tasks (for technicians)
- * - 'my-bids': Shows tasks where technician has submitted bids
- * - 'in-progress': Shows IN_PROGRESS or ACCEPTED tasks
- * - 'completed': Shows COMPLETED tasks
- * 
- * For users: Shows their own created requests
- * For technicians: Shows available tasks or their bids based on filter
+ * SmallTasksListScreen - Displays a list of small tasks with filtering and search.
+ *
+ * - Displays tasks based on filter prop: 'available', 'my-bids', 'in-progress', 'completed'
+ * - Search + status filter dropdown (All, Pending, In Progress, Completed, etc.)
+ * - Pull-to-refresh
  */
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -36,8 +23,8 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { API_ENDPOINTS, buildApiUrl } from '../config/api';
 import { storage } from '../utils/storage';
+import { getMyRequests, getAvailableRequests, getMyBids } from '../services/SmallTaskService';
 
 interface SmallTaskRequest {
   id: number;
@@ -53,7 +40,9 @@ interface SmallTaskRequest {
   status: string;
   createdAt: string;
   bidCount?: number;
+  bidsCount?: number;
   amount?: number;
+  userName?: string;
 }
 
 interface SmallTasksListScreenProps {
@@ -61,6 +50,8 @@ interface SmallTasksListScreenProps {
   onTaskPress: (task: SmallTaskRequest) => void;
   filter?: 'available' | 'my-bids' | 'in-progress' | 'completed';
   refreshTrigger?: number;
+  /** When set, used for available vs my-requests (avoids async role delay on Android) */
+  isTechnician?: boolean;
 }
 
 export default function SmallTasksListScreen({
@@ -68,6 +59,7 @@ export default function SmallTasksListScreen({
   onTaskPress,
   filter = 'available',
   refreshTrigger,
+  isTechnician: propIsTechnician,
 }: SmallTasksListScreenProps) {
   const { t, i18n } = useTranslation();
   const { colors, theme } = useTheme();
@@ -80,7 +72,7 @@ export default function SmallTasksListScreen({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
-  
+
   const dropdownAnimation = useRef(new Animated.Value(0)).current;
   const rotateAnimation = useRef(new Animated.Value(0)).current;
 
@@ -90,9 +82,8 @@ export default function SmallTasksListScreen({
 
   useEffect(() => {
     loadTasks();
-  }, [filter, refreshTrigger]);
+  }, [filter, refreshTrigger, propIsTechnician]);
 
-  // Filter Dropdown Animation
   useEffect(() => {
     if (showFilterDropdown) {
       Animated.parallel([
@@ -127,38 +118,8 @@ export default function SmallTasksListScreen({
     setShowFilterDropdown(!showFilterDropdown);
   };
 
-  // Get all possible task statuses (per README flow)
-  // PENDING → ACCEPTED (bid accepted, payment required) → IN_PROGRESS (paid) → COMPLETED
   const getAllStatuses = () => {
     return ['PENDING', 'ACCEPTED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'];
-  };
-
-  // Get unique task statuses from tasks (for reference/counting)
-  const getUniqueStatuses = () => {
-    const statuses = new Set<string>();
-    tasks.forEach(task => {
-      const status = (task.status || '').trim().toUpperCase();
-      if (status) {
-        statuses.add(status);
-      }
-    });
-    return Array.from(statuses).sort();
-  };
-
-  const handleStatusSelect = (statusValue: string) => {
-    if (statusValue === 'All') {
-      setSelectedCategory('All');
-    } else {
-      setSelectedCategory(statusValue);
-    }
-    setShowFilterDropdown(false);
-  };
-
-  const getStatusFilterLabel = (statusValue: string) => {
-    if (statusValue === 'All') {
-      return t('All');
-    }
-    return getStatusLabel(statusValue);
   };
 
   const getStatusLabel = (status: string) => {
@@ -173,11 +134,20 @@ export default function SmallTasksListScreen({
     return statusMap[status.toUpperCase()] || status;
   };
 
-  // Calculate dropdown height based on number of status options
+  const getStatusFilterLabel = (statusValue: string) => {
+    if (statusValue === 'All') return t('All');
+    return getStatusLabel(statusValue);
+  };
+
+  const handleStatusSelect = (statusValue: string) => {
+    setSelectedCategory(statusValue === 'All' ? 'All' : statusValue);
+    setShowFilterDropdown(false);
+  };
+
   const getDropdownHeight = () => {
     const allStatuses = getAllStatuses();
-    const optionCount = 1 + allStatuses.length; // "All" + statuses
-    return Math.min(optionCount * 48, 288); // 48px per option, max 288px (6 items visible)
+    const optionCount = 1 + allStatuses.length;
+    return Math.min(optionCount * 48, 288);
   };
 
   const dropdownHeight = dropdownAnimation.interpolate({
@@ -196,172 +166,109 @@ export default function SmallTasksListScreen({
   });
 
   const loadTasks = async () => {
-    console.log('═══════════════════════════════════════════════════════════');
-    console.log('🔄 [SmallTasksListScreen] Loading small tasks...');
-    console.log('═══════════════════════════════════════════════════════════');
-    
     try {
       setIsLoading(true);
       const token = await storage.getAuthToken();
       const role = await storage.getUserRole();
-      const isTechnician = role?.toUpperCase() === 'TECHNICIAN';
+      const isTechnician = propIsTechnician ?? (role?.toUpperCase() === 'TECHNICIAN');
 
-      console.log('📋 [SmallTasksListScreen] Filter:', filter);
-      console.log('👤 [SmallTasksListScreen] User Role:', role);
-      console.log('🔧 [SmallTasksListScreen] Is Technician:', isTechnician);
-      console.log('🔑 [SmallTasksListScreen] Has Token:', !!token);
+      if (__DEV__ && filter === 'available') {
+        console.log('🔍 [SmallTasksListScreen] loadTasks role=', role, 'propIsTechnician=', propIsTechnician, 'isTechnician=', isTechnician, 'filter=', filter);
+      }
 
-      // Token is required for authenticated endpoints
       if (!token) {
-        console.error('❌ [SmallTasksListScreen] No authentication token found');
         setTasks([]);
         setIsLoading(false);
         return;
       }
 
-      let url: string;
-      const headers: { [key: string]: string } = {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`, // Always include token from async storage
-      };
+      let allTasks: SmallTaskRequest[] = [];
 
       if (filter === 'available' && isTechnician) {
-        // Technicians see available tasks
-        url = buildApiUrl(API_ENDPOINTS.SMALL_TASKS.REQUESTS_AVAILABLE);
-        console.log('📡 [SmallTasksListScreen] Endpoint: REQUESTS_AVAILABLE (Technician)');
+        const requests = await getAvailableRequests();
+        allTasks = requests.map((task: { taskTypeId?: number; taskTypeNameAr?: string; taskTypeNameEn?: string; userName?: string; bidsCount?: number; [k: string]: unknown }) => {
+          const existingType = task.taskType && typeof task.taskType === 'object' && (task.taskType as any).id != null
+            ? { id: (task.taskType as any).id, nameAr: (task.taskType as any).nameAr || '', nameEn: (task.taskType as any).nameEn || '' }
+            : null;
+          const taskType = existingType ?? (task.taskTypeId
+            ? { id: task.taskTypeId, nameAr: task.taskTypeNameAr || '', nameEn: task.taskTypeNameEn || '' }
+            : { id: 0, nameEn: 'Task', nameAr: 'مهمة' });
+          return {
+            ...task,
+            taskType,
+            bidCount: (task.bidsCount ?? (task as any).bidCount) ?? 0,
+            userName: task.userName,
+          } as SmallTaskRequest;
+        });
       } else if (filter === 'my-bids' && isTechnician) {
-        // Technicians see their bids
-        url = buildApiUrl(API_ENDPOINTS.SMALL_TASKS.MY_BIDS);
-        console.log('📡 [SmallTasksListScreen] Endpoint: MY_BIDS (Technician)');
+        const { bids } = await getMyBids();
+        allTasks = bids.map((bid: { smallTaskRequestId?: number; requestId?: number; request?: SmallTaskRequest; taskType?: { nameAr: string; nameEn: string }; description?: string; address?: string; latitude?: number; longitude?: number; status?: string; createdAt?: string; price?: number; amount?: number; estimatedDuration?: number }) => ({
+          id: bid.smallTaskRequestId || bid.requestId || 0,
+          taskType: bid.request?.taskType || bid.taskType || { nameEn: 'Task', nameAr: 'مهمة' },
+          description: bid.request?.description || bid.description || '',
+          address: bid.request?.address || '',
+          latitude: bid.request?.latitude || 0,
+          longitude: bid.request?.longitude || 0,
+          status: bid.request?.status || bid.status || 'PENDING',
+          createdAt: bid.createdAt || '',
+          bidCount: 0,
+          amount: bid.price || bid.amount,
+        })) as SmallTaskRequest[];
       } else if (!isTechnician) {
-        // Users see their own created requests - requires token
-        url = buildApiUrl(API_ENDPOINTS.SMALL_TASKS.MY_REQUESTS);
-        console.log('📡 [SmallTasksListScreen] Endpoint: MY_REQUESTS (User)');
+        const requests = await getMyRequests();
+        allTasks = requests.map((task: { taskTypeId?: number; taskTypeNameAr?: string; taskTypeNameEn?: string; userName?: string; bidsCount?: number; [k: string]: unknown }) => ({
+          ...task,
+          taskType: task.taskTypeId
+            ? { id: task.taskTypeId, nameAr: task.taskTypeNameAr || '', nameEn: task.taskTypeNameEn || '' }
+            : { id: 0, nameEn: 'Task', nameAr: 'مهمة' },
+          bidCount: (task.bidsCount ?? (task as any).bidCount) ?? 0,
+          userName: task.userName,
+        })) as SmallTaskRequest[];
       } else {
-        // Default: available endpoint
-        url = buildApiUrl(API_ENDPOINTS.SMALL_TASKS.REQUESTS_AVAILABLE);
-        console.log('📡 [SmallTasksListScreen] Endpoint: REQUESTS_AVAILABLE (Default)');
+        const requests = await getAvailableRequests();
+        allTasks = requests.map((task: { taskTypeId?: number; taskTypeNameAr?: string; taskTypeNameEn?: string; userName?: string; bidsCount?: number; [k: string]: unknown }) => ({
+          ...task,
+          taskType: task.taskTypeId
+            ? { id: task.taskTypeId, nameAr: task.taskTypeNameAr || '', nameEn: task.taskTypeNameEn || '' }
+            : { id: 0, nameEn: 'Task', nameAr: 'مهمة' },
+          bidCount: (task.bidsCount ?? (task as any).bidCount) ?? 0,
+          userName: task.userName,
+        })) as SmallTaskRequest[];
       }
 
-      console.log('🌐 [SmallTasksListScreen] URL:', url);
-      console.log('📤 [SmallTasksListScreen] Method: GET');
-      console.log('📤 [SmallTasksListScreen] Headers:', {
-        'Content-Type': headers['Content-Type'],
-        'Authorization': `Bearer ${token.substring(0, 20)}...`,
-      });
-
-      const response = await fetch(url, {
-        method: 'GET',
-        headers,
-      });
-
-      console.log('📥 [SmallTasksListScreen] Response Status:', response.status);
-      console.log('📥 [SmallTasksListScreen] Response OK:', response.ok);
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log('📦 [SmallTasksListScreen] Response Data:', JSON.stringify(data, null, 2));
-        
-        let allTasks: SmallTaskRequest[] = [];
-        
-        if (filter === 'my-bids') {
-          console.log('🔄 [SmallTasksListScreen] Transforming bids to requests...');
-          console.log('📊 [SmallTasksListScreen] Bids Count:', data.bids?.length || 0);
-          
-          // Transform bids to requests
-          allTasks = data.bids?.map((bid: any) => ({
-            id: bid.smallTaskRequestId || bid.requestId,
-            taskType: bid.request?.taskType || bid.taskType || { nameEn: 'Task', nameAr: 'مهمة' },
-            description: bid.request?.description || bid.description || '',
-            address: bid.request?.address || '',
-            latitude: bid.request?.latitude || 0,
-            longitude: bid.request?.longitude || 0,
-            status: bid.request?.status || bid.status || 'PENDING',
-            createdAt: bid.createdAt || '',
-            bidCount: 0,
-            amount: bid.price || bid.amount,
-            estimatedDuration: bid.estimatedDuration,
-          })) || [];
-          
-          console.log('✅ [SmallTasksListScreen] Transformed Tasks Count:', allTasks.length);
-        } else {
-          console.log('🔄 [SmallTasksListScreen] Processing requests...');
-          console.log('📊 [SmallTasksListScreen] Requests Count:', data.requests?.length || data.count || 0);
-          
-          // Ensure all tasks have a valid taskType
-          allTasks = (data.requests || []).map((task: any) => ({
-            ...task,
-            taskType: task.taskType || { nameEn: 'Task', nameAr: 'مهمة' },
-          }));
-          
-          console.log('✅ [SmallTasksListScreen] Processed Tasks Count:', allTasks.length);
-        }
-
-        // Log task statuses before filtering
-        const statusCounts: { [key: string]: number } = {};
-        allTasks.forEach(task => {
-          const status = (task.status || 'UNKNOWN').toUpperCase();
-          statusCounts[status] = (statusCounts[status] || 0) + 1;
-        });
-        console.log('📊 [SmallTasksListScreen] Task Status Distribution:', statusCounts);
-
         // Filter by status based on filter prop
-        // Note: We load all tasks and let the dropdown handle status filtering
-        // This ensures that when a user selects a specific status from dropdown, 
-        // all tasks of that status are available to be shown
         let filteredByStatus = allTasks;
         if (filter === 'in-progress') {
-          // For in-progress filter, show tasks that are actively being worked on
-          // But include all statuses so dropdown can filter them
           filteredByStatus = allTasks.filter(task => {
             const status = (task.status || '').toUpperCase();
-            // Include all active statuses, not just IN_PROGRESS
             return status === 'IN_PROGRESS' || status === 'ACCEPTED' || 
                    status === 'ASSIGNED' || status === 'PENDING' || 
                    status === 'BID_RECEIVED';
           });
-          console.log('🔍 [SmallTasksListScreen] Filtered (in-progress):', filteredByStatus.length);
         } else if (filter === 'completed') {
-          // For completed filter, only show completed tasks
           filteredByStatus = allTasks.filter(task => {
             const status = (task.status || '').toUpperCase();
             return status === 'COMPLETED';
           });
-          console.log('🔍 [SmallTasksListScreen] Filtered (completed):', filteredByStatus.length);
         } else if (filter === 'available') {
-          // For available filter, load ALL non-completed tasks
-          // This ensures ACCEPTED/ASSIGNED tasks are available when selected from dropdown
+          // Same as web: only show tasks open for bidding (PENDING or AVAILABLE)
           filteredByStatus = allTasks.filter(task => {
             const status = (task.status || '').toUpperCase();
-            // Include all statuses except COMPLETED and CANCELLED
-            return status !== 'COMPLETED' && status !== 'CANCELLED';
+            return status === 'PENDING' || status === 'AVAILABLE';
           });
-          console.log('🔍 [SmallTasksListScreen] Filtered (available):', filteredByStatus.length);
+          if (__DEV__) {
+            console.log('📋 [SmallTasksListScreen] Available: PENDING/AVAILABLE:', filteredByStatus.length, 'of', allTasks.length);
+          }
         } else if (filter === 'my-bids') {
-          // For my-bids, show all bids regardless of status (dropdown will filter)
           filteredByStatus = allTasks;
-          console.log('🔍 [SmallTasksListScreen] Filtered (my-bids):', filteredByStatus.length);
-        } else {
-          // Default: show all tasks, let dropdown handle filtering
-          filteredByStatus = allTasks;
-          console.log('🔍 [SmallTasksListScreen] No status filter applied - showing all tasks');
         }
 
-        console.log('✅ [SmallTasksListScreen] Final Tasks Count:', filteredByStatus.length);
-        console.log('📋 [SmallTasksListScreen] Tasks:', filteredByStatus.map(t => ({
-          id: t.id,
-          taskType: t.taskType?.nameEn || 'Unknown',
-          status: t.status,
-        })));
+        // Sort by date (newest first) - same as web
+        filteredByStatus = [...filteredByStatus].sort((a, b) =>
+          new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+        );
 
         setTasks(filteredByStatus);
-        console.log('✅ [SmallTasksListScreen] Tasks loaded successfully');
-      } else {
-        const errorText = await response.text().catch(() => 'Unable to read error');
-        console.error('❌ [SmallTasksListScreen] Response not OK:', response.status);
-        console.error('❌ [SmallTasksListScreen] Error Response:', errorText);
-        setTasks([]);
-      }
     } catch (error: any) {
       console.error('❌ [SmallTasksListScreen] Error loading small tasks:', error);
       console.error('❌ [SmallTasksListScreen] Error Message:', error.message);
@@ -384,26 +291,35 @@ export default function SmallTasksListScreen({
     return new Intl.NumberFormat('en-US').format(budget);
   };
 
+  const formatDate = (dateString: string) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleDateString(i18n.language === 'ar' ? 'ar-SA' : 'en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  };
+
+  const getStatusColor = (status: string) => {
+    const s = (status || '').toUpperCase();
+    if (s === 'PENDING') return '#FFB703';
+    if (s === 'ACCEPTED' || s === 'ASSIGNED') return '#008B3E';
+    if (s === 'IN_PROGRESS') return '#8B5CF6';
+    if (s === 'COMPLETED') return '#008B3E';
+    if (s === 'CANCELLED') return '#FF3B30';
+    return colors.textSecondary || '#666666';
+  };
+
   const filteredTasks = tasks.filter(task => {
-    // Filter by status
     if (selectedCategory !== 'All') {
       let taskStatus = (task.status || '').trim().toUpperCase();
+      if (taskStatus === 'ASSIGNED') taskStatus = 'ACCEPTED';
       const selectedStatus = selectedCategory.toUpperCase().trim();
-      
-      // Normalize ASSIGNED to ACCEPTED (legacy status handling)
-      if (taskStatus === 'ASSIGNED') {
-        taskStatus = 'ACCEPTED';
-      }
-      
-      if (taskStatus !== selectedStatus) {
-        return false;
-      }
+      if (taskStatus !== selectedStatus) return false;
     }
-
-    // Filter by search query
     if (!searchQuery.trim()) return true;
     const query = searchQuery.toLowerCase();
-    // Safely access taskType with fallback
     const taskType = task.taskType || { nameEn: 'Task', nameAr: 'مهمة' };
     const taskName = i18n.language === 'ar' ? taskType.nameAr : taskType.nameEn;
     return (
@@ -439,9 +355,9 @@ export default function SmallTasksListScreen({
       >
         {/* Search Bar */}
         <View style={[
-          styles.searchContainer, 
-          { 
-            backgroundColor: colors.cardBackground, 
+          styles.searchContainer,
+          {
+            backgroundColor: colors.cardBackground,
             borderColor: colors.border,
             flexDirection: isRTL ? 'row-reverse' : 'row',
           }
@@ -449,8 +365,8 @@ export default function SmallTasksListScreen({
           <Feather name="search" size={20} color={colors.textSecondary} />
           <TextInput
             style={[
-              styles.searchInput, 
-              { 
+              styles.searchInput,
+              {
                 color: colors.text,
                 textAlign: isRTL ? 'right' : 'left',
               }
@@ -467,7 +383,7 @@ export default function SmallTasksListScreen({
           <TouchableOpacity
             style={[
               styles.filterButton,
-              { 
+              {
                 backgroundColor: colors.cardBackground,
                 borderColor: colors.border,
                 flexDirection: isRTL ? 'row-reverse' : 'row',
@@ -480,11 +396,7 @@ export default function SmallTasksListScreen({
               {getStatusFilterLabel(selectedCategory)}
             </Text>
             <Animated.View style={{ transform: [{ rotate: rotateInterpolate }] }}>
-              <Feather 
-                name="chevron-down" 
-                size={20} 
-                color={colors.primary} 
-              />
+              <Feather name="chevron-down" size={20} color={colors.primary} />
             </Animated.View>
           </TouchableOpacity>
 
@@ -505,12 +417,10 @@ export default function SmallTasksListScreen({
               showsVerticalScrollIndicator={false}
               bounces={false}
             >
-              {/* All Option */}
               <TouchableOpacity
                 style={[
                   styles.filterOption,
-                  selectedCategory === 'All' && styles.filterOptionActive,
-                  { 
+                  {
                     backgroundColor: selectedCategory === 'All' ? colors.primary + '15' : 'transparent',
                     borderBottomColor: colors.border,
                   },
@@ -531,14 +441,12 @@ export default function SmallTasksListScreen({
                 )}
               </TouchableOpacity>
 
-              {/* Task Statuses - Show all possible statuses per README flow */}
               {getAllStatuses().map((status, index, array) => (
                 <TouchableOpacity
                   key={status}
                   style={[
                     styles.filterOption,
-                    selectedCategory === status && styles.filterOptionActive,
-                    { 
+                    {
                       backgroundColor: selectedCategory === status ? colors.primary + '15' : 'transparent',
                       borderBottomColor: index < array.length - 1 ? colors.border : 'transparent',
                     },
@@ -578,6 +486,8 @@ export default function SmallTasksListScreen({
               // Safely access taskType with fallback
               const taskType = task.taskType || { nameEn: 'Task', nameAr: 'مهمة' };
               const taskName = i18n.language === 'ar' ? taskType.nameAr : taskType.nameEn;
+              const statusColor = getStatusColor(task.status);
+              const bidsCount = task.bidsCount ?? task.bidCount ?? 0;
               return (
                 <TouchableOpacity
                   key={task.id}
@@ -585,6 +495,21 @@ export default function SmallTasksListScreen({
                   onPress={() => onTaskPress(task)}
                   activeOpacity={0.7}
                 >
+                  {/* Row 1: Request #id + Status badge (same as web) */}
+                  <View style={[
+                    styles.cardHeaderRow,
+                    { flexDirection: isRTL ? 'row-reverse' : 'row' }
+                  ]}>
+                    <Text style={[styles.taskIdText, { color: colors.textSecondary }]}>
+                      #{task.id}
+                    </Text>
+                    <View style={[styles.statusBadge, { backgroundColor: statusColor + '20' }]}>
+                      <Text style={[styles.statusBadgeText, { color: statusColor }]}>
+                        {getStatusLabel(task.status)}
+                      </Text>
+                    </View>
+                  </View>
+
                   <View style={[
                     styles.taskHeader,
                     { flexDirection: isRTL ? 'row-reverse' : 'row' }
@@ -598,7 +523,7 @@ export default function SmallTasksListScreen({
                     ]} numberOfLines={1}>
                       {taskName}
                     </Text>
-                    {task.amount && (
+                    {task.amount != null && task.amount > 0 && (
                       <View style={[
                         styles.priceContainer,
                         { flexDirection: isRTL ? 'row-reverse' : 'row' }
@@ -614,6 +539,16 @@ export default function SmallTasksListScreen({
                       </View>
                     )}
                   </View>
+
+                  {task.userName ? (
+                    <Text style={[
+                      styles.userNameText,
+                      { color: colors.textSecondary, textAlign: isRTL ? 'right' : 'left' }
+                    ]} numberOfLines={1}>
+                      {task.userName}
+                    </Text>
+                  ) : null}
+
                   <Text style={[
                     styles.taskDescription, 
                     { 
@@ -639,20 +574,27 @@ export default function SmallTasksListScreen({
                           textAlign: isRTL ? 'right' : 'left',
                         }
                       ]} numberOfLines={1}>
-                        {task.address}
+                        {task.address || t('No address')}
                       </Text>
                     </View>
-                    {task.bidCount !== undefined && (
-                      <View style={[
-                        styles.bidCountContainer,
-                        { flexDirection: isRTL ? 'row-reverse' : 'row' }
-                      ]}>
-                        <Ionicons name="people-outline" size={14} color={colors.primary} />
-                        <Text style={[styles.bidCountText, { color: colors.primary }]}>
-                          {task.bidCount} {t('bids')}
-                        </Text>
-                      </View>
-                    )}
+                    <View style={[
+                      styles.cardInfoRow,
+                      { flexDirection: isRTL ? 'row-reverse' : 'row' }
+                    ]}>
+                      <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
+                      <Text style={[styles.cardInfoText, { color: colors.textSecondary }]}>
+                        {formatDate(task.createdAt)}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={[
+                    styles.bidCountRow,
+                    { flexDirection: isRTL ? 'row-reverse' : 'row' }
+                  ]}>
+                    <Ionicons name="hand-left-outline" size={14} color={colors.primary} />
+                    <Text style={[styles.bidCountText, { color: colors.primary }]}>
+                      {bidsCount} {t('Bids')}
+                    </Text>
                   </View>
                 </TouchableOpacity>
               );
@@ -701,6 +643,25 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginBottom: 12,
   },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  taskIdText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  statusBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
   taskHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -730,6 +691,10 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     lineHeight: 18,
   },
+  userNameText: {
+    fontSize: 12,
+    marginBottom: 4,
+  },
   taskFooter: {
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -742,6 +707,18 @@ const styles = StyleSheet.create({
   taskMetaText: {
     fontSize: 12,
     flex: 1,
+  },
+  cardInfoRow: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  cardInfoText: {
+    fontSize: 12,
+  },
+  bidCountRow: {
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 8,
   },
   bidCountContainer: {
     alignItems: 'center',
@@ -810,9 +787,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-  },
-  filterOptionActive: {
-    // Active state handled by backgroundColor
   },
   filterOptionText: {
     fontSize: 14,

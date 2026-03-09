@@ -16,8 +16,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { API_ENDPOINTS, buildApiUrl, buildApiUrlWithParams } from '../config/api';
 import { storage } from '../utils/storage';
+import { getRequestDetails, updateRequestStatus } from '../services/SmallTaskService';
 import SmallTaskPhaseBar from '../components/SmallTaskPhaseBar';
 import SmallTaskStatusTimeline from '../components/SmallTaskStatusTimeline';
 import SmallTaskProgressBar from '../components/SmallTaskProgressBar';
@@ -142,25 +142,15 @@ export default function InProgressSmallTaskScreen({
 
   const loadTaskDetails = async () => {
     try {
-      const token = await storage.getAuthToken();
-      if (!token) return;
-
-      const url = buildApiUrlWithParams(API_ENDPOINTS.SMALL_TASKS.REQUEST_DETAILS, { id: task.id });
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setTaskDetails(data);
-        // Calculate progress if available
-        if (data.progress) {
-          setProgress(data.progress);
-        }
+      const data = await getRequestDetails(task.id);
+      setTaskDetails({
+        ...data,
+        taskType: data.taskTypeId
+          ? { id: data.taskTypeId, nameAr: data.taskTypeNameAr || '', nameEn: data.taskTypeNameEn || '' }
+          : undefined,
+      } as SmallTaskRequest);
+      if ((data as { progress?: number }).progress != null) {
+        setProgress((data as { progress?: number }).progress!);
       }
     } catch (error) {
       console.error('Error loading task details:', error);
@@ -174,29 +164,10 @@ export default function InProgressSmallTaskScreen({
       async () => {
         setIsCompleting(true);
         try {
-          const token = await storage.getAuthToken();
-          if (!token) {
-            showError(t('Please login again'), t('Error'));
-            return;
-          }
-
-          const url = buildApiUrlWithParams(API_ENDPOINTS.SMALL_TASKS.UPDATE_STATUS, { id: task.id });
-          const response = await fetch(url, {
-            method: 'PATCH',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ status: 'COMPLETED' }),
-          });
-
-          if (response.ok) {
-            showSuccess(t('Task marked as completed'), t('Success'));
-            await loadData();
-            onSuccess?.();
-          } else {
-            showError(t('Failed to update status'), t('Error'));
-          }
+          await updateRequestStatus(task.id, 'COMPLETED');
+          showSuccess(t('Task marked as completed'), t('Success'));
+          await loadData();
+          onSuccess?.();
         } catch (error) {
           console.error('Error updating status:', error);
           showError(t('Error updating status'), t('Error'));
@@ -336,17 +307,28 @@ export default function InProgressSmallTaskScreen({
 
           {/* Task Info - Direct Fields (No Card) */}
           <View style={styles.taskInfoSection}>
-            {/* Task Icon and Name */}
+            {/* Task Icon and Name + Request ID (same as web) */}
             <View style={styles.taskHeaderSection}>
               <View style={[styles.iconContainer, { backgroundColor: colors.primary + '15' }]}>
                 <Ionicons name="construct" size={32} color={colors.primary} />
               </View>
               <View style={styles.taskInfo}>
+                <Text style={[styles.requestIdText, { color: colors.textSecondary }]}>#{taskDetails.id}</Text>
                 <Text style={[styles.taskName, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '700' }]}>
                   {taskName}
                 </Text>
               </View>
             </View>
+
+            {/* Created date (same as web) */}
+            {taskDetails.createdAt && (
+              <View style={styles.fieldSection}>
+                <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{t('Created')}</Text>
+                <Text style={[styles.fieldValue, { color: colors.text }]}>
+                  {new Date(taskDetails.createdAt).toLocaleDateString(i18n.language === 'ar' ? 'ar-SA' : 'en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                </Text>
+              </View>
+            )}
 
             {/* Description */}
             {taskDetails.description && (
@@ -562,6 +544,11 @@ const styles = StyleSheet.create({
   },
   taskInfo: {
     flex: 1,
+  },
+  requestIdText: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginBottom: 6,
   },
   taskName: {
     fontSize: 22,

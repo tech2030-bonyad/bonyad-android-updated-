@@ -16,8 +16,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { API_ENDPOINTS, buildApiUrl, buildApiUrlWithParams } from '../config/api';
 import { storage } from '../utils/storage';
+import { getRequestDetails, getBidsOnRequest, updateRequestStatus } from '../services/SmallTaskService';
 import SmallTaskPhaseBar from '../components/SmallTaskPhaseBar';
 import SmallTaskStatusTimeline from '../components/SmallTaskStatusTimeline';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
@@ -141,50 +141,41 @@ export default function AssignedSmallTaskScreen({
 
   const loadTaskDetails = async () => {
     try {
-      const token = await storage.getAuthToken();
-      if (!token) return;
-
-      // GET /api/small-tasks/requests/{id}
-      const url = buildApiUrlWithParams(API_ENDPOINTS.SMALL_TASKS.REQUEST_DETAILS, { id: task.id });
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setTaskDetails(data);
-      }
+      const data = await getRequestDetails(task.id);
+      setTaskDetails({
+        ...data,
+        taskType: data.taskTypeId
+          ? { id: data.taskTypeId, nameAr: data.taskTypeNameAr || '', nameEn: data.taskTypeNameEn || '' }
+          : undefined,
+      } as SmallTaskRequest);
     } catch (error) {
       console.error('Error loading task details:', error);
     }
   };
 
   const loadAcceptedBid = async () => {
-    try {
-      const token = await storage.getAuthToken();
-      if (!token) return;
-
-      const url = buildApiUrlWithParams(API_ENDPOINTS.SMALL_TASKS.REQUEST_BID, { id: task.id });
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const bidsList = data.bids || data || [];
-        const accepted = bidsList.find((b: SmallTaskBid) => b.status === 'ACCEPTED');
-        if (accepted) {
-          setAcceptedBid(accepted);
-        }
+    // Only the requester can view bids; for technician use task (prop) details for display
+    if (isTechnician) {
+      const t = taskDetails || task;
+      if (t && (t.amount != null || t.budget != null)) {
+        setAcceptedBid({
+          id: 0,
+          smallTaskRequestId: task.id,
+          technicianId: t.acceptedTechnicianId ?? 0,
+          technicianName: t.acceptedTechnicianName ?? '',
+          price: t.amount ?? t.budget ?? 0,
+          amount: t.amount ?? t.budget ?? 0,
+          estimatedDuration: t.estimatedDuration ?? 0,
+          status: 'ACCEPTED',
+          createdAt: '',
+        } as SmallTaskBid);
       }
+      return;
+    }
+    try {
+      const list = await getBidsOnRequest(task.id);
+      const accepted = list.find((b: SmallTaskBid) => b.status === 'ACCEPTED');
+      if (accepted) setAcceptedBid(accepted as SmallTaskBid);
     } catch (error) {
       console.error('Error loading accepted bid:', error);
     }
@@ -197,29 +188,10 @@ export default function AssignedSmallTaskScreen({
       async () => {
         setIsUpdatingStatus(true);
         try {
-          const token = await storage.getAuthToken();
-          if (!token) {
-            showError(t('Please login again'), t('Error'));
-            return;
-          }
-
-          const url = buildApiUrlWithParams(API_ENDPOINTS.SMALL_TASKS.UPDATE_STATUS, { id: task.id });
-          const response = await fetch(url, {
-            method: 'PATCH',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ status: 'IN_PROGRESS' }),
-          });
-
-          if (response.ok) {
-            showSuccess(t('Work started successfully'), t('Success'));
-            await loadData();
-            onSuccess?.();
-          } else {
-            showError(t('Failed to update status'), t('Error'));
-          }
+          await updateRequestStatus(task.id, 'IN_PROGRESS');
+          showSuccess(t('Work started successfully'), t('Success'));
+          await loadData();
+          onSuccess?.();
         } catch (error) {
           console.error('Error updating status:', error);
           showError(t('Error updating status'), t('Error'));
@@ -362,17 +334,28 @@ export default function AssignedSmallTaskScreen({
 
           {/* Task Info - Direct Fields (No Card) */}
           <View style={styles.taskInfoSection}>
-            {/* Task Icon and Name */}
+            {/* Task Icon and Name + Request ID (same as web) */}
             <View style={styles.taskHeaderSection}>
               <View style={[styles.iconContainer, { backgroundColor: COLORS.green10 }]}>
                 <Ionicons name="checkmark-circle" size={32} color={COLORS.green80} />
               </View>
               <View style={styles.taskInfo}>
+                <Text style={[styles.requestIdText, { color: colors.textSecondary }]}>#{taskDetails.id}</Text>
                 <Text style={[styles.taskName, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '700' }]}>
                   {taskName}
                 </Text>
               </View>
             </View>
+
+            {/* Created date (same as web) */}
+            {taskDetails.createdAt && (
+              <View style={styles.fieldSection}>
+                <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{t('Created')}</Text>
+                <Text style={[styles.fieldValue, { color: colors.text }]}>
+                  {new Date(taskDetails.createdAt).toLocaleDateString(i18n.language === 'ar' ? 'ar-SA' : 'en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                </Text>
+              </View>
+            )}
 
             {/* Description */}
             {taskDetails.description && (
@@ -648,6 +631,11 @@ const styles = StyleSheet.create({
   },
   taskInfo: {
     flex: 1,
+  },
+  requestIdText: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginBottom: 6,
   },
   taskName: {
     fontSize: 22,

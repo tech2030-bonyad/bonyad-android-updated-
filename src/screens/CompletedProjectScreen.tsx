@@ -726,6 +726,16 @@ export default function CompletedProjectScreen({
               <Text style={styles.summaryTitle}>{t('Project Summary')}</Text>
               <View style={styles.summaryContent}>
                 <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>{t('Project')} #</Text>
+                  <Text style={styles.summaryValue}>{project.id}</Text>
+                </View>
+                {project.createdAt ? (
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryLabel}>{t('Created')}</Text>
+                    <Text style={styles.summaryValue}>{formatDate(project.createdAt)}</Text>
+                  </View>
+                ) : null}
+                <View style={styles.summaryRow}>
                   <Text style={styles.summaryLabel}>{t('Total Amount')}</Text>
                   <Text style={styles.summaryValue}>
                     {formatBudget(summary.totalAmount || project.budget || 0)} {t('SAR')}

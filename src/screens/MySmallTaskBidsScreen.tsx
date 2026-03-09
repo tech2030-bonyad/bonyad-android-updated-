@@ -16,8 +16,8 @@ import { Image as ExpoImage } from 'expo-image';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { API_ENDPOINTS, buildApiUrl, buildApiUrlWithParams } from '../config/api';
 import { storage } from '../utils/storage';
+import { getMyBids, withdrawBid } from '../services/SmallTaskService';
 import { SmallTaskBid } from '../types/smallTasks';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
 
@@ -75,25 +75,9 @@ export default function MySmallTaskBidsScreen({
         return;
       }
 
-      const url = buildApiUrl(API_ENDPOINTS.SMALL_TASKS.MY_BIDS);
-      console.log('🔍 Fetching my bids:', url);
-
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log('✅ Loaded bids:', data.bids?.length || data.length || 0);
-        const bidsList = data.bids || data || [];
-        setBids(bidsList);
-        setFilteredBids(bidsList);
-      } else {
-        console.error('❌ Failed to fetch bids:', response.status);
-        showError(t('Failed to load bids'), t('Error'));
-      }
+      const { bids: bidsList } = await getMyBids();
+      setBids(bidsList);
+      setFilteredBids(bidsList);
     } catch (error) {
       console.error('❌ Error fetching bids:', error);
       showError(t('Error loading bids'), t('Error'));
@@ -117,33 +101,12 @@ export default function MySmallTaskBidsScreen({
       t('Are you sure you want to withdraw this bid? This action cannot be undone.'),
       async () => {
         try {
-          const token = await storage.getAuthToken();
-          if (!token) {
-            showError(t('Please login again'), t('Error'));
-            return;
-          }
-
-          const url = buildApiUrlWithParams(API_ENDPOINTS.SMALL_TASKS.WITHDRAW_BID, { id: bidId });
-          console.log('🔄 Withdrawing bid:', url);
-
-          const response = await fetch(url, {
-            method: 'PATCH',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-            },
-          });
-
-          if (response.ok) {
-            console.log('✅ Bid withdrawn');
-            showSuccess(t('Bid withdrawn successfully'), t('Success'));
-            setTimeout(() => {
-              hideAlert();
-              fetchMyBids();
-            }, 1500);
-          } else {
-            console.error('❌ Failed to withdraw bid:', response.status);
-            showError(t('Failed to withdraw bid'), t('Error'));
-          }
+          await withdrawBid(bidId);
+          showSuccess(t('Bid withdrawn successfully'), t('Success'));
+          setTimeout(() => {
+            hideAlert();
+            fetchMyBids();
+          }, 1500);
         } catch (error) {
           console.error('❌ Error withdrawing bid:', error);
           showError(t('Error withdrawing bid'), t('Error'));

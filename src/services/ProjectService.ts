@@ -1,5 +1,148 @@
+import { Platform } from 'react-native';
 import { storage } from '../utils/storage';
-import { API_ENDPOINTS, buildApiUrlWithParams } from '../config/api';
+import { API_ENDPOINTS, buildApiUrl, buildApiUrlWithParams } from '../config/api';
+
+// ===== TYPE DEFINITIONS (aligned with web) =====
+
+/**
+ * Request interface for creating a project.
+ * New method: serviceCategoryId + serviceSubcategoryId.
+ * Legacy: serviceId.
+ */
+export interface CreateProjectRequest {
+  description: string;
+  serviceCategoryId?: number;
+  serviceSubcategoryId?: number;
+  serviceId?: number;
+  address: string;
+  latitude: number;
+  longitude: number;
+  timeRequired: number;
+  projectType: 'ALL' | 'DIRECT_ASSIGNMENT';
+  budget?: number;
+  budgetUnspecified?: boolean;
+  images?: Array<{ uri: string; type: string; name: string }>;
+  assignedTechnicianId?: number;
+  assignmentType?: string;
+  bidsCloseAt?: string;
+  activeDuration?: number;
+}
+
+/**
+ * Response interface for created project (aligned with web).
+ */
+export interface CreateProjectResponse {
+  id: number;
+  description: string;
+  service?: { id: number; nameEn: string; nameAr: string; isCategory: boolean };
+  serviceCategory?: { id: number; nameEn: string; nameAr: string; isCategory: boolean };
+  serviceId?: number;
+  serviceName?: string;
+  budget: number | null;
+  budgetUnspecified?: boolean;
+  address: string;
+  latitude: number;
+  longitude: number;
+  timeRequiredDays?: number;
+  timeRequired?: number;
+  projectType: string;
+  status: string;
+  biddingStatus?: string;
+  files?: string[];
+  activeUntil?: string;
+  bidsCloseAt?: string;
+  createdAt: string;
+}
+
+/**
+ * Create a new project (User). Same backend contract as web.
+ * Uses FormData: description, serviceCategoryId/serviceSubcategoryId or serviceId, address, lat/long, timeRequired, projectType, budget/budgetUnspecified, images, assignedTechnicianId, assignmentType, bidsCloseAt, activeDuration.
+ */
+export const createProject = async (data: CreateProjectRequest): Promise<CreateProjectResponse> => {
+  try {
+    const token = await storage.getAuthToken();
+    if (!token) {
+      throw new Error('No authentication token');
+    }
+
+    const formData = new FormData();
+    formData.append('description', data.description);
+
+    if (data.serviceCategoryId) {
+      formData.append('serviceCategoryId', data.serviceCategoryId.toString());
+      if (data.serviceSubcategoryId) {
+        formData.append('serviceSubcategoryId', data.serviceSubcategoryId.toString());
+      }
+    } else if (data.serviceId) {
+      formData.append('serviceId', data.serviceId.toString());
+    } else {
+      throw new Error('Either serviceId or serviceCategoryId is required');
+    }
+
+    formData.append('address', data.address);
+    formData.append('latitude', data.latitude.toString());
+    formData.append('longitude', data.longitude.toString());
+    formData.append('timeRequired', data.timeRequired.toString());
+    formData.append('projectType', data.projectType);
+
+    if (data.activeDuration != null) {
+      formData.append('activeDuration', data.activeDuration.toString());
+    }
+
+    if (data.budgetUnspecified) {
+      formData.append('budgetUnspecified', 'true');
+    } else if (data.budget !== undefined) {
+      formData.append('budget', data.budget.toString());
+    }
+
+    if (data.assignedTechnicianId != null) {
+      formData.append('assignedTechnicianId', data.assignedTechnicianId.toString());
+    }
+    if (data.assignmentType) {
+      formData.append('assignmentType', data.assignmentType);
+    }
+
+    if (data.bidsCloseAt) {
+      formData.append('bidsCloseAt', data.bidsCloseAt);
+    }
+
+    if (data.images && data.images.length > 0) {
+      data.images.forEach((image, index) => {
+        formData.append('images', {
+          uri: Platform.OS === 'ios' ? image.uri.replace('file://', '') : image.uri,
+          name: image.name || `photo_${index}.jpg`,
+          type: image.type || 'image/jpeg',
+        } as any);
+      });
+    }
+
+    const url = buildApiUrl(API_ENDPOINTS.PROJECTS.CREATE);
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      try {
+        const errorJson = JSON.parse(errorText);
+        throw new Error(errorJson.message || `Failed to create project: ${response.status}`);
+      } catch (e: any) {
+        if (e.message && e.message.startsWith('Failed to create')) throw e;
+        throw new Error(`Server error: ${response.status}`);
+      }
+    }
+
+    const responseData = await response.json();
+    return responseData as CreateProjectResponse;
+  } catch (error: any) {
+    console.error('❌ [ProjectService] Error creating project:', error);
+    throw error;
+  }
+};
 
 /**
  * Complete a project by marking it as COMPLETED

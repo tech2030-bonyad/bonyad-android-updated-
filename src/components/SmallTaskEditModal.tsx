@@ -17,8 +17,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
-import { API_ENDPOINTS, buildApiUrl } from '../config/api';
 import { storage } from '../utils/storage';
+import { updateRequest } from '../services/SmallTaskService';
 import { SmallTaskRequest } from '../types/smallTasks';
 import AlertPopup, { useAlertPopup } from './AlertPopup';
 
@@ -93,38 +93,17 @@ export default function SmallTaskEditModal({
 
     setIsSubmitting(true);
     try {
-      const token = await storage.getAuthToken();
-      if (!token) {
-        showError(t('Please login again'), t('Error'));
-        return;
-      }
-
-      // PUT /api/small-tasks/requests/{id}
-      const url = buildApiUrl(`/small-tasks/requests/${task.id}`);
-      const response = await fetch(url, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          description: description.trim(),
-          address: address.trim(),
-        }),
+      await updateRequest(task.id, {
+        description: description.trim(),
+        address: address.trim(),
       });
-
-      if (response.ok) {
-        showSuccess(t('Task updated successfully'), t('Success'));
-        setTimeout(() => {
-          onSuccess();
-        }, 1500);
-      } else {
-        const errorData = await response.json().catch(() => ({}));
-        showError(errorData.message || t('Failed to update task'), t('Error'));
-      }
-    } catch (error) {
-      console.error('Error updating task:', error);
-      showError(t('Error updating task'), t('Error'));
+      showSuccess(t('Task updated successfully'), t('Success'));
+      setTimeout(() => {
+        onSuccess();
+      }, 1500);
+    } catch (error: unknown) {
+      const err = error as { message?: string };
+      showError(err.message || t('Failed to update task'), t('Error'));
     } finally {
       setIsSubmitting(false);
     }

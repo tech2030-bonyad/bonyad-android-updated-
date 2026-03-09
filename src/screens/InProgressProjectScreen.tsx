@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,9 @@ import {
   Modal,
   Platform,
   Dimensions,
+  Linking,
+  AppState,
+  AppStateStatus,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,6 +22,11 @@ import { API_ENDPOINTS, buildApiUrlWithParams } from '../config/api';
 import { storage } from '../utils/storage';
 import { showError, showSuccess } from '../utils/alert';
 import ProjectCreationFlow from '../components/ProjectCreationFlow';
+import { createCheckout, getPaymentStatus } from '../services/PaymentService';
+import { getUserProfile } from '../services/ProfileService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const PENDING_PHASE_PAYMENT_KEY = 'PENDING_PHASE_PAYMENT';
 
 // ===== DESIGN TOKENS (matching Figma design) =====
 const COLORS = {
@@ -55,6 +63,7 @@ interface InProgressProjectScreenProps {
   onOpenChat?: (roomId: string, receiverId: number, receiverName: string, projectId?: number | null) => void;
   onViewTechnician?: (technicianId: number) => void;
   onBookAppointment?: (technicianId: number, technicianName: string, projectId?: number) => void;
+  onNavigateToChangeRequests?: (projectId: number) => void;
 }
 
 interface Phase {
@@ -82,6 +91,7 @@ export default function InProgressProjectScreen({
   onOpenChat,
   onViewTechnician,
   onBookAppointment,
+  onNavigateToChangeRequests,
 }: InProgressProjectScreenProps) {
   const { t, i18n } = useTranslation();
   const { colors } = useTheme();
@@ -183,25 +193,67 @@ export default function InProgressProjectScreen({
   const payForPhase = async (phaseId: number) => {
     setShowConfirmModal(false);
     setPayingPhaseId(phaseId);
+    const phase = phases.find((p) => p.id === phaseId);
+    if (!phase) {
+      setPayingPhaseId(null);
+      return;
+    }
 
     try {
       const token = await storage.getAuthToken();
       if (!token) {
         showError(t('Please login again'));
+        setPayingPhaseId(null);
         return;
       }
 
-      const url = buildApiUrlWithParams(API_ENDPOINTS.PHASES.PAY, {
-        phaseId,
-      });
+      // Use create-checkout + redirect on native (same as web / HyperPay)
+      if (Platform.OS !== 'web') {
+        const profile = await getUserProfile().catch(() => ({}));
+        const paymentData = {
+          phaseId: phase.id,
+          amount: phase.moneySpent,
+          currency: 'SAR',
+          paymentType: 'DB' as const,
+          paymentBrand: 'MADA' as const,
+          merchantTransactionId: `PHASE-${phase.id}-${Date.now()}`,
+          customer: {
+            email: profile?.email || 'user@bonyad.app',
+            givenName: profile?.firstName || profile?.name?.split(' ')[0] || 'User',
+            surname: profile?.lastName || profile?.name?.split(' ').slice(1).join(' ') || '',
+          },
+          billing: {
+            street1: profile?.address || 'King Fahd Road',
+            city: profile?.city || 'Riyadh',
+            state: profile?.state || 'Riyadh',
+            country: 'SA',
+            postcode: profile?.postcode || '12345',
+          },
+        };
+        const result = await createCheckout(paymentData);
+        const checkoutId = result?.checkoutId || result?.id;
+        let redirectUrl = result?.redirectUrl || result?.shopperUrl;
+        if (!redirectUrl && checkoutId) {
+          const isProduction = String(checkoutId).includes('prod');
+          redirectUrl = isProduction
+            ? `https://eu-prod.oppwa.com/v1/checkouts/${checkoutId}`
+            : `https://eu-test.oppwa.com/v1/checkouts/${checkoutId}`;
+        }
+        if (redirectUrl) {
+          await AsyncStorage.setItem(
+            PENDING_PHASE_PAYMENT_KEY,
+            JSON.stringify({ checkoutId: String(checkoutId), phaseId, projectId: project?.id })
+          );
+          await Linking.openURL(redirectUrl);
+        } else {
+          showError(t('No payment URL received'));
+        }
+        setPayingPhaseId(null);
+        return;
+      }
 
-      console.log('═══════════════════════════════════════════════════════════');
-      console.log('🟢 [InProgressProjectScreen] Pay for Phase');
-      console.log('🟢 [InProgressProjectScreen] Endpoint: POST /phases/{phaseId}/pay');
-      console.log('🟢 [InProgressProjectScreen] Phase ID:', phaseId);
-      console.log('🟢 [InProgressProjectScreen] URL:', url);
-      console.log('═══════════════════════════════════════════════════════════');
-
+      // Web or fallback: direct POST /phases/:id/pay
+      const url = buildApiUrlWithParams(API_ENDPOINTS.PHASES.PAY, { phaseId });
       const response = await fetch(url, {
         method: 'POST',
         headers: {
@@ -210,10 +262,7 @@ export default function InProgressProjectScreen({
         },
       });
 
-      console.log('📥 [InProgressProjectScreen] Pay Response Status:', response.status);
-
       if (response.ok || response.status === 201) {
-        console.log('✅ [InProgressProjectScreen] Payment successful!');
         showSuccess(t('Payment processed successfully'));
         setTimeout(() => {
           loadPhases();
@@ -221,16 +270,39 @@ export default function InProgressProjectScreen({
         }, 1000);
       } else {
         const errorText = await response.text();
-        console.error('❌ [InProgressProjectScreen] Failed to pay:', errorText);
         showError(t('Failed to process payment'));
       }
     } catch (error: any) {
-      console.error('❌ [InProgressProjectScreen] Error paying for phase:', error);
       showError(error.message || t('Failed to process payment'));
     } finally {
       setPayingPhaseId(null);
     }
   };
+
+  // When app returns from payment gateway, check pending and poll status
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', async (nextAppState: AppStateStatus) => {
+      if (nextAppState !== 'active') return;
+      try {
+        const raw = await AsyncStorage.getItem(PENDING_PHASE_PAYMENT_KEY);
+        if (!raw) return;
+        const pending = JSON.parse(raw) as { checkoutId: string; phaseId: number; projectId?: number };
+        const status = await getPaymentStatus(pending.checkoutId);
+        if (status?.success) {
+          await AsyncStorage.removeItem(PENDING_PHASE_PAYMENT_KEY);
+          showSuccess(t('Payment successful'));
+          loadPhases();
+          onSuccess?.();
+        } else if (status?.description && (status.description.toLowerCase().includes('fail') || status.description.toLowerCase().includes('reject'))) {
+          await AsyncStorage.removeItem(PENDING_PHASE_PAYMENT_KEY);
+          showError(t('Payment failed or was cancelled'));
+        }
+      } catch (_) {
+        // Ignore; user may still be on payment page
+      }
+    });
+    return () => subscription.remove();
+  }, [project?.id]);
 
   // ===== COMPLETE PHASE FUNCTIONS (TECHNICIAN) =====
   const handleCompletePhase = (phase: Phase) => {
@@ -658,8 +730,15 @@ export default function InProgressProjectScreen({
             <Text style={[styles.subtitleText, { fontSize: scaledSize(14) }]}>
               {t('In Progress')}
             </Text>
+          </View>
+          {onNavigateToChangeRequests && project?.id != null ? (
+            <TouchableOpacity onPress={() => onNavigateToChangeRequests(project.id)} style={styles.changeRequestsLink}>
+              <Ionicons name="document-text-outline" size={20} color={COLORS.primary60} />
+            </TouchableOpacity>
+          ) : (
+            <View style={{ width: 24 }} />
+          )}
         </View>
-      </View>
       )}
 
       {/* Content */}
@@ -969,6 +1048,11 @@ const styles = StyleSheet.create({
   },
   backButton: {
     padding: 4,
+  },
+  changeRequestsLink: {
+    padding: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   backButtonLargeWeb: {
     width: 40,

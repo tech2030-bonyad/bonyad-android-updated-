@@ -102,6 +102,7 @@ interface ApprovedProjectScreenProps {
   onProceedToContract?: () => void;
   onSuccess?: () => void;
   isTechnician?: boolean;
+  onNavigateToChangeRequests?: (projectId: number) => void;
 }
 
 type Feedback = {
@@ -795,6 +796,7 @@ export default function ApprovedProjectScreen({
   onProceedToContract,
   onSuccess,
   isTechnician: propIsTechnician,
+  onNavigateToChangeRequests,
 }: ApprovedProjectScreenProps) {
   const { t, i18n } = useTranslation();
   const { colors } = useTheme();
@@ -1121,6 +1123,12 @@ export default function ApprovedProjectScreen({
               {t('Approved Project')}
           </Text>
         </View>
+        {onNavigateToChangeRequests && project?.id != null && (
+          <TouchableOpacity onPress={() => onNavigateToChangeRequests(project.id)} style={styles.changeRequestsLink}>
+            <Ionicons name="document-text-outline" size={18} color={COLORS.primary60} />
+            <Text style={styles.changeRequestsLinkText}>{t('Change requests')}</Text>
+          </TouchableOpacity>
+        )}
       </View>
       )}
       
@@ -1167,6 +1175,14 @@ export default function ApprovedProjectScreen({
           <Text style={[styles.sectionHeaderTitle, isRTL && { textAlign: 'right' }, { fontSize: scaledSize(16) }]}>
             {t('Project Summary')}
           </Text>
+          <View style={[styles.requestIdCreatedRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+            <Text style={[styles.requestIdText, { color: COLORS.textSecondary }]}>#{project.id}</Text>
+            {project.createdAt ? (
+              <Text style={[styles.createdText, { color: COLORS.textSecondary }]}>
+                {t('Created')}: {new Date(project.createdAt).toLocaleDateString(i18n.language === 'ar' ? 'ar-SA' : 'en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+              </Text>
+            ) : null}
+          </View>
           <Text style={[styles.sectionDescription, isRTL && { textAlign: 'right' }, { fontSize: scaledSize(14) }]}>
             {t('Review and modify project phases before proceeding to contract signing.')}
           </Text>
@@ -1365,6 +1381,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  changeRequestsLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  changeRequestsLinkText: {
+    fontSize: 14,
+    color: COLORS.primary60,
+    fontWeight: '500',
+  },
   backButtonLargeWeb: {
     width: 40,
     height: 40,
@@ -1438,6 +1466,20 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     color: COLORS.textHeader,
     marginBottom: 12,
+  },
+  requestIdCreatedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 8,
+  },
+  requestIdText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  createdText: {
+    fontSize: 12,
+    fontWeight: '400',
   },
   sectionDescription: {
     fontSize: 14,

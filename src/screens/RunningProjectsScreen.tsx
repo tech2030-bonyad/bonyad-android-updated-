@@ -311,9 +311,13 @@ export default function RunningProjectsScreen({
           <TouchableOpacity
             style={[styles.actionButton, { backgroundColor: colors.primary }]}
             onPress={() => {
-              setSelectedProjectId(item.id);
-              setSelectedProject(item);
-              setShowPhaseModal(true);
+              if (onShowProjectDetails) {
+                onShowProjectDetails(item);
+              } else {
+                setSelectedProjectId(item.id);
+                setSelectedProject(item);
+                setShowPhaseModal(true);
+              }
             }}
           >
             <Ionicons name="eye-outline" size={18} color="#fff" />

@@ -17,8 +17,8 @@ import { useTranslation } from 'react-i18next';
 import { Image as ExpoImage } from 'expo-image';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
-import { API_ENDPOINTS, buildApiUrlWithParams } from '../config/api';
 import { storage } from '../utils/storage';
+import { createBid } from '../services/SmallTaskService';
 import { SmallTaskRequest } from '../types/smallTasks';
 import AlertPopup, { useAlertPopup } from './AlertPopup';
 
@@ -107,56 +107,23 @@ export default function SmallTaskBidFormModal({
     setIsSubmitting(true);
 
     try {
-      const token = await storage.getAuthToken();
-      if (!token) {
-        showError(t('Please login again'), t('Error'));
-        setIsSubmitting(false);
-        return;
-      }
-
-      const url = buildApiUrlWithParams(API_ENDPOINTS.SMALL_TASKS.REQUEST_BID, {
-        id: task.id,
+      await createBid(task.id, {
+        price: parseFloat(amount),
+        estimatedDuration: Math.round(parseFloat(estimatedHours) * 60),
+        notes: description.trim(),
       });
-
-      console.log('📤 Submitting bid:', {
-        url,
-        amount: parseFloat(amount),
-        estimatedHours: parseFloat(estimatedHours),
-      });
-
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          price: parseFloat(amount),
-          estimatedDuration: Math.round(parseFloat(estimatedHours) * 60), // Convert hours to minutes
-          notes: description.trim(),
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log('✅ Bid submitted:', data);
-        showSuccess(t('Bid submitted successfully'), t('Success'));
-        setTimeout(() => {
-          setAmount('');
-          setDescription('');
-          setEstimatedHours('');
-          hideAlert();
-          onClose();
-          onSuccess();
-        }, 1500);
-      } else {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('❌ Failed to submit bid:', response.status, errorData);
-        showError(errorData.message || t('Failed to submit bid'), t('Error'));
-      }
-    } catch (error) {
-      console.error('❌ Error submitting bid:', error);
-      showError(t('Error submitting bid'), t('Error'));
+      showSuccess(t('Bid submitted successfully'), t('Success'));
+      setAmount('');
+      setDescription('');
+      setEstimatedHours('');
+      setTimeout(() => {
+        hideAlert();
+        onClose();
+        onSuccess();
+      }, 1500);
+    } catch (error: unknown) {
+      const err = error as { message?: string };
+      showError(err.message || t('Failed to submit bid'), t('Error'));
     } finally {
       setIsSubmitting(false);
     }

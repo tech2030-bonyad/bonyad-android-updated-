@@ -86,6 +86,10 @@ interface Project {
   requirements?: string[];
   needsVisit?: boolean;
   needsBooking?: boolean;
+  /** Bids count (when from API) - same as web card */
+  bidCount?: number;
+  /** Visit requests count (when from API) - same as web card */
+  visitRequestCount?: number;
   assignedTechnician?: {
     id: number;
     name: string;
@@ -438,12 +442,11 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
 
       // Determine API endpoint based on role and filter
       if (isTechnician) {
-        // TECHNICIAN ENDPOINTS
+        // TECHNICIAN ENDPOINTS (same as web: use auth for available projects)
         if (currentFilter === 'available') {
-          // Look for Offers (BID NOW) - All available projects to bid on
+          // Available projects to bid on - same as web getAvailableProjects (with auth)
           url = buildApiUrl(API_ENDPOINTS.PROJECTS.LIST);
-          // No auth required for this endpoint
-          delete headers['Authorization'];
+          // Keep Authorization - web uses it for GET /projects
         } else if (currentFilter === 'direct_offers') {
           // Direct Offers - Projects directly assigned to technician
           url = buildApiUrl(`${API_ENDPOINTS.PROJECTS.MY_ASSIGNED}?type=DIRECT_ASSIGNMENT`);
@@ -457,9 +460,8 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
           // Completed Projects - Filter from my-assigned
           url = buildApiUrl(API_ENDPOINTS.PROJECTS.MY_ASSIGNED);
         } else {
-          // Default to available projects
+          // Default to available projects (with auth)
           url = buildApiUrl(API_ENDPOINTS.PROJECTS.LIST);
-          delete headers['Authorization'];
         }
       } else {
         // USER ENDPOINTS - All use /projects/my
@@ -486,13 +488,18 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
       if (response.ok) {
         const data = await response.json();
         console.log('✅ Loaded data:', data);
-        console.log('📊 Number of items:', data.length);
-        
+        const rawList = Array.isArray(data)
+          ? data
+          : (data && typeof data === 'object' && Array.isArray((data as any).projects))
+            ? (data as any).projects
+            : (data && typeof data === 'object' && Array.isArray((data as any).data))
+              ? (data as any).data
+              : [];
+        console.log('📊 Number of items:', rawList.length);
+
         // For bid_received filter, we get bids, not projects
-        // We'll need to transform them or handle separately
         if (currentFilter === 'bid_received' && isTechnician) {
-          // Transform bids to project-like structure for display
-          const bidsAsProjects = data.map((bid: any) => ({
+          const bidsAsProjects = rawList.map((bid: any) => ({
             id: bid.projectId,
             description: bid.projectDescription || bid.comment || 'Project',
             budget: bid.projectBudget || bid.proposedBudget || 0,
@@ -509,7 +516,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
           }));
           setProjects(bidsAsProjects);
         } else {
-          setProjects(data);
+          setProjects(rawList);
         }
       } else {
         const errorText = await response.text();
@@ -967,11 +974,11 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
             <View style={{ width: 24 }} />
           )}
           <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(18) }]}>
-            {localFilter === 'available' ? (isTechnician ? t('Look for Offers') : t('Available Projects')) : 
-             localFilter === 'running' ? (isTechnician ? t('My Assigned Projects') : t('Running Projects')) : 
-             localFilter === 'bid_received' ? t('My Bids') :
-             localFilter === 'direct_offers' ? t('Direct Offers') :
-             localFilter === 'completed' ? t('Completed Projects') :
+            {localFilter === 'available' ? (isTechnician ? t('Available') : t('Available Projects')) :
+             localFilter === 'running' ? (isTechnician ? t('In-Progress') : t('Running Projects')) :
+             localFilter === 'bid_received' ? t('Bidding') :
+             localFilter === 'direct_offers' ? t('Direct Assigned') :
+             localFilter === 'completed' ? (isTechnician ? t('Completed') : t('Completed Projects')) :
              t('Projects')}
           </Text>
           <View style={{ width: 24 }} />
@@ -1332,7 +1339,10 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
           <View style={styles.androidProjectTypeSelector}>
             <AnimatedProjectTypeToggle
               selectedType={projectType}
-              onTypeChange={setProjectType}
+              onTypeChange={(type) => {
+                setProjectType(type);
+                if (type === 'small') setLocalFilter('available');
+              }}
             />
           </View>
 
@@ -1352,6 +1362,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
             >
               <SmallTasksListScreen
                 onBack={onBack}
+                isTechnician={userRole?.toUpperCase() === 'TECHNICIAN'}
                 onTaskPress={(task) => {
                   // Route to appropriate status screen based on task status
                   // Per README: PENDING → ACCEPTED (after bid acceptance) → IN_PROGRESS (after payment) → COMPLETED
@@ -1435,37 +1446,74 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
                   };
                   const statusLabel = getStatusLabel(project.status || '');
                   const statusColor = getStatusColor(project.status || '');
+                  const formatCardDate = (dateString: string) => {
+                    if (!dateString) return '';
+                    try {
+                      return new Date(dateString).toLocaleDateString(i18n.language === 'ar' ? 'ar-SA' : 'en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                    } catch { return dateString; }
+                  };
+                  const bidsCount = project.bidCount ?? 0;
+                  const visitsCount = project.visitRequestCount ?? 0;
                   return (
                     <TouchableOpacity
-                      style={styles.androidProjectCard}
+                      style={[styles.androidProjectCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
                       onPress={() => handleProjectCardPress(project)}
                       activeOpacity={0.7}
                     >
-                      <View style={styles.androidCardHeader}>
-                        <Text style={styles.androidProjectTitle}>
-                          {project.serviceNameEn || project.serviceNameAr || `Project${project.id}`}
-                        </Text>
-                        {project.status && (
-                          <View style={[styles.androidStatusBadge, { backgroundColor: statusColor + '20' }]}>
-                            <Text style={[styles.androidStatusText, { color: statusColor }]}>
-                              {statusLabel}
-                            </Text>
-                          </View>
-                        )}
+                      <View style={[styles.androidCardHeaderRow, { flexDirection: i18n.language === 'ar' ? 'row-reverse' : 'row' }]}>
+                        <Text style={[styles.androidProjectId, { color: colors.textSecondary }]}>#{project.id}</Text>
+                        <View style={[styles.androidStatusBadge, { backgroundColor: statusColor + '20' }]}>
+                          <Text style={[styles.androidStatusText, { color: statusColor }]}>
+                            {statusLabel}
+                          </Text>
+                        </View>
                       </View>
-                      <Text style={styles.androidProjectDescription}>
+                      <View style={[styles.androidCardHeader, { flexDirection: i18n.language === 'ar' ? 'row-reverse' : 'row' }]}>
+                        <Text style={[styles.androidProjectTitle, { color: colors.text }]} numberOfLines={1}>
+                          {project.serviceNameEn || project.serviceNameAr || `Project ${project.id}`}
+                        </Text>
+                        <View style={[styles.androidPriceContainer, { flexDirection: i18n.language === 'ar' ? 'row-reverse' : 'row' }]}>
+                          <ExpoImage
+                            source={riyalLogo}
+                            style={styles.androidRiyalLogo}
+                            contentFit="contain"
+                          />
+                          <Text style={[styles.androidPriceText, { color: colors.primary }]}>
+                            {formatBudget(project.budget)}
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={[styles.androidProjectDescription, { color: colors.textSecondary }]} numberOfLines={2}>
                         {truncateDescription(project.description || '')}
                       </Text>
-                      <View style={styles.androidPriceContainer}>
-                        <ExpoImage
-                          source={riyalLogo}
-                          style={styles.androidRiyalLogo}
-                          contentFit="contain"
-                        />
-                        <Text style={styles.androidPriceText}>
-                          {formatBudget(project.budget)}
+                      {project.address ? (
+                        <View style={[styles.androidCardMetaRow, { flexDirection: i18n.language === 'ar' ? 'row-reverse' : 'row' }]}>
+                          <Ionicons name="location-outline" size={14} color={colors.textSecondary} />
+                          <Text style={[styles.androidCardMetaText, { color: colors.textSecondary }]} numberOfLines={1}>
+                            {project.address}
+                          </Text>
+                        </View>
+                      ) : null}
+                      <View style={[styles.androidCardMetaRow, { flexDirection: i18n.language === 'ar' ? 'row-reverse' : 'row' }]}>
+                        <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
+                        <Text style={[styles.androidCardMetaText, { color: colors.textSecondary }]}>
+                          {formatCardDate(project.createdAt)}
                         </Text>
                       </View>
+                      {(bidsCount > 0 || visitsCount > 0) ? (
+                        <View style={[styles.androidCardStatsRow, { flexDirection: i18n.language === 'ar' ? 'row-reverse' : 'row' }]}>
+                          <View style={[styles.androidCardStatItem, { backgroundColor: colors.primary + '15' }]}>
+                            <Ionicons name="hand-left-outline" size={14} color={colors.primary} />
+                            <Text style={[styles.androidCardStatValue, { color: colors.primary }]}>{bidsCount}</Text>
+                            <Text style={[styles.androidCardStatLabel, { color: colors.textSecondary }]}>{t('Bids')}</Text>
+                          </View>
+                          <View style={[styles.androidCardStatItem, { backgroundColor: '#FF9500' + '15' }]}>
+                            <Ionicons name="calendar-outline" size={14} color="#FF9500" />
+                            <Text style={[styles.androidCardStatValue, { color: '#FF9500' }]}>{visitsCount}</Text>
+                            <Text style={[styles.androidCardStatLabel, { color: colors.textSecondary }]}>{t('Visits')}</Text>
+                          </View>
+                        </View>
+                      ) : null}
                     </TouchableOpacity>
                   );
                 }}
@@ -1583,11 +1631,11 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
               <View style={{ width: 24 }} />
             )}
             <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(18) }]}>
-              {localFilter === 'available' ? (isTechnician ? t('Look for Offers') : t('Available Projects')) : 
-               localFilter === 'running' ? (isTechnician ? t('My Assigned Projects') : t('Running Projects')) : 
-               localFilter === 'bid_received' ? t('My Bids') :
-               localFilter === 'direct_offers' ? t('Direct Offers') :
-               localFilter === 'completed' ? t('Completed Projects') :
+              {localFilter === 'available' ? (isTechnician ? t('Available') : t('Available Projects')) :
+               localFilter === 'running' ? (isTechnician ? t('In-Progress') : t('Running Projects')) :
+               localFilter === 'bid_received' ? t('Bidding') :
+               localFilter === 'direct_offers' ? t('Direct Assigned') :
+               localFilter === 'completed' ? (isTechnician ? t('Completed') : t('Completed Projects')) :
                t('Projects')}
             </Text>
             <View style={{ width: 24 }} />
@@ -1633,7 +1681,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
                   localFilter === 'running' && styles.tabButtonActive,
                   { color: localFilter === 'running' ? colors.primary : colors.textSecondary, fontSize: scaledSize(14) }
                 ]}>
-                  {t('Running')}
+                  {isTechnician ? t('In-Progress') : t('Running')}
                 </Text>
               </TouchableOpacity>
               {isTechnician && (
@@ -1649,7 +1697,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
                     localFilter === 'direct_offers' && styles.tabButtonActive,
                     { color: localFilter === 'direct_offers' ? colors.primary : colors.textSecondary }
                   ]}>
-                    {t('Direct Offers')}
+                    {t('Direct Assigned')}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -1666,7 +1714,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
                     localFilter === 'bid_received' && styles.tabButtonActive,
                     { color: localFilter === 'bid_received' ? colors.primary : colors.textSecondary }
                   ]}>
-                    {t('My Bids')}
+                    {t('Bidding')}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -2760,6 +2808,16 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     minHeight: 100,
   },
+  androidCardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  androidProjectId: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
   androidCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -2790,6 +2848,39 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     color: '#9ca3af',
     marginBottom: 12,
+  },
+  androidCardMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  androidCardMetaText: {
+    fontSize: 12,
+    flex: 1,
+  },
+  androidCardStatsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 10,
+  },
+  androidCardStatItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    gap: 6,
+  },
+  androidCardStatValue: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  androidCardStatLabel: {
+    fontSize: 11,
+    fontWeight: '500',
   },
   androidPriceContainer: {
     flexDirection: 'row',

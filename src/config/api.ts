@@ -1,10 +1,27 @@
 // API Configuration
-// Production API endpoint
+// Same integration as web: absolute base URL, same endpoints and payloads.
+// Base URL comes from env (apiBaseUrl in app.config extra) when set.
 
 import { Platform } from 'react-native';
+import { ENV } from './env';
 
-// Main Production API - Used for all APIs except Chatbot
-export const API_BASE_URL = 'https://bonyad-app-nyayeditqq-ww.a.run.app/api';
+const DEFAULT_BASE_URL = 'https://bonyad-app-nyayeditqq-ww.a.run.app/api';
+
+/** Use ENV.API_BASE_URL (same as web) so one config drives both. */
+const getBaseUrl = (): string => {
+  const fromEnv = ENV.API_BASE_URL;
+  if (fromEnv && fromEnv.startsWith('http')) {
+    return fromEnv;
+  }
+  return DEFAULT_BASE_URL;
+};
+
+// Main Production API
+export const API_BASE_URL = getBaseUrl();
+
+if (__DEV__) {
+  console.log('✅ [API] API_BASE_URL (small tasks use this):', API_BASE_URL);
+}
 
 // Chatbot API - Ngrok endpoint (only for AI chat)
 export const CHATBOT_BASE_URL = 'https://glynda-unvexatious-felisa.ngrok-free.dev';
@@ -37,6 +54,17 @@ export const API_ENDPOINTS = {
     USER_DETAILS: '/user-details',
     COMPLETE_PROFILE: '/users/complete-profile',
     TECHNICIAN_STATUS: '/users/technician-status',
+    SEARCH: '/users/search',
+    TECHNICIANS_LIST: '/users/technicians',
+    /** Approve terms (signup flow) */
+    TERMS_APPROVE: '/users/terms/approve',
+  },
+
+  // Terms and Conditions (aligned with web)
+  TERMS: {
+    USER: '/terms/user',
+    TECHNICIAN: '/terms/technician',
+    BY_TYPE: '/terms',
   },
 
   // Zones (Regions)
@@ -69,10 +97,14 @@ export const API_ENDPOINTS = {
     ACCEPT: '/bids/:id/accept',
   },
 
-  // Visit Requests
+  // Visit Requests (aligned with web)
   VISIT_REQUESTS: {
     CREATE: '/visit-requests',
+    MY: '/visit-requests/my',
+    FOR_ME: '/visit-requests/for-me',
     LIST: '/visit-requests/project/:projectId',
+    ACCEPT: '/visit-requests/:id/accept',
+    REJECT: '/visit-requests/:id/reject',
     UPDATE: '/visit-requests/:id',
     DELETE: '/visit-requests/:id',
   },
@@ -143,15 +175,24 @@ export const API_ENDPOINTS = {
     LIST: '/rating-categories',
   },
 
-  // Phases
+  // Phases (aligned with web backend)
   PHASES: {
     LIST: '/phases/project/:projectId',
+    GET: '/phases/:phaseId',
     CREATE: '/phases',
     UPDATE: '/phases/:phaseId',
     DELETE: '/phases/:phaseId',
     APPROVE_ALL: '/phases/project/:projectId/approve-all',
     COMPLETE: '/phases/:phaseId/complete',
     PAY: '/phases/:phaseId/pay',
+    REQUEST_PAYMENT: '/phases/:phaseId/request-payment',
+    FINISH: '/phases/:phaseId/finish',
+    CONFIRM_COMPLETION: '/phases/:phaseId/confirm-completion',
+    PAYMENT_TIMING: '/phases/:phaseId/payment-timing',
+    EXTENDED_STATUS: '/phases/:phaseId/extended-status',
+    ISSUES: '/phases/:phaseId/issues',
+    ISSUE_BY_ID: '/phases/:phaseId/issues/:issueId',
+    RESOLVE_ISSUE: '/phases/:phaseId/issues/:issueId/resolve',
   },
 
   // Feedbacks
@@ -162,12 +203,37 @@ export const API_ENDPOINTS = {
     RESOLVE: '/feedbacks/:feedbackId/resolve',
   },
 
-  // Contracts/Signatures
+  // Contracts/Signatures (aligned with web)
   CONTRACTS: {
     CREATE: '/signatures',
     STATUS: '/signatures/:projectId/status',
     VIEW: '/contracts/:projectId',
     GENERATE_PDF: '/contracts/test/generate-pdf',
+    BY_PROJECT: '/contracts/project/:projectId',
+    MY: '/contracts/my',
+    BY_USER: '/contracts/user/:userId',
+    TECHNICIAN_MY: '/contracts/technician/my',
+    BY_TECHNICIAN: '/contracts/technician/:technicianId',
+    BY_ID: '/contracts/:contractId',
+  },
+  SIGNATURES: {
+    CREATE: '/signatures',
+    GET_BY_PROJECT: '/signatures/project/:projectId',
+    GET_STATUS: '/signatures/:id/status',
+    UPDATE: '/signatures/:id',
+    DELETE: '/signatures/:id',
+  },
+
+  // Change Requests (aligned with web)
+  CHANGE_REQUESTS: {
+    REQUEST: '/change-requests/project/:projectId/request',
+    RESPOND: '/change-requests/:changeRequestId/respond',
+    AGREE: '/change-requests/:changeRequestId/agree',
+    REJECT: '/change-requests/:changeRequestId/reject',
+    BY_PROJECT: '/change-requests/project/:projectId',
+    THREAD: '/change-requests/:changeRequestId/thread',
+    ACTIVE: '/change-requests/project/:projectId/active',
+    PENDING: '/change-requests/project/:projectId/pending',
   },
 
   // Notifications
@@ -236,21 +302,28 @@ export const API_ENDPOINTS = {
     CATEGORIES: '/api/support/categories',
   },
 
-  // Small Tasks (see Small Tasks Implementation README)
+  // Small Tasks – same paths and behavior as web (src/config/api.ts SMALL_TASKS)
   SMALL_TASKS: {
     TYPES: '/small-tasks/types',
     CREATE_REQUEST: '/small-tasks/requests',
-    REQUESTS_AVAILABLE: '/small-tasks/requests/available',
     MY_REQUESTS: '/small-tasks/requests/my-requests',
     REQUEST_DETAILS: '/small-tasks/requests/:id',
-    REQUEST_BID: '/small-tasks/requests/:id/bids',
+    REQUEST_BIDS: '/small-tasks/requests/:id/bids',
+    ACCEPT_BID: '/small-tasks/requests/:requestId/bids/:bidId/accept',
+    CANCEL_REQUEST: '/small-tasks/requests/:id/cancel',
+    PAY: '/small-tasks/requests/:id/pay',
+    AVAILABLE_REQUESTS: '/small-tasks/requests/available',
     MY_BIDS: '/small-tasks/bids/my-bids',
+    CREATE_BID: '/small-tasks/requests/:id/bids',
     WITHDRAW_BID: '/small-tasks/bids/:id/withdraw',
     UPDATE_STATUS: '/small-tasks/requests/:id/status',
-    PAY: '/small-tasks/requests/:requestId/pay',
-    ACCEPT_BID: '/small-tasks/requests/:requestId/bids/:bidId/accept',
     REJECT_BID: '/small-tasks/bids/:bidId/reject',
-    CANCEL: '/small-tasks/requests/:id/cancel',
+    SPECIALIZATIONS: '/small-tasks/technician/specializations',
+    SPECIALIZATIONS_ACTIVE: '/small-tasks/technician/specializations/active',
+    SUBSCRIBE_TO_TYPE: '/small-tasks/technician/specializations/:taskTypeId',
+    UNSUBSCRIBE_FROM_TYPE: '/small-tasks/technician/specializations/:taskTypeId',
+    BULK_SUBSCRIBE: '/small-tasks/technician/specializations/bulk-subscribe',
+    UNSUBSCRIBE_ALL: '/small-tasks/technician/specializations/all',
   },
 
   // Technician Services
@@ -274,16 +347,17 @@ export const API_ENDPOINTS = {
     MY_REQUESTS: '/small-tasks/request-type/my-requests',
   },
 
-  // Payments
+  // Payments (aligned with web – phase payments use create-checkout + redirect)
   PAYMENTS: {
     MY_TRANSACTIONS: '/payments/my-transactions',
     TRANSACTION: '/payments/transactions/:id',
-    REFUND_REQUEST: '/payments/transactions/:transactionId/refund-request',
+    TRANSACTION_DETAIL: '/payments/transactions/:id',
+    REFUND_REQUEST: '/payments/transactions/:id/refund-request',
     MY_REFUND_REQUESTS: '/payments/my-refund-requests',
     CREATE_CHECKOUT: '/payments/create-checkout',
     PREPARE_CHECKOUT: '/payments/prepare-checkout',
     STATUS: '/payments/status/:checkoutId',
-    STATUS_PROD: '/payments/prod/status/:checkoutId', // Production small-task payment status per README
+    STATUS_PROD: '/payments/prod/status/:checkoutId',
   },
 
   // Admin - Payments
@@ -308,19 +382,19 @@ export const getServerBaseUrl = (): string => {
   return API_BASE_URL.replace('/api', '');
 };
 
-// Helper function to build full URL
+// Helper function to build full URL (always absolute base – same as web)
 export const buildApiUrl = (endpoint: string): string => {
-  return `${API_BASE_URL}${endpoint}`;
+  const base = API_BASE_URL && API_BASE_URL.startsWith('http') ? API_BASE_URL : DEFAULT_BASE_URL;
+  return `${base}${endpoint}`;
 };
 
 // Helper function to build URL with parameters
 export const buildApiUrlWithParams = (endpoint: string, params: Record<string, string | number>): string => {
-  let url = `${API_BASE_URL}${endpoint}`;
-
+  const base = API_BASE_URL && API_BASE_URL.startsWith('http') ? API_BASE_URL : DEFAULT_BASE_URL;
+  let url = `${base}${endpoint}`;
   Object.entries(params).forEach(([key, value]) => {
     url = url.replace(`:${key}`, String(value));
   });
-
   return url;
 };
 

@@ -22,7 +22,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import LocationPicker from '../components/LocationPicker';
 import ProjectCreationFlow from '../components/ProjectCreationFlow';
-import { API_ENDPOINTS, buildApiUrl } from '../config/api';
+import { createProject, CreateProjectRequest } from '../services/ProjectService';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
 import { globalAlertManager } from '../utils/globalAlertManager';
 import { getCategories, getSubcategories, ServiceCategory as ApiServiceCategory, ServiceSubcategory } from '../services/ServiceService';
@@ -290,7 +290,7 @@ export default function ManualProjectForm({
     setBidsCloseAt('');
   };
 
-  // Submit project
+  // Submit project – same backend integration as web (ProjectService.createProject)
   const submitProject = async () => {
     if (!description.trim()) {
       showError('Please enter a project description');
@@ -310,79 +310,48 @@ export default function ManualProjectForm({
 
       if (!token || !userId) {
         showError('Please login again');
+        setIsSubmitting(false);
         return;
       }
 
-      // Validate budget if not unspecified
       if (!budgetUnspecified && (!budget || budget.trim() === '' || parseFloat(budget) <= 0)) {
         showError(t('Please enter a valid budget amount or mark it as unspecified'));
         setIsSubmitting(false);
         return;
       }
 
-      // Create form data - use serviceCategoryId + optional serviceSubcategoryId (new API)
-      const formData = new FormData();
-
-      formData.append('description', description);
-      formData.append('serviceCategoryId', selectedCategoryId.toString());
-      if (selectedSubcategoryId) {
-        formData.append('serviceSubcategoryId', selectedSubcategoryId.toString());
-      }
-      
-      // Budget handling
-      if (budgetUnspecified) {
-        formData.append('budgetUnspecified', 'true');
-      } else {
-        formData.append('budget', budget || '0');
-        formData.append('budgetUnspecified', 'false');
-      }
-      
-      formData.append('address', address);
-      formData.append('latitude', latitude?.toString() || '0');
-      formData.append('longitude', longitude?.toString() || '0');
-      formData.append('timeRequired', '7'); // Default 1 week
-      formData.append('projectType', technician ? 'DIRECT_ASSIGNMENT' : 'ALL');
-      
-      // Add bid deadline if set
-      if (bidsCloseAt) {
-        formData.append('bidsCloseAt', bidsCloseAt);
-      }
-
-      if (technician) {
-        formData.append('assignedTechnicianId', technician.id.toString());
-        formData.append('assignmentType', 'DIRECT_ASSIGNMENT');
-      }
-
-      // Add photos
-      photos.forEach((uri, index) => {
+      const images = photos.map((uri, index) => {
         const filename = uri.split('/').pop();
         const match = /\.(\w+)$/.exec(filename || '');
         const type = match ? `image/${match[1]}` : 'image/jpeg';
-
-        formData.append('images', {
+        return {
           uri: Platform.OS === 'ios' ? uri.replace('file://', '') : uri,
           name: `photo_${index}.jpg`,
           type,
-        } as any);
+        };
       });
 
-      const response = await fetch(
-        buildApiUrl(API_ENDPOINTS.PROJECTS.CREATE),
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          body: formData,
-        }
-      );
+      const projectData: CreateProjectRequest = {
+        description: description.trim(),
+        serviceCategoryId: selectedCategoryId,
+        serviceSubcategoryId: selectedSubcategoryId || undefined,
+        address: address || '',
+        latitude: latitude ?? 0,
+        longitude: longitude ?? 0,
+        timeRequired: 7,
+        projectType: technician ? 'DIRECT_ASSIGNMENT' : 'ALL',
+        budget: budgetUnspecified ? undefined : parseFloat(budget || '0'),
+        budgetUnspecified: budgetUnspecified || undefined,
+        images: images.length > 0 ? images : undefined,
+        assignedTechnicianId: technician ? technician.id : undefined,
+        assignmentType: technician ? 'DIRECT_ASSIGNMENT' : undefined,
+        bidsCloseAt: bidsCloseAt || undefined,
+      };
 
-      const data = await response.json();
+      const data = await createProject(projectData);
 
-      if (response.ok && data.id) {
+      if (data && data.id) {
         const successMessage = technician ? 'Deal sent successfully!' : 'Project submitted successfully!';
-        
-        // Use custom popup for all platforms
         showAlert(
           t('Success'),
           successMessage,
@@ -398,7 +367,7 @@ export default function ManualProjectForm({
           ]
         );
       } else {
-        throw new Error(data.message || 'Failed to submit project');
+        throw new Error('Failed to create project');
       }
     } catch (error: any) {
       console.error('Error submitting project:', error);

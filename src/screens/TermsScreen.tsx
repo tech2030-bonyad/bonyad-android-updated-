@@ -25,19 +25,9 @@ import {
 import { printToFileAsync } from 'expo-print';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 
-// Determine if we are running in Expo Go
-const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
-
-// Dynamically require Pdf to avoid Web/Expo Go build issues
-// react-native-pdf requires native linking, which is not available in Expo Go
-let Pdf: any;
-if (Platform.OS !== 'web' && !isExpoGo) {
-  try {
-    Pdf = require('react-native-pdf').default;
-  } catch (e) {
-    console.warn('react-native-pdf could not be loaded', e);
-  }
-}
+// Platform-specific: .web.tsx exports null (no react-native-pdf); .native.tsx exports Pdf.
+// This keeps react-native-pdf out of the web bundle and fixes "Importing native-only module on web".
+const Pdf = require('./TermsScreenPdf').default;
 
 const { width, height } = Dimensions.get('window');
 
@@ -55,7 +45,8 @@ export default function TermsScreen({ type, onAccept, onDecline }: TermsScreenPr
   // Robust RTL check
   const isRTL = i18n.language.startsWith('ar');
 
-  // Use PDF viewer only if native (not web) AND not Expo Go AND Pdf module loaded
+  // Use PDF viewer only on native when Pdf module loaded; web and Expo Go use text fallback
+  const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
   const canUsePdf = Platform.OS !== 'web' && !isExpoGo && !!Pdf;
   const isWeb = Platform.OS === 'web';
 

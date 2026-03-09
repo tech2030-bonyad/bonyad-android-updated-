@@ -22,7 +22,7 @@ export interface TermsAndConditions {
  */
 export async function getUserTerms(): Promise<TermsAndConditions | null> {
   try {
-    const url = buildApiUrl('/terms/user');
+    const url = buildApiUrl(API_ENDPOINTS.TERMS.USER);
     console.log('🔍 [TermsService] Fetching user terms from:', url);
 
     const response = await fetch(url, {
@@ -63,7 +63,7 @@ export async function getUserTerms(): Promise<TermsAndConditions | null> {
  */
 export async function getTechnicianTerms(): Promise<TermsAndConditions | null> {
   try {
-    const url = buildApiUrl('/terms/technician');
+    const url = buildApiUrl(API_ENDPOINTS.TERMS.TECHNICIAN);
     console.log('🔍 [TermsService] Fetching technician terms from:', url);
 
     const response = await fetch(url, {
@@ -121,7 +121,7 @@ export async function approveTerms(
 ): Promise<boolean> {
   try {
     // Note: This endpoint needs to be implemented on the backend
-    const url = buildApiUrl('/users/terms/approve');
+    const url = buildApiUrl(API_ENDPOINTS.USER.TERMS_APPROVE);
     console.log('📤 [TermsService] Approving terms:', { termsId, version, url });
 
     const response = await fetch(url, {

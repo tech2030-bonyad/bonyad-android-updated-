@@ -1164,23 +1164,23 @@ export default function BidReceivedProjectScreen({
       async () => {
         try {
           const token = await storage.getAuthToken();
-          const url = buildApiUrl(API_ENDPOINTS.VISIT_REQUESTS.UPDATE.replace(':id', visitRequestId.toString()));
-          
+          const url = buildApiUrlWithParams(API_ENDPOINTS.VISIT_REQUESTS.ACCEPT, { id: visitRequestId });
+
           const response = await fetch(url, {
-            method: 'PUT',
+            method: 'POST',
             headers: {
               'Authorization': `Bearer ${token}`,
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ status: 'ACCEPTED' }),
           });
-          
+
           if (response.ok) {
             showSuccess(t('Visit request accepted'), t('Success'));
             loadVisitRequests();
             onSuccess?.();
           } else {
-            showError(t('Failed to accept visit request'), t('Error'));
+            const errorData = await response.json().catch(() => ({}));
+            showError(errorData.message || t('Failed to accept visit request'), t('Error'));
           }
         } catch (error) {
           console.error('Error accepting visit request:', error);
@@ -1190,33 +1190,44 @@ export default function BidReceivedProjectScreen({
     );
   };
 
-  const handleDeclineVisitRequest = async (visitRequestId: number) => {
+  const handleDeclineVisitRequest = async (visitRequestId: number, rejectionReason?: string) => {
     showConfirmation(
-      t('Decline Visit Request'),
-      t('Are you sure you want to decline this visit request?'),
+      t('Reject Visit Request'),
+      t('Are you sure you want to reject this visit request?'),
       async () => {
         try {
           const token = await storage.getAuthToken();
-          const url = buildApiUrl(API_ENDPOINTS.VISIT_REQUESTS.DELETE.replace(':id', visitRequestId.toString()));
-          
+          const url = buildApiUrlWithParams(API_ENDPOINTS.VISIT_REQUESTS.REJECT, { id: visitRequestId });
+
+          const requestBody: Record<string, string> = {};
+          if (rejectionReason) {
+            requestBody.rejectionReason = rejectionReason;
+          }
+
           const response = await fetch(url, {
-            method: 'DELETE',
+            method: 'POST',
             headers: {
               'Authorization': `Bearer ${token}`,
               'Content-Type': 'application/json',
             },
+            body: Object.keys(requestBody).length > 0 ? JSON.stringify(requestBody) : undefined,
           });
-          
+
           if (response.ok) {
-            showSuccess(t('Visit request declined'), t('Success'));
+            showSuccess(t('Visit request rejected'), t('Success'));
             loadVisitRequests();
+            onSuccess?.();
+          } else {
+            const errorData = await response.json().catch(() => ({}));
+            showError(errorData.message || t('Failed to reject visit request'), t('Error'));
           }
         } catch (error) {
-          console.error('Error declining visit request:', error);
+          console.error('Error rejecting visit request:', error);
+          showError(t('Failed to reject visit request'), t('Error'));
         }
       },
       {
-        confirmText: t('Decline'),
+        confirmText: t('Reject'),
         confirmStyle: 'destructive',
       }
     );
@@ -1353,6 +1364,14 @@ export default function BidReceivedProjectScreen({
       {/* Project Overview + Details (User POV) */}
       <View style={styles.section}>
         <Text style={[styles.sectionHeaderTitle, { fontSize: scaledSize(16) }]}>{t('Project Overview')}</Text>
+        <View style={[styles.requestIdCreatedRow, { flexDirection: i18n.language === 'ar' ? 'row-reverse' : 'row' }]}>
+          <Text style={[styles.requestIdText, { color: COLORS.textSecondary }]}>#{project.id}</Text>
+          {project.createdAt ? (
+            <Text style={[styles.createdText, { color: COLORS.textSecondary }]}>
+              {t('Created')}: {formatDate(project.createdAt)}
+            </Text>
+          ) : null}
+        </View>
         <Text style={[styles.sectionDescription, { fontSize: scaledSize(14) }]}>
           {t('Review your project details below. Once submitted, service providers will start sending bids.')}
         </Text>
@@ -1584,6 +1603,14 @@ export default function BidReceivedProjectScreen({
       {/* Project Overview Section */}
       <View style={styles.section}>
         <Text style={[styles.sectionHeaderTitle, { fontSize: scaledSize(16) }]}>{t('Project Overview')}</Text>
+        <View style={[styles.requestIdCreatedRow, { flexDirection: i18n.language === 'ar' ? 'row-reverse' : 'row' }]}>
+          <Text style={[styles.requestIdText, { color: COLORS.textSecondary }]}>#{project.id}</Text>
+          {project.createdAt ? (
+            <Text style={[styles.createdText, { color: COLORS.textSecondary }]}>
+              {t('Created')}: {formatDate(project.createdAt)}
+            </Text>
+          ) : null}
+        </View>
         <Text style={[styles.sectionDescription, { fontSize: scaledSize(14) }]}>
           {t('Review your project details below. Once submitted, service providers will start sending bids.')}
         </Text>
@@ -2077,6 +2104,20 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     color: COLORS.textHeader,
     marginBottom: 12,
+  },
+  requestIdCreatedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 8,
+  },
+  requestIdText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  createdText: {
+    fontSize: 12,
+    fontWeight: '400',
   },
   sectionDescription: {
     fontSize: 14,

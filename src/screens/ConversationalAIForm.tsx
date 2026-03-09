@@ -28,6 +28,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { storage } from '../utils/storage';
 import LocationPicker from '../components/LocationPicker';
 import { API_ENDPOINTS, buildApiUrl } from '../config/api';
+import { createProject, CreateProjectRequest } from '../services/ProjectService';
 import { useRouter } from '../utils/useRouter';
 import ProjectCreationFlow from '../components/ProjectCreationFlow';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
@@ -707,64 +708,38 @@ export default function ConversationalAIForm({
       await new Promise(resolve => setTimeout(resolve, 300));
 
       updateProgress(0.2, t('Creating project...'));
-      
-      const formData = new FormData();
-      formData.append('description', project.description);
-      formData.append('serviceId', (project.serviceId || 1).toString());
-      
-      // Budget handling: if unspecified, don't send budget (backend will treat as null); otherwise send the budget value
-      if (project.budgetUnspecified) {
-        formData.append('budgetUnspecified', 'true');
-        // Don't append budget field - backend will treat missing budget as null
-      } else {
-        formData.append('budget', (project.budget || 0).toString());
-        formData.append('budgetUnspecified', 'false');
-      }
-      
-      // Add bid deadline if set
-      if (project.bidsCloseAt) {
-        formData.append('bidsCloseAt', project.bidsCloseAt);
-      }
-      
-      formData.append('address', project.address || '');
-      formData.append('latitude', (project.latitude || 0).toString());
-      formData.append('longitude', (project.longitude || 0).toString());
-      formData.append('timeRequired', ((project.durationWeeks || 2) * 7).toString());
-      formData.append('projectType', technician ? 'DIRECT_ASSIGNMENT' : 'ALL');
 
-      if (technician) {
-        formData.append('assignedTechnicianId', technician.id.toString());
-        formData.append('assignmentType', 'DIRECT_ASSIGNMENT');
-      }
-
-      // Add photos
-      photos.forEach((uri, index) => {
+      const images = photos.map((uri, index) => {
         const filename = uri.split('/').pop();
         const match = /\.(\w+)$/.exec(filename || '');
         const type = match ? `image/${match[1]}` : 'image/jpeg';
-
-        formData.append('images', {
+        return {
           uri: Platform.OS === 'ios' ? uri.replace('file://', '') : uri,
           name: `photo_${index}.jpg`,
           type,
-        } as any);
+        };
       });
 
-      const response = await fetch(
-        buildApiUrl(API_ENDPOINTS.PROJECTS.CREATE),
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          body: formData,
-        }
-      );
+      const projectData: CreateProjectRequest = {
+        description: project.description,
+        serviceId: project.serviceId || 1,
+        address: project.address || '',
+        latitude: project.latitude || 0,
+        longitude: project.longitude || 0,
+        timeRequired: (project.durationWeeks || 2) * 7,
+        projectType: technician ? 'DIRECT_ASSIGNMENT' : 'ALL',
+        budget: project.budgetUnspecified ? undefined : (project.budget || 0),
+        budgetUnspecified: project.budgetUnspecified || undefined,
+        images: images.length > 0 ? images : undefined,
+        assignedTechnicianId: technician ? technician.id : undefined,
+        assignmentType: technician ? 'DIRECT_ASSIGNMENT' : undefined,
+        bidsCloseAt: project.bidsCloseAt || undefined,
+      };
 
-      const data = await response.json();
+      const data = await createProject(projectData);
 
-      if (!response.ok || !data.id) {
-        throw new Error(data.message || 'Failed to create project');
+      if (!data || !data.id) {
+        throw new Error('Failed to create project');
       }
 
       const projectId = data.id;

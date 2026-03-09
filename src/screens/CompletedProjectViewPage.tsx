@@ -24,6 +24,8 @@ interface CompletedProjectViewPageProps {
   project: any;
   onBack: () => void;
   onSuccess?: () => void;
+  onStartNewProject?: () => void;
+  onViewAllProjects?: () => void;
 }
 
 interface Phase {
@@ -52,6 +54,8 @@ export default function CompletedProjectViewPage({
   project,
   onBack,
   onSuccess,
+  onStartNewProject,
+  onViewAllProjects,
 }: CompletedProjectViewPageProps) {
   const resolvedProjectId = project?.id ?? project?.project?.id ?? project?.projectId;
   const { t } = useTranslation();
@@ -712,6 +716,27 @@ export default function CompletedProjectViewPage({
                         {t('Technician information not available')}
                       </Text>
                     )}
+
+                    {(onStartNewProject || onViewAllProjects) && (
+                      <View style={styles.actionButtonsRow}>
+                        {onViewAllProjects && (
+                          <TouchableOpacity
+                            style={[styles.secondaryButton, { borderColor: colors.primary }]}
+                            onPress={onViewAllProjects}
+                          >
+                            <Text style={[styles.secondaryButtonText, { color: colors.primary }]}>{t('View all projects')}</Text>
+                          </TouchableOpacity>
+                        )}
+                        {onStartNewProject && (
+                          <TouchableOpacity
+                            style={[styles.primaryButton, { backgroundColor: colors.primary }]}
+                            onPress={onStartNewProject}
+                          >
+                            <Text style={styles.primaryButtonText}>{t('Start new project')}</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    )}
                   </>
                 )}
               </View>
@@ -1036,6 +1061,32 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 10,
     borderWidth: 1,
+  },
+  actionButtonsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 20,
+    flexWrap: 'wrap',
+  },
+  secondaryButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  secondaryButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  primaryButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  primaryButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
   },
   reviewActionText: {
     fontSize: 14,

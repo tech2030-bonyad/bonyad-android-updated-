@@ -23,6 +23,7 @@ import { getCategories, ServiceCategory } from '../../services/ServiceService';
 import { resolveServiceImage, shouldRenderSvg } from '../../services/ServiceIconUtils';
 import { getServerBaseUrl, buildApiUrl, API_ENDPOINTS } from '../../config/api';
 import { storage } from '../../utils/storage';
+import { getSmallTaskTypes } from '../../services/SmallTaskService';
 import { LinearGradient } from 'expo-linear-gradient';
 
 // Walkthroughable component with proper layout handling
@@ -209,11 +210,8 @@ const UserHomeScreen: React.FC<UserHomeScreenProps> = ({
     let mounted = true;
     const loadTaskTypes = async () => {
       try {
-        const response = await fetch(buildApiUrl(API_ENDPOINTS.SMALL_TASKS.TYPES));
-        if (response.ok) {
-          const data = await response.json();
-          if (mounted) setTaskTypes(data.taskTypes || []);
-        }
+        const types = await getSmallTaskTypes();
+        if (mounted) setTaskTypes(types);
       } catch (error) {
         console.error('Error fetching task types:', error);
       }

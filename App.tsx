@@ -7,7 +7,7 @@ import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { FontProvider } from './src/context/FontContext';
 // Import API config early to ensure global fetch override is applied
 import './src/config/api';
-import { SplashScreen, WelcomeScreen, OverviewScreen, LoginScreen, SignupScreen, OTPVerificationScreen, ForgotPasswordScreen, ForgotPasswordOTPScreen, ResetPasswordScreen, UserHomeScreen, TechnicianHomeScreen, TechnicianOnboardingScreen, ProfileScreen, EditProfileScreen, MyDataScreen, ChangePhoneScreen, ChangePasswordScreen, PortfolioScreen, ServiceManagementScreen, AvailabilityScreen, SubscriptionScreen, NewProjectView, ManualProjectForm, ConversationalAIForm, ProjectsScreen, ChatRoomsListScreen, ChatDetailScreen, RunningProjectsScreen, NotificationsScreen, AppointmentsScreen, BookingScreen, TechnicianProfileViewScreen, RoomDesignScreen, VoiceAIScreen, CostExplorerScreen, RoomVisualizerScreen, AskBonyadAIScreen, ProjectsMapScreen, AboutScreen, ContactScreen, IntroToAppScreen, OnboardingScreen, TechnicianCompleteProfileScreen, ChatbotScreen, SupportChatScreen, TicketListScreen, CreateTicketScreen, TicketDetailScreen, ServiceProvidersScreen, CommissionPaymentScreen, PaymentCheckoutScreen, CategorySubcategoryScreen, CreationMethodScreen } from './src/screens';
+import { SplashScreen, WelcomeScreen, OverviewScreen, LoginScreen, SignupScreen, OTPVerificationScreen, ForgotPasswordScreen, ForgotPasswordOTPScreen, ResetPasswordScreen, UserHomeScreen, TechnicianHomeScreen, TechnicianOnboardingScreen, ProfileScreen, EditProfileScreen, MyDataScreen, ChangePhoneScreen, ChangePasswordScreen, PortfolioScreen, ServiceManagementScreen, AvailabilityScreen, SubscriptionScreen, NewProjectView, ManualProjectForm, ConversationalAIForm, ProjectsScreen, ChatRoomsListScreen, ChatDetailScreen, RunningProjectsScreen, NotificationsScreen, AppointmentsScreen, BookingScreen, TechnicianProfileViewScreen, RoomDesignScreen, VoiceAIScreen, CostExplorerScreen, RoomVisualizerScreen, AskBonyadAIScreen, ProjectsMapScreen, AboutScreen, ContactScreen, IntroToAppScreen, OnboardingScreen, TechnicianCompleteProfileScreen, ChatbotScreen, SupportChatScreen, TicketListScreen, CreateTicketScreen, TicketDetailScreen, ServiceProvidersScreen, CommissionPaymentScreen, PaymentCheckoutScreen, CategorySubcategoryScreen, CreationMethodScreen, PendingProjectScreen, BidReceivedProjectScreen, ApprovedProjectScreen, ContractSigningProjectScreen, InProgressProjectScreen, CompletedProjectViewPage, ChangeRequestListScreen, ChangeRequestDetailScreen, RequestModificationScreen } from './src/screens';
 import './src/localization/i18n'; // Initialize i18n
 import OnlineStatusService from './src/services/OnlineStatusService';
 import { storage } from './src/utils/storage';
@@ -33,7 +33,7 @@ import { CreateCheckoutRequest } from './src/services/PaymentService';
 // Keep native splash screen visible while we show custom splash
 SplashScreenNative.preventAutoHideAsync();
 
-type Screen = 'splash' | 'onboarding' | 'welcome' | 'overview' | 'about' | 'contact' | 'introToApp' | 'login' | 'signup' | 'otp' | 'forgotPassword' | 'otpVerification' | 'resetPassword' | 'home' | 'profile' | 'editProfile' | 'myData' | 'changePhone' | 'changePassword' | 'portfolio' | 'services' | 'availability' | 'subscription' | 'newProject' | 'manualForm' | 'aiForm' | 'projects' | 'runningProjects' | 'chatRooms' | 'chatDetail' | 'notifications' | 'appointments' | 'booking' | 'technicianProfile' | 'technicianOnboarding' | 'technicianCompleteProfile' | 'roomDesign' | 'voiceAI' | 'costExplorer' | 'roomVisualizer' | 'askBonyadAI' | 'projectsMap' | 'chatbot' | 'supportChat' | 'ticketList' | 'createTicket' | 'ticketDetail' | 'serviceProviders' | 'commissionPayment' | 'paymentCheckout' | 'categorySubcategories' | 'creationMethod';
+type Screen = 'splash' | 'onboarding' | 'welcome' | 'overview' | 'about' | 'contact' | 'introToApp' | 'login' | 'signup' | 'otp' | 'forgotPassword' | 'otpVerification' | 'resetPassword' | 'home' | 'profile' | 'editProfile' | 'myData' | 'changePhone' | 'changePassword' | 'portfolio' | 'services' | 'availability' | 'subscription' | 'newProject' | 'manualForm' | 'aiForm' | 'projects' | 'runningProjects' | 'chatRooms' | 'chatDetail' | 'notifications' | 'appointments' | 'booking' | 'technicianProfile' | 'technicianOnboarding' | 'technicianCompleteProfile' | 'roomDesign' | 'voiceAI' | 'costExplorer' | 'roomVisualizer' | 'askBonyadAI' | 'projectsMap' | 'chatbot' | 'supportChat' | 'ticketList' | 'createTicket' | 'ticketDetail' | 'serviceProviders' | 'commissionPayment' | 'paymentCheckout' | 'categorySubcategories' | 'creationMethod' | 'pendingProject' | 'bidReceivedProject' | 'approvedProject' | 'contractSigningProject' | 'inProgressProject' | 'completedProject' | 'changeRequestList' | 'changeRequestDetail' | 'requestModification';
 
 export default function App() {
   const initialScreen: Screen = Platform.OS === 'web' ? 'welcome' : 'splash';
@@ -80,6 +80,13 @@ export default function App() {
   // Category/Subcategory selection state for project creation flow
   const [selectedCategory, setSelectedCategory] = useState<{ id: number; nameEn: string; nameAr?: string } | null>(null);
   const [selectedSubcategory, setSelectedSubcategory] = useState<{ id: number; nameEn: string; nameAr?: string } | null>(null);
+  
+  // Project detail by status (from Running Projects tap – same flow as web)
+  const [selectedProjectForDetail, setSelectedProjectForDetail] = useState<any>(null);
+  // Change requests flow (from approved/in-progress project)
+  const [changeRequestProjectId, setChangeRequestProjectId] = useState<number | null>(null);
+  const [changeRequestId, setChangeRequestId] = useState<number | null>(null);
+  const [previousScreenBeforeChangeRequests, setPreviousScreenBeforeChangeRequests] = useState<Screen | null>(null);
   
   // Router hook for URL-based routing on web
   const router = useRouter(currentScreen, setCurrentScreen);
@@ -712,6 +719,14 @@ export default function App() {
               setChatbotAIHistory={setChatbotAIHistory}
               selectedTicketId={selectedTicketId}
               setSelectedTicketId={setSelectedTicketId}
+              selectedProjectForDetail={selectedProjectForDetail}
+              setSelectedProjectForDetail={setSelectedProjectForDetail}
+              changeRequestProjectId={changeRequestProjectId}
+              setChangeRequestProjectId={setChangeRequestProjectId}
+              changeRequestId={changeRequestId}
+              setChangeRequestId={setChangeRequestId}
+              previousScreenBeforeChangeRequests={previousScreenBeforeChangeRequests}
+              setPreviousScreenBeforeChangeRequests={setPreviousScreenBeforeChangeRequests}
             />
           </View>
         </GlobalAlertProvider>
@@ -1295,7 +1310,16 @@ function AppContent({
               onBack={() => navigate('home')}
               isTechnician={userRole === 'technician'}
               onShowProjectDetails={(project) => {
-                // Modal is now handled internally in RunningProjectsScreen
+                if (!project) return;
+                const status = (project.status || '').toUpperCase().trim();
+                setSelectedProjectForDetail(project);
+                if (status === 'PENDING') setCurrentScreen('pendingProject');
+                else if (status === 'BID_RECEIVED' || (status.includes('BID') && status.includes('RECEIVED'))) setCurrentScreen('bidReceivedProject');
+                else if (status === 'APPROVED' || status === 'PHASE_PLANNING' || status === 'PHASE_PLANNING_APPROVED') setCurrentScreen('approvedProject');
+                else if (status === 'CONTRACT_SIGNING') setCurrentScreen('contractSigningProject');
+                else if (status === 'IN_PROGRESS') setCurrentScreen('inProgressProject');
+                else if (status === 'COMPLETED') setCurrentScreen('completedProject');
+                else setCurrentScreen('inProgressProject');
               }}
               onOpenChat={(roomId, receiverId, receiverName) => {
                 setChatRoomId(roomId);
@@ -1303,6 +1327,116 @@ function AppContent({
                 setChatReceiverName(receiverName);
                 navigate('chatDetail');
               }}
+            />
+          )}
+
+          {/* Project status screens (from Running Projects or direct nav – same flow as web) */}
+          {currentScreen === 'pendingProject' && selectedProjectForDetail && (
+            <PendingProjectScreen
+              project={selectedProjectForDetail}
+              onBack={() => { setSelectedProjectForDetail(null); setCurrentScreen('runningProjects'); }}
+              onSuccess={() => { setSelectedProjectForDetail(null); setCurrentScreen('runningProjects'); }}
+            />
+          )}
+          {currentScreen === 'bidReceivedProject' && selectedProjectForDetail && (
+            <BidReceivedProjectScreen
+              project={selectedProjectForDetail}
+              onBack={() => { setSelectedProjectForDetail(null); setCurrentScreen('runningProjects'); }}
+              onSuccess={() => { setSelectedProjectForDetail(null); setCurrentScreen('runningProjects'); }}
+              onOpenChat={(roomId, receiverId, receiverName) => {
+                setChatRoomId(roomId);
+                setChatReceiverId(receiverId);
+                setChatReceiverName(receiverName);
+                setSelectedProjectForDetail(null);
+                setCurrentScreen('chatDetail');
+              }}
+            />
+          )}
+          {currentScreen === 'approvedProject' && selectedProjectForDetail && (
+            <ApprovedProjectScreen
+              project={selectedProjectForDetail}
+              onBack={() => { setSelectedProjectForDetail(null); setCurrentScreen('runningProjects'); }}
+              onSuccess={() => { setSelectedProjectForDetail(null); setCurrentScreen('runningProjects'); }}
+              onProceedToContract={() => setCurrentScreen('contractSigningProject')}
+              onOpenChat={(roomId, receiverId, receiverName) => {
+                setChatRoomId(roomId);
+                setChatReceiverId(receiverId);
+                setChatReceiverName(receiverName);
+                setCurrentScreen('chatDetail');
+              }}
+              onNavigateToChangeRequests={(projectId) => {
+                setChangeRequestProjectId(projectId);
+                setPreviousScreenBeforeChangeRequests(currentScreen);
+                setCurrentScreen('changeRequestList');
+              }}
+            />
+          )}
+          {currentScreen === 'contractSigningProject' && selectedProjectForDetail && (
+            <ContractSigningProjectScreen
+              project={selectedProjectForDetail}
+              isTechnician={userRole === 'technician'}
+              onBack={() => { setSelectedProjectForDetail(null); setCurrentScreen('runningProjects'); }}
+              onSuccess={() => { setSelectedProjectForDetail(null); setCurrentScreen('runningProjects'); }}
+            />
+          )}
+          {currentScreen === 'inProgressProject' && selectedProjectForDetail && (
+            <InProgressProjectScreen
+              project={selectedProjectForDetail}
+              isTechnician={userRole === 'technician'}
+              onBack={() => { setSelectedProjectForDetail(null); setCurrentScreen('runningProjects'); }}
+              onOpenChat={(roomId, receiverId, receiverName) => {
+                setChatRoomId(roomId);
+                setChatReceiverId(receiverId);
+                setChatReceiverName(receiverName);
+                setCurrentScreen('chatDetail');
+              }}
+              onSuccess={() => { setSelectedProjectForDetail(null); setCurrentScreen('runningProjects'); }}
+              onNavigateToChangeRequests={(projectId) => {
+                setChangeRequestProjectId(projectId);
+                setPreviousScreenBeforeChangeRequests(currentScreen);
+                setCurrentScreen('changeRequestList');
+              }}
+            />
+          )}
+          {currentScreen === 'completedProject' && selectedProjectForDetail && (
+            <CompletedProjectViewPage
+              project={selectedProjectForDetail}
+              onBack={() => { setSelectedProjectForDetail(null); setCurrentScreen('runningProjects'); }}
+              onSuccess={() => { setSelectedProjectForDetail(null); setCurrentScreen('runningProjects'); }}
+              onViewAllProjects={() => { setSelectedProjectForDetail(null); setCurrentScreen('runningProjects'); }}
+              onStartNewProject={() => { setSelectedProjectForDetail(null); setCurrentScreen('newProject'); }}
+            />
+          )}
+
+          {/* Change request screens */}
+          {currentScreen === 'changeRequestList' && changeRequestProjectId != null && (
+            <ChangeRequestListScreen
+              projectId={changeRequestProjectId}
+              onBack={() => {
+                setChangeRequestProjectId(null);
+                setCurrentScreen(previousScreenBeforeChangeRequests || 'runningProjects');
+                setPreviousScreenBeforeChangeRequests(null);
+              }}
+              onViewDetail={(id) => {
+                setChangeRequestId(id);
+                setCurrentScreen('changeRequestDetail');
+              }}
+              onCreateRequest={() => setCurrentScreen('requestModification')}
+            />
+          )}
+          {currentScreen === 'changeRequestDetail' && changeRequestId != null && changeRequestProjectId != null && (
+            <ChangeRequestDetailScreen
+              changeRequestId={changeRequestId}
+              projectId={changeRequestProjectId}
+              onBack={() => { setChangeRequestId(null); setCurrentScreen('changeRequestList'); }}
+              onSuccess={() => {}}
+            />
+          )}
+          {currentScreen === 'requestModification' && changeRequestProjectId != null && (
+            <RequestModificationScreen
+              projectId={changeRequestProjectId}
+              onBack={() => setCurrentScreen('changeRequestList')}
+              onSuccess={() => {}}
             />
           )}
 

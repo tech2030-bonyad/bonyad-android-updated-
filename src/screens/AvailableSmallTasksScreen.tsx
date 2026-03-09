@@ -16,8 +16,8 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { API_ENDPOINTS, buildApiUrl } from '../config/api';
 import { storage } from '../utils/storage';
+import { getAvailableRequests } from '../services/SmallTaskService';
 import SmallTaskCard from '../components/SmallTaskCard';
 import { SmallTaskRequest } from '../types/smallTasks';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
@@ -85,27 +85,9 @@ export default function AvailableSmallTasksScreen({
         return;
       }
 
-      const url = buildApiUrl(API_ENDPOINTS.SMALL_TASKS.REQUESTS_AVAILABLE);
-      console.log('🔍 Fetching available tasks:', url);
-
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log('✅ Loaded tasks:', data.requests?.length || data.length || 0);
-        const tasksList = data.requests || data || [];
-        setTasks(tasksList);
-        setFilteredTasks(tasksList);
-      } else {
-        console.error('❌ Failed to fetch tasks:', response.status);
-        const errorText = await response.text();
-        console.error('Error:', errorText);
-        showError(t('Failed to load tasks'), t('Error'));
-      }
+      const tasksList = await getAvailableRequests();
+      setTasks(tasksList as SmallTaskRequest[]);
+      setFilteredTasks(tasksList as SmallTaskRequest[]);
     } catch (error) {
       console.error('❌ Error fetching tasks:', error);
       showError(t('Error loading tasks'), t('Error'));

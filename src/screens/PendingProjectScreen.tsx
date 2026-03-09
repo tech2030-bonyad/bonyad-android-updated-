@@ -488,6 +488,14 @@ export default function PendingProjectScreen({
         {/* Project Overview Section */}
         <View style={styles.section}>
           <Text style={[styles.sectionHeaderTitle, { fontSize: scaledSize(16) }]}>{t('Project Overview')}</Text>
+          <View style={[styles.requestIdCreatedRow, { flexDirection: i18n.language === 'ar' ? 'row-reverse' : 'row' }]}>
+            <Text style={[styles.requestIdText, { color: COLORS.textSecondary }]}>#{project.id}</Text>
+            {project.createdAt ? (
+              <Text style={[styles.createdText, { color: COLORS.textSecondary }]}>
+                {t('Created')}: {formatDate(project.createdAt)}
+              </Text>
+            ) : null}
+          </View>
           <Text style={[styles.sectionDescription, { fontSize: scaledSize(14) }]}>
             {isTechnician 
               ? t('Review the project details below. You can request a visit or submit a bid.')
@@ -933,6 +941,20 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     color: COLORS.textHeader,
     marginBottom: 12,
+  },
+  requestIdCreatedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 8,
+  },
+  requestIdText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  createdText: {
+    fontSize: 12,
+    fontWeight: '400',
   },
   sectionDescription: {
     fontSize: 14,

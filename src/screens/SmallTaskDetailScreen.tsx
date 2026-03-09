@@ -15,11 +15,11 @@ import { Ionicons, Feather } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { API_ENDPOINTS, buildApiUrl, buildApiUrlWithParams } from '../config/api';
 import { storage } from '../utils/storage';
 import SmallTaskPhaseBar from '../components/SmallTaskPhaseBar';
 import SmallTaskBidFormModal from '../components/SmallTaskBidFormModal';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
+import { getBidsOnRequest, acceptBid, rejectBid, updateRequestStatus } from '../services/SmallTaskService';
 import { SmallTaskRequest, SmallTaskBid } from '../types/smallTasks';
 
 interface SmallTaskDetailScreenProps {
@@ -121,10 +121,12 @@ export default function SmallTaskDetailScreen({
         return;
       }
 
-      // Load task details and bids
-      await Promise.all([
-        loadBids(),
-      ]);
+      // Load task details and bids (only requester can view bids; technicians get "Only the requester can view bids")
+      if (userRole === 'user') {
+        await loadBids();
+      } else {
+        setBids([]);
+      }
     } catch (error) {
       console.error('Error loading task details:', error);
     } finally {
@@ -134,25 +136,14 @@ export default function SmallTaskDetailScreen({
 
   const loadBids = async () => {
     if (!task?.id) return;
-
+    // Only the requester can view bids; skip for technicians to avoid "Only the requester can view bids" error
+    if (userRole !== 'user') {
+      setBids([]);
+      return;
+    }
     try {
-      const token = await storage.getAuthToken();
-      // GET /api/small-tasks/requests/:id/bids
-      const url = buildApiUrlWithParams(API_ENDPOINTS.SMALL_TASKS.REQUEST_BID, { id: task.id });
-      
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        // API might return bids array directly or wrapped in an object
-        setBids(Array.isArray(data) ? data : (data.bids || []));
-      }
+      const list = await getBidsOnRequest(task.id);
+      setBids(list as SmallTaskBid[]);
     } catch (error) {
       console.error('Error loading bids:', error);
     }
@@ -188,36 +179,13 @@ export default function SmallTaskDetailScreen({
       async () => {
         setIsUpdatingStatus(true);
         try {
-          const token = await storage.getAuthToken();
-          if (!token) {
-            showError(t('Please login again'), t('Error'));
-            return;
-          }
-
-          const url = buildApiUrlWithParams(API_ENDPOINTS.SMALL_TASKS.UPDATE_STATUS, { id: task.id });
-          console.log('🔄 Updating task status:', url, newStatus);
-
-          const response = await fetch(url, {
-            method: 'PATCH',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ status: newStatus }),
-          });
-
-          if (response.ok) {
-            console.log('✅ Status updated');
-            showSuccess(t('Status updated successfully'), t('Success'));
-            setCurrentStatus(newStatus);
-            setTimeout(() => {
-              hideAlert();
-              onSuccess?.();
-            }, 1500);
-          } else {
-            console.error('❌ Failed to update status:', response.status);
-            showError(t('Failed to update status'), t('Error'));
-          }
+          await updateRequestStatus(task.id, newStatus);
+          showSuccess(t('Status updated successfully'), t('Success'));
+          setCurrentStatus(newStatus);
+          setTimeout(() => {
+            hideAlert();
+            onSuccess?.();
+          }, 1500);
         } catch (error) {
           console.error('❌ Error updating status:', error);
           showError(t('Error updating status'), t('Error'));
@@ -234,33 +202,13 @@ export default function SmallTaskDetailScreen({
       t('Are you sure you want to accept this bid? Other bids will be rejected.'),
       async () => {
         try {
-          const token = await storage.getAuthToken();
-          if (!token) {
-            showError(t('Please login again'), t('Error'));
-            return;
-          }
-
-          const url = buildApiUrlWithParams(API_ENDPOINTS.SMALL_TASKS.ACCEPT_BID, { requestId: task.id, bidId });
-          console.log('✅ Accepting bid:', url);
-
-          const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-            },
-          });
-
-          if (response.ok) {
-            showSuccess(t('Bid accepted successfully'), t('Success'));
-            setTimeout(() => {
-              hideAlert();
-              loadTaskDetails();
-              onSuccess?.();
-            }, 1500);
-          } else {
-            console.error('❌ Failed to accept bid:', response.status);
-            showError(t('Failed to accept bid'), t('Error'));
-          }
+          await acceptBid(task.id, bidId);
+          showSuccess(t('Bid accepted successfully'), t('Success'));
+          setTimeout(() => {
+            hideAlert();
+            loadTaskDetails();
+            onSuccess?.();
+          }, 1500);
         } catch (error) {
           console.error('❌ Error accepting bid:', error);
           showError(t('Error accepting bid'), t('Error'));
@@ -275,32 +223,12 @@ export default function SmallTaskDetailScreen({
       t('Are you sure you want to reject this bid?'),
       async () => {
         try {
-          const token = await storage.getAuthToken();
-          if (!token) {
-            showError(t('Please login again'), t('Error'));
-            return;
-          }
-
-          const url = buildApiUrlWithParams(API_ENDPOINTS.SMALL_TASKS.REJECT_BID, { bidId });
-          console.log('❌ Rejecting bid:', url);
-
-          const response = await fetch(url, {
-            method: 'PATCH',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-            },
-          });
-
-          if (response.ok) {
-            showSuccess(t('Bid rejected'), t('Success'));
-            setTimeout(() => {
-              hideAlert();
-              loadTaskDetails();
-            }, 1500);
-          } else {
-            console.error('❌ Failed to reject bid:', response.status);
-            showError(t('Failed to reject bid'), t('Error'));
-          }
+          await rejectBid(bidId);
+          showSuccess(t('Bid rejected'), t('Success'));
+          setTimeout(() => {
+            hideAlert();
+            loadTaskDetails();
+          }, 1500);
         } catch (error) {
           console.error('❌ Error rejecting bid:', error);
           showError(t('Error rejecting bid'), t('Error'));
@@ -389,6 +317,9 @@ export default function SmallTaskDetailScreen({
                 <Ionicons name="construct" size={32} color={colors.primary} />
               </View>
               <View style={styles.taskInfo}>
+                <Text style={[styles.taskIdText, { color: colors.textSecondary }]}>
+                  #{taskDetails?.id ?? task?.id}
+                </Text>
                 <Text style={[styles.taskName, { color: colors.text }]}>
                   {taskName}
                 </Text>
@@ -748,6 +679,11 @@ const styles = StyleSheet.create({
   },
   taskInfo: {
     flex: 1,
+  },
+  taskIdText: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginBottom: 4,
   },
   taskName: {
     fontSize: 18,

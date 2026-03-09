@@ -16,23 +16,13 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { API_ENDPOINTS, buildApiUrl } from '../config/api';
+import { createSmallTaskRequest, type SmallTaskType, type CreateSmallTaskRequestBody } from '../services/SmallTaskService';
 import { storage } from '../utils/storage';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
 import LocationPicker from '../components/LocationPicker';
 
-interface TaskType {
-  id: number;
-  nameAr: string;
-  nameEn: string;
-  description?: string;
-  basePrice: number;
-  estimatedDuration: number;
-  isActive: boolean;
-}
-
 interface SmallTaskRequestFormProps {
-  taskType: TaskType;
+  taskType: SmallTaskType;
   onBack: () => void;
   onSuccess: () => void;
 }
@@ -109,70 +99,49 @@ export default function SmallTaskRequestForm({
         return;
       }
 
-      const url = buildApiUrl(API_ENDPOINTS.SMALL_TASKS.CREATE_REQUEST);
-      
-      // Validate required fields
       if (!description.trim()) {
         showError(t('Please enter a description'), t('Validation Error'));
         setIsSubmitting(false);
         return;
       }
 
-      if (!address.trim()) {
-        showError(t('Please enter an address'), t('Validation Error'));
+      // Align with web: description + location (lat/long) required; address optional
+      if (latitude == null || longitude == null) {
+        showError(t('Please select location on map'), t('Validation Error'));
         setIsSubmitting(false);
         return;
       }
 
-      // API requires only taskTypeId, description, address; optional latitude, longitude (README)
-      const requestBody: Record<string, unknown> = {
+      const body: CreateSmallTaskRequestBody = {
         taskTypeId: taskType.id,
         description: description.trim(),
-        address: address.trim(),
+        address: address.trim() || undefined,
+        latitude,
+        longitude,
       };
-      if (latitude != null && longitude != null) {
-        requestBody.latitude = latitude;
-        requestBody.longitude = longitude;
-      }
 
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
+      await createSmallTaskRequest(body);
+
+      showSuccess(t('Small task request created successfully'), t('Success'));
+
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: -20,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        setTimeout(() => {
+          onSuccess();
+        }, 300);
       });
-
-      if (response.ok) {
-        const data = await response.json();
-        showSuccess(t('Small task request created successfully'), t('Success'));
-        
-        // Exit animation
-        Animated.parallel([
-          Animated.timing(fadeAnim, {
-            toValue: 0,
-            duration: 200,
-            useNativeDriver: true,
-          }),
-          Animated.timing(slideAnim, {
-            toValue: -20,
-            duration: 200,
-            useNativeDriver: true,
-          }),
-        ]).start(() => {
-          setTimeout(() => {
-            onSuccess();
-          }, 300);
-        });
-      } else {
-        const errorText = await response.text();
-        console.error('❌ Failed to create small task request:', errorText);
-        showError(t('Failed to create task request'), t('Error'));
-        setIsSubmitting(false);
-      }
     } catch (error: any) {
-      console.error('❌ Error creating small task request:', error);
+      console.error('Error creating small task request:', error);
       showError(error.message || t('Error creating task request'), t('Error'));
       setIsSubmitting(false);
     }
@@ -315,7 +284,7 @@ export default function SmallTaskRequestForm({
                 keyboardType="numeric"
               />
             </View>
-            {taskType.basePrice > 0 && (
+            {taskType.basePrice != null && taskType.basePrice > 0 && (
               <Text style={[
                 styles.hintText, 
                 { 
@@ -366,7 +335,7 @@ export default function SmallTaskRequestForm({
                 {t('hours')}
               </Text>
             </View>
-            {taskType.estimatedDuration > 0 && (
+            {taskType.estimatedDuration != null && taskType.estimatedDuration > 0 && (
               <Text style={[
                 styles.hintText, 
                 { 

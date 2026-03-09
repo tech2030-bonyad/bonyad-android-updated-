@@ -17,8 +17,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { API_ENDPOINTS, buildApiUrl, buildApiUrlWithParams } from '../config/api';
 import { storage } from '../utils/storage';
+import { getRequestDetails, getBidsOnRequest, acceptBid, rejectBid, cancelRequest } from '../services/SmallTaskService';
 import SmallTaskPhaseBar from '../components/SmallTaskPhaseBar';
 import SmallTaskBidFormModal from '../components/SmallTaskBidFormModal';
 import SmallTaskBidCard from '../components/SmallTaskBidCard';
@@ -151,7 +151,25 @@ export default function PendingSmallTaskScreen({
     setError(null);
     setHasError(false);
     try {
-      await Promise.all([loadTaskDetails(), loadBids()]);
+      await loadTaskDetails();
+      // Only the requester can view bids; technicians get "Only the requester can view bids" from API
+      if (!isTechnician) {
+        await loadBids();
+      } else {
+        setBids([]);
+        // For technician: check if they already bid via my-bids (optional - could call getMyBids and find this request)
+        const userId = await storage.getUserId();
+        if (userId != null && task.id) {
+          try {
+            const { getMyBids } = await import('../services/SmallTaskService');
+            const { bids: myBids } = await getMyBids();
+            const myBid = myBids.find((b: { smallTaskRequestId?: number }) => b.smallTaskRequestId === task.id);
+            if (myBid && (myBid as any).id) setMyBidId((myBid as any).id);
+          } catch (_) {
+            // ignore
+          }
+        }
+      }
     } catch (err) {
       console.error('Error loading data:', err);
       setError(t('Failed to load data. Please try again.'));
@@ -163,56 +181,23 @@ export default function PendingSmallTaskScreen({
 
   const loadTaskDetails = async () => {
     try {
-      const token = await storage.getAuthToken();
-      if (!token) return;
-
-      const url = buildApiUrlWithParams(API_ENDPOINTS.SMALL_TASKS.REQUEST_BID, { id: task.id });
-      const response = await fetch(url.replace('/bids', ''), {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setTaskDetails(data);
-      }
+      const data = await getRequestDetails(task.id);
+      setTaskDetails({
+        ...data,
+        taskType: data.taskTypeId
+          ? { id: data.taskTypeId, nameAr: data.taskTypeNameAr || '', nameEn: data.taskTypeNameEn || '' }
+          : undefined,
+      } as SmallTaskRequest);
     } catch (error) {
       console.error('Error loading task details:', error);
     }
   };
 
   const loadBids = async () => {
+    if (isTechnician) return; // Only requester can view bids
     try {
-      const token = await storage.getAuthToken();
-      if (!token) return;
-
-      // GET /api/small-tasks/requests/{id}/bids
-      const url = buildApiUrlWithParams(API_ENDPOINTS.SMALL_TASKS.REQUEST_BID, { id: task.id });
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const bidsList = data.bids || data || [];
-        setBids(bidsList);
-
-        // Check if user has a bid
-        if (isTechnician) {
-          const userId = await storage.getUserId();
-          const myBid = bidsList.find((b: SmallTaskBid) => b.technicianId === userId);
-          if (myBid) {
-            setMyBidId(myBid.id);
-          }
-        }
-      }
+      const list = await getBidsOnRequest(task.id);
+      setBids(list as SmallTaskBid[]);
     } catch (error) {
       console.error('Error loading bids:', error);
     }
@@ -230,27 +215,10 @@ export default function PendingSmallTaskScreen({
       t('Are you sure you want to accept this bid? Other bids will be rejected.'),
       async () => {
         try {
-          const token = await storage.getAuthToken();
-          if (!token) {
-            showError(t('Please login again'), t('Error'));
-            return;
-          }
-
-          const url = buildApiUrlWithParams(API_ENDPOINTS.SMALL_TASKS.ACCEPT_BID, { requestId: task.id, bidId });
-          const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-            },
-          });
-
-          if (response.ok) {
-            showSuccess(t('Bid accepted successfully'), t('Success'));
-            await loadData();
-            onSuccess?.();
-          } else {
-            showError(t('Failed to accept bid'), t('Error'));
-          }
+          await acceptBid(task.id, bidId);
+          showSuccess(t('Bid accepted successfully'), t('Success'));
+          await loadData();
+          onSuccess?.();
         } catch (error) {
           console.error('Error accepting bid:', error);
           showError(t('Error accepting bid'), t('Error'));
@@ -265,26 +233,9 @@ export default function PendingSmallTaskScreen({
       t('Are you sure you want to reject this bid?'),
       async () => {
         try {
-          const token = await storage.getAuthToken();
-          if (!token) {
-            showError(t('Please login again'), t('Error'));
-            return;
-          }
-
-          const url = buildApiUrlWithParams(API_ENDPOINTS.SMALL_TASKS.REJECT_BID, { bidId });
-          const response = await fetch(url, {
-            method: 'PATCH',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-            },
-          });
-
-          if (response.ok) {
-            showSuccess(t('Bid rejected'), t('Success'));
-            await loadData();
-          } else {
-            showError(t('Failed to reject bid'), t('Error'));
-          }
+          await rejectBid(bidId);
+          showSuccess(t('Bid rejected'), t('Success'));
+          await loadData();
         } catch (error) {
           console.error('Error rejecting bid:', error);
           showError(t('Error rejecting bid'), t('Error'));
@@ -295,32 +246,13 @@ export default function PendingSmallTaskScreen({
 
   const handleCancelRequest = async () => {
     try {
-      const token = await storage.getAuthToken();
-      if (!token) {
-        showError(t('Please login again'), t('Error'));
-        return;
-      }
-
-      const url = buildApiUrlWithParams(API_ENDPOINTS.SMALL_TASKS.CANCEL, { id: task.id });
-      const response = await fetch(url, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        showSuccess(t('Task request cancelled successfully'), t('Success'));
-        onSuccess?.();
-        onBack();
-      } else {
-        const data = await response.json().catch(() => ({}));
-        showError(data.message || t('Failed to cancel request'), t('Error'));
-      }
-    } catch (error) {
+      await cancelRequest(task.id);
+      showSuccess(t('Task request cancelled successfully'), t('Success'));
+      onSuccess?.();
+      onBack();
+    } catch (error: unknown) {
       console.error('Error cancelling request:', error);
-      showError(t('Error cancelling request'), t('Error'));
+      showError((error as Error).message || t('Error cancelling request'), t('Error'));
     }
   };
 
@@ -442,17 +374,33 @@ export default function PendingSmallTaskScreen({
 
           {/* Task Info - Direct Fields (No Card) */}
           <View style={styles.taskInfoSection}>
-            {/* Task Icon and Name */}
+            {/* Task Icon and Name + Request ID & Status (same as web) */}
             <View style={styles.taskHeaderSection}>
               <View style={[styles.iconContainer, { backgroundColor: colors.primary + '15' }]}>
                 <Ionicons name="construct" size={32} color={colors.primary} />
               </View>
               <View style={styles.taskInfo}>
+                <View style={[styles.requestIdStatusRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+                  <Text style={[styles.requestIdText, { color: colors.textSecondary }]}>#{taskDetails.id}</Text>
+                  <View style={[styles.cardStatusBadge, { backgroundColor: '#FFB70320' }]}>
+                    <Text style={[styles.cardStatusBadgeText, { color: '#FFB703' }]}>{t('Pending')}</Text>
+                  </View>
+                </View>
                 <Text style={[styles.taskName, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '700' }]}>
                   {taskName}
                 </Text>
               </View>
             </View>
+
+            {/* Created date (same as web) */}
+            {taskDetails.createdAt && (
+              <View style={styles.fieldSection}>
+                <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{t('Created')}</Text>
+                <Text style={[styles.fieldValue, { color: colors.text }]}>
+                  {new Date(taskDetails.createdAt).toLocaleDateString(i18n.language === 'ar' ? 'ar-SA' : 'en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                </Text>
+              </View>
+            )}
 
             {/* Description */}
             {taskDetails.description && (
@@ -752,6 +700,24 @@ const styles = StyleSheet.create({
   },
   taskInfo: {
     flex: 1,
+  },
+  requestIdStatusRow: {
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  requestIdText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  cardStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  cardStatusBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
   },
   taskName: {
     fontSize: 22,
