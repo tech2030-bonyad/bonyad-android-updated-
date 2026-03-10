@@ -60,6 +60,8 @@ export { default as ContractSigningProjectScreen } from './ContractSigningProjec
 export { default as InProgressProjectScreen } from './InProgressProjectScreen';
 export { default as PaymentTransactionScreen } from './PaymentTransactionScreen';
 export { default as RefundRequestScreen } from './RefundRequestScreen';
+export { default as RegionsManagementScreen } from './RegionsManagementScreen';
+export { default as SmallTaskTypesScreen } from './SmallTaskTypesScreen';
 export { default as PaymentCheckoutScreen } from './PaymentCheckoutScreen';
 export { default as AdminRefundManagementScreen } from './AdminRefundManagementScreen';
 export { default as PaymentResultScreen } from './PaymentResultScreen';

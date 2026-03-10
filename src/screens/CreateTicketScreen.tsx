@@ -1,5 +1,5 @@
-// 🎫 CreateTicketScreen - Create New Support Ticket
-import React, { useState } from 'react';
+// 🎫 CreateTicketScreen – same integration as web (getSupportCategoriesHierarchy, createTicket with categoryId/subcategoryId)
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,17 +11,19 @@ import {
   KeyboardAvoidingView,
   Platform,
   Image,
-  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
-import SupportTicketService from '../services/SupportTicketService';
+import {
+  getSupportCategoriesHierarchy,
+  hierarchyToRequestTypes,
+  createTicket,
+} from '../services/SupportTicketService';
 import FileUploadService from '../services/FileUploadService';
-import { TicketCategory, TicketPriority } from '../types/chat';
+import type { SupportRequestType, TicketPriority } from '../types/chat';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
-import { LinearGradient } from 'expo-linear-gradient';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
 
 interface CreateTicketScreenProps {
@@ -29,73 +31,31 @@ interface CreateTicketScreenProps {
   onSuccess?: () => void;
 }
 
-// Category configuration with subcategories (priority is for backend only, not displayed)
-const CATEGORY_CONFIG: Record<TicketCategory, {
-  labelEn: string;
-  labelAr: string;
-  icon: string;
-  subcategories: { value: string; labelEn: string; labelAr: string; priority: TicketPriority }[];
-}> = {
-  'General': {
-    labelEn: 'General',
-    labelAr: 'عام',
-    icon: 'help-circle-outline',
-    subcategories: [
-      { value: 'General Inquiry', labelEn: 'General Inquiry', labelAr: 'استفسار عام', priority: 'LOW' },
-      { value: 'Feedback', labelEn: 'Feedback', labelAr: 'ملاحظات', priority: 'LOW' },
-      { value: 'Complaint', labelEn: 'Complaint', labelAr: 'شكوى', priority: 'MEDIUM' },
-    ],
-  },
-  'Billing': {
-    labelEn: 'Billing',
-    labelAr: 'الفواتير',
-    icon: 'card-outline',
-    subcategories: [
-      { value: 'Duplicate Charge', labelEn: 'Duplicate Charge', labelAr: 'رسوم مكررة', priority: 'HIGH' },
-      { value: 'Refund Request', labelEn: 'Refund Request', labelAr: 'طلب استرداد', priority: 'HIGH' },
-      { value: 'Payment Failed', labelEn: 'Payment Failed', labelAr: 'فشل الدفع', priority: 'HIGH' },
-      { value: 'Invoice Issue', labelEn: 'Invoice Issue', labelAr: 'مشكلة في الفاتورة', priority: 'MEDIUM' },
-      { value: 'Subscription', labelEn: 'Subscription', labelAr: 'الاشتراك', priority: 'MEDIUM' },
-    ],
-  },
-  'Technical': {
-    labelEn: 'Technical',
-    labelAr: 'تقني',
-    icon: 'construct-outline',
-    subcategories: [
-      { value: 'App Crashing', labelEn: 'App Crashing', labelAr: 'تعطل التطبيق', priority: 'URGENT' },
-      { value: 'Login Issue', labelEn: 'Login Issue', labelAr: 'مشكلة تسجيل الدخول', priority: 'HIGH' },
-      { value: 'Payment Error', labelEn: 'Payment Error', labelAr: 'خطأ في الدفع', priority: 'HIGH' },
-      { value: 'Feature Not Working', labelEn: 'Feature Not Working', labelAr: 'الميزة لا تعمل', priority: 'MEDIUM' },
-      { value: 'Slow Performance', labelEn: 'Slow Performance', labelAr: 'بطء الأداء', priority: 'LOW' },
-    ],
-  },
-  'Account': {
-    labelEn: 'Account',
-    labelAr: 'الحساب',
-    icon: 'person-outline',
-    subcategories: [
-      { value: 'Password Reset', labelEn: 'Password Reset', labelAr: 'إعادة تعيين كلمة المرور', priority: 'HIGH' },
-      { value: 'Account Locked', labelEn: 'Account Locked', labelAr: 'الحساب مغلق', priority: 'URGENT' },
-      { value: 'Update Profile', labelEn: 'Update Profile', labelAr: 'تحديث الملف الشخصي', priority: 'LOW' },
-      { value: 'Delete Account', labelEn: 'Delete Account', labelAr: 'حذف الحساب', priority: 'MEDIUM' },
-      { value: 'Verification', labelEn: 'Verification', labelAr: 'التحقق', priority: 'MEDIUM' },
-    ],
-  },
-  'Other': {
-    labelEn: 'Other',
-    labelAr: 'أخرى',
-    icon: 'ellipsis-horizontal-outline',
-    subcategories: [
-      { value: 'Other', labelEn: 'Other', labelAr: 'أخرى', priority: 'MEDIUM' },
-    ],
-  },
-};
+/** Fallback when GET /support/categories/hierarchy fails or returns empty – same as web CreateTicketModal */
+const FALLBACK_CATEGORIES: SupportRequestType[] = [
+  { id: 1, nameEn: 'General Inquiry', nameAr: 'استفسار عام', name: 'General Inquiry', active: true, subcategories: [
+    { id: 11, nameEn: 'Product question', nameAr: 'سؤال عن المنتج', name: 'Product question', active: true },
+    { id: 12, nameEn: 'Pricing', nameAr: 'الأسعار', name: 'Pricing', active: true },
+    { id: 13, nameEn: 'Other', nameAr: 'أخرى', name: 'Other', active: true },
+  ]},
+  { id: 2, nameEn: 'Payment Issues', nameAr: 'مشكلات الدفع', name: 'Payment Issues', active: true, subcategories: [
+    { id: 21, nameEn: 'Payment not received', nameAr: 'لم أستلم الدفع', name: 'Payment not received', active: true },
+    { id: 22, nameEn: 'Refund', nameAr: 'استرداد', name: 'Refund', active: true },
+    { id: 23, nameEn: 'Wallet / Escrow', nameAr: 'المحفظة / الضمان', name: 'Wallet / Escrow', active: true },
+  ]},
+  { id: 3, nameEn: 'Technical Issue', nameAr: 'مشكلة تقنية', name: 'Technical Issue', active: true, subcategories: [
+    { id: 31, nameEn: 'App not working', nameAr: 'التطبيق لا يعمل', name: 'App not working', active: true },
+    { id: 32, nameEn: 'Login / Account access', nameAr: 'تسجيل الدخول / الوصول', name: 'Login / Account access', active: true },
+    { id: 33, nameEn: 'Bug or error', nameAr: 'خلل أو خطأ', name: 'Bug or error', active: true },
+  ]},
+  { id: 4, nameEn: 'Account Issue', nameAr: 'مشكلة الحساب', name: 'Account Issue', active: true, subcategories: [
+    { id: 41, nameEn: 'Profile update', nameAr: 'تحديث الملف', name: 'Profile update', active: true },
+    { id: 42, nameEn: 'Verification', nameAr: 'التحقق', name: 'Verification', active: true },
+    { id: 43, nameEn: 'Close account', nameAr: 'إغلاق الحساب', name: 'Close account', active: true },
+  ]},
+];
 
-const CATEGORIES = Object.entries(CATEGORY_CONFIG).map(([key, config]) => ({
-  value: key as TicketCategory,
-  ...config,
-}));
+const PRIORITIES: TicketPriority[] = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
 
 const CreateTicketScreen: React.FC<CreateTicketScreenProps> = ({
   onBack,
@@ -105,33 +65,52 @@ const CreateTicketScreen: React.FC<CreateTicketScreenProps> = ({
   const { colors, theme } = useTheme();
   const isDarkMode = theme === 'dark';
   const language = i18n.language === 'ar' ? 'ar' : 'en';
+  const isRTL = language === 'ar';
   const { alertState, showSuccess, showError, hideAlert } = useAlertPopup();
 
   const [subject, setSubject] = useState('');
   const [description, setDescription] = useState('');
-  const [category, setCategory] = useState<TicketCategory | null>(null);
-  const [subcategory, setSubcategory] = useState<string>('');
+  const [priority, setPriority] = useState<TicketPriority>('MEDIUM');
+  const [categoryId, setCategoryId] = useState<number | undefined>(undefined);
+  const [subcategoryId, setSubcategoryId] = useState<number | undefined>(undefined);
+  const [categories, setCategories] = useState<SupportRequestType[]>([]);
+  const [loadingCategories, setLoadingCategories] = useState(false);
   const [attachments, setAttachments] = useState<{ uri: string; name: string; type: string }[]>([]);
   const [uploadingFiles, setUploadingFiles] = useState(false);
-  const [showSubcategoryModal, setShowSubcategoryModal] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Get current category config
-  const currentCategory = category ? CATEGORY_CONFIG[category] : null;
-  const currentSubcategories = currentCategory?.subcategories || [];
+  const topLevelCategories = categories.filter(c => !c.parentId && c.active !== false);
+  const subcategories = categoryId != null
+    ? (categories.find(c => c.id === categoryId)?.subcategories || []).filter(s => s.active !== false)
+    : [];
 
-  // Get auto-assigned priority based on selected subcategory
-  const autoPriority = currentSubcategories.find(s => s.value === subcategory)?.priority || 'MEDIUM';
+  const loadCategories = useCallback(async () => {
+    setLoadingCategories(true);
+    try {
+      const hierarchy = await getSupportCategoriesHierarchy();
+      if (hierarchy?.length > 0) {
+        setCategories(hierarchyToRequestTypes(hierarchy));
+      } else {
+        setCategories(FALLBACK_CATEGORIES);
+      }
+    } catch {
+      setCategories(FALLBACK_CATEGORIES);
+    } finally {
+      setLoadingCategories(false);
+    }
+  }, []);
 
-  const handleCategorySelect = (cat: TicketCategory) => {
-    setCategory(cat);
-    setSubcategory('');
-    setShowSubcategoryModal(true);
+  useEffect(() => {
+    loadCategories();
+  }, [loadCategories]);
+
+  const handleCategorySelect = (id: number) => {
+    setCategoryId(id);
+    setSubcategoryId(undefined);
   };
 
-  const handleSubcategorySelect = (sub: string) => {
-    setSubcategory(sub);
-    setShowSubcategoryModal(false);
+  const handleSubcategorySelect = (id: number) => {
+    setSubcategoryId(prev => prev === id ? undefined : id);
   };
 
   // Pick document from file system
@@ -256,14 +235,6 @@ const CreateTicketScreen: React.FC<CreateTicketScreenProps> = ({
   };
 
   const handleSubmit = async () => {
-    if (!category) {
-      showError(language === 'ar' ? 'الرجاء اختيار الفئة' : 'Please select a category');
-      return;
-    }
-    if (!subcategory) {
-      showError(language === 'ar' ? 'الرجاء اختيار الفئة الفرعية' : 'Please select a subcategory');
-      return;
-    }
     if (!subject.trim()) {
       showError(language === 'ar' ? 'الرجاء إدخال الموضوع' : 'Please enter a subject');
       return;
@@ -276,35 +247,40 @@ const CreateTicketScreen: React.FC<CreateTicketScreenProps> = ({
       showError(language === 'ar' ? 'الوصف قصير جداً' : 'Description is too short');
       return;
     }
+    if (categories.length > 0 && categoryId == null && subcategoryId == null) {
+      showError(language === 'ar' ? 'الرجاء اختيار الفئة أو الفئة الفرعية' : 'Please select a category or subcategory');
+      return;
+    }
 
     setLoading(true);
     try {
       const attachmentUrls = await uploadAttachments();
 
-      const ticket = await SupportTicketService.createTicket({
+      const ticket = await createTicket({
         subject: subject.trim(),
         description: description.trim(),
-        category,
-        subcategory,
-        priority: autoPriority,
+        priority,
+        ...(categoryId != null && { categoryId }),
+        ...(subcategoryId != null && { subcategoryId }),
         attachmentUrls: attachmentUrls.length > 0 ? attachmentUrls : undefined,
       });
 
       if (ticket) {
         showSuccess(
-          language === 'ar' 
+          language === 'ar'
             ? 'تم إنشاء تذكرتك بنجاح. سنتواصل معك خلال 24 إلى 48 ساعة.'
             : 'Your ticket has been created successfully. We will contact you within 24 to 48 hours.',
           language === 'ar' ? 'تم بنجاح' : 'Success'
         );
-        // Call onSuccess after a delay to let user see the success message
-        setTimeout(() => {
-          onSuccess?.();
-        }, 2000);
+        setTimeout(() => onSuccess?.(), 2000);
       }
     } catch (error: any) {
+      const msg = error?.message || '';
+      const isCategoryError = typeof msg === 'string' && /category is not active/i.test(msg);
       showError(
-        error.message || (language === 'ar' ? 'فشل في إنشاء التذكرة' : 'Failed to create ticket')
+        isCategoryError
+          ? (language === 'ar' ? 'الفئة المحددة لم تعد متاحة. حاول مرة أخرى أو اختر فئة أخرى.' : 'Selected category is no longer available. Please try again or choose another.')
+          : (error?.message || (language === 'ar' ? 'فشل في إنشاء التذكرة' : 'Failed to create ticket'))
       );
     } finally {
       setLoading(false);
@@ -353,69 +329,94 @@ const CreateTicketScreen: React.FC<CreateTicketScreenProps> = ({
           </Text>
         </View>
 
-        {/* Category Selection */}
+        {/* Category – from API GET /support/categories/hierarchy */}
         <View style={styles.section}>
           <Text style={[styles.label, { color: colors.text }]}>
-            {language === 'ar' ? 'اختر الفئة *' : 'Select Category *'}
+            {language === 'ar' ? 'الفئة *' : 'Category *'}
           </Text>
-          <View style={styles.categoriesList}>
-            {CATEGORIES.map((cat) => (
-              <TouchableOpacity
-                key={cat.value}
-                style={[
-                  styles.categoryItem,
-                  {
-                    backgroundColor: category === cat.value 
-                      ? colors.primary + '10'
-                      : isDarkMode ? colors.cardBackground : '#f9fafb',
-                    borderColor: category === cat.value ? colors.primary : colors.border,
-                  },
-                ]}
-                onPress={() => handleCategorySelect(cat.value)}
-                activeOpacity={0.8}
-              >
-                <View style={[styles.categoryIconBox, { 
-                  backgroundColor: category === cat.value ? colors.primary : colors.textTertiary + '30'
-                }]}>
-                  <Ionicons name={cat.icon as any} size={22} color="#fff" />
-                </View>
-                <Text style={[styles.categoryItemText, { color: colors.text }]}>
-                  {language === 'ar' ? cat.labelAr : cat.labelEn}
-                </Text>
-                <View style={styles.categoryArrow}>
-                  <Ionicons 
-                    name={category === cat.value ? "checkmark-circle" : "chevron-forward"} 
-                    size={22} 
-                    color={category === cat.value ? colors.primary : colors.textTertiary} 
-                  />
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
+          {loadingCategories ? (
+            <View style={[styles.loadingCategories, { backgroundColor: isDarkMode ? colors.cardBackground : '#f9fafb', borderRadius: 12 }]}>
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={[styles.loadingCategoriesText, { color: colors.textSecondary }]}>{language === 'ar' ? 'جاري تحميل الفئات...' : 'Loading categories...'}</Text>
+            </View>
+          ) : topLevelCategories.length > 0 ? (
+            <View style={styles.chipRow}>
+              {topLevelCategories.map((c) => {
+                const name = isRTL && c.nameAr ? c.nameAr : (c.nameEn || c.name || '');
+                const selected = categoryId === c.id;
+                return (
+                  <TouchableOpacity
+                    key={c.id}
+                    onPress={() => handleCategorySelect(c.id)}
+                    style={[
+                      styles.categoryChip,
+                      {
+                        backgroundColor: selected ? colors.primary + '20' : (isDarkMode ? colors.cardBackground : '#f9fafb'),
+                        borderColor: selected ? colors.primary : colors.border,
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.categoryChipText, { color: selected ? colors.primary : colors.text }]} numberOfLines={1}>{name}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ) : null}
         </View>
 
-        {/* Selected Subcategory Display */}
-        {category && subcategory && (
+        {/* Subcategory */}
+        {subcategories.length > 0 && (
           <View style={styles.section}>
             <Text style={[styles.label, { color: colors.text }]}>
               {language === 'ar' ? 'الفئة الفرعية' : 'Subcategory'}
             </Text>
-            <TouchableOpacity 
-              style={[styles.selectedSubcategoryBox, { 
-                backgroundColor: isDarkMode ? colors.cardBackground : '#f9fafb',
-                borderColor: colors.border 
-              }]}
-              onPress={() => setShowSubcategoryModal(true)}
-            >
-              <Text style={[styles.selectedSubcategoryText, { color: colors.text }]}>
-                {language === 'ar' 
-                  ? currentSubcategories.find(s => s.value === subcategory)?.labelAr 
-                  : currentSubcategories.find(s => s.value === subcategory)?.labelEn}
-              </Text>
-              <Ionicons name="chevron-forward" size={20} color={colors.textTertiary} />
-            </TouchableOpacity>
+            <View style={styles.chipRow}>
+              {subcategories.map((s) => {
+                const name = isRTL && s.nameAr ? s.nameAr : (s.nameEn || s.name || '');
+                const selected = subcategoryId === s.id;
+                return (
+                  <TouchableOpacity
+                    key={s.id}
+                    onPress={() => handleSubcategorySelect(s.id)}
+                    style={[
+                      styles.categoryChip,
+                      {
+                        backgroundColor: selected ? colors.primary + '20' : (isDarkMode ? colors.cardBackground : '#f9fafb'),
+                        borderColor: selected ? colors.primary : colors.border,
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.categoryChipText, { color: selected ? colors.primary : colors.text }]} numberOfLines={1}>{name}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           </View>
         )}
+
+        {/* Priority – same as web */}
+        <View style={styles.section}>
+          <Text style={[styles.label, { color: colors.text }]}>
+            {language === 'ar' ? 'الأولوية' : 'Priority'}
+          </Text>
+          <View style={styles.chipRow}>
+            {PRIORITIES.map((p) => (
+              <TouchableOpacity
+                key={p}
+                onPress={() => setPriority(p)}
+                style={[
+                  styles.categoryChip,
+                  {
+                    backgroundColor: priority === p ? colors.primary + '20' : (isDarkMode ? colors.cardBackground : '#f9fafb'),
+                    borderColor: priority === p ? colors.primary : colors.border,
+                  },
+                ]}
+              >
+                <Text style={[styles.categoryChipText, { color: priority === p ? colors.primary : colors.text }]}>{p}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
 
         {/* Description */}
         <View style={styles.section}>
@@ -543,10 +544,10 @@ const CreateTicketScreen: React.FC<CreateTicketScreenProps> = ({
           style={[
             styles.submitButton,
             { backgroundColor: colors.primary },
-            (loading || !category || !subcategory) && { opacity: 0.6 },
+            (loading || (categories.length > 0 && categoryId == null && subcategoryId == null)) && { opacity: 0.6 },
           ]}
           onPress={handleSubmit}
-          disabled={loading || !category || !subcategory}
+          disabled={loading || !subject.trim() || !description.trim() || loadingCategories || (categories.length > 0 && categoryId == null && subcategoryId == null)}
           activeOpacity={0.8}
         >
           {loading ? (
@@ -560,68 +561,6 @@ const CreateTicketScreen: React.FC<CreateTicketScreenProps> = ({
 
         <View style={{ height: 40 }} />
       </ScrollView>
-
-      {/* Subcategory Modal */}
-      <Modal
-        visible={showSubcategoryModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowSubcategoryModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.text }]}>
-                {language === 'ar' 
-                  ? `اختر ${currentCategory?.labelAr || ''}` 
-                  : `Select ${currentCategory?.labelEn || ''}`}
-              </Text>
-              <TouchableOpacity onPress={() => setShowSubcategoryModal(false)}>
-                <Ionicons name="close" size={24} color={colors.text} />
-              </TouchableOpacity>
-            </View>
-            
-            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
-              <View style={styles.subcategoriesList}>
-                {currentSubcategories.map((sub) => (
-                  <TouchableOpacity
-                    key={sub.value}
-                    style={[
-                      styles.subcategoryItem,
-                      {
-                        backgroundColor: subcategory === sub.value 
-                          ? colors.primary + '10'
-                          : isDarkMode ? colors.background : '#f9fafb',
-                        borderColor: subcategory === sub.value 
-                          ? colors.primary 
-                          : colors.border,
-                      },
-                    ]}
-                    onPress={() => handleSubcategorySelect(sub.value)}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={[styles.subcategoryItemText, { color: colors.text }]}>
-                      {language === 'ar' ? sub.labelAr : sub.labelEn}
-                    </Text>
-                    {subcategory === sub.value && (
-                      <Ionicons name="checkmark-circle" size={22} color={colors.primary} />
-                    )}
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
-
-            <TouchableOpacity
-              style={[styles.modalDoneBtn, { backgroundColor: colors.primary }]}
-              onPress={() => setShowSubcategoryModal(false)}
-            >
-              <Text style={styles.modalDoneText}>
-                {language === 'ar' ? 'تم' : 'Done'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
 
       {/* Alert Popup */}
       <AlertPopup
@@ -669,6 +608,30 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 12,
+  },
+  loadingCategories: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    gap: 8,
+  },
+  loadingCategoriesText: {
+    fontSize: 15,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  categoryChip: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  categoryChipText: {
+    fontSize: 14,
+    fontWeight: '500',
   },
   input: {
     borderRadius: 12,

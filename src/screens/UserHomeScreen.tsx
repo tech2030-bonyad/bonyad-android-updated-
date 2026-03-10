@@ -50,6 +50,9 @@ import PortfolioManagement from '../components/PortfolioManagement';
 import SubscriptionScreen from './SubscriptionScreen';
 import ServiceManagementScreen from './ServiceManagementScreen';
 import AvailabilityScreen from './AvailabilityScreen';
+import RegionsManagementScreen from './RegionsManagementScreen';
+import SmallTaskTypesScreen from './SmallTaskTypesScreen';
+import PaymentTransactionScreen from './PaymentTransactionScreen';
 import ConversationalAIForm from './ConversationalAIForm';
 import ManualProjectForm from './ManualProjectForm';
 import ServiceTechniciansScreen from './ServiceTechniciansScreen';
@@ -160,7 +163,7 @@ export default function UserHomeScreen({
     tabScrollRef.current?.scrollTo({ x: index * CARD_WIDTH, animated: true });
   };
   const [currentProjectsFilter, setCurrentProjectsFilter] = useState<'available' | 'running' | 'completed'>(projectsFilter || 'available');
-  const [profileSubView, setProfileSubView] = useState<'myData' | 'editProfile' | 'portfolio' | 'subscription' | 'services' | 'availability' | 'changePassword' | 'changePhone' | 'verifyPhoneChange' | null>(null);
+  const [profileSubView, setProfileSubView] = useState<'myData' | 'editProfile' | 'portfolio' | 'subscription' | 'services' | 'availability' | 'regions' | 'smallTaskTypes' | 'paymentHistory' | 'changePassword' | 'changePhone' | 'verifyPhoneChange' | null>(null);
   const [phoneChangeNumber, setPhoneChangeNumber] = useState<string>('');
   const [newProjectSubView, setNewProjectSubView] = useState<'project-type-selection' | 'ai' | 'manual' | 'small-task-type-selection' | 'small-task-request-form' | null>(null);
   const [selectedTaskType, setSelectedTaskType] = useState<any>(null);
@@ -1536,6 +1539,9 @@ export default function UserHomeScreen({
                 onNavigateToSubscription={() => setProfileSubView('subscription')}
                 onNavigateToServices={() => setProfileSubView('services')}
                 onNavigateToAvailability={() => setProfileSubView('availability')}
+                onNavigateToRegions={() => setProfileSubView('regions')}
+                onNavigateToSmallTaskTypes={() => setProfileSubView('smallTaskTypes')}
+                onNavigateToPaymentHistory={() => setProfileSubView('paymentHistory')}
                 onNavigateToSupportTickets={() => {
                   setProfileSubView(null);
                   onShowSupportTickets?.();
@@ -1547,9 +1553,6 @@ export default function UserHomeScreen({
                 onEditProfile={() => setProfileSubView('editProfile')}
                 onChangePhone={() => setProfileSubView('changePhone')}
                 onChangePassword={() => setProfileSubView('changePassword')}
-                onNavigateToSubscription={() => setProfileSubView('subscription')}
-                onNavigateToServices={() => setProfileSubView('services')}
-                onNavigateToAvailability={() => setProfileSubView('availability')}
                 isTechnician={false}
               />
             ) : profileSubView === 'editProfile' ? (
@@ -1562,6 +1565,7 @@ export default function UserHomeScreen({
               <PortfolioManagement
                 technicianId={userId}
                 isOwnProfile={true}
+                onBack={() => setProfileSubView(null)}
               />
             ) : profileSubView === 'subscription' ? (
               <SubscriptionScreen
@@ -1573,6 +1577,18 @@ export default function UserHomeScreen({
               />
             ) : profileSubView === 'availability' ? (
               <AvailabilityScreen
+                onBack={() => setProfileSubView(null)}
+              />
+            ) : profileSubView === 'regions' ? (
+              <RegionsManagementScreen
+                onBack={() => setProfileSubView(null)}
+              />
+            ) : profileSubView === 'smallTaskTypes' ? (
+              <SmallTaskTypesScreen
+                onBack={() => setProfileSubView(null)}
+              />
+            ) : profileSubView === 'paymentHistory' ? (
+              <PaymentTransactionScreen
                 onBack={() => setProfileSubView(null)}
               />
             ) : profileSubView === 'changePassword' ? (
@@ -2520,6 +2536,13 @@ export default function UserHomeScreen({
                   onNavigateToSubscription={() => setProfileSubView('subscription')}
                   onNavigateToServices={() => setProfileSubView('services')}
                   onNavigateToAvailability={() => setProfileSubView('availability')}
+                  onNavigateToRegions={() => setProfileSubView('regions')}
+                  onNavigateToSmallTaskTypes={() => setProfileSubView('smallTaskTypes')}
+                  onNavigateToPaymentHistory={() => setProfileSubView('paymentHistory')}
+                  onNavigateToSupportTickets={() => {
+                    setProfileSubView(null);
+                    onShowSupportTickets?.();
+                  }}
                 />
               ) : profileSubView === 'myData' ? (
                 <MyDataScreen
@@ -2527,9 +2550,6 @@ export default function UserHomeScreen({
                   onEditProfile={() => setProfileSubView('editProfile')}
                   onChangePhone={() => setProfileSubView('changePhone')}
                   onChangePassword={() => setProfileSubView('changePassword')}
-                  onNavigateToSubscription={() => setProfileSubView('subscription')}
-                  onNavigateToServices={() => setProfileSubView('services')}
-                  onNavigateToAvailability={() => setProfileSubView('availability')}
                   isTechnician={false}
                 />
               ) : profileSubView === 'editProfile' ? (
@@ -2542,6 +2562,7 @@ export default function UserHomeScreen({
                 <PortfolioManagement
                   technicianId={userId}
                   isOwnProfile={true}
+                  onBack={() => setProfileSubView(null)}
                 />
               ) : profileSubView === 'subscription' ? (
                 <SubscriptionScreen
@@ -2553,6 +2574,18 @@ export default function UserHomeScreen({
                 />
               ) : profileSubView === 'availability' ? (
                 <AvailabilityScreen
+                  onBack={() => setProfileSubView(null)}
+                />
+              ) : profileSubView === 'regions' ? (
+                <RegionsManagementScreen
+                  onBack={() => setProfileSubView(null)}
+                />
+              ) : profileSubView === 'smallTaskTypes' ? (
+                <SmallTaskTypesScreen
+                  onBack={() => setProfileSubView(null)}
+                />
+              ) : profileSubView === 'paymentHistory' ? (
+                <PaymentTransactionScreen
                   onBack={() => setProfileSubView(null)}
                 />
               ) : profileSubView === 'changePassword' ? (

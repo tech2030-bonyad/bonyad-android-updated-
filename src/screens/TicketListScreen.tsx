@@ -62,11 +62,11 @@ const TicketItem: React.FC<{
         <Text style={[styles.ticketSubject, { color: colors.text }]} numberOfLines={1}>
           {ticket.subject}
         </Text>
-        {ticket.hasUnreadMessages && (
+        {ticket.hasUnreadMessages || (ticket.unreadMessageCount ?? 0) > 0 ? (
           <View style={[styles.unreadBadge, { backgroundColor: colors.primary }]}>
             <Text style={styles.unreadText}>NEW</Text>
           </View>
-        )}
+        ) : null}
       </View>
 
       {/* Description */}
@@ -78,7 +78,7 @@ const TicketItem: React.FC<{
       <View style={styles.ticketCategoryRow}>
         <Ionicons name="folder-outline" size={12} color={colors.textTertiary} />
         <Text style={[styles.ticketCategoryText, { color: colors.textTertiary }]}>
-          {getCategoryText(ticket.category)}
+          {ticket.category ? getCategoryText(String(ticket.category)) : ''}
           {ticket.subcategory ? ` › ${ticket.subcategory}` : ''}
         </Text>
       </View>
@@ -143,6 +143,7 @@ const TicketListScreen: React.FC<TicketListScreenProps> = ({
   const {
     tickets,
     loading,
+    error,
     stats,
     fetchTickets,
     getStatusColor,
@@ -193,20 +194,32 @@ const TicketListScreen: React.FC<TicketListScreenProps> = ({
         </View>
       </View>
 
+      {/* Error banner - always render error inside Text to avoid "Text strings must be rendered within a <Text> component" */}
+      {error ? (
+        <View style={[styles.errorBanner, { backgroundColor: (colors.error || '#ef4444') + '20', marginHorizontal: 16, marginTop: 8 }]}>
+          <Text style={[styles.errorBannerText, { color: colors.error || '#ef4444' }]}>{error}</Text>
+          <TouchableOpacity onPress={fetchTickets} style={styles.errorRetry}>
+            <Text style={[styles.errorRetryText, { color: colors.primary }]}>{language === 'ar' ? 'حاول مرة أخرى' : 'Try again'}</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+
       {/* Tickets List */}
-      {tickets.length === 0 && !loading ? (
+      {tickets.length === 0 && !loading && !error ? (
         <EmptyState colors={colors} onCreate={onCreateTicket || (() => {})} isDarkMode={isDarkMode} />
       ) : (
-        <FlatList
-          data={tickets}
-          keyExtractor={(item) => item.id.toString()}
-          renderItem={renderTicket}
-          contentContainerStyle={styles.listContent}
-          refreshControl={
-            <RefreshControl refreshing={loading} onRefresh={fetchTickets} tintColor={colors.primary} />
-          }
-          showsVerticalScrollIndicator={false}
-        />
+        !error ? (
+          <FlatList
+            data={tickets}
+            keyExtractor={(item) => item.id.toString()}
+            renderItem={renderTicket}
+            contentContainerStyle={styles.listContent}
+            refreshControl={
+              <RefreshControl refreshing={loading} onRefresh={fetchTickets} tintColor={colors.primary} />
+            }
+            showsVerticalScrollIndicator={false}
+          />
+        ) : null
       )}
 
       {/* FAB */}
@@ -271,6 +284,21 @@ const styles = StyleSheet.create({
   statDivider: {
     width: 1,
     height: 40,
+  },
+  errorBanner: {
+    padding: 12,
+    borderRadius: 8,
+  },
+  errorBannerText: {
+    fontSize: 14,
+    marginBottom: 8,
+  },
+  errorRetry: {
+    alignSelf: 'flex-start',
+  },
+  errorRetryText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   listContent: {
     padding: 16,

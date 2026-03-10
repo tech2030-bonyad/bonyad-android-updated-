@@ -296,6 +296,17 @@ export async function getActiveSpecializations(): Promise<TechnicianSpecializati
   return Array.isArray(data) ? data : [];
 }
 
+/** Unsubscribe from a task type – DELETE /small-tasks/technician/specializations/:taskTypeId (same as web) */
+export async function unsubscribeFromTaskType(taskTypeId: number): Promise<{ message: string }> {
+  const url = buildApiUrlWithParams(API_ENDPOINTS.SMALL_TASKS.UNSUBSCRIBE_FROM_TYPE, { taskTypeId });
+  const response = await fetch(url, { method: 'DELETE', headers: await getAuthHeaders() });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error((err as { message?: string; error?: string }).message || (err as { message?: string; error?: string }).error || 'Failed to unsubscribe');
+  }
+  return (await response.json()) as { message: string };
+}
+
 /** Get available requests (technician) - GET /small-tasks/requests/available. Same API and behavior as web. */
 export async function getAvailableRequests(options?: { cacheBust?: boolean }): Promise<SmallTaskRequestApi[]> {
   try {

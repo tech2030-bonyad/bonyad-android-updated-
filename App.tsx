@@ -10,10 +10,11 @@ import './src/config/api';
 import { SplashScreen, WelcomeScreen, OverviewScreen, LoginScreen, SignupScreen, OTPVerificationScreen, ForgotPasswordScreen, ForgotPasswordOTPScreen, ResetPasswordScreen, UserHomeScreen, TechnicianHomeScreen, TechnicianOnboardingScreen, ProfileScreen, EditProfileScreen, MyDataScreen, ChangePhoneScreen, ChangePasswordScreen, PortfolioScreen, ServiceManagementScreen, AvailabilityScreen, SubscriptionScreen, NewProjectView, ManualProjectForm, ConversationalAIForm, ProjectsScreen, ChatRoomsListScreen, ChatDetailScreen, RunningProjectsScreen, NotificationsScreen, AppointmentsScreen, BookingScreen, TechnicianProfileViewScreen, RoomDesignScreen, VoiceAIScreen, CostExplorerScreen, RoomVisualizerScreen, AskBonyadAIScreen, ProjectsMapScreen, AboutScreen, ContactScreen, IntroToAppScreen, OnboardingScreen, TechnicianCompleteProfileScreen, ChatbotScreen, SupportChatScreen, TicketListScreen, CreateTicketScreen, TicketDetailScreen, ServiceProvidersScreen, CommissionPaymentScreen, PaymentCheckoutScreen, CategorySubcategoryScreen, CreationMethodScreen, PendingProjectScreen, BidReceivedProjectScreen, ApprovedProjectScreen, ContractSigningProjectScreen, InProgressProjectScreen, CompletedProjectViewPage, ChangeRequestListScreen, ChangeRequestDetailScreen, RequestModificationScreen } from './src/screens';
 import './src/localization/i18n'; // Initialize i18n
 import OnlineStatusService from './src/services/OnlineStatusService';
+import { presenceService } from './src/services/PresenceService';
 import { storage } from './src/utils/storage';
 import CoachMarkProvider from './src/components/CoachMarkProvider';
 import { coachMarksStorage } from './src/utils/coachMarks';
-import { useRouter } from './src/utils/useRouter';
+import { useRouter, type Screen } from './src/utils/useRouter';
 import * as SplashScreenNative from 'expo-splash-screen';
 import * as Font from 'expo-font';
 import { Asset } from 'expo-asset';
@@ -32,8 +33,6 @@ import { CreateCheckoutRequest } from './src/services/PaymentService';
 
 // Keep native splash screen visible while we show custom splash
 SplashScreenNative.preventAutoHideAsync();
-
-type Screen = 'splash' | 'onboarding' | 'welcome' | 'overview' | 'about' | 'contact' | 'introToApp' | 'login' | 'signup' | 'otp' | 'forgotPassword' | 'otpVerification' | 'resetPassword' | 'home' | 'profile' | 'editProfile' | 'myData' | 'changePhone' | 'changePassword' | 'portfolio' | 'services' | 'availability' | 'subscription' | 'newProject' | 'manualForm' | 'aiForm' | 'projects' | 'runningProjects' | 'chatRooms' | 'chatDetail' | 'notifications' | 'appointments' | 'booking' | 'technicianProfile' | 'technicianOnboarding' | 'technicianCompleteProfile' | 'roomDesign' | 'voiceAI' | 'costExplorer' | 'roomVisualizer' | 'askBonyadAI' | 'projectsMap' | 'chatbot' | 'supportChat' | 'ticketList' | 'createTicket' | 'ticketDetail' | 'serviceProviders' | 'commissionPayment' | 'paymentCheckout' | 'categorySubcategories' | 'creationMethod' | 'pendingProject' | 'bidReceivedProject' | 'approvedProject' | 'contractSigningProject' | 'inProgressProject' | 'completedProject' | 'changeRequestList' | 'changeRequestDetail' | 'requestModification';
 
 export default function App() {
   const initialScreen: Screen = Platform.OS === 'web' ? 'welcome' : 'splash';
@@ -88,6 +87,9 @@ export default function App() {
   const [changeRequestId, setChangeRequestId] = useState<number | null>(null);
   const [previousScreenBeforeChangeRequests, setPreviousScreenBeforeChangeRequests] = useState<Screen | null>(null);
   
+  // Bundle load error message (when Metro unreachable)
+  const [bundleLoadError, setBundleLoadError] = useState<string | null>(null);
+  
   // Router hook for URL-based routing on web
   const router = useRouter(currentScreen, setCurrentScreen);
 
@@ -124,6 +126,11 @@ export default function App() {
         setAuthToken(authResult.token);
         setUserId(authResult.userId);
         setUserRole(authResult.role.toLowerCase() as 'user' | 'technician');
+
+        // Mark user as online when app opens with valid session (same as web)
+        if (authResult.token) {
+          presenceService.markOnline().catch(() => {});
+        }
 
         // Connect to WebSocket services if authenticated
         if (authResult.token) {
@@ -164,7 +171,9 @@ export default function App() {
               );
             }
           } else {
-            console.error('❌ Failed to connect WebSocket:', connectionResult.error);
+            if (connectionResult.error) {
+              console.error('❌ Failed to connect WebSocket:', connectionResult.error);
+            }
           }
         }
 
@@ -201,13 +210,31 @@ export default function App() {
         // Navigate to login
         setCurrentScreen('login');
       }
-    } catch (error) {
+    } catch (error: any) {
+      const message = error?.message ?? String(error ?? '');
+      const errorName = error?.name ?? error?.constructor?.name ?? '';
+      const isBundleOrNetworkError =
+        message.includes('Could not load bundle') ||
+        message.includes('LoadBundleFromServerRequestError') ||
+        errorName === 'LoadBundleFromServerRequestError' ||
+        message.includes('Network request failed') ||
+        message.includes('Unable to resolve');
+
+      if (isBundleOrNetworkError) {
+        setBundleLoadError(
+          Platform.OS === 'web'
+            ? 'Could not load. Check the dev server and refresh.'
+            : 'Could not connect to dev server. Run "npm start" in the project, then reload the app (shake device → Reload).'
+        );
+        setCurrentScreen('welcome');
+        return;
+      }
+
       console.error('❌ Error checking stored session:', error);
-      // Clear session on error
+      setBundleLoadError(null);
       setAuthToken('');
       setUserId(0);
       setUserRole('user');
-      // Navigate to login on error
       setCurrentScreen('login');
     }
   }, []);
@@ -320,9 +347,15 @@ export default function App() {
           }
         }
       }
-    } catch (error) {
-      console.error('❌ Failed to check for new notifications:', error);
-      // Don't show error to user, just log it
+    } catch (error: any) {
+      const msg = error?.message ?? String(error ?? '');
+      const isBundleError =
+        msg.includes('Could not load bundle') ||
+        msg.includes('LoadBundleFromServerRequestError') ||
+        error?.name === 'LoadBundleFromServerRequestError';
+      if (!isBundleError) {
+        console.error('❌ Failed to check for new notifications:', error);
+      }
     }
   };
 
@@ -400,7 +433,10 @@ export default function App() {
       console.log('📱 AppState changed to:', nextAppState);
 
       if (nextAppState === 'background' || nextAppState === 'inactive') {
-        // App went to background - disconnect WebSocket (Android only)
+        // Mark user as offline when app closes or goes to background (same as web)
+        if (authToken) {
+          presenceService.markOffline().catch(() => {});
+        }
         if (Platform.OS === 'android') {
           console.log('📱 App entered background');
           if (OnlineStatusService.isConnected()) {
@@ -409,7 +445,8 @@ export default function App() {
           }
         }
       } else if (nextAppState === 'active' && authToken) {
-        // App came to foreground - reconnect WebSocket if user is authenticated (Android only)
+        // Mark user as online when app is used / comes to foreground (same as web)
+        presenceService.markOnline().catch(() => {});
         if (Platform.OS === 'android') {
           console.log('📱 App entering foreground');
 
@@ -467,6 +504,9 @@ export default function App() {
     setUserRole(role);
     setAuthToken(token);
     setUserId(id);
+
+    // Mark user as online when they log in (same as web)
+    presenceService.markOnline().catch(() => {});
 
     // Increment login count (for onboarding logic - tracks logins and signups)
     await storage.incrementLoginCount();
@@ -526,7 +566,9 @@ export default function App() {
         );
       }
     } else {
-      console.error('❌ Failed to connect WebSocket:', connectionResult.error);
+      if (connectionResult.error) {
+        console.error('❌ Failed to connect WebSocket:', connectionResult.error);
+      }
     }
 
     navigateToScreen(requiresOnboarding ? 'technicianOnboarding' : 'home');
@@ -545,6 +587,9 @@ export default function App() {
     setAuthToken(token);
     setUserId(id);
     setUserRole(role.toLowerCase() as 'user' | 'technician');
+
+    // Mark user as online when they complete signup (same as web)
+    presenceService.markOnline().catch(() => {});
 
     // Increment login count (for onboarding logic - tracks logins and signups)
     await storage.incrementLoginCount();
@@ -611,7 +656,9 @@ export default function App() {
         );
       }
     } else {
-      console.error('❌ Failed to connect WebSocket:', connectionResult.error);
+      if (connectionResult.error) {
+        console.error('❌ Failed to connect WebSocket:', connectionResult.error);
+      }
     }
 
     navigateToScreen(requiresOnboarding ? 'technicianOnboarding' : 'home');
@@ -619,6 +666,9 @@ export default function App() {
 
   // Handle logout with WebSocket disconnection
   const handleLogout = async () => {
+    // Mark user as offline when logout (same as web) – call before clearing auth so token is still available
+    await presenceService.markOffline();
+
     // Clear notification check interval
     if (notificationCheckInterval.current) {
       clearInterval(notificationCheckInterval.current);
@@ -727,6 +777,18 @@ export default function App() {
               setChangeRequestId={setChangeRequestId}
               previousScreenBeforeChangeRequests={previousScreenBeforeChangeRequests}
               setPreviousScreenBeforeChangeRequests={setPreviousScreenBeforeChangeRequests}
+              checkoutRequest={checkoutRequest}
+              setCheckoutRequest={setCheckoutRequest}
+              checkoutDescription={checkoutDescription}
+              setCheckoutDescription={setCheckoutDescription}
+              selectedCategory={selectedCategory}
+              setSelectedCategory={setSelectedCategory}
+              selectedSubcategory={selectedSubcategory}
+              setSelectedSubcategory={setSelectedSubcategory}
+              serviceProvidersBookingTechnician={serviceProvidersBookingTechnician}
+              setServiceProvidersBookingTechnician={setServiceProvidersBookingTechnician}
+              bundleLoadError={bundleLoadError}
+              setBundleLoadError={setBundleLoadError}
             />
           </View>
         </GlobalAlertProvider>
@@ -787,6 +849,26 @@ function AppContent({
   setChatbotAIHistory,
   selectedTicketId,
   setSelectedTicketId,
+  selectedProjectForDetail,
+  setSelectedProjectForDetail,
+  changeRequestProjectId,
+  setChangeRequestProjectId,
+  changeRequestId,
+  setChangeRequestId,
+  previousScreenBeforeChangeRequests,
+  setPreviousScreenBeforeChangeRequests,
+  checkoutRequest,
+  setCheckoutRequest,
+  checkoutDescription,
+  setCheckoutDescription,
+  selectedCategory,
+  setSelectedCategory,
+  selectedSubcategory,
+  setSelectedSubcategory,
+  serviceProvidersBookingTechnician,
+  setServiceProvidersBookingTechnician,
+  bundleLoadError,
+  setBundleLoadError,
 }: any) {
   const { colors } = useTheme();
 
@@ -1037,11 +1119,6 @@ function AppContent({
             <TicketDetailScreen
               ticketId={selectedTicketId}
               onBack={() => navigate('ticketList')}
-              onNavigateToChat={(roomId, adminName) => {
-                setChatRoomId(roomId);
-                setChatReceiverName(adminName);
-                navigate('chatDetail');
-              }}
             />
           )}
 

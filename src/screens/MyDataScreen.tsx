@@ -13,8 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
-import { storage } from '../utils/storage';
-import { API_BASE_URL, API_ENDPOINTS, buildApiUrl } from '../config/api';
+import { getUserProfile } from '../services/ProfileService';
 
 // Figma Design Colors
 const FIGMA_COLORS = {
@@ -33,10 +32,10 @@ interface MyDataScreenProps {
   onEditProfile: () => void;
   onChangePhone: () => void;
   onChangePassword: () => void;
+  isTechnician?: boolean;
   onNavigateToSubscription?: () => void;
   onNavigateToServices?: () => void;
   onNavigateToAvailability?: () => void;
-  isTechnician?: boolean;
 }
 
 interface UserProfile {
@@ -50,10 +49,10 @@ export default function MyDataScreen({
   onEditProfile, 
   onChangePhone, 
   onChangePassword,
+  isTechnician = false,
   onNavigateToSubscription,
   onNavigateToServices,
   onNavigateToAvailability,
-  isTechnician = false 
 }: MyDataScreenProps) {
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -71,36 +70,8 @@ export default function MyDataScreen({
 
   const fetchUserProfile = async () => {
     try {
-      const token = await storage.getAuthToken();
-      if (!token) {
-        setIsLoading(false);
-        return;
-      }
-
-      const response = await fetch(
-        buildApiUrl(API_ENDPOINTS.USER.PROFILE),
-        {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        // Construct full URLs for images
-        if (data.profileImage || data.avatar) {
-          const imagePath = data.profileImage || data.avatar;
-          if (!imagePath.startsWith('http')) {
-            data.avatar = `${API_BASE_URL.replace('/api', '')}${imagePath}`;
-          } else {
-            data.avatar = imagePath;
-          }
-        }
-        setUserProfile(data);
-      }
+      const profile = await getUserProfile();
+      setUserProfile(profile);
     } catch (error) {
       console.error('Error fetching profile:', error);
     } finally {
@@ -191,8 +162,8 @@ export default function MyDataScreen({
         {/* User Avatar Section - Centered */}
         <View style={styles.userSection}>
           <View style={[styles.avatarContainer, { backgroundColor: avatarBgColor }]}>
-            {userProfile?.avatar ? (
-              <Image source={{ uri: userProfile.avatar }} style={styles.avatar} />
+            {userProfile?.avatar || userProfile?.profileImage ? (
+              <Image source={{ uri: userProfile.avatar || userProfile.profileImage }} style={styles.avatar} />
             ) : (
               <Ionicons name="person" size={60} color={primaryColor} />
             )}
@@ -225,23 +196,6 @@ export default function MyDataScreen({
             onPress={onChangePassword}
           />
 
-          {/* Technician-specific options - Services, Availability, Subscription */}
-          {isTechnician && (
-            <>
-              <MenuOption
-                icon="construct-outline"
-                title={t('Services')}
-                onPress={() => onNavigateToServices?.()}
-              />
-
-              <MenuOption
-                icon="calendar-outline"
-                title={t('Availability')}
-                onPress={() => onNavigateToAvailability?.()}
-              />
-
-            </>
-          )}
         </View>
 
         {/* Save Button */}

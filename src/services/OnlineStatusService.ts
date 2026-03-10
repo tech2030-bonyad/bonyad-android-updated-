@@ -223,7 +223,6 @@ export const OnlineStatusService = {
    */
   async connect(token: string): Promise<ConnectionStatus> {
     // DISABLED: Online status WebSocket connection is temporarily disabled
-    console.log('⚠️ [OnlineStatus] Connection disabled - returning without connecting');
     return { connected: false };
     
     /* DISABLED CODE - Uncomment to re-enable

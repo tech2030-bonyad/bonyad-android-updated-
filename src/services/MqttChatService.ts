@@ -1,8 +1,8 @@
-// MQTT Chat Service - Real-time messaging via MQTT protocol (TCP)
+// MQTT Chat Service - Real-time messaging via MQTT over WebSocket (same as web)
 import { Platform } from 'react-native';
 import { ChatMessage } from '../types/chat';
 import { storage } from '../utils/storage';
-import { getServerBaseUrl } from '../config/api';
+import { getMQTTBrokerUrl } from '../config/env';
 
 // Use mqtt.js for all platforms (Web, Android, iOS)
 // mqtt.js supports TCP connections on all platforms
@@ -164,36 +164,15 @@ class MqttChatService {
   private isConnected: boolean = false;
   private currentRoomId: string | null = null;
 
-  // MQTT Configuration - Matching Swift CocoaMQTT implementation
-  // Port: 1883 (TCP for native)
-  // Port: 8084 (Secure WebSocket WSS for web - browsers can't use raw TCP)
-  // Note: Web browsers cannot use raw TCP, so we use Secure WebSocket (WSS) for MQTT on web
-  // The MQTT protocol is the same, just transported over Secure WebSocket instead of TCP
-  private readonly PORT = 1883; // TCP port (for native, like Swift)
-  private readonly WEB_PORT = 8084; // Secure WebSocket port (WSS for web)
-  private readonly KEEP_ALIVE = 60; // KeepAlive: 60 (like Swift: keepAlive = 60)
-  private readonly QOS_LEVEL = 1; // At least once delivery
-  
-  // Get host from API config
-  private getHost(): string {
-    const serverBaseUrl = getServerBaseUrl();
-    // Extract hostname from URL (remove protocol)
-    const url = new URL(serverBaseUrl);
-    return url.hostname;
-  }
-  
-  // Get broker URL based on platform
-  // Web: Use Secure WebSocket on port 8084
-  // Native: Use TCP on port 1883
+  // MQTT Configuration - Same as web: WebSocket for all platforms
+  private readonly KEEP_ALIVE = 60;
+  private readonly QOS_LEVEL = 1;
+
   private getBrokerUrl(): string {
-    const host = this.getHost();
     if (Platform.OS === 'web') {
-      // Web: Use Secure WebSocket (WSS) on port 8084
-      return `wss://${host}:${this.WEB_PORT}`;
-    } else {
-      // Native: Use TCP (like Swift CocoaMQTT: port 1883)
-      return `tcp://${host}:${this.PORT}`;
+      return getMQTTBrokerUrl('web');
     }
+    return getMQTTBrokerUrl('android');
   }
 
   /**
@@ -243,30 +222,21 @@ class MqttChatService {
         clientId: clientID, // Client ID
       };
       
-      // Get connection URL based on platform
+      // Get connection URL – same URI as web (wss://admin.bonyad-hub.com/mqtt)
       const connectionUrl = this.getBrokerUrl();
       
-      // For web, add protocol: "wss" and SSL options - IMPORTANT
-      if (Platform.OS === 'web') {
-        options.protocol = 'wss'; // Secure WebSocket
-        options.rejectUnauthorized = true; // Verifies SSL certificate
-      }
+      // Same connection options as web: WSS + SSL verification
+      options.protocol = 'wss';
+      options.rejectUnauthorized = true;
       
-      const host = this.getHost();
-      console.log('🔌 [MQTT] Connecting to broker:');
-      console.log('   Host:', host);
-      console.log('   Port:', Platform.OS === 'web' ? this.WEB_PORT : this.PORT);
-      console.log('   Protocol:', Platform.OS === 'web' ? 'Secure WebSocket (wss)' : 'TCP');
+      console.log('🔌 [MQTT] Connecting to broker (same URI as web):');
       console.log('   URL:', connectionUrl);
       console.log('   ClientID:', clientID);
       console.log('   Username:', this.token ? this.token.substring(0, 20) + '...' : 'none');
       console.log('   KeepAlive:', this.KEEP_ALIVE);
       console.log('   ReconnectPeriod: 2000ms');
       console.log('   Clean: true');
-      if (Platform.OS === 'web') {
-        console.log('   Protocol option: wss (Secure WebSocket)');
-        console.log('   rejectUnauthorized: true (SSL certificate verification)');
-      }
+      console.log('   Protocol: wss, rejectUnauthorized: true (same as web)');
       console.log('   Platform:', Platform.OS);
       
       // Check if mqtt.connect exists

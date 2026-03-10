@@ -1,7 +1,7 @@
 import { useEffect, useCallback } from 'react';
 import { Platform } from 'react-native';
 
-type Screen = 'splash' | 'onboarding' | 'welcome' | 'overview' | 'about' | 'contact' | 'introToApp' | 'login' | 'signup' | 'otp' | 'forgotPassword' | 'otpVerification' | 'resetPassword' | 'home' | 'profile' | 'editProfile' | 'myData' | 'changePhone' | 'changePassword' | 'portfolio' | 'services' | 'availability' | 'subscription' | 'newProject' | 'manualForm' | 'aiForm' | 'projects' | 'runningProjects' | 'chatRooms' | 'chatDetail' | 'notifications' | 'appointments' | 'booking' | 'technicianProfile' | 'technicianOnboarding' | 'technicianCompleteProfile' | 'roomDesign' | 'voiceAI' | 'costExplorer' | 'roomVisualizer' | 'askBonyadAI' | 'projectsMap' | 'chatbot' | 'supportChat' | 'ticketList' | 'createTicket' | 'ticketDetail' | 'serviceProviders';
+export type Screen = 'splash' | 'onboarding' | 'welcome' | 'overview' | 'about' | 'contact' | 'introToApp' | 'login' | 'signup' | 'otp' | 'forgotPassword' | 'otpVerification' | 'resetPassword' | 'home' | 'profile' | 'editProfile' | 'myData' | 'changePhone' | 'changePassword' | 'portfolio' | 'services' | 'availability' | 'subscription' | 'newProject' | 'manualForm' | 'aiForm' | 'projects' | 'runningProjects' | 'chatRooms' | 'chatDetail' | 'notifications' | 'appointments' | 'booking' | 'technicianProfile' | 'technicianOnboarding' | 'technicianCompleteProfile' | 'roomDesign' | 'voiceAI' | 'costExplorer' | 'roomVisualizer' | 'askBonyadAI' | 'projectsMap' | 'chatbot' | 'supportChat' | 'ticketList' | 'createTicket' | 'ticketDetail' | 'serviceProviders' | 'commissionPayment' | 'paymentCheckout' | 'categorySubcategories' | 'creationMethod' | 'pendingProject' | 'bidReceivedProject' | 'approvedProject' | 'contractSigningProject' | 'inProgressProject' | 'completedProject' | 'changeRequestList' | 'changeRequestDetail' | 'requestModification';
 
 // Screen to path mapping
 const screenToPath: Record<Screen, string> = {
@@ -53,6 +53,19 @@ const screenToPath: Record<Screen, string> = {
   createTicket: '/tickets/create',
   ticketDetail: '/tickets/detail',
   serviceProviders: '/service-providers',
+  commissionPayment: '/commission-payment',
+  paymentCheckout: '/payment-checkout',
+  categorySubcategories: '/projects/new/category',
+  creationMethod: '/projects/new/creation-method',
+  pendingProject: '/projects/pending',
+  bidReceivedProject: '/projects/bid-received',
+  approvedProject: '/projects/approved',
+  contractSigningProject: '/projects/contract-signing',
+  inProgressProject: '/projects/in-progress',
+  completedProject: '/projects/completed',
+  changeRequestList: '/projects/change-requests',
+  changeRequestDetail: '/projects/change-request-detail',
+  requestModification: '/projects/request-modification',
 };
 
 // Path to screen mapping (reverse)
@@ -103,6 +116,19 @@ const pathToScreen: Record<string, Screen> = {
   '/tickets/create': 'createTicket',
   '/tickets/detail': 'ticketDetail',
   '/service-providers': 'serviceProviders',
+  '/commission-payment': 'commissionPayment',
+  '/payment-checkout': 'paymentCheckout',
+  '/projects/new/category': 'categorySubcategories',
+  '/projects/new/creation-method': 'creationMethod',
+  '/projects/pending': 'pendingProject',
+  '/projects/bid-received': 'bidReceivedProject',
+  '/projects/approved': 'approvedProject',
+  '/projects/contract-signing': 'contractSigningProject',
+  '/projects/in-progress': 'inProgressProject',
+  '/projects/completed': 'completedProject',
+  '/projects/change-requests': 'changeRequestList',
+  '/projects/change-request-detail': 'changeRequestDetail',
+  '/projects/request-modification': 'requestModification',
 };
 
 const isWeb = Platform.OS === 'web';

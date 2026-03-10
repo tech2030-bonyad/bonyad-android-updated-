@@ -17,7 +17,7 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
-import { API_ENDPOINTS, buildApiUrlWithParams, buildApiUrl, API_BASE_URL } from '../config/api';
+import { API_ENDPOINTS, buildApiUrlWithParams, buildApiUrl } from '../config/api';
 import { storage } from '../utils/storage';
 import { ChatMessage } from '../types/chat';
 import { formatMessageTime } from '../utils/chatUtils';
@@ -136,96 +136,71 @@ export default function ChatDetailScreen({
   }, [message, roomId, receiverId]);
 
   useEffect(() => {
-    // Load messages first (this should always work)
-    loadMessages().catch((error) => {
-      console.error('❌ Failed to load messages:', error);
-      setIsLoading(false);
-    });
-    
-    // Setup MQTT (non-blocking - chat should work even if MQTT fails)
-    setupMqtt().catch((error) => {
-      console.error('❌ Failed to setup MQTT (non-critical):', error);
-      // Don't block the UI - chat can work without live updates
-    });
-    
+    let pollInterval: ReturnType<typeof setInterval> | null = null;
+
+    const init = async () => {
+      setMessages([]);
+      await loadMessages(false).catch((error) => {
+        console.error('❌ Failed to load messages:', error);
+        setIsLoading(false);
+      });
+      // Setup MQTT for real-time messages (same as web) - non-blocking
+      setupMqtt().catch((err) => {
+        console.warn('⚠️ [MQTT] Setup failed (non-critical), using polling:', err?.message || err);
+      });
+      // Poll for new messages every 5s as fallback (same as web)
+      pollInterval = setInterval(() => {
+        loadMessages(true).catch((e) => console.error('❌ Poll load messages:', e));
+      }, 5000);
+    };
+
+    init();
     return () => {
+      if (pollInterval) clearInterval(pollInterval);
       try {
         MqttChatService.disconnect();
-      } catch (error) {
-        console.error('❌ Error disconnecting MQTT:', error);
+      } catch (e) {
+        console.warn('⚠️ [MQTT] Disconnect error:', e);
       }
     };
-  }, []);
+  }, [roomId, receiverId]);
 
   const setupMqtt = async () => {
     try {
-      console.log('🔌 [MQTT] Attempting to connect to room:', roomId);
-      
-      // Connect to MQTT and subscribe to room with callbacks
       const connected = await MqttChatService.subscribeToRoomWithCallbacks(roomId, {
         onMessage: async (newMessage: ChatMessage) => {
           try {
-            console.log('📨 [MQTT] New message received:', newMessage);
-            console.log('📨 Message ID:', newMessage.id);
-
-            // Get current user ID to determine if message is mine
             const currentUserId = await storage.getUserId();
             const isMine = newMessage.senderId === currentUserId;
-            console.log('📨 Is mine?', isMine, 'senderId:', newMessage.senderId, 'myId:', currentUserId);
-
-            // Add to messages if not already present
             setMessages((prev) => {
-              if (prev.find((m) => m.id === newMessage.id)) {
-                console.log('📨 Message already exists, skipping');
-                return prev; // Already exists
-              }
-              console.log('📨 [setMessages] Adding message');
+              if (prev.some((m) => m.id === newMessage.id)) return prev;
               return [...prev, { ...newMessage, isMine }];
             });
-
-            // Auto-scroll to bottom
-            setTimeout(() => {
-              flatListRef.current?.scrollToEnd({ animated: true });
-            }, 100);
-
-            // Mark as read if from other user
+            setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
             if (!isMine) {
-              markMessageAsRead(newMessage.id).catch((err) => {
-                console.error('❌ Failed to mark message as read:', err);
-              });
+              markMessageAsRead(newMessage.id).catch(() => {});
             }
-          } catch (error: any) {
-            console.error('❌ Error handling MQTT message:', error);
+          } catch (e) {
+            console.error('❌ [MQTT] Handle message error:', e);
           }
         },
         onReadReceipt: (messageId: number, isRead: boolean) => {
-          try {
-            console.log(`✓✓ [MQTT] Read receipt: Message ${messageId} read: ${isRead}`);
-            setMessages((prev) =>
-              prev.map((msg) => (msg.id === messageId ? { ...msg, isRead } : msg))
-            );
-          } catch (error: any) {
-            console.error('❌ Error handling read receipt:', error);
-          }
+          setMessages((prev) =>
+            prev.map((msg) => (msg.id === messageId ? { ...msg, isRead } : msg))
+          );
         },
       });
-
       if (!connected) {
-        console.warn('⚠️ [MQTT] Failed to connect - chat will work but without live updates');
-        return;
+        console.warn('⚠️ [MQTT] Not connected - chat will use polling');
       }
-
-      console.log('✅ [MQTT] Connected and callbacks set up');
-    } catch (error: any) {
-      console.error('❌ [MQTT] Failed to setup (non-critical):', error);
-      console.error('❌ [MQTT] Error details:', error?.message || error);
-      // Don't throw - allow chat to work without MQTT
+    } catch (e: any) {
+      console.warn('⚠️ [MQTT] Setup failed:', e?.message || e);
     }
   };
 
-  const loadMessages = async () => {
+  const loadMessages = async (silent = false) => {
     try {
-      setIsLoading(true);
+      if (!silent) setIsLoading(true);
       const token = await storage.getAuthToken();
       if (!token) {
         console.error('❌ No auth token found');
@@ -238,7 +213,7 @@ export default function ChatDetailScreen({
         roomId,
       }) + '?limit=100';
 
-      console.log('🔍 Fetching messages from:', url);
+      if (!silent) console.log('🔍 Fetching messages from:', url);
 
       const response = await fetch(url, {
         method: 'GET',
@@ -248,41 +223,55 @@ export default function ChatDetailScreen({
         },
       });
 
-      console.log('📥 Messages API Response Status:', response.status);
+      if (!silent) console.log('📥 Messages API Response Status:', response.status);
 
       if (response.ok) {
         const data = await response.json();
         const currentUserId = await storage.getUserId();
 
-        // Add isMine property to each message
-        const messagesWithOwnership = data.map((msg: ChatMessage) => ({
-          ...msg,
-          isMine: msg.senderId === currentUserId,
-        }));
+        // Filter messages to ensure only messages from this room between sender and receiver (same as web)
+        const filteredMessages = (Array.isArray(data) ? data : []).filter((msg: ChatMessage) => {
+          if (msg.roomId && msg.roomId !== roomId) return false;
+          const isValid =
+            (msg.senderId === currentUserId && msg.receiverId === receiverId) ||
+            (msg.senderId === receiverId && msg.receiverId === currentUserId);
+          return isValid;
+        });
+
+        // Add isMine and normalize content (API may send body/message/text) — same as web
+        const messagesWithOwnership = filteredMessages.map((msg: ChatMessage) => {
+          const content = msg.content ?? (msg as any).body ?? (msg as any).message ?? (msg as any).text ?? '';
+          return {
+            ...msg,
+            content: typeof content === 'string' ? content : String(content || ''),
+            isMine: msg.senderId === currentUserId,
+          };
+        });
 
         setMessages(messagesWithOwnership);
-        console.log('✅ Loaded messages:', messagesWithOwnership.length);
+        if (!silent) console.log('✅ Loaded messages:', messagesWithOwnership.length);
 
-        // Auto-scroll to bottom
-        setTimeout(() => {
-          flatListRef.current?.scrollToEnd({ animated: true });
-        }, 300);
+        if (!silent) {
+          setTimeout(() => {
+            flatListRef.current?.scrollToEnd({ animated: true });
+          }, 300);
+        }
 
-        // Mark unread messages as read (non-blocking)
         markAllMessagesAsRead().catch((err) => {
           console.error('❌ Failed to mark messages as read:', err);
         });
       } else {
-        const errorText = await response.text();
-        console.error('❌ Failed to load messages - Status:', response.status);
-        console.error('❌ Error response:', errorText);
-        Alert.alert(t('Error'), t('Failed to load messages'));
+        if (!silent) {
+          const errorText = await response.text();
+          console.error('❌ Failed to load messages - Status:', response.status, errorText);
+          Alert.alert(t('Error'), t('Failed to load messages'));
+        }
       }
     } catch (error: any) {
       console.error('❌ Error loading messages:', error);
-      Alert.alert(t('Error'), error?.message || t('Failed to load messages'));
+      if (!silent) Alert.alert(t('Error'), error?.message || t('Failed to load messages'));
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   };
 
@@ -293,6 +282,29 @@ export default function ChatDetailScreen({
     setMessage('');
     setIsSending(true);
 
+    let optimisticMessage: ChatMessage;
+    try {
+      const currentUserId = await storage.getUserId();
+      if (!currentUserId) throw new Error('No user ID found');
+      optimisticMessage = {
+        id: Date.now(),
+        roomId,
+        senderId: currentUserId,
+        receiverId: receiverId,
+        content: messageText,
+        messageType: 'text',
+        createdAt: new Date().toISOString(),
+        isRead: false,
+        isMine: true,
+      };
+      setMessages((prev) => [...prev, optimisticMessage]);
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+    } catch (e) {
+      setMessage(messageText);
+      setIsSending(false);
+      return;
+    }
+
     try {
       const token = await storage.getAuthToken();
       if (!token) {
@@ -300,7 +312,6 @@ export default function ChatDetailScreen({
       }
 
       const url = buildApiUrl(API_ENDPOINTS.CHAT.SEND);
-      console.log('📤 Sending message to:', url);
 
       const response = await fetch(url, {
         method: 'POST',
@@ -309,18 +320,20 @@ export default function ChatDetailScreen({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          roomId,
           receiverId: receiverId,
           content: messageText,
           projectId: projectId ?? undefined,
         }),
       });
 
-      console.log('📥 Send Message Response Status:', response.status);
-
       if (response.ok) {
         const newMessage = await response.json();
-        console.log('✅ Message sent, ID:', newMessage.id);
-        // MQTT will deliver the message to UI automatically
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === optimisticMessage.id ? { ...newMessage, isMine: true } : msg
+          )
+        );
       } else {
         const errorText = await response.text();
         throw new Error(errorText || 'Failed to send message');
@@ -328,7 +341,8 @@ export default function ChatDetailScreen({
     } catch (error: any) {
       console.error('❌ Failed to send message:', error);
       Alert.alert(t('Error'), error.message || t('Failed to send message'));
-      setMessage(messageText); // Restore message on error
+      setMessages((prev) => prev.filter((msg) => msg.id !== optimisticMessage.id));
+      setMessage(messageText);
     } finally {
       setIsSending(false);
     }
@@ -441,16 +455,13 @@ export default function ChatDetailScreen({
         throw new Error(errorText || 'Failed to send attachment');
       }
 
-      // For voice notes, reload messages to get the correct duration from server
-      // MQTT will deliver the message, but we reload to ensure duration is correct
+      // Reload messages so the new attachment appears (REST-only, no MQTT)
       if (payload.type === 'audio/m4a' && payload.duration) {
-        console.log('🔄 [ChatDetailScreen] Reloading messages after voice note upload to get correct duration');
-        setTimeout(() => {
-          loadMessages().catch(console.error);
-        }, 500); // Small delay to allow server to process
+        setTimeout(() => loadMessages(true).catch(console.error), 500);
+      } else {
+        loadMessages(true).catch(console.error);
       }
-      
-      // MQTT will deliver the new message; no local state update needed
+
       if (trimmedMessage) {
         setMessage('');
       }

@@ -1,34 +1,34 @@
-// 🎫 useSupportTickets Hook - Manage Support Ticket State
+// 🎫 useSupportTickets Hook – same integration as web (SupportTicketService)
 import { useState, useEffect, useCallback } from 'react';
-import SupportTicketService from '../services/SupportTicketService';
-import { SupportTicket, CreateTicketRequest, TicketRating } from '../types/chat';
+import * as SupportTicketService from '../services/SupportTicketService';
+import { SupportTicket, CreateTicketRequest } from '../types/chat';
 
 interface UseSupportTicketsOptions {
   language?: 'en' | 'ar';
+  statusFilter?: string;
 }
 
 export const useSupportTickets = (options: UseSupportTicketsOptions = {}) => {
-  const { language = 'en' } = options;
-  
+  const { language = 'en', statusFilter } = options;
+
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch all tickets
   const fetchTickets = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await SupportTicketService.getMyTickets();
+      const data = await SupportTicketService.getMyTickets(statusFilter as any);
       setTickets(data);
     } catch (err: any) {
-      setError(err.message || 'Failed to fetch tickets');
+      const message = err?.message && typeof err.message === 'string' ? err.message : 'Failed to fetch tickets';
+      setError(message);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [statusFilter]);
 
-  // Create new ticket
   const createTicket = useCallback(async (data: CreateTicketRequest): Promise<SupportTicket | null> => {
     setLoading(true);
     setError(null);
@@ -44,7 +44,6 @@ export const useSupportTickets = (options: UseSupportTicketsOptions = {}) => {
     }
   }, []);
 
-  // Get ticket details
   const getTicketDetails = useCallback(async (ticketId: number): Promise<SupportTicket | null> => {
     try {
       return await SupportTicketService.getTicketDetails(ticketId);
@@ -54,71 +53,22 @@ export const useSupportTickets = (options: UseSupportTicketsOptions = {}) => {
     }
   }, []);
 
-  // Rate a ticket
-  const rateTicket = useCallback(async (ticketId: number, rating: TicketRating): Promise<boolean> => {
-    try {
-      const success = await SupportTicketService.rateTicket(ticketId, rating);
-      if (success) {
-        setTickets(prev => prev.map(t => 
-          t.id === ticketId ? { ...t, rating: rating.rating, feedback: rating.feedback } : t
-        ));
-      }
-      return success;
-    } catch (err: any) {
-      setError(err.message || 'Failed to rate ticket');
-      return false;
-    }
-  }, []);
-
-  // Close a ticket
-  const closeTicket = useCallback(async (ticketId: number): Promise<boolean> => {
-    try {
-      const success = await SupportTicketService.closeTicket(ticketId);
-      if (success) {
-        setTickets(prev => prev.map(t => 
-          t.id === ticketId ? { ...t, status: 'CLOSED' } : t
-        ));
-      }
-      return success;
-    } catch (err: any) {
-      setError(err.message || 'Failed to close ticket');
-      return false;
-    }
-  }, []);
-
-  // Initial fetch
   useEffect(() => {
     fetchTickets();
   }, [fetchTickets]);
 
-  // Helper methods
-  const getStatusColor = useCallback((status: string) => {
-    return SupportTicketService.getStatusColor(status);
-  }, []);
+  const getStatusColor = useCallback((status: string) => SupportTicketService.getStatusColor(status), []);
+  const getStatusText = useCallback((status: string) => SupportTicketService.getStatusText(status, language), [language]);
+  const getPriorityColor = useCallback((priority: string) => SupportTicketService.getPriorityColor(priority), []);
+  const getPriorityText = useCallback((priority: string) => SupportTicketService.getPriorityText(priority, language), [language]);
+  const getCategoryText = useCallback((category: string) => SupportTicketService.getCategoryText(category, language), [language]);
 
-  const getStatusText = useCallback((status: string) => {
-    return SupportTicketService.getStatusText(status, language);
-  }, [language]);
-
-  const getPriorityColor = useCallback((priority: string) => {
-    return SupportTicketService.getPriorityColor(priority);
-  }, []);
-
-  const getPriorityText = useCallback((priority: string) => {
-    return SupportTicketService.getPriorityText(priority, language);
-  }, [language]);
-
-  const getCategoryText = useCallback((category: string) => {
-    return SupportTicketService.getCategoryText(category, language);
-  }, [language]);
-
-  // Stats
   const stats = {
     total: tickets.length,
-    pending: tickets.filter(t => t.status === 'PENDING').length,
-    inProgress: tickets.filter(t => t.status === 'IN_PROGRESS' || t.status === 'ASSIGNED').length,
+    pending: tickets.filter(t => t.status === 'PENDING' || t.status === 'OPEN').length,
+    inProgress: tickets.filter(t => t.status === 'IN_PROGRESS' || t.status === 'ASSIGNED' || t.status === 'WAITING_FOR_CUSTOMER').length,
     resolved: tickets.filter(t => t.status === 'RESOLVED' || t.status === 'CLOSED').length,
-    unread: tickets.filter(t => t.hasUnreadMessages).length,
+    unread: tickets.filter(t => (t.unreadMessageCount ?? 0) > 0 || t.hasUnreadMessages).length,
   };
 
   return {
@@ -129,8 +79,6 @@ export const useSupportTickets = (options: UseSupportTicketsOptions = {}) => {
     fetchTickets,
     createTicket,
     getTicketDetails,
-    rateTicket,
-    closeTicket,
     getStatusColor,
     getStatusText,
     getPriorityColor,

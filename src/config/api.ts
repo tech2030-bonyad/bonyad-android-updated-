@@ -48,11 +48,13 @@ export const API_ENDPOINTS = {
     PROFILE_BY_ID: '/users/:id/profile',
     UPDATE_PROFILE: '/users/profile',
     PROFILE_IMAGE: '/users/update-profile-image',
+    CHANGE_PHONE: '/users/:userId/change-phone',
     CHANGE_PHONE_REQUEST: '/users/:userId/change-phone-request',
     CHANGE_PHONE_VERIFY: '/users/:userId/change-phone-verify',
     CHANGE_PASSWORD: '/users/:userId/change-password',
     USER_DETAILS: '/user-details',
     COMPLETE_PROFILE: '/users/complete-profile',
+    DELETE_ACCOUNT: '/users/me/account',
     TECHNICIAN_STATUS: '/users/technician-status',
     SEARCH: '/users/search',
     TECHNICIANS_LIST: '/users/technicians',
@@ -293,13 +295,22 @@ export const API_ENDPOINTS = {
     CHAT_HISTORY: '/ai-support/chat/history',
   },
 
-  // Live Agent Support
+  // Support Centre – same as web (SupportTicketService + supportChatService)
   SUPPORT: {
+    TICKETS: '/support/tickets',
+    TICKETS_CREATE_WITH_FILES: '/support/tickets/create-with-files',
+    TICKET_BY_ID: '/support/tickets/:id',
+    TICKET_MESSAGES: '/support/tickets/:id/messages',
+    TICKET_RESOLVE: '/support/tickets/:id/resolve',
+    REQUEST_TYPES: '/support/request-types',
+    /** Public, no auth. GET /api/support/categories/hierarchy */
+    CATEGORIES_HIERARCHY: '/support/categories/hierarchy',
+    SEND_WITH_FILE: '/support/send-with-file',
     REQUESTS: '/support/requests',
-    REQUEST_DETAILS: '/support/requests/:id',
-    MY_REQUESTS: '/support/requests/my',
-    CANCEL_REQUEST: '/support/requests/:id/cancel',
-    CATEGORIES: '/api/support/categories',
+    REQUEST_BY_ID: '/support/requests/:requestId',
+    ACCEPT_REQUEST: '/support/requests/:requestId/accept',
+    REQUEST: '/support/request',
+    MY_REQUESTS: '/support/my-requests',
   },
 
   // Small Tasks – same paths and behavior as web (src/config/api.ts SMALL_TASKS)
@@ -380,6 +391,16 @@ export const getApiUrl = (): string => {
 // Helper function to get server base URL (without /api)
 export const getServerBaseUrl = (): string => {
   return API_BASE_URL.replace('/api', '');
+};
+
+// Build full asset/image URL from relative path (same as web)
+export const buildAssetUrl = (relativePath: string): string => {
+  if (!relativePath) return '';
+  if (relativePath.startsWith('http://') || relativePath.startsWith('https://')) {
+    return relativePath;
+  }
+  const path = relativePath.startsWith('/') ? relativePath : `/${relativePath}`;
+  return `${getServerBaseUrl()}${path}`;
 };
 
 // Helper function to build full URL (always absolute base – same as web)

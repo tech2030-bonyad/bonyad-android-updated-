@@ -43,6 +43,9 @@ import MySmallTaskBidsScreen from './MySmallTaskBidsScreen';
 import SmallTaskDetailScreen from './SmallTaskDetailScreen';
 import ServiceSuggestionFormScreen from './ServiceSuggestionFormScreen';
 import MyServiceSuggestionsScreen from './MyServiceSuggestionsScreen';
+import RegionsManagementScreen from './RegionsManagementScreen';
+import SmallTaskTypesScreen from './SmallTaskTypesScreen';
+import PaymentTransactionScreen from './PaymentTransactionScreen';
 import Footer from '../components/Footer';
 import { buildApiUrl, API_ENDPOINTS, getServerBaseUrl } from '../config/api';
 import { storage } from '../utils/storage';
@@ -106,7 +109,7 @@ export default function TechnicianHomeScreen({
   const [showProjectsDropdown, setShowProjectsDropdown] = useState(false);
   const [activeTab, setActiveTab] = useState('home');
   const [currentProjectsFilter, setCurrentProjectsFilter] = useState<'available' | 'running' | 'completed' | 'bid_received' | 'direct_offers'>(projectsFilter || 'available');
-  const [profileSubView, setProfileSubView] = useState<'myData' | 'editProfile' | 'portfolio' | 'subscription' | 'services' | 'availability' | 'changePassword' | 'changePhone' | 'verifyPhoneChange' | 'serviceSuggestions' | null>(null);
+  const [profileSubView, setProfileSubView] = useState<'myData' | 'editProfile' | 'portfolio' | 'subscription' | 'services' | 'availability' | 'regions' | 'smallTaskTypes' | 'paymentHistory' | 'changePassword' | 'changePhone' | 'verifyPhoneChange' | 'serviceSuggestions' | null>(null);
   const [phoneChangeNumber, setPhoneChangeNumber] = useState<string>('');
   const [selectedChat, setSelectedChat] = useState<{ roomId: string; receiverId: number; receiverName: string; projectId?: number | null } | null>(null);
   const [showChatList, setShowChatList] = useState(true);
@@ -650,6 +653,9 @@ export default function TechnicianHomeScreen({
                 onNavigateToSubscription={() => setProfileSubView('subscription')}
                 onNavigateToServices={() => setProfileSubView('services')}
                 onNavigateToAvailability={() => setProfileSubView('availability')}
+                onNavigateToRegions={() => setProfileSubView('regions')}
+                onNavigateToSmallTaskTypes={() => setProfileSubView('smallTaskTypes')}
+                onNavigateToPaymentHistory={() => setProfileSubView('paymentHistory')}
                 onNavigateToSupportTickets={() => {
                   setProfileSubView(null);
                   onShowSupportTickets?.();
@@ -692,6 +698,18 @@ export default function TechnicianHomeScreen({
               />
             ) : profileSubView === 'availability' ? (
               <AvailabilityScreen
+                onBack={() => setProfileSubView(null)}
+              />
+            ) : profileSubView === 'regions' ? (
+              <RegionsManagementScreen
+                onBack={() => setProfileSubView(null)}
+              />
+            ) : profileSubView === 'smallTaskTypes' ? (
+              <SmallTaskTypesScreen
+                onBack={() => setProfileSubView(null)}
+              />
+            ) : profileSubView === 'paymentHistory' ? (
+              <PaymentTransactionScreen
                 onBack={() => setProfileSubView(null)}
               />
             ) : profileSubView === 'changePassword' ? (
@@ -1170,6 +1188,13 @@ export default function TechnicianHomeScreen({
                   onNavigateToSubscription={() => setProfileSubView('subscription')}
                   onNavigateToServices={() => setProfileSubView('services')}
                   onNavigateToAvailability={() => setProfileSubView('availability')}
+                  onNavigateToRegions={() => setProfileSubView('regions')}
+                  onNavigateToSmallTaskTypes={() => setProfileSubView('smallTaskTypes')}
+                  onNavigateToPaymentHistory={() => setProfileSubView('paymentHistory')}
+                  onNavigateToSupportTickets={() => {
+                    setProfileSubView(null);
+                    onShowSupportTickets?.();
+                  }}
                 />
               ) : profileSubView === 'myData' ? (
                 <MyDataScreen
@@ -1208,6 +1233,18 @@ export default function TechnicianHomeScreen({
                 />
               ) : profileSubView === 'availability' ? (
                 <AvailabilityScreen
+                  onBack={() => setProfileSubView(null)}
+                />
+              ) : profileSubView === 'regions' ? (
+                <RegionsManagementScreen
+                  onBack={() => setProfileSubView(null)}
+                />
+              ) : profileSubView === 'smallTaskTypes' ? (
+                <SmallTaskTypesScreen
+                  onBack={() => setProfileSubView(null)}
+                />
+              ) : profileSubView === 'paymentHistory' ? (
+                <PaymentTransactionScreen
                   onBack={() => setProfileSubView(null)}
                 />
               ) : profileSubView === 'changePassword' ? (

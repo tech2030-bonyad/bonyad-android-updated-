@@ -103,11 +103,12 @@ export interface ChatRoom {
 
 export interface ChatMessage {
   id: number;
-  chatRoomId: number;
+  chatRoomId?: number;
+  roomId?: string;
   senderId: number;
-  senderName: string;
+  senderName?: string;
   receiverId: number;
-  receiverName: string;
+  receiverName?: string;
   content: string;
   fileUrl?: string | null;
   fileType?: string | null;
@@ -117,6 +118,7 @@ export interface ChatMessage {
   readAt?: string | null;
   createdAt: string;
   isMine?: boolean; // Calculated on client
+  messageType?: string; // e.g. 'text'
 }
 
 export interface SendMessageRequest {
@@ -143,25 +145,68 @@ export interface SendMessageResponse {
 }
 
 // ============================================
-// SUPPORT TICKET TYPES
+// SUPPORT TICKET TYPES (aligned with web SupportTicketService)
 // ============================================
 
-export type TicketStatus = 
-  | 'PENDING' 
-  | 'ASSIGNED' 
-  | 'IN_PROGRESS' 
-  | 'RESOLVED' 
-  | 'CLOSED' 
-  | 'REJECTED';
+export type TicketStatus =
+  | 'PENDING'
+  | 'ASSIGNED'
+  | 'IN_PROGRESS'
+  | 'RESOLVED'
+  | 'CLOSED'
+  | 'REJECTED'
+  | 'OPEN'
+  | 'WAITING_FOR_CUSTOMER';
 
-export type TicketPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+export type TicketPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT' | 'CRITICAL';
 
-export type TicketCategory = 
-  | 'General' 
-  | 'Billing' 
-  | 'Technical' 
-  | 'Account' 
+export type TicketCategory =
+  | 'General'
+  | 'Billing'
+  | 'Technical'
+  | 'Account'
   | 'Other';
+
+/** Category node from GET /support/categories/hierarchy (public). */
+export interface SupportCategoryHierarchyNode {
+  id: number;
+  nameAr: string;
+  nameEn: string;
+  hasChildren?: boolean;
+  parentId?: number;
+  children?: SupportCategoryHierarchyNode[];
+}
+
+/** Category / request type for create form (from hierarchy or request-types). */
+export interface SupportRequestType {
+  id: number;
+  nameEn: string;
+  nameAr?: string;
+  name?: string;
+  parentId?: number | null;
+  active?: boolean;
+  subcategories?: SupportRequestType[];
+}
+
+export interface SupportTicketMessage {
+  id: number;
+  userId?: number;
+  senderId?: number;
+  userName: string;
+  senderName?: string;
+  senderRole?: 'USER' | 'ADMIN';
+  content: string;
+  attachmentUrls?: string[];
+  attachments?: string[];
+  fileUrl?: string | null;
+  fileType?: string | null;
+  duration?: number;
+  createdAt: string;
+  isRead: boolean;
+  readAt?: string | null;
+  isAdminMessage?: boolean;
+  isInternal?: boolean;
+}
 
 export interface TicketMessage {
   id: number;
@@ -179,38 +224,46 @@ export interface TicketMessage {
 
 export interface SupportTicket {
   id: number;
+  userId?: number;
+  userName?: string;
   subject: string;
   description: string;
-  category: TicketCategory;
+  category?: TicketCategory | string;
   subcategory?: string;
+  categoryId?: number;
+  subcategoryId?: number;
   priority: TicketPriority;
   status: TicketStatus;
-  assignedAdminId: number | null;
-  assignedAdminName: string | null;
-  chatRoomId: number | null;
-  chatRoomRoomId: string | null;
+  assignedAdminId?: number | null;
+  assignedAdminName?: string | null;
+  chatRoomId?: number | null;
+  chatRoomRoomId?: string | null;
   createdAt: string;
   updatedAt: string;
-  assignedAt: string | null;
-  resolvedAt: string | null;
-  hasUnreadMessages: boolean;
+  assignedAt?: string | null;
+  resolvedAt?: string | null;
+  hasUnreadMessages?: boolean;
+  unreadMessageCount?: number;
   rating?: number;
   feedback?: string;
   attachmentUrls?: string[];
-  messages?: TicketMessage[];
+  messages?: (SupportTicketMessage | TicketMessage)[];
 }
 
+/** Web create-ticket payload: subject, description, priority, categoryId?, subcategoryId?, attachmentUrls? */
 export interface CreateTicketRequest {
   subject: string;
   description: string;
-  category: TicketCategory;
+  category?: TicketCategory;
   subcategory?: string;
   priority: TicketPriority;
+  categoryId?: number;
+  subcategoryId?: number;
   attachmentUrls?: string[];
 }
 
 export interface TicketRating {
-  rating: number; // 1-5
+  rating: number;
   feedback?: string;
 }
 

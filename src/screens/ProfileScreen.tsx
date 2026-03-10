@@ -12,10 +12,11 @@ import {
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { storage } from '../utils/storage';
+import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
-import { API_BASE_URL, API_ENDPOINTS, buildApiUrl } from '../config/api';
+import { getUserProfile, uploadProfileImage, deleteAccount } from '../services/ProfileService';
+import { storage } from '../utils/storage';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
 import ConfirmationPopup, { useConfirmationPopup } from '../components/ConfirmationPopup';
 
@@ -44,6 +45,9 @@ interface ProfileScreenProps {
   onNavigateToSubscription?: () => void;
   onNavigateToServices?: () => void;
   onNavigateToAvailability?: () => void;
+  onNavigateToRegions?: () => void;
+  onNavigateToSmallTaskTypes?: () => void;
+  onNavigateToPaymentHistory?: () => void;
   onNavigateToSupportTickets?: () => void;
 }
 
@@ -87,6 +91,9 @@ export default function ProfileScreen({
   onNavigateToSubscription, 
   onNavigateToServices, 
   onNavigateToAvailability,
+  onNavigateToRegions,
+  onNavigateToSmallTaskTypes,
+  onNavigateToPaymentHistory,
   onNavigateToSupportTickets,
 }: ProfileScreenProps) {
   const { t, i18n } = useTranslation();
@@ -95,13 +102,13 @@ export default function ProfileScreen({
   const { fontFamily, fontSizeScale, setFontSizeScale, scaledSize } = useFontFamily();
   const [userDetails, setUserDetails] = useState<UserDetails | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [language, setLanguage] = useState(i18n.language);
   const isDarkMode = theme === 'dark';
   const isRTL = i18n.language === 'ar';
   
-  // Custom popup hooks
-  const { alertState, showError, hideAlert } = useAlertPopup();
-  const { confirmState, showLogoutConfirmation, hideConfirmation } = useConfirmationPopup();
+  const { alertState, showError, showSuccess, hideAlert } = useAlertPopup();
+  const { confirmState, showLogoutConfirmation, showConfirmation, hideConfirmation } = useConfirmationPopup();
 
   // Watch for language changes and force re-render
   useEffect(() => {
@@ -125,46 +132,59 @@ export default function ProfileScreen({
 
   const fetchUserProfile = async () => {
     try {
-      const token = await storage.getAuthToken();
-      if (!token) {
-        showError(t('No authentication token found'), t('Error'));
-        return;
-      }
-
-      const response = await fetch(
-        buildApiUrl(API_ENDPOINTS.USER.PROFILE),
-        {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        
-        // Construct full URLs for images
-        if (data.profileImage || data.avatar) {
-          const imagePath = data.profileImage || data.avatar;
-          if (!imagePath.startsWith('http')) {
-            data.avatar = `${API_BASE_URL.replace('/api', '')}${imagePath}`;
-          } else {
-            data.avatar = imagePath;
-          }
-        }
-
-        setUserDetails(data);
-      } else {
-        showError(t('Failed to load profile'), t('Error'));
-      }
+      const profile = await getUserProfile();
+      setUserDetails(profile);
     } catch (error) {
       console.error('Error fetching profile:', error);
       showError(t('Failed to load profile'), t('Error'));
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleChangeProfileImage = async () => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        showError(t('Permission to access photos is required'), t('Error'));
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (result.canceled || !result.assets?.[0]) return;
+      setIsUploadingImage(true);
+      const { profileImage } = await uploadProfileImage(result.assets[0]);
+      if (userDetails) {
+        setUserDetails({ ...userDetails, avatar: profileImage, profileImage });
+      }
+      showSuccess(t('Profile photo updated'), t('Success'));
+    } catch (error: any) {
+      showError(error.message || t('Failed to upload photo'), t('Error'));
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  const handleDeleteAccount = () => {
+    showConfirmation(
+      t('Delete Account'),
+      t('Are you sure you want to permanently delete your account? This action cannot be undone.'),
+      async () => {
+        try {
+          await deleteAccount();
+          await storage.clearAuthData();
+          showSuccess(t('Account deleted successfully'), t('Success'));
+          setTimeout(() => onLogout(), 1500);
+        } catch (error: any) {
+          showError(error.message || t('Failed to delete account'), t('Error'));
+        }
+      },
+      { confirmText: t('Yes, Delete'), confirmStyle: 'destructive' }
+    );
   };
 
   const handleLogout = () => {
@@ -259,7 +279,6 @@ export default function ProfileScreen({
           <TouchableOpacity 
             style={[styles.userWelcomeSection, isRTL && styles.rowRTL]} 
             onPress={() => {
-              // For technicians, navigate to MyDataScreen (settings screen)
               if (isTechnician) {
                 onNavigateToEditProfile?.();
               } else {
@@ -267,13 +286,19 @@ export default function ProfileScreen({
               }
             }}
           >
-            <View style={[styles.profileImageContainer, { backgroundColor: avatarBgColor }]}>
-              {user?.avatar ? (
-                <Image source={{ uri: user.avatar }} style={styles.profileImage} />
+            <TouchableOpacity
+              onPress={handleChangeProfileImage}
+              disabled={isUploadingImage}
+              style={[styles.profileImageContainer, { backgroundColor: avatarBgColor }]}
+            >
+              {isUploadingImage ? (
+                <ActivityIndicator size="small" color={primaryColor} />
+              ) : user?.avatar || user?.profileImage ? (
+                <Image source={{ uri: user?.avatar || user?.profileImage }} style={styles.profileImage} />
               ) : (
                 <Ionicons name="person" size={24} color={primaryColor} />
               )}
-            </View>
+            </TouchableOpacity>
             <View style={[styles.userWelcomeText, isRTL && styles.textContainerRTL]}>
               <Text style={[styles.welcomeLabel, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }, isRTL && styles.textRTL]}>
                 {t('Welcome')}
@@ -361,14 +386,15 @@ export default function ProfileScreen({
 
         {/* Settings Section Card */}
        
-        {/* Technician Menu Items - Only Portfolio and Subscription */}
+        {/* Technician Menu Items – same order as web: Portfolio, Subscription, Availability, Services, Small Task Types, Working Areas */}
         {isTechnician && (
           <>
-            {/* My Portfolio Card */}
+            {/* My Portfolio */}
             <View style={[styles.technicianCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.menuItem, isRTL && styles.rowRTL]}
                 onPress={() => onNavigateToPortfolio?.()}
+                activeOpacity={0.7}
               >
                 <View style={[styles.settingIconContainer, { backgroundColor: iconBgColor }]}>
                   <Ionicons name="briefcase-outline" size={24} color={isDarkMode ? colors.textSecondary : '#666666'} />
@@ -381,26 +407,127 @@ export default function ProfileScreen({
                     {t('Add your works here')}
                   </Text>
                 </View>
+                <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={24} color={primaryColor} />
               </TouchableOpacity>
             </View>
 
-            {/* My Subscriptions Card */}
+            {/* My Subscription */}
             <View style={[styles.technicianCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.menuItem, isRTL && styles.rowRTL]}
                 onPress={() => onNavigateToSubscription?.()}
+                activeOpacity={0.7}
               >
                 <View style={[styles.settingIconContainer, { backgroundColor: iconBgColor }]}>
                   <Ionicons name="card-outline" size={24} color={isDarkMode ? colors.textSecondary : '#666666'} />
                 </View>
                 <View style={[styles.settingTextContainer, isRTL && styles.textContainerRTL]}>
                   <Text style={[styles.settingTitle, { color: textColor, fontFamily, fontSize: scaledSize(16) }, isRTL && styles.textRTL]}>
-                    {t('My Subscriptions')}
+                    {t('My Subscription')}
                   </Text>
                   <Text style={[styles.settingSubtitle, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }, isRTL && styles.textRTL]}>
                     {t('Manage your subscriptions')}
                   </Text>
                 </View>
+                <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={24} color={primaryColor} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Availability */}
+            <View style={[styles.technicianCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}>
+              <TouchableOpacity
+                style={[styles.menuItem, isRTL && styles.rowRTL]}
+                onPress={() => onNavigateToAvailability?.()}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.settingIconContainer, { backgroundColor: iconBgColor }]}>
+                  <Ionicons name="calendar-outline" size={24} color={isDarkMode ? colors.textSecondary : '#666666'} />
+                </View>
+                <View style={[styles.settingTextContainer, isRTL && styles.textContainerRTL]}>
+                  <Text style={[styles.settingTitle, { color: textColor, fontFamily, fontSize: scaledSize(16) }, isRTL && styles.textRTL]}>
+                    {t('Availability')}
+                  </Text>
+                  <Text style={[styles.settingSubtitle, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }, isRTL && styles.textRTL]}>
+                    {t('Set when you are available')}
+                  </Text>
+                </View>
+                <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={24} color={primaryColor} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Services */}
+            <View style={[styles.technicianCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}>
+              <TouchableOpacity
+                style={[styles.menuItem, isRTL && styles.rowRTL]}
+                onPress={() => onNavigateToServices?.()}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.settingIconContainer, { backgroundColor: iconBgColor }]}>
+                  <Ionicons name="construct-outline" size={24} color={isDarkMode ? colors.textSecondary : '#666666'} />
+                </View>
+                <View style={[styles.settingTextContainer, isRTL && styles.textContainerRTL]}>
+                  <Text style={[styles.settingTitle, { color: textColor, fontFamily, fontSize: scaledSize(16) }, isRTL && styles.textRTL]}>
+                    {t('Services')}
+                  </Text>
+                  <Text style={[styles.settingSubtitle, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }, isRTL && styles.textRTL]}>
+                    {t('Manage your services')}
+                  </Text>
+                </View>
+                <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={24} color={primaryColor} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Small Task Types – ensure clickable with explicit handler and hitSlop */}
+            <View style={[styles.technicianCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}>
+              <TouchableOpacity
+                style={[styles.menuItem, isRTL && styles.rowRTL]}
+                onPress={() => {
+                  if (onNavigateToSmallTaskTypes) onNavigateToSmallTaskTypes();
+                }}
+                activeOpacity={0.7}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <View style={[styles.settingIconContainer, { backgroundColor: iconBgColor }]}>
+                  <Ionicons name="list-outline" size={24} color={isDarkMode ? colors.textSecondary : '#666666'} />
+                </View>
+                <View style={[styles.settingTextContainer, isRTL && styles.textContainerRTL]}>
+                  <Text style={[styles.settingTitle, { color: textColor, fontFamily, fontSize: scaledSize(16) }, isRTL && styles.textRTL]}>
+                    {t('Small Task Types')}
+                  </Text>
+                  <Text style={[styles.settingSubtitle, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }, isRTL && styles.textRTL]}>
+                    {t('Manage subscribed task types')}
+                  </Text>
+                </View>
+                <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={24} color={primaryColor} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Working Areas – ensure clickable with hitSlop and explicit handler */}
+            <View style={[styles.technicianCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}>
+              <TouchableOpacity
+                style={[styles.menuItem, isRTL && styles.rowRTL]}
+                onPress={() => {
+                  if (onNavigateToRegions) onNavigateToRegions();
+                }}
+                activeOpacity={0.7}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <View style={[styles.settingIconContainer, { backgroundColor: iconBgColor }]}>
+                  <Ionicons name="location-outline" size={24} color={isDarkMode ? colors.textSecondary : '#666666'} />
+                </View>
+                <View style={[styles.settingTextContainer, isRTL && styles.textContainerRTL]}>
+                  <Text style={[styles.settingTitle, { color: textColor, fontFamily, fontSize: scaledSize(16) }, isRTL && styles.textRTL]}>
+                    {t('Working Areas')}
+                  </Text>
+                  <Text style={[styles.settingSubtitle, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }, isRTL && styles.textRTL]}>
+                    {t('Add regions where you offer services')}
+                  </Text>
+                </View>
+                <Ionicons
+                  name={isRTL ? 'chevron-back' : 'chevron-forward'}
+                  size={24}
+                  color={primaryColor}
+                />
               </TouchableOpacity>
             </View>
           </>
@@ -460,8 +587,32 @@ export default function ProfileScreen({
               color={primaryColor} 
             />
           </TouchableOpacity>
+        </View>
 
-
+        {/* Transactions (Payment History) – same as web label */}
+        <View style={[styles.userMenuCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}>
+          <TouchableOpacity 
+            style={[styles.menuItem, isRTL && styles.rowRTL]}
+            onPress={() => onNavigateToPaymentHistory?.()}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.settingIconContainer, { backgroundColor: iconBgColor }]}>
+              <Ionicons name="receipt-outline" size={24} color={isDarkMode ? colors.textSecondary : '#666666'} />
+            </View>
+            <View style={[styles.settingTextContainer, isRTL && styles.textContainerRTL]}>
+              <Text style={[styles.settingTitle, { color: textColor, fontFamily, fontSize: scaledSize(16) }, isRTL && styles.textRTL]}>
+                {t('Transactions')}
+              </Text>
+              <Text style={[styles.settingSubtitle, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }, isRTL && styles.textRTL]}>
+                {t('View your transactions and refund requests')}
+              </Text>
+            </View>
+            <Ionicons 
+              name={isRTL ? 'chevron-back' : 'chevron-forward'} 
+              size={24} 
+              color={primaryColor} 
+            />
+          </TouchableOpacity>
         </View>
 
          <View style={[styles.settingsCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}>
@@ -602,6 +753,21 @@ export default function ProfileScreen({
             </View>
           )}
 
+        </View>
+
+        {/* Delete Account Card */}
+        <View style={[styles.userMenuCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}>
+          <TouchableOpacity 
+            style={[styles.deleteAccountItem, isRTL && styles.rowRTL]}
+            onPress={handleDeleteAccount}
+          >
+            <View style={[styles.settingIconContainer, { backgroundColor: 'rgba(212, 24, 61, 0.15)' }]}>
+              <Ionicons name="trash-outline" size={24} color="#D4183D" />
+            </View>
+            <Text style={[styles.deleteAccountText, { fontFamily, fontSize: scaledSize(16) }, isRTL && styles.textRTL]}>
+              {t('Delete Account')}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Logout Card */}
@@ -924,6 +1090,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: FIGMA_COLORS.purple,
+  },
+
+  deleteAccountItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    width: '100%',
+    paddingVertical: 8,
+  },
+  deleteAccountText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#D4183D',
   },
 
   // RTL Support
