@@ -1,7 +1,7 @@
 import { useEffect, useCallback } from 'react';
 import { Platform } from 'react-native';
 
-export type Screen = 'splash' | 'onboarding' | 'welcome' | 'overview' | 'about' | 'contact' | 'introToApp' | 'login' | 'signup' | 'otp' | 'forgotPassword' | 'otpVerification' | 'resetPassword' | 'home' | 'profile' | 'editProfile' | 'myData' | 'changePhone' | 'changePassword' | 'portfolio' | 'services' | 'availability' | 'subscription' | 'newProject' | 'manualForm' | 'aiForm' | 'projects' | 'runningProjects' | 'chatRooms' | 'chatDetail' | 'notifications' | 'appointments' | 'booking' | 'technicianProfile' | 'technicianOnboarding' | 'technicianCompleteProfile' | 'roomDesign' | 'voiceAI' | 'costExplorer' | 'roomVisualizer' | 'askBonyadAI' | 'projectsMap' | 'chatbot' | 'supportChat' | 'ticketList' | 'createTicket' | 'ticketDetail' | 'serviceProviders' | 'commissionPayment' | 'paymentCheckout' | 'categorySubcategories' | 'creationMethod' | 'pendingProject' | 'bidReceivedProject' | 'approvedProject' | 'contractSigningProject' | 'inProgressProject' | 'completedProject' | 'changeRequestList' | 'changeRequestDetail' | 'requestModification';
+export type Screen = 'splash' | 'onboarding' | 'welcome' | 'overview' | 'about' | 'contact' | 'introToApp' | 'login' | 'signup' | 'otp' | 'forgotPassword' | 'otpVerification' | 'resetPassword' | 'home' | 'profile' | 'editProfile' | 'myData' | 'changePhone' | 'changePassword' | 'portfolio' | 'services' | 'availability' | 'subscription' | 'newProject' | 'manualForm' | 'aiForm' | 'projects' | 'runningProjects' | 'chatRooms' | 'chatDetail' | 'notifications' | 'appointments' | 'booking' | 'technicianProfile' | 'technicianOnboarding' | 'technicianCompleteProfile' | 'waitingApproval' | 'roomDesign' | 'voiceAI' | 'costExplorer' | 'roomVisualizer' | 'askBonyadAI' | 'projectsMap' | 'chatbot' | 'supportChat' | 'ticketList' | 'createTicket' | 'ticketDetail' | 'serviceProviders' | 'commissionPayment' | 'paymentCheckout' | 'categorySubcategories' | 'creationMethod' | 'pendingProject' | 'bidReceivedProject' | 'approvedProject' | 'contractSigningProject' | 'inProgressProject' | 'completedProject' | 'changeRequestList' | 'changeRequestDetail' | 'requestModification';
 
 // Screen to path mapping
 const screenToPath: Record<Screen, string> = {
@@ -47,6 +47,7 @@ const screenToPath: Record<Screen, string> = {
   askBonyadAI: '/features/ai',
   projectsMap: '/features/map',
   technicianCompleteProfile: '/technician/complete-profile',
+  waitingApproval: '/technician/waiting-approval',
   chatbot: '/chatbot',
   supportChat: '/support-chat',
   ticketList: '/tickets',
@@ -110,6 +111,7 @@ const pathToScreen: Record<string, Screen> = {
   '/features/ai': 'askBonyadAI',
   '/features/map': 'projectsMap',
   '/technician/complete-profile': 'technicianCompleteProfile',
+  '/technician/waiting-approval': 'waitingApproval',
   '/chatbot': 'chatbot',
   '/support-chat': 'supportChat',
   '/tickets': 'ticketList',
@@ -173,6 +175,8 @@ export function useRouter(currentScreen: Screen, setCurrentScreen: (screen: Scre
     if (path.startsWith('/chat/')) {
       return 'chatDetail';
     }
+    if (path === '/technician/complete-profile') return 'technicianCompleteProfile';
+    if (path === '/technician/waiting-approval') return 'waitingApproval';
     if (path.startsWith('/technician/')) {
       return 'technicianProfile';
     }

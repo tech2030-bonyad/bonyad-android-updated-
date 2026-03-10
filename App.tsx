@@ -7,7 +7,7 @@ import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { FontProvider } from './src/context/FontContext';
 // Import API config early to ensure global fetch override is applied
 import './src/config/api';
-import { SplashScreen, WelcomeScreen, OverviewScreen, LoginScreen, SignupScreen, OTPVerificationScreen, ForgotPasswordScreen, ForgotPasswordOTPScreen, ResetPasswordScreen, UserHomeScreen, TechnicianHomeScreen, TechnicianOnboardingScreen, ProfileScreen, EditProfileScreen, MyDataScreen, ChangePhoneScreen, ChangePasswordScreen, PortfolioScreen, ServiceManagementScreen, AvailabilityScreen, SubscriptionScreen, NewProjectView, ManualProjectForm, ConversationalAIForm, ProjectsScreen, ChatRoomsListScreen, ChatDetailScreen, RunningProjectsScreen, NotificationsScreen, AppointmentsScreen, BookingScreen, TechnicianProfileViewScreen, RoomDesignScreen, VoiceAIScreen, CostExplorerScreen, RoomVisualizerScreen, AskBonyadAIScreen, ProjectsMapScreen, AboutScreen, ContactScreen, IntroToAppScreen, OnboardingScreen, TechnicianCompleteProfileScreen, ChatbotScreen, SupportChatScreen, TicketListScreen, CreateTicketScreen, TicketDetailScreen, ServiceProvidersScreen, CommissionPaymentScreen, PaymentCheckoutScreen, CategorySubcategoryScreen, CreationMethodScreen, PendingProjectScreen, BidReceivedProjectScreen, ApprovedProjectScreen, ContractSigningProjectScreen, InProgressProjectScreen, CompletedProjectViewPage, ChangeRequestListScreen, ChangeRequestDetailScreen, RequestModificationScreen } from './src/screens';
+import { SplashScreen, WelcomeScreen, OverviewScreen, LoginScreen, SignupScreen, OTPVerificationScreen, ForgotPasswordScreen, ForgotPasswordOTPScreen, ResetPasswordScreen, UserHomeScreen, TechnicianHomeScreen, TechnicianOnboardingScreen, ProfileScreen, EditProfileScreen, MyDataScreen, ChangePhoneScreen, ChangePasswordScreen, PortfolioScreen, ServiceManagementScreen, AvailabilityScreen, SubscriptionScreen, NewProjectView, ManualProjectForm, ConversationalAIForm, ProjectsScreen, ChatRoomsListScreen, ChatDetailScreen, RunningProjectsScreen, NotificationsScreen, AppointmentsScreen, BookingScreen, TechnicianProfileViewScreen, RoomDesignScreen, VoiceAIScreen, CostExplorerScreen, RoomVisualizerScreen, AskBonyadAIScreen, ProjectsMapScreen, AboutScreen, ContactScreen, IntroToAppScreen, OnboardingScreen, TechnicianCompleteProfileScreen, WaitingApprovalScreen, ChatbotScreen, SupportChatScreen, TicketListScreen, CreateTicketScreen, TicketDetailScreen, ServiceProvidersScreen, CommissionPaymentScreen, PaymentCheckoutScreen, CategorySubcategoryScreen, CreationMethodScreen, PendingProjectScreen, BidReceivedProjectScreen, ApprovedProjectScreen, ContractSigningProjectScreen, InProgressProjectScreen, CompletedProjectViewPage, ChangeRequestListScreen, ChangeRequestDetailScreen, RequestModificationScreen } from './src/screens';
 import './src/localization/i18n'; // Initialize i18n
 import OnlineStatusService from './src/services/OnlineStatusService';
 import { presenceService } from './src/services/PresenceService';
@@ -25,6 +25,7 @@ import WebSocketNotificationService from './src/services/WebSocketNotificationSe
 import NotificationPopup from './src/components/NotificationPopup';
 import { getOnboardingStatus } from './src/services/onboardingApi';
 import onboardingStorage from './src/services/onboardingStorage';
+import { getTechnicianStatus } from './src/services/TechnicianStatusService';
 import GlobalAlertProvider from './src/components/GlobalAlertProvider';
 import { globalAlertManager } from './src/utils/globalAlertManager';
 import { CreateCheckoutRequest } from './src/services/PaymentService';
@@ -177,16 +178,21 @@ export default function App() {
           }
         }
 
-        // Navigate based on onboarded and profileComplete status
+        // Navigate based on onboarded and profileComplete status (technician: same order as web)
         const role = authResult.role.toLowerCase() as 'user' | 'technician';
 
         if (role === 'technician') {
-          if (!authResult.onboarded) {
-            console.log('📍 Technician not onboarded - redirecting to onboarding');
-            setCurrentScreen('technicianOnboarding');
-          } else if (!authResult.profileComplete) {
+          const status = authResult.user?.status;
+          // Priority 1: Complete Profile (before waiting approval)
+          if (!authResult.profileComplete) {
             console.log('📍 Technician profile incomplete - redirecting to complete profile');
             setCurrentScreen('technicianCompleteProfile');
+          } else if (status === 'WAITING_ADMIN_APPROVAL' || status === 'PENDING') {
+            console.log('📍 Technician waiting for admin approval');
+            setCurrentScreen('waitingApproval');
+          } else if (!authResult.onboarded) {
+            console.log('📍 Technician not onboarded - redirecting to onboarding');
+            setCurrentScreen('technicianOnboarding');
           } else {
             console.log('📍 Technician fully onboarded - going to home');
             setCurrentScreen('home');
@@ -301,50 +307,57 @@ export default function App() {
         },
       });
 
-      if (response.ok) {
-        const notifications = await response.json();
+      if (!response.ok) {
+        return;
+      }
 
-        // Filter for unread notifications
-        const unreadNotifications = notifications.filter((n: any) => !n.read);
+      const data = await response.json();
+      // API may return array or { content: [] } / { data: [] } – ensure we have an array
+      const rawList = Array.isArray(data) ? data : (data?.content ?? data?.data ?? []);
+      const notifications = Array.isArray(rawList) ? rawList : [];
 
-        // If we have unread notifications and haven't checked before, or there's a new one
-        if (unreadNotifications.length > 0) {
-          // Sort by ID descending to get the latest
-          unreadNotifications.sort((a: any, b: any) => b.id - a.id);
-          const latestNotification = unreadNotifications[0];
+      const unreadNotifications = notifications.filter((n: any) => n && !(n.read === true || n.isRead === true));
 
-          // Check if this is a new notification (different from last checked)
-          if (lastCheckedNotificationId.current === null || latestNotification.id > lastCheckedNotificationId.current) {
-            console.log('📬 [App] New unread notification found:', latestNotification);
+      // If we have unread notifications and haven't checked before, or there's a new one
+      if (unreadNotifications.length > 0) {
+        // Sort by ID descending to get the latest
+        unreadNotifications.sort((a: any, b: any) => (b?.id ?? 0) - (a?.id ?? 0));
+        const latestNotification = unreadNotifications[0];
 
-            // Only show popup if we haven't shown it for this notification yet
-            if (currentNotification?.id !== latestNotification.id) {
-              setCurrentNotification(latestNotification);
-              setShowNotificationPopup(true);
+        if (!latestNotification || latestNotification.id == null) {
+          return;
+        }
 
-              // Request browser notification permission and show notification (web only)
-              if (Platform.OS === 'web' && typeof window !== 'undefined' && 'Notification' in window) {
-                if (Notification.permission === 'granted') {
-                  new Notification(latestNotification.title, {
-                    body: latestNotification.message,
-                    icon: '/favicon.ico',
-                  });
-                } else if (Notification.permission === 'default') {
-                  Notification.requestPermission().then((permission) => {
-                    if (permission === 'granted') {
-                      new Notification(latestNotification.title, {
-                        body: latestNotification.message,
-                        icon: '/favicon.ico',
-                      });
-                    }
-                  });
-                }
+        // Check if this is a new notification (different from last checked)
+        if (lastCheckedNotificationId.current === null || latestNotification.id > lastCheckedNotificationId.current) {
+          console.log('📬 [App] New unread notification found:', latestNotification.id);
+
+          // Only show popup if we haven't shown it for this notification yet
+          if (currentNotification?.id !== latestNotification.id) {
+            setCurrentNotification(latestNotification);
+            setShowNotificationPopup(true);
+
+            // Request browser notification permission and show notification (web only)
+            if (Platform.OS === 'web' && typeof window !== 'undefined' && 'Notification' in window) {
+              if (Notification.permission === 'granted') {
+                new Notification(latestNotification.title ?? '', {
+                  body: latestNotification.message ?? '',
+                  icon: '/favicon.ico',
+                });
+              } else if (Notification.permission === 'default') {
+                Notification.requestPermission().then((permission) => {
+                  if (permission === 'granted') {
+                    new Notification(latestNotification.title ?? '', {
+                      body: latestNotification.message ?? '',
+                      icon: '/favicon.ico',
+                    });
+                  }
+                });
               }
             }
-
-            // Update last checked ID
-            lastCheckedNotificationId.current = latestNotification.id;
           }
+
+          lastCheckedNotificationId.current = latestNotification.id;
         }
       }
     } catch (error: any) {
@@ -505,30 +518,49 @@ export default function App() {
     setAuthToken(token);
     setUserId(id);
 
-    // Mark user as online when they log in (same as web)
     presenceService.markOnline().catch(() => {});
-
-    // Increment login count (for onboarding logic - tracks logins and signups)
     await storage.incrementLoginCount();
-
-    let requiresOnboarding = false;
 
     if (role === 'technician') {
       try {
-        const status = await getOnboardingStatus(token, id);
-        if (status && !status.completed) {
-          requiresOnboarding = true;
-          const nextStep = status.currentStep && status.currentStep >= 1 && status.currentStep <= 4 ? status.currentStep : 1;
-          await onboardingStorage.set('currentStep', String(nextStep));
-        } else {
-          await onboardingStorage.clear();
+        const technicianStatus = await getTechnicianStatus();
+        if (!technicianStatus.profileComplete) {
+          console.log('📍 Technician profile incomplete - redirecting to complete profile');
+          navigateToScreen('technicianCompleteProfile');
+          return;
         }
-      } catch (error) {
-        console.warn('⚠️ Failed to fetch onboarding status:', error);
+        if (technicianStatus.status === 'WAITING_ADMIN_APPROVAL' || technicianStatus.status === 'PENDING') {
+          console.log('📍 Technician waiting for admin approval');
+          navigateToScreen('waitingApproval');
+          return;
+        }
+        if (technicianStatus.status === 'APPROVED' && !technicianStatus.onboarded) {
+          console.log('📍 Technician approved but not onboarded - redirecting to onboarding');
+          try {
+            const status = await getOnboardingStatus(token, id);
+            if (status && !status.completed) {
+              const nextStep = status.currentStep && status.currentStep >= 1 && status.currentStep <= 4 ? status.currentStep : 1;
+              await onboardingStorage.set('currentStep', String(nextStep));
+            } else {
+              await onboardingStorage.clear();
+            }
+          } catch (e) {
+            console.warn('⚠️ Failed to fetch onboarding status:', e);
+          }
+          navigateToScreen('technicianOnboarding');
+          return;
+        }
+        console.log('📍 Technician ready - going to home');
+        navigateToScreen('home');
+        return;
+      } catch (err) {
+        console.warn('⚠️ getTechnicianStatus failed, defaulting to home:', err);
+        navigateToScreen('home');
+        return;
       }
     }
 
-    // Connect to WebSocket for online status tracking
+    // Connect to WebSocket for online status tracking (user)
     console.log('🔌 Connecting to WebSocket after login...');
     const connectionResult = await OnlineStatusService.connect(token);
     if (connectionResult.connected) {
@@ -571,7 +603,7 @@ export default function App() {
       }
     }
 
-    navigateToScreen(requiresOnboarding ? 'technicianOnboarding' : 'home');
+    navigateToScreen('home');
   };
 
   // Handle showing OTP popup after signup
@@ -581,44 +613,58 @@ export default function App() {
     setShowOTPPopup(true);
   };
 
-  // Handle successful OTP verification
+  // Handle successful OTP verification (same flow as web: Complete Profile → Waiting Approval → Onboarding → Home)
   const handleOTPVerificationSuccess = async (token: string, id: number, role: string, profileComplete?: boolean) => {
-    setShowOTPPopup(false); // Close the OTP popup
+    setShowOTPPopup(false);
     setAuthToken(token);
     setUserId(id);
     setUserRole(role.toLowerCase() as 'user' | 'technician');
 
-    // Mark user as online when they complete signup (same as web)
     presenceService.markOnline().catch(() => {});
-
-    // Increment login count (for onboarding logic - tracks logins and signups)
     await storage.incrementLoginCount();
-
-    // Check profile completion for technicians
-    if (role.toLowerCase() === 'technician' && profileComplete === false) {
-      console.log('📍 Technician profile incomplete - redirecting to complete profile');
-      navigateToScreen('technicianCompleteProfile');
-      return;
-    }
-
-    let requiresOnboarding = false;
 
     if (role.toLowerCase() === 'technician') {
       try {
-        const status = await getOnboardingStatus(token, id);
-        if (status && !status.completed) {
-          requiresOnboarding = true;
-          const nextStep = status.currentStep && status.currentStep >= 1 && status.currentStep <= 4 ? status.currentStep : 1;
-          await onboardingStorage.set('currentStep', String(nextStep));
-        } else {
-          await onboardingStorage.clear();
+        // Pass token explicitly so we use the one we have (avoid storage race)
+        const technicianStatus = await getTechnicianStatus(token);
+        if (!technicianStatus.profileComplete) {
+          console.log('📍 Technician profile incomplete - redirecting to complete profile');
+          navigateToScreen('technicianCompleteProfile');
+          return;
         }
-      } catch (error) {
-        console.warn('⚠️ Failed to fetch onboarding status (signup):', error);
+        if (technicianStatus.status === 'WAITING_ADMIN_APPROVAL' || technicianStatus.status === 'PENDING' || technicianStatus.recommendedPage === 'WAITING_APPROVAL') {
+          console.log('📍 Technician waiting for admin approval');
+          navigateToScreen('waitingApproval');
+          return;
+        }
+        if (technicianStatus.status === 'APPROVED' && !technicianStatus.onboarded) {
+          console.log('📍 Technician approved but not onboarded - redirecting to onboarding');
+          try {
+            const status = await getOnboardingStatus(token, id);
+            if (status && !status.completed) {
+              const nextStep = status.currentStep && status.currentStep >= 1 && status.currentStep <= 4 ? status.currentStep : 1;
+              await onboardingStorage.set('currentStep', String(nextStep));
+            } else {
+              await onboardingStorage.clear();
+            }
+          } catch (e) {
+            console.warn('⚠️ Failed to fetch onboarding status (signup):', e);
+          }
+          navigateToScreen('technicianOnboarding');
+          return;
+        }
+        console.log('📍 Technician ready - going to home');
+        navigateToScreen('home');
+        return;
+      } catch (err) {
+        console.warn('⚠️ getTechnicianStatus failed after OTP:', err);
+        // New technician signup: always send to Complete Profile first (match web flow), never home
+        navigateToScreen('technicianCompleteProfile');
+        return;
       }
     }
 
-    // Connect to WebSocket for online status tracking
+    // User: connect WebSocket and go home
     console.log('🔌 Connecting to WebSocket after signup verification...');
     const connectionResult = await OnlineStatusService.connect(token);
     if (connectionResult.connected) {
@@ -661,7 +707,7 @@ export default function App() {
       }
     }
 
-    navigateToScreen(requiresOnboarding ? 'technicianOnboarding' : 'home');
+    navigateToScreen('home');
   };
 
   // Handle logout with WebSocket disconnection
@@ -1165,7 +1211,10 @@ function AppContent({
             <TechnicianOnboardingScreen
               token={authToken}
               userId={userId}
-              onFinished={() => navigate('home')}
+              onFinished={async () => {
+                presenceService.markOnline().catch(() => {});
+                navigate('home');
+              }}
             />
           )}
 
@@ -1173,10 +1222,66 @@ function AppContent({
             <TechnicianCompleteProfileScreen
               authToken={authToken}
               userId={userId}
-              onSuccess={() => {
-                console.log('✅ Tech Profile Complete - Going to Onboarding');
-                navigate('technicianOnboarding');
+              onSuccess={async () => {
+                console.log('✅ Tech Profile Complete - Checking technician status...');
+                try {
+                  const technicianStatus = await getTechnicianStatus();
+                  if (technicianStatus.status === 'WAITING_ADMIN_APPROVAL' || technicianStatus.status === 'PENDING' || technicianStatus.recommendedPage === 'WAITING_APPROVAL') {
+                    navigate('waitingApproval');
+                    return;
+                  }
+                  if (technicianStatus.status === 'APPROVED' && !technicianStatus.onboarded) {
+                    try {
+                      const status = await getOnboardingStatus(authToken, userId);
+                      if (status && !status.completed) {
+                        const nextStep = status.currentStep && status.currentStep >= 1 && status.currentStep <= 4 ? status.currentStep : 1;
+                        await onboardingStorage.set('currentStep', String(nextStep));
+                      } else {
+                        await onboardingStorage.clear();
+                      }
+                    } catch (e) {
+                      console.warn('⚠️ Failed to fetch onboarding status:', e);
+                    }
+                    navigate('technicianOnboarding');
+                    return;
+                  }
+                  navigate('home');
+                } catch (err) {
+                  console.warn('⚠️ getTechnicianStatus failed after complete profile:', err);
+                  navigate('waitingApproval');
+                }
               }}
+            />
+          )}
+
+          {currentScreen === 'waitingApproval' && (
+            <WaitingApprovalScreen
+              onApproved={async () => {
+                try {
+                  const technicianStatus = await getTechnicianStatus();
+                  if (technicianStatus.status === 'APPROVED' && !technicianStatus.onboarded) {
+                    try {
+                      const status = await getOnboardingStatus(authToken, userId);
+                      if (status && !status.completed) {
+                        const nextStep = status.currentStep && status.currentStep >= 1 && status.currentStep <= 4 ? status.currentStep : 1;
+                        await onboardingStorage.set('currentStep', String(nextStep));
+                      } else {
+                        await onboardingStorage.clear();
+                      }
+                    } catch (e) {
+                      console.warn('⚠️ Failed to fetch onboarding status:', e);
+                    }
+                    navigate('technicianOnboarding');
+                    return;
+                  }
+                  navigate('home');
+                } catch (err) {
+                  console.warn('⚠️ getTechnicianStatus failed on approval:', err);
+                  navigate('home');
+                }
+              }}
+              onBack={() => navigate('login')}
+              onLogout={handleLogout}
             />
           )}
 

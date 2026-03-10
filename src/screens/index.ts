@@ -78,4 +78,5 @@ export { default as CreationMethodScreen } from './CreationMethodScreen';
 export { default as ChangeRequestListScreen } from './ChangeRequestListScreen';
 export { default as ChangeRequestDetailScreen } from './ChangeRequestDetailScreen';
 export { default as RequestModificationScreen } from './RequestModificationScreen';
+export { default as WaitingApprovalScreen } from './WaitingApprovalScreen';
 

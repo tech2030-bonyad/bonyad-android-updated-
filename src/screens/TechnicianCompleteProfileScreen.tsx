@@ -16,7 +16,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { Ionicons, Feather } from '@expo/vector-icons';
-import CustomInput from '../components/CustomInput';
+import { CustomTextInput } from '../components/CustomInput';
 import { API_ENDPOINTS, buildApiUrl } from '../config/api';
 import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -93,8 +93,8 @@ export default function TechnicianCompleteProfileScreen({
     const pickImage = async () => {
         try {
             const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                allowsMultipleSelection: true, // Allow multiple if native support
+                mediaTypes: ['images'],
+                allowsMultipleSelection: true,
                 quality: 0.8,
             });
 
@@ -182,15 +182,43 @@ export default function TechnicianCompleteProfileScreen({
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${authToken}`,
-                    'Content-Type': 'multipart/form-data',
+                    // Do not set Content-Type for FormData — let fetch set it with boundary
                 },
                 body: formData,
             });
 
-            const data = await response.json();
+            let data: { message?: string; messageEn?: string; messageAr?: string; error?: string; errorCode?: string; errors?: Record<string, string | string[]> } = {};
+            try {
+                data = await response.json();
+            } catch {
+                // non-JSON response body
+            }
 
             if (!response.ok) {
-                throw new Error(data.message || t('Failed to complete profile'));
+                const isArabic = i18n.language.startsWith('ar');
+                const mainMessage =
+                    (isArabic && data?.messageAr) ? data.messageAr
+                    : (data?.messageEn || data?.message || data?.error) || t('Failed to complete profile');
+
+                // Map API field-level errors to form state (support both array and string per field)
+                const apiErrors = data?.errors || {};
+                const first = (v: string | string[] | undefined): string =>
+                    Array.isArray(v) ? (v[0] || '') : (v || '');
+                setErrors(prev => ({
+                    ...prev,
+                    email: first(apiErrors.email) || (data?.errorCode === 'EMAIL_ALREADY_EXISTS' ? (isArabic && data?.messageAr ? data.messageAr : (data?.messageEn || data?.message || t('Email already registered. Please use a different email.'))) : ''),
+                    bio: first(apiErrors.description) || first(apiErrors.bio) || '',
+                    address: first(apiErrors.address) || '',
+                    yearsOfExperience: first(apiErrors.yearsOfExperience) || '',
+                    regions: first(apiErrors.regionIds) || first(apiErrors.regions) || '',
+                    certificates: first(apiErrors.certificates) || '',
+                }));
+
+                if (__DEV__) {
+                    console.warn('❌ [TechnicianCompleteProfile] API error:', response.status, data);
+                }
+                Alert.alert(t('Error'), mainMessage);
+                return;
             }
 
             Alert.alert(t('Success'), t('Profile completed successfully!'), [
@@ -198,7 +226,8 @@ export default function TechnicianCompleteProfileScreen({
             ]);
 
         } catch (error: any) {
-            Alert.alert(t('Error'), error.message);
+            const message = error?.message || t('Failed to complete profile');
+            Alert.alert(t('Error'), message);
         } finally {
             setLoading(false);
         }
@@ -208,6 +237,7 @@ export default function TechnicianCompleteProfileScreen({
         setSelectedRegions(prev =>
             prev.includes(id) ? prev.filter(r => r !== id) : [...prev, id]
         );
+        setErrors(prev => ({ ...prev, regions: '' }));
     };
 
     const getSelectedRegionsText = () => {
@@ -235,35 +265,35 @@ export default function TechnicianCompleteProfileScreen({
                     {/* Form */}
                     <View style={styles.form}>
 
-                        <CustomInput
+                        <CustomTextInput
                             label={t('Email')}
                             value={email}
-                            onChangeText={setEmail}
+                            onChangeText={(text) => { setEmail(text); setErrors(prev => ({ ...prev, email: '' })); }}
                             placeholder={t('Enter your email')}
                             keyboardType="email-address"
                             error={errors.email}
                             autoCapitalize="none"
-                            icon="mail"
+                            leftIcon="mail-outline"
                         />
 
-                        <CustomInput
+                        <CustomTextInput
                             label={t('Bio / Description')}
                             value={bio}
-                            onChangeText={setBio}
+                            onChangeText={(text) => { setBio(text); setErrors(prev => ({ ...prev, bio: '' })); }}
                             placeholder={t('Tell us about your services...')}
                             multiline
                             numberOfLines={4}
                             error={errors.bio}
-                            icon="file-text"
+                            leftIcon="document-text-outline"
                         />
 
-                        <CustomInput
+                        <CustomTextInput
                             label={t('Address')}
                             value={address}
-                            onChangeText={setAddress}
+                            onChangeText={(text) => { setAddress(text); setErrors(prev => ({ ...prev, address: '' })); }}
                             placeholder={t('Your specific address')}
                             error={errors.address}
-                            icon="map-pin"
+                            leftIcon="location-outline"
                         />
 
                         {/* Regions Dropdown Trigger */}
@@ -385,6 +415,7 @@ export default function TechnicianCompleteProfileScreen({
                                     style={styles.regionItem}
                                     onPress={() => {
                                         setYearsOfExperience(item);
+                                        setErrors(prev => ({ ...prev, yearsOfExperience: '' }));
                                         setShowExperienceModal(false);
                                     }}
                                 >

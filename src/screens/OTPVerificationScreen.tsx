@@ -279,7 +279,7 @@ export default function OTPVerificationPopup({
       // After showing "Verified!", start typewriter animation
       setTimeout(() => {
         setButtonState('navigating');
-        const navigatingText = t('Navigating to home...');
+        const navigatingText = t('Navigating...');
         animateTypewriter(navigatingText, () => {
           // After typewriter finishes, proceed with login
           if (pendingSuccessData.current) {

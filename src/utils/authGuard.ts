@@ -3,6 +3,25 @@ import { storage } from './storage';
 import { buildApiUrl, API_ENDPOINTS } from '../config/api';
 import { showError } from './alert';
 
+/** Thrown when token validation fails due to network/connectivity (caller should not clear storage). */
+export class NetworkAuthError extends Error {
+  constructor(message: string = 'Network request failed') {
+    super(message);
+    this.name = 'NetworkAuthError';
+  }
+}
+
+function isNetworkError(error: any): boolean {
+  if (!error) return false;
+  const msg = typeof error?.message === 'string' ? error.message : String(error);
+  return (
+    msg.includes('Network request failed') ||
+    msg.includes('Failed to fetch') ||
+    msg.includes('NetworkError') ||
+    (error?.name === 'TypeError' && msg.includes('network'))
+  );
+}
+
 interface ValidateTokenResponse {
   valid: boolean;
   message: string;
@@ -30,6 +49,7 @@ interface ValidateTokenResponse {
  * Validates a JWT token with the backend API
  * @param token The JWT token to validate
  * @returns Promise with validation result and user data
+ * @throws NetworkAuthError when request fails due to network (caller should not clear storage)
  */
 export const validateToken = async (token: string): Promise<ValidateTokenResponse | null> => {
   try {
@@ -64,7 +84,11 @@ export const validateToken = async (token: string): Promise<ValidateTokenRespons
       console.log('❌ Token validation failed:', data.message);
       return null;
     }
-  } catch (error) {
+  } catch (error: any) {
+    if (isNetworkError(error)) {
+      console.warn('⚠️ Token validation failed (network) - keeping stored session');
+      throw new NetworkAuthError(error?.message || 'Network request failed');
+    }
     console.error('❌ Error validating token:', error);
     return null;
   }
@@ -82,7 +106,8 @@ export interface AuthResult {
 /**
  * Checks if user is authenticated
  * Validates token with backend API and returns user data if valid
- * Returns null if no token exists or token is invalid
+ * Returns null if no token exists or token is invalid.
+ * On network error, does NOT clear storage so user can retry when back online.
  */
 export const checkAuthentication = async (): Promise<AuthResult | null> => {
   try {
@@ -94,12 +119,20 @@ export const checkAuthentication = async (): Promise<AuthResult | null> => {
       return null;
     }
 
-    // Validate token with backend API
-    const validationResult = await validateToken(token);
+    let validationResult: ValidateTokenResponse | null;
+    try {
+      validationResult = await validateToken(token);
+    } catch (err: any) {
+      // Network/connectivity failure: keep stored token, don't clear auth
+      if (err?.name === 'NetworkAuthError' || isNetworkError(err)) {
+        console.warn('⚠️ Could not validate token (network) - keeping session for retry');
+        return null;
+      }
+      throw err;
+    }
     
     if (!validationResult || !validationResult.valid) {
       console.log('❌ Token validation failed - clearing invalid token');
-      // Clear invalid token from storage
       await storage.clearAuthData();
       return null;
     }
@@ -132,21 +165,24 @@ export const checkAuthentication = async (): Promise<AuthResult | null> => {
       token: validationResult.token || token,
       userId,
       role: userRole,
-      user: validationResult.user || {
+      user: validationResult.user ?? {
         id: userId,
         role: userRole,
-        phoneNumber: validationResult.phoneNumber || '',
-        name: validationResult.user?.name || '',
-        status: validationResult.status || validationResult.user?.status || 'ACTIVE',
+        phoneNumber: validationResult.phoneNumber ?? '',
+        name: (validationResult.user as any)?.name ?? '',
+        status: (validationResult.user as any)?.status ?? validationResult.status ?? 'ACTIVE',
         onboarded,
         profileComplete,
       },
       onboarded,
       profileComplete,
     };
-  } catch (error) {
+  } catch (error: any) {
+    if (isNetworkError(error)) {
+      console.warn('⚠️ Auth check failed (network) - keeping session for retry');
+      return null;
+    }
     console.error('❌ Error checking authentication:', error);
-    // On error, clear potentially invalid token
     await storage.clearAuthData();
     return null;
   }

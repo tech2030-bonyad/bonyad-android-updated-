@@ -68,7 +68,7 @@ export default function BookAppointmentModal({
 
 const styles = StyleSheet.create({
   webOverlay: {
-    position: 'fixed',
+    position: 'absolute',
     top: 0,
     left: 0,
     right: 0,

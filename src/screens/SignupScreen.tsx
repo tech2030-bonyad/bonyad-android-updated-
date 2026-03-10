@@ -223,17 +223,29 @@ export default function SignupScreen({
 
   const performSignup = async (formattedPhone: string) => {
     const apiURL = buildApiUrl(API_ENDPOINTS.AUTH.REGISTER);
+    const phoneOnly = String(formattedPhone).replace(/\D/g, '').slice(0, 9);
+    if (phoneOnly.length !== 9) {
+      showError(t('signup.validation.phone'), t('validation_failed'));
+      setIsLoading(false);
+      return;
+    }
 
-    // Generate placeholder email
-    const generatedEmail = `${formattedPhone}${name.replace(/\s+/g, '')}@gmail.com`;
-
-    const requestBody = {
-      name: name,
-      phoneNumber: formattedPhone,
-      password: password,
-      role: selectedRole.toUpperCase(),
-      email: generatedEmail,
-    };
+    // Match web: USER sends email (generated); TECHNICIAN sends only name, phoneNumber, password, role
+    const requestBody: Record<string, string> =
+      selectedRole === 'user'
+        ? {
+            name: name.trim(),
+            phoneNumber: phoneOnly,
+            password: password,
+            role: 'USER',
+            email: `${phoneOnly}${name.replace(/\s+/g, '')}@gmail.com`,
+          }
+        : {
+            name: name.trim(),
+            phoneNumber: phoneOnly,
+            password: password,
+            role: 'TECHNICIAN',
+          };
 
     console.log('📤 Signup Request:', { url: apiURL, body: requestBody });
 
@@ -249,7 +261,7 @@ export default function SignupScreen({
     if (response.status === 201 || response.ok) {
       console.log('✅ Signup successful!');
       setIsLoading(false);
-      onNavigateToOTP(formattedPhone, selectedRole);
+      onNavigateToOTP(phoneOnly, selectedRole);
     } else {
       setIsLoading(false);
       const responseText = await response.text();
@@ -257,7 +269,7 @@ export default function SignupScreen({
 
       try {
         const data = JSON.parse(responseText);
-        if (data.errorCode === 'USER_ALREADY_EXISTS' || data.errorCode === 'USER_ALREADY_EXISTS_PENDING') {
+        if (data.errorCode === 'USER_ALREADY_EXISTS' || data.errorCode === 'USER_ALREADY_EXISTS_PENDING' || data.errorCode === 'PHONE_ALREADY_EXISTS' || data.errorCode === 'EMAIL_ALREADY_EXISTS') {
           const message = isArabic ? data.messageAr : data.messageEn;
           showAlertWithCountdown(
             t('validation_failed'),
@@ -413,7 +425,6 @@ export default function SignupScreen({
         message={alertState.message}
         type={alertState.type}
         countdown={alertState.countdown}
-        countdownText={alertState.countdownText}
         onClose={hideAlert}
       />
 
