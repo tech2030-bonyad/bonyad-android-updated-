@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,34 +6,85 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  Image,
   ActivityIndicator,
   Dimensions,
   StatusBar,
   Platform,
+  Animated,
+  Modal,
+  Pressable,
 } from 'react-native';
-import { Feather, MaterialCommunityIcons, Ionicons, FontAwesome5 } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { SvgUri } from 'react-native-svg';
-import { Image as ExpoImage } from 'expo-image';
 import { useTheme } from '../../context/ThemeContext';
-import { AnimatedStatTicker } from '../../components/AnimatedStatTicker';
 import { useTranslation } from 'react-i18next';
+import { useFontFamily } from '../../context/FontContext';
+import { AnimatedStatTicker } from '../../components/AnimatedStatTicker';
+import { LinearGradient } from 'expo-linear-gradient';
 import { CopilotStep, walkthroughable } from 'react-native-copilot';
-import { getCategories, ServiceCategory } from '../../services/ServiceService';
-import { resolveServiceImage, shouldRenderSvg } from '../../services/ServiceIconUtils';
+import {
+  getCategories,
+  getSubcategories,
+  ServiceCategory,
+  ServiceSubcategory,
+} from '../../services/ServiceService';
 import { getServerBaseUrl, buildApiUrl, API_ENDPOINTS } from '../../config/api';
 import { storage } from '../../utils/storage';
-import { getSmallTaskTypes } from '../../services/SmallTaskService';
-import { LinearGradient } from 'expo-linear-gradient';
+import { getSmallTaskTypes, getMyRequests, SmallTaskRequestApi } from '../../services/SmallTaskService';
 
-// Walkthroughable component with proper layout handling
-const WalkableView = walkthroughable((props: any) => (
-  <View {...props} collapsable={false} />
-));
 
-const { width: screenWidth } = Dimensions.get('window');
-const IS_SMALL_SCREEN = screenWidth < 375;
+const WalkableView = walkthroughable((props: any) => <View {...props} collapsable={false} />);
 
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const H_PAD = 16;
+const BANNER_W = SCREEN_WIDTH - H_PAD * 2;
+const CARD_HALF = (SCREEN_WIDTH - H_PAD * 2 - 12) / 2;
+const CARD_SCROLL_WIDTH = Math.min(280, SCREEN_WIDTH * 0.78);
+const CARD_GAP = 12;
+
+// ─── Icon helpers ──────────────────────────────────────────────────────────────
+type MCIcon = keyof typeof MaterialCommunityIcons.glyphMap;
+
+function getServiceIcon(nameEn: string): MCIcon {
+  const n = nameEn.toLowerCase();
+  if (n.includes('construct') || n.includes('build')) return 'hammer';
+  if (n.includes('design')) return 'pencil-ruler';
+  if (n.includes('consult')) return 'account-tie';
+  if (n.includes('electric')) return 'lightning-bolt';
+  if (n.includes('plumb') || n.includes('water')) return 'water-pump';
+  if (n.includes('paint')) return 'format-paint';
+  if (n.includes('clean')) return 'broom';
+  if (n.includes('garden') || n.includes('landscape')) return 'flower';
+  if (n.includes('security')) return 'shield-check';
+  if (n.includes('move') || n.includes('transport')) return 'truck';
+  if (n.includes('repair') || n.includes('fix')) return 'tools';
+  if (n.includes('roof')) return 'home-roof';
+  if (n.includes('floor')) return 'floor-plan';
+  if (n.includes('air') || n.includes('hvac') || n.includes('ac')) return 'air-conditioner';
+  if (n.includes('finance')) return 'cash-multiple';
+  if (n.includes('supervis')) return 'account-supervisor';
+  return 'briefcase-outline';
+}
+
+function getTaskIcon(nameEn = '', nameAr = ''): MCIcon {
+  const n = (nameEn + ' ' + nameAr).toLowerCase();
+  if (n.includes('ac') || n.includes('air') || n.includes('مكيف')) return 'air-conditioner';
+  if (n.includes('drill') || n.includes('حفر')) return 'hammer-wrench';
+  if (n.includes('plumb') || n.includes('سباك')) return 'water-pump';
+  if (n.includes('electric') || n.includes('كهرب')) return 'lightning-bolt';
+  if (n.includes('paint') || n.includes('دهان')) return 'format-paint';
+  if (n.includes('clean') || n.includes('تنظيف')) return 'broom';
+  if (n.includes('design') || n.includes('3d') || n.includes('تصميم')) return 'pencil-ruler';
+  if (n.includes('construct') || n.includes('build') || n.includes('بناء')) return 'hammer';
+  return 'hammer-wrench';
+}
+
+function resolveSvgUrl(item: { svgUrl?: string | null }): string | null {
+  if (!item.svgUrl) return null;
+  return item.svgUrl.startsWith('http') ? item.svgUrl : `${getServerBaseUrl()}${item.svgUrl}`;
+}
+
+// ─── Types ─────────────────────────────────────────────────────────────────────
 type ProjectStatus = 'pending' | 'running' | 'completed';
 
 interface Project {
@@ -41,10 +92,21 @@ interface Project {
   description: string;
   status: string;
   budget: number;
+  budgetUnspecified?: boolean;
   address?: string;
   createdAt: string;
   serviceName?: string;
   serviceNameAr?: string;
+  userName?: string;
+}
+
+interface TaskType {
+  id: number;
+  nameEn: string;
+  nameAr?: string;
+  svgUrl?: string | null;
+  imageUrl?: string | null;
+  useSvg?: boolean;
 }
 
 export interface CategoryInfo {
@@ -53,7 +115,7 @@ export interface CategoryInfo {
   nameAr?: string;
 }
 
-interface UserHomeScreenProps {
+export interface UserHomeScreenProps {
   userName?: string;
   onPressSearch?: (query: string) => void;
   onPressOpenServices?: () => void;
@@ -70,562 +132,625 @@ interface UserHomeScreenProps {
   onPressCategory?: (category: CategoryInfo) => void;
   onPressChatbot?: () => void;
   onShowServiceProviders?: () => void;
+  onPressCreateProject?: (serviceId?: number) => void;
+  onPressCreateSmallTask?: (taskTypeId?: number) => void;
+  onPressMySmallTasks?: () => void;
 }
 
-const spacing = {
-  xs: 4,
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 20,
-  xxl: 24,
-  xxxl: 32,
-};
+// ─── Banner slides ─────────────────────────────────────────────────────────────
+const BANNERS = [
+  {
+    key: 'technicians',
+    titleKey: 'Find Expert Technicians',
+    subtitleKey: 'Browse verified professionals for all your construction needs',
+    gradient: ['#EFF6FF', '#DBEAFE', '#BFDBFE'] as const,
+    iconName: 'account-group' as MCIcon,
+    iconGrad: ['#2563EB', '#3B82F6'] as const,
+    titleColor: '#1E3A8A',
+    subtitleColor: '#1D4ED8',
+  },
+  {
+    key: 'project',
+    titleKey: 'Post your project',
+    subtitleKey: 'Get competitive offers from qualified technicians',
+    gradient: ['#F0FDF4', '#DCFCE7', '#BBF7D0'] as const,
+    iconName: 'briefcase' as MCIcon,
+    iconGrad: ['#16A34A', '#22C55E'] as const,
+    titleColor: '#166534',
+    subtitleColor: '#15803D',
+  },
+  {
+    key: 'smalltask',
+    titleKey: 'Quick Services',
+    subtitleKey: 'Browse small tasks by type',
+    gradient: ['#FFFBEB', '#FEF3C7', '#FDE68A'] as const,
+    iconName: 'lightning-bolt' as MCIcon,
+    iconGrad: ['#D97706', '#F59E0B'] as const,
+    titleColor: '#92400E',
+    subtitleColor: '#B45309',
+  },
+];
 
-const borderRadius = {
-  sm: 4,
-  md: 8,
-  lg: 12,
-  xl: 16,
-  xxl: 20,
-  round: 24,
-  full: 50,
-};
-
-function resolveCategoryImage(cat: ServiceCategory) {
-  // Return regular image URL for non-SVG services
-  if (cat.useSvg || cat.svgUrl) {
-    return null; // SVGs handled separately
-  }
-  return resolveServiceImage(cat);
-}
-
-function getSvgUrl(cat: ServiceCategory): string | null {
-  if (cat.svgUrl) {
-    return cat.svgUrl.startsWith('http') ? cat.svgUrl : `${getServerBaseUrl()}${cat.svgUrl}`;
-  }
-  return null;
-}
-
-function shouldShowSvg(cat: ServiceCategory) {
-  return shouldRenderSvg(cat);
-}
-
-// Get appropriate icon based on service name
-function getServiceIcon(name: string): string {
-  const nameLower = name.toLowerCase();
-  if (nameLower.includes('construction')) return 'hammer';
-  if (nameLower.includes('design')) return 'pencil-ruler';
-  if (nameLower.includes('consult')) return 'account-tie';
-  if (nameLower.includes('electric')) return 'lightning-bolt';
-  if (nameLower.includes('plumb')) return 'water-pump';
-  if (nameLower.includes('paint')) return 'format-paint';
-  if (nameLower.includes('clean')) return 'broom';
-  if (nameLower.includes('garden') || nameLower.includes('landscape')) return 'flower';
-  if (nameLower.includes('security')) return 'shield-check';
-  if (nameLower.includes('move')) return 'truck';
-  if (nameLower.includes('repair')) return 'tools';
-  if (nameLower.includes('roof')) return 'home-roof';
-  if (nameLower.includes('floor')) return 'floor-plan';
-  if (nameLower.includes('air') || nameLower.includes('hvac')) return 'air-conditioner';
-  if (nameLower.includes('finance')) return 'cash-multiple';
-  if (nameLower.includes('insurance')) return 'shield-home';
-  if (nameLower.includes('dispute')) return 'scale-balance';
-  if (nameLower.includes('supervis')) return 'account-supervisor';
-  if (nameLower.includes('market')) return 'bullhorn';
-  if (nameLower.includes('logistic')) return 'truck-delivery';
-  if (nameLower.includes('project')) return 'clipboard-check';
-  return 'briefcase-outline';
-}
-
-// Responsive card dimensions
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const CARD_WIDTH = SCREEN_WIDTH < 380 ? 120 : SCREEN_WIDTH < 414 ? 140 : 160;
-const CARD_GAP = 10;
-
+// ──────────────────────────────────────────────────────────────────────────────
 const UserHomeScreen: React.FC<UserHomeScreenProps> = ({
   userName,
-  onPressSearch,
   onPressOpenServices,
-  onPressServiceProvidersAll,
   onPressMyProjects,
   onPressProject,
   onPressMyTasks,
-  onPressPremiumUpgrade,
-  onPressNotifications,
-  onPressMessages,
-  onPressInfo,
   onPressFab,
   onPressProjectStatus,
   onPressCategory,
   onPressChatbot,
-  onShowServiceProviders,
+  onPressCreateProject,
+  onPressCreateSmallTask,
 }) => {
-  /* ═══ Interfaces ═══ */
-  interface TaskType {
-    id: number;
-    nameAr: string;
-    nameEn: string;
-    descriptionAr?: string;
-    descriptionEn?: string;
-    icon?: string;
-    imageUrl?: string;
-    svgUrl?: string;
-    useSvg?: boolean;
-    isActive?: boolean;
-  }
-
   const { t, i18n } = useTranslation();
   const { colors: themeColors, theme } = useTheme();
+  const { fontFamily, boldFontFamily } = useFontFamily();
+  const isRTL = i18n.language === 'ar';
   const isDarkMode = theme === 'dark';
 
-  const riyalLogo = isDarkMode
-    ? require('../../../assets/saudi_riyal_logo_dark.svg')
-    : require('../../../assets/saudi_riyal_logo.svg');
+  const fs = { fontFamily: fontFamily || undefined };
+  const fsB = { fontFamily: boldFontFamily || fontFamily || undefined };
 
-  const [searchText, setSearchText] = React.useState('');
-  const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const [showSearchResults, setShowSearchResults] = useState(false);
-  const [categories, setCategories] = useState<ServiceCategory[]>([]);
-  const [categoriesLoading, setCategoriesLoading] = useState(true);
-  const [taskTypes, setTaskTypes] = useState<TaskType[]>([]);
-
-  // Projects state
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [projectsLoading, setProjectsLoading] = useState(true);
-
-  // Fetch Services
-  useEffect(() => {
-    let mounted = true;
-    getCategories()
-      .then((list) => { if (mounted) setCategories(list); })
-      .catch(() => { if (mounted) setCategories([]); })
-      .finally(() => { if (mounted) setCategoriesLoading(false); });
-    return () => { mounted = false; };
-  }, []);
-
-  // Fetch Small Task Types
-  useEffect(() => {
-    let mounted = true;
-    const loadTaskTypes = async () => {
-      try {
-        const types = await getSmallTaskTypes();
-        if (mounted) setTaskTypes(types);
-      } catch (error) {
-        console.error('Error fetching task types:', error);
-      }
-    };
-    loadTaskTypes();
-    return () => { mounted = false; };
-  }, []);
-
-  // Fetch user's projects
-  useEffect(() => {
-    let mounted = true;
-    const loadProjects = async () => {
-      try {
-        setProjectsLoading(true);
-        const token = await storage.getAuthToken();
-        if (!token) {
-          setProjects([]);
-          return;
-        }
-        const projectsUrl = buildApiUrl(API_ENDPOINTS.PROJECTS.MY_PROJECTS);
-        const response = await fetch(projectsUrl, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
-        if (response.ok) {
-          const data = await response.json();
-          if (mounted) setProjects(data.slice(0, 5));
-        } else {
-          if (mounted) setProjects([]);
-        }
-      } catch (error) {
-        console.error('Error fetching projects:', error);
-        if (mounted) setProjects([]);
-      } finally {
-        if (mounted) setProjectsLoading(false);
-      }
-    };
-    loadProjects();
-    return () => { mounted = false; };
-  }, []);
-
-  // Dynamic colors based on theme
+  // ─── Colours ───────────────────────────────────────────────────────────────
   const dc = {
     primary: themeColors.primary,
     primaryDark: themeColors.primaryDark,
     purple: isDarkMode ? '#a78bfa' : '#7c3aed',
-    purpleDark: isDarkMode ? '#7c3aed' : '#5b21b6',
-    purpleLight: isDarkMode ? '#2d1b4e' : '#f5f0ff',
-    green: isDarkMode ? '#34d399' : '#10b981',
-    greenDark: isDarkMode ? '#10b981' : '#059669',
-    greenLight: isDarkMode ? '#064e3b' : '#ecfdf5',
-    orange: isDarkMode ? '#fb923c' : '#f97316',
-    orangeLight: isDarkMode ? '#78350f' : '#fff7ed',
-    red: themeColors.error,
-    gray50: isDarkMode ? themeColors.background : '#f8fafc',
-    gray100: isDarkMode ? themeColors.gray100 : '#f1f5f9',
-    gray200: isDarkMode ? themeColors.gray200 : '#e2e8f0',
-    gray300: isDarkMode ? themeColors.gray300 : '#cbd5e1',
-    gray400: isDarkMode ? themeColors.gray400 : '#94a3b8',
-    gray500: isDarkMode ? themeColors.gray500 : '#64748b',
-    gray600: isDarkMode ? themeColors.textSecondary : '#475569',
-    gray900: isDarkMode ? themeColors.text : '#0f172a',
-    amber50: isDarkMode ? '#78350f' : '#fffbeb',
-    amber400: isDarkMode ? '#fbbf24' : '#f59e0b',
-    amber900: isDarkMode ? '#fef3c7' : '#92400e',
-    blue50: isDarkMode ? '#1e3a5f' : '#eff6ff',
-    white: themeColors.white,
-    black: themeColors.black,
+    green: isDarkMode ? '#34d399' : '#16a34a',
+    amber: isDarkMode ? '#fbbf24' : '#f59e0b',
+    gray100: isDarkMode ? '#1e293b' : '#f1f5f9',
+    gray400: isDarkMode ? '#94a3b8' : '#94a3b8',
+    gray500: isDarkMode ? '#64748b' : '#64748b',
     background: themeColors.background,
-    cardBackground: themeColors.cardBackground,
+    card: themeColors.cardBackground,
     text: themeColors.text,
-    textSecondary: themeColors.textSecondary,
+    textSec: themeColors.textSecondary,
+    border: (themeColors as any).border || '#e5e7eb',
+    white: themeColors.white ?? '#FFFFFF',
   };
 
-  const handleSearchSubmit = useCallback(async () => {
-    const query = searchText.trim();
-    if (!query) {
-      setShowSearchResults(false);
-      setSearchResults([]);
-      return;
-    }
-    setSearchLoading(true);
-    setShowSearchResults(true);
-    let allResults: any[] = [];
-    const searchLower = query.toLowerCase();
+  // ─── State ─────────────────────────────────────────────────────────────────
+  const [searchText, setSearchText] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
 
-    try {
-      // 1. Services
-      const filteredCategories = categories.filter(cat => {
-        const nameEn = cat.nameEn?.toLowerCase() || '';
-        const nameAr = cat.nameAr?.toLowerCase() || '';
-        return nameEn.includes(searchLower) || nameAr.includes(searchLower);
-      });
-      allResults = allResults.concat(filteredCategories.map(c => ({ ...c, searchItemType: 'service' })));
+  const [categories, setCategories] = useState<ServiceCategory[]>([]);
+  const [catsLoading, setCatsLoading] = useState(true);
+  const [subcatsMap, setSubcatsMap] = useState<Record<number, ServiceSubcategory[]>>({});
+  const [loadingSubcat, setLoadingSubcat] = useState<number | null>(null);
+  const [selectedCat, setSelectedCat] = useState<ServiceCategory | null>(null);
+  const [modalVisible, setModalVisible] = useState(false);
+  const modalAnim = useRef(new Animated.Value(0)).current;
 
-      // 2. Tasks
-      const filteredTasks = taskTypes.filter(task => {
-        const nameEn = task.nameEn?.toLowerCase() || '';
-        const nameAr = task.nameAr?.toLowerCase() || '';
-        return nameEn.includes(searchLower) || nameAr.includes(searchLower);
-      });
-      allResults = allResults.concat(filteredTasks.map(t => ({ ...t, searchItemType: 'task' })));
+  const [taskTypes, setTaskTypes] = useState<TaskType[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [projLoading, setProjLoading] = useState(true);
+  const [myTasks, setMyTasks] = useState<SmallTaskRequestApi[]>([]);
+  const [tasksLoading, setTasksLoading] = useState(true);
 
-      // 3. Providers
+  const [activeBanner, setActiveBanner] = useState(0);
+  const bannerRef = useRef<ScrollView>(null);
+  const bannerIdxRef = useRef(0);
+
+  // ─── Auto-scroll banner ────────────────────────────────────────────────────
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const next = (bannerIdxRef.current + 1) % BANNERS.length;
+      bannerIdxRef.current = next;
+      bannerRef.current?.scrollTo({ x: next * BANNER_W, animated: true });
+      setActiveBanner(next);
+    }, 4000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // ─── Fetch categories ──────────────────────────────────────────────────────
+  useEffect(() => {
+    let alive = true;
+    getCategories()
+      .then(list => { if (alive) setCategories(list); })
+      .catch(() => {})
+      .finally(() => { if (alive) setCatsLoading(false); });
+    return () => { alive = false; };
+  }, []);
+
+  // ─── Fetch task types ──────────────────────────────────────────────────────
+  useEffect(() => {
+    let alive = true;
+    getSmallTaskTypes()
+      .then(types => { if (alive) setTaskTypes(types as TaskType[]); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
+  // ─── Fetch user projects ───────────────────────────────────────────────────
+  useEffect(() => {
+    let alive = true;
+    (async () => {
       try {
         const token = await storage.getAuthToken();
-        if (token) {
-          const response = await fetch(
-            `${buildApiUrl(API_ENDPOINTS.TECHNICIANS.SEARCH)}?query=${encodeURIComponent(query)}`,
-            { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } }
-          );
-          if (response.ok) {
-            const data = await response.json();
-            if (Array.isArray(data)) {
-              allResults = allResults.concat(data.map((p: any) => ({ ...p, searchItemType: 'provider' })));
-            }
-          }
-        }
-      } catch (err) {
-        console.error('Provider search error:', err);
-      }
+        if (!token) { if (alive) { setProjects([]); setProjLoading(false); } return; }
+        const res = await fetch(buildApiUrl(API_ENDPOINTS.PROJECTS.MY_PROJECTS), {
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        });
+        if (res.ok) {
+          const raw = await res.json();
+          const arr = Array.isArray(raw) ? raw : (raw?.projects ?? raw?.data ?? []);
+          if (alive) setProjects(arr.slice(0, 6));
+        } else if (alive) { setProjects([]); }
+      } catch { if (alive) setProjects([]); }
+      finally { if (alive) setProjLoading(false); }
+    })();
+    return () => { alive = false; };
+  }, []);
 
-      setSearchResults(allResults);
-    } catch (error) {
-      console.error('Search error:', error);
-      setSearchResults([]);
-    } finally {
-      setSearchLoading(false);
-    }
-  }, [searchText, categories, taskTypes]);
-
-  const searchTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
-
+  // ─── Fetch user's small task requests ─────────────────────────────────────
   useEffect(() => {
-    if (searchTimeoutRef.current) {
-      clearTimeout(searchTimeoutRef.current);
+    let alive = true;
+    (async () => {
+      try {
+        const list = await getMyRequests();
+        if (alive) setMyTasks(Array.isArray(list) ? list.slice(0, 6) : []);
+      } catch { if (alive) setMyTasks([]); }
+      finally { if (alive) setTasksLoading(false); }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  // ─── Fetch subcategories (cached) ─────────────────────────────────────────
+  const fetchSubcats = useCallback(async (catId: number) => {
+    if (subcatsMap[catId] !== undefined) return;
+    setLoadingSubcat(catId);
+    try {
+      const subs = await getSubcategories(catId);
+      setSubcatsMap(prev => ({ ...prev, [catId]: subs }));
+    } catch {
+      setSubcatsMap(prev => ({ ...prev, [catId]: [] }));
+    } finally {
+      setLoadingSubcat(null);
     }
-    if (searchText.trim() === '') {
-      setShowSearchResults(false);
-      setSearchResults([]);
-      return;
-    }
-    searchTimeoutRef.current = setTimeout(() => {
-      handleSearchSubmit();
+  }, [subcatsMap]);
+
+  // ─── Open / close subcategory modal ───────────────────────────────────────
+  const openCatModal = useCallback((cat: ServiceCategory) => {
+    setSelectedCat(cat);
+    setModalVisible(true);
+    modalAnim.setValue(0);
+    Animated.spring(modalAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 65,
+      friction: 11,
+    }).start();
+    fetchSubcats(cat.id);
+  }, [fetchSubcats, modalAnim]);
+
+  const closeCatModal = useCallback(() => {
+    Animated.timing(modalAnim, {
+      toValue: 0,
+      duration: 220,
+      useNativeDriver: true,
+    }).start(() => {
+      setModalVisible(false);
+      setSelectedCat(null);
+    });
+  }, [modalAnim]);
+
+  // ─── Search ────────────────────────────────────────────────────────────────
+  const searchTimer = useRef<NodeJS.Timeout | null>(null);
+  const handleSearchChange = (text: string) => {
+    setSearchText(text);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    if (!text.trim()) { setShowSearch(false); setSearchResults([]); return; }
+    searchTimer.current = setTimeout(() => {
+      setSearchLoading(true);
+      setShowSearch(true);
+      const q = text.toLowerCase();
+      const results = [
+        ...categories
+          .filter(c => c.nameEn?.toLowerCase().includes(q) || c.nameAr?.toLowerCase().includes(q))
+          .map(c => ({ ...c, sType: 'service' })),
+        ...taskTypes
+          .filter(tt => tt.nameEn?.toLowerCase().includes(q) || tt.nameAr?.toLowerCase().includes(q))
+          .map(tt => ({ ...tt, sType: 'task' })),
+      ];
+      setSearchResults(results);
+      setSearchLoading(false);
     }, 400);
-    return () => {
-      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-    };
-  }, [searchText, handleSearchSubmit]);
-
-  const handleClearSearch = () => {
-    setSearchText('');
-    setShowSearchResults(false);
-    setSearchResults([]);
   };
 
-
-  // Status helpers
-  const getStatusColors = (status: string) => {
+  // ─── Helpers ───────────────────────────────────────────────────────────────
+  const statusStyle = (status: string) => {
     switch (status?.toLowerCase()) {
-      case 'pending': return { bg: dc.amber50, text: dc.amber400, label: t('Pending') };
-      case 'running': case 'in_progress': return { bg: dc.blue50, text: dc.primary, label: t('In Progress') };
-      case 'completed': return { bg: dc.greenLight, text: dc.green, label: t('Completed') };
-      case 'approved': return { bg: dc.greenLight, text: dc.greenDark, label: t('Approved') };
-      case 'cancelled': return { bg: '#fee2e2', text: '#ef4444', label: t('Cancelled') };
-      case 'bid_received': return { bg: dc.purpleLight, text: dc.purple, label: t('Bid Received') };
-      default: return { bg: dc.gray100, text: dc.gray500, label: status?.replace(/_/g, ' ') || t('Unknown') };
+      case 'pending': return { bg: '#FFFBEB', tc: '#D97706', label: t('Pending') };
+      case 'bid_received': return { bg: '#F5F3FF', tc: '#7C3AED', label: t('Bid Received') };
+      case 'running':
+      case 'in_progress': return { bg: '#EFF6FF', tc: '#2563EB', label: t('In Progress') };
+      case 'approved': return { bg: '#F0FDF4', tc: '#16A34A', label: t('Approved') };
+      case 'completed': return { bg: '#F0FDF4', tc: '#16A34A', label: t('Completed') };
+      case 'cancelled': return { bg: '#FEF2F2', tc: '#EF4444', label: t('Cancelled') };
+      default: return { bg: dc.gray100, tc: dc.gray500, label: status?.replace(/_/g, ' ') || t('Unknown') };
     }
   };
 
-  const getProjectIcon = (status: string) => {
-    switch (status?.toLowerCase()) {
-      case 'pending': return 'clock-outline';
-      case 'running': case 'in_progress': return 'hammer-wrench';
-      case 'completed': return 'check-circle-outline';
-      case 'approved': return 'thumb-up-outline';
-      case 'bid_received': return 'hand-extended-outline';
-      default: return 'folder-outline';
-    }
+  const fmtDate = (d: string) => {
+    if (!d) return '';
+    return new Date(d).toLocaleDateString(isRTL ? 'ar-SA' : 'en-US', { month: 'short', day: 'numeric' });
   };
 
-  const formatDate = (dateString: string) => {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffTime = Math.abs(now.getTime() - date.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    if (diffDays === 1) return t('Today');
-    if (diffDays === 2) return t('Yesterday');
-    if (diffDays <= 7) return t('{{days}} days ago', { days: diffDays });
-    return date.toLocaleDateString(i18n.language === 'ar' ? 'ar-SA' : 'en-US', { month: 'short', day: 'numeric' });
-  };
+  const name = (en?: string, ar?: string) => isRTL && ar ? ar : (en ?? '');
 
-  // Project count stats
-  const projectCounts = {
-    pending: projects.filter(p => p.status?.toLowerCase() === 'pending' || p.status?.toLowerCase() === 'bid_received').length,
-    running: projects.filter(p => p.status?.toLowerCase() === 'running' || p.status?.toLowerCase() === 'in_progress' || p.status?.toLowerCase() === 'approved').length,
+  // Project count stats for ticker
+  const pCounts = {
+    pending: projects.filter(p => ['pending', 'bid_received'].includes(p.status?.toLowerCase())).length,
+    running: projects.filter(p => ['running', 'in_progress', 'approved'].includes(p.status?.toLowerCase())).length,
     completed: projects.filter(p => p.status?.toLowerCase() === 'completed').length,
   };
 
+  // Quick Build items: first 6 task types + first 6 categories
+  const quickItems: Array<(TaskType & { itype: 'task' }) | (ServiceCategory & { itype: 'cat' })> = [
+    ...taskTypes.slice(0, 6).map(tt => ({ ...tt, itype: 'task' as const })),
+    ...categories.slice(0, 6).map(c => ({ ...c, itype: 'cat' as const })),
+  ];
+
+  // ─── Render ────────────────────────────────────────────────────────────────
   return (
-    <View style={[styles.root, { backgroundColor: dc.background }]}>
+    <View style={[s.root, { backgroundColor: dc.background }]}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
 
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false}
-        nestedScrollEnabled={true}
-      >
-        {/* ═══ Hero Section with Gradient ═══ */}
+      <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false} nestedScrollEnabled>
+
+        {/* ════ HERO: search + stats ════ */}
         <LinearGradient
           colors={isDarkMode ? [dc.primary, '#1a365d'] : ['#ffffff', '#3b82f6']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={styles.heroGradient}
+          style={s.hero}
         >
+          {/* Stat ticker */}
+          <View style={{ marginBottom: 14 }}>
+            <AnimatedStatTicker stats={[
+              { label: t('Welcome back'), value: userName || t('User'), icon: 'account', color: '#fff', bgColor: 'rgba(255,255,255,0.2)' },
+              { label: t('Pending'), value: String(pCounts.pending), icon: 'clock-outline', color: '#fbbf24', bgColor: 'rgba(251,191,36,0.2)' },
+              { label: t('Running'), value: String(pCounts.running), icon: 'hammer-wrench', color: '#60a5fa', bgColor: 'rgba(96,165,250,0.2)' },
+              { label: t('Completed'), value: String(pCounts.completed), icon: 'check-circle-outline', color: '#34d399', bgColor: 'rgba(52,211,153,0.2)' },
+            ]} />
+          </View>
 
-
-          {/* Search Bar */}
-          <View style={[styles.heroSearchContainer, { marginTop: 16 }]}>
-            <View style={styles.heroSearchBar}>
+          {/* Search bar */}
+          <View style={s.searchWrap}>
+            <View style={[s.searchBar, isRTL && s.rowRev]}>
               <Feather name="search" size={18} color={dc.gray400} />
               <TextInput
-                style={[styles.heroSearchInput, { color: dc.gray900 }]}
+                style={[s.searchInput, fs, { color: dc.text }, isRTL && { textAlign: 'right' }]}
                 placeholder={t('Search services, tasks, providers...')}
                 placeholderTextColor={dc.gray400}
                 value={searchText}
-                onChangeText={setSearchText}
-                onSubmitEditing={handleSearchSubmit}
+                onChangeText={handleSearchChange}
                 returnKeyType="search"
               />
               {searchText.length > 0 && (
-                <TouchableOpacity onPress={handleClearSearch}>
+                <TouchableOpacity onPress={() => { setSearchText(''); setShowSearch(false); }}>
                   <Ionicons name="close-circle" size={18} color={dc.gray400} />
                 </TouchableOpacity>
               )}
             </View>
 
-            {/* Search Results connected to search bar */}
-            {showSearchResults && (
-              <View style={[styles.searchResultsContainer, { backgroundColor: dc.cardBackground }]}>
-                <View style={styles.searchResultsHeader}>
-                  <Text style={[styles.searchResultsTitle, { color: dc.text }]}>
-                    {t('Search Results')}
-                    {searchResults.length > 0 && ` (${searchResults.length})`}
-                  </Text>
-                  <TouchableOpacity onPress={handleClearSearch}>
-                    <Text style={[styles.closeResultsText, { color: dc.primary }]}>{t('Close')}</Text>
-                  </TouchableOpacity>
-                </View>
+            {/* Search dropdown */}
+            {showSearch && (
+              <View style={[s.searchDrop, { backgroundColor: dc.card }]}>
                 {searchLoading ? (
-                  <ActivityIndicator size="small" color={dc.primary} style={{ paddingVertical: 20 }} />
+                  <ActivityIndicator size="small" color={dc.primary} style={{ padding: 16 }} />
                 ) : searchResults.length === 0 ? (
-                  <View style={styles.noResultsContainer}>
-                    <Ionicons name="search-outline" size={40} color={dc.gray300} />
-                    <Text style={[styles.noResultsText, { color: dc.gray400 }]}>{t('No results found')}</Text>
-                  </View>
-                ) : (
-                  <View style={styles.searchResultsList}>
-                    {searchResults.map((item, index) => (
-                      <TouchableOpacity
-                        key={item.id?.toString() || index.toString()}
-                        style={[styles.searchResultItem, { borderBottomColor: dc.gray100 }]}
-                        onPress={() => {
-                          if (item.searchItemType === 'service') {
-                            onPressCategory?.({ id: item.id, nameEn: item.nameEn || item.name, nameAr: item.nameAr });
-                          } else if (item.searchItemType === 'task') {
-                            console.log('Task selected:', item);
-                          } else {
-                            onPressServiceProvidersAll?.();
-                          }
-                          setShowSearchResults(false);
-                        }}
-                      >
-                        <View style={[styles.resultIconContainer, { backgroundColor: dc.primary + '12' }]}>
-                          <Ionicons
-                            name={
-                              item.searchItemType === 'service' ? 'briefcase-outline' :
-                                item.searchItemType === 'task' ? 'hammer-outline' :
-                                  'person-outline'
-                            }
-                            size={18} color={dc.primary}
-                          />
-                        </View>
-                        <View style={styles.resultTextContainer}>
-                          <Text style={[styles.resultTitle, { color: dc.text }]}>
-                            {item.searchItemType === 'service' || item.searchItemType === 'task'
-                              ? (i18n.language === 'ar' && item.nameAr ? item.nameAr : (item.nameEn || item.name))
-                              : (item.name || item.fullName || item.username || t('Unknown'))
-                            }
-                          </Text>
-                          {item.searchItemType && (
-                            <Text style={[styles.resultSubtitle, { color: dc.gray400 }]}>
-                              {item.searchItemType === 'service' ? t('Service') :
-                                item.searchItemType === 'task' ? t('Small Task') :
-                                  (item.serviceName || t('Provider'))}
-                            </Text>
-                          )}
-                        </View>
-                        <Ionicons name="chevron-forward" size={16} color={dc.gray300} />
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
+                  <Text style={[s.searchEmpty, fs, { color: dc.textSec }]}>{t('No results found')}</Text>
+                ) : searchResults.slice(0, 6).map((item, idx) => (
+                  <TouchableOpacity
+                    key={idx}
+                    style={[s.searchRow, { borderBottomColor: dc.border }, isRTL && s.rowRev]}
+                    onPress={() => {
+                      setShowSearch(false); setSearchText('');
+                      if (item.sType === 'service') onPressCategory?.({ id: item.id, nameEn: item.nameEn, nameAr: item.nameAr });
+                      else onPressCreateSmallTask?.(item.id);
+                    }}
+                  >
+                    <View style={[s.searchIcon, { backgroundColor: dc.primary + '15' }]}>
+                      <Ionicons name={item.sType === 'task' ? 'hammer-outline' : 'briefcase-outline'} size={16} color={dc.primary} />
+                    </View>
+                    <Text style={[s.searchRowText, fs, { color: dc.text }]} numberOfLines={1}>
+                      {name(item.nameEn, item.nameAr)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
               </View>
             )}
           </View>
-
-          {/* Animated Stats Ticker */}
-          <View style={{ marginTop: 10, marginBottom: 15 }}>
-            <AnimatedStatTicker
-              stats={[
-                { label: t('Welcome back'), value: userName || t('User'), icon: 'account', color: '#fff', bgColor: 'rgba(255, 255, 255, 0.2)' },
-                { label: t('Pending'), value: projectCounts.pending?.toString() || '0', icon: 'clock-outline', color: '#fbbf24', bgColor: 'rgba(251, 191, 36, 0.2)' },
-                { label: t('Running'), value: projectCounts.running?.toString() || '0', icon: 'hammer-wrench', color: '#60a5fa', bgColor: 'rgba(96, 165, 250, 0.2)' },
-                { label: t('Completed'), value: projectCounts.completed?.toString() || '0', icon: 'check-circle-outline', color: '#34d399', bgColor: 'rgba(52, 211, 153, 0.2)' },
-              ]}
-            />
-          </View>
         </LinearGradient>
 
-
-
-        {/* ═══ Available Services Section ═══ */}
-        <View style={styles.sectionWrapper}>
-          <CopilotStep key="availableServices" text={t('coachMark.availableServices')} order={2} name="availableServices">
-            <WalkableView style={styles.sectionHeaderRow}>
-              <View style={styles.sectionTitleWrapper}>
-                <View style={[styles.sectionIcon, { backgroundColor: dc.primary + '12' }]}>
-                  <MaterialCommunityIcons name="apps" size={18} color={dc.primary} />
-                </View>
-                <Text style={[styles.sectionHeading, { color: dc.text }]}>{t('Available Services')}</Text>
-              </View>
-              <TouchableOpacity style={styles.seeAllBtn} onPress={onPressOpenServices}>
-                <Text style={[styles.seeAllText, { color: dc.primary }]}>{t('See All')}</Text>
-                <Feather name="chevron-right" size={14} color={dc.primary} />
+        {/* ════ BANNER CAROUSEL ════ */}
+        <View style={[s.section, { paddingHorizontal: H_PAD }]}>
+          <ScrollView
+            ref={bannerRef}
+            horizontal
+            pagingEnabled
+            snapToInterval={BANNER_W}
+            decelerationRate="fast"
+            showsHorizontalScrollIndicator={false}
+            onMomentumScrollEnd={e => {
+              const idx = Math.round(e.nativeEvent.contentOffset.x / BANNER_W);
+              bannerIdxRef.current = idx;
+              setActiveBanner(idx);
+            }}
+          >
+            {BANNERS.map(b => (
+              <TouchableOpacity key={b.key} activeOpacity={0.95} style={{ width: BANNER_W }}>
+                <LinearGradient colors={b.gradient} style={s.bannerCard}>
+                  <View style={[s.bannerRow, isRTL && s.rowRev]}>
+                    <LinearGradient colors={b.iconGrad} style={s.bannerIcon}>
+                      <MaterialCommunityIcons name={b.iconName} size={28} color="#fff" />
+                    </LinearGradient>
+                    <View style={[s.bannerTexts, isRTL && { alignItems: 'flex-end' }]}>
+                      <Text style={[s.bannerTitle, fsB, { color: b.titleColor }]}>{t(b.titleKey)}</Text>
+                      <Text style={[s.bannerSub, fs, { color: b.subtitleColor }]}>{t(b.subtitleKey)}</Text>
+                    </View>
+                  </View>
+                </LinearGradient>
               </TouchableOpacity>
-            </WalkableView>
-          </CopilotStep>
+            ))}
+          </ScrollView>
 
-          {categoriesLoading ? (
-            <View style={[styles.categoriesLoader, { backgroundColor: dc.cardBackground }]}>
-              <ActivityIndicator size="small" color={dc.primary} />
-              <Text style={[styles.loaderText, { color: dc.textSecondary }]}>{t('Loading categories...')}</Text>
+          {/* Pagination dots */}
+          <View style={s.dots}>
+            {BANNERS.map((_, i) => (
+              <TouchableOpacity key={i} onPress={() => {
+                bannerIdxRef.current = i;
+                setActiveBanner(i);
+                bannerRef.current?.scrollTo({ x: i * BANNER_W, animated: true });
+              }}>
+                <View style={[
+                  s.dot,
+                  i === activeBanner
+                    ? [s.dotActive, { backgroundColor: dc.primary }]
+                    : s.dotInactive,
+                ]} />
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* ════ QUICK CREATE ════ */}
+        <View style={s.section}>
+          <View style={[s.secHead, isRTL && s.rowRev]}>
+            <View style={[s.secTitleRow, isRTL && s.rowRev]}>
+              <View style={[s.secIcon, { backgroundColor: dc.primary + '18' }]}>
+                <MaterialCommunityIcons name="lightning-bolt-outline" size={20} color={dc.primary} />
+              </View>
+              <Text style={[s.secHeading, fsB, { color: dc.text }]}>{t('Quick Create')}</Text>
             </View>
+          </View>
+
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={[s.qScroll, isRTL && { flexDirection: 'row-reverse' }]}
+          >
+            {quickItems.map(item => {
+              const isTask = item.itype === 'task';
+              const label = name(item.nameEn, item.nameAr);
+              const iconName = isTask ? getTaskIcon(item.nameEn, item.nameAr) : getServiceIcon(item.nameEn);
+              const svgUrl = resolveSvgUrl(item);
+              const iconColor = isTask ? dc.amber : dc.primary;
+
+              return (
+                <TouchableOpacity
+                  key={`${isTask ? 't' : 'c'}-${item.id}`}
+                  style={s.qItem}
+                  activeOpacity={0.8}
+                  onPress={() => isTask ? onPressCreateSmallTask?.(item.id) : onPressCreateProject?.(item.id)}
+                >
+                  <View style={[s.qCircle, { backgroundColor: dc.white }]}>
+                    {svgUrl
+                      ? <SvgUri width={28} height={28} uri={svgUrl} fill={iconColor} />
+                      : <MaterialCommunityIcons name={iconName} size={24} color={iconColor} />
+                    }
+                  </View>
+                  <Text style={[s.qLabel, fs, { color: dc.text }]} numberOfLines={2}>{label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        {/* ════ SERVICE CATEGORIES (horizontal scroll → modal) ════ */}
+        <View style={s.section}>
+          <View style={[s.secHead, isRTL && s.rowRev]}>
+            <View style={[s.secTitleRow, isRTL && s.rowRev]}>
+              <View style={[s.secIcon, { backgroundColor: dc.purple + '18' }]}>
+                <MaterialCommunityIcons name="view-grid-outline" size={20} color={dc.purple} />
+              </View>
+              <Text style={[s.secHeading, fsB, { color: dc.text }]}>{t('Service Categories')}</Text>
+            </View>
+            <TouchableOpacity
+              style={[s.viewAll, { backgroundColor: dc.purple + '12' }]}
+              onPress={onPressOpenServices}
+              activeOpacity={0.8}
+            >
+              <Text style={[s.viewAllTxt, fs, { color: dc.purple }]}>
+                {isRTL ? `❯ ${t('View All')}` : `${t('View All')} ❯`}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {catsLoading ? (
+            <ActivityIndicator size="small" color={dc.primary} style={{ marginTop: 16, alignSelf: 'center' }} />
+          ) : (
+            <CopilotStep key="availableServices" text={t('coachMark.availableServices')} order={2} name="availableServices">
+              <WalkableView>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={[s.qScroll, isRTL && { flexDirection: 'row-reverse' }]}
+                >
+                  {categories.map(cat => {
+                    const svgUrl = resolveSvgUrl(cat);
+                    const iconName = getServiceIcon(cat.nameEn);
+                    const label = name(cat.nameEn, cat.nameAr);
+                    return (
+                      <TouchableOpacity
+                        key={cat.id}
+                        style={s.qItem}
+                        onPress={() => openCatModal(cat)}
+                        activeOpacity={0.8}
+                      >
+                        <View style={[s.qCircle, { backgroundColor: dc.white }]}>
+                          {svgUrl
+                            ? <SvgUri width={28} height={28} uri={svgUrl} fill={dc.purple} />
+                            : <MaterialCommunityIcons name={iconName} size={24} color={dc.purple} />
+                          }
+                        </View>
+                        <Text style={[s.qLabel, fs, { color: dc.text }]} numberOfLines={2}>{label}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </WalkableView>
+            </CopilotStep>
+          )}
+        </View>
+
+        {/* ════ QUICK SERVICES (small task types) ════ */}
+        <View style={s.section}>
+          <View style={[s.secHead, isRTL && s.rowRev]}>
+            <View style={[s.secTitleRow, isRTL && s.rowRev]}>
+              <View style={[s.secIcon, { backgroundColor: dc.amber + '22' }]}>
+                <Ionicons name="flash-outline" size={20} color={dc.amber} />
+              </View>
+              <Text style={[s.secHeading, fsB, { color: dc.text }]}>{t('Quick Services')}</Text>
+            </View>
+          </View>
+
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={[s.qScroll, isRTL && { flexDirection: 'row-reverse' }]}
+          >
+            {/* Chatbot entry point */}
+            <TouchableOpacity style={s.qItem} onPress={onPressChatbot} activeOpacity={0.8}>
+              <View style={[s.qCircle, { backgroundColor: dc.white }]}>
+                <MaterialCommunityIcons name="robot" size={26} color={dc.primary} />
+              </View>
+              <Text style={[s.qLabel, fs, { color: dc.text }]}>AI</Text>
+            </TouchableOpacity>
+
+            {taskTypes.map(tt => {
+              const label = name(tt.nameEn, tt.nameAr);
+              const iconName = getTaskIcon(tt.nameEn, tt.nameAr);
+              const svgUrl = resolveSvgUrl(tt);
+              return (
+                <TouchableOpacity
+                  key={tt.id}
+                  style={s.qItem}
+                  onPress={() => onPressCreateSmallTask?.(tt.id)}
+                  activeOpacity={0.8}
+                >
+                  <View style={[s.qCircle, { backgroundColor: dc.white }]}>
+                    {svgUrl
+                      ? <SvgUri width={26} height={26} uri={svgUrl} fill={dc.amber} />
+                      : <MaterialCommunityIcons name={iconName} size={24} color={dc.amber} />
+                    }
+                  </View>
+                  <Text style={[s.qLabel, fs, { color: dc.text }]} numberOfLines={2}>{label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        {/* ════ MY PROJECTS ════ */}
+        <View style={s.section}>
+          <View style={[s.secHead, isRTL && s.rowRev]}>
+            <View style={[s.secTitleRow, isRTL && s.rowRev]}>
+              <View style={[s.secIcon, { backgroundColor: dc.purple + '18' }]}>
+                <Feather name="folder" size={20} color={dc.purple} />
+              </View>
+              <Text style={[s.secHeading, fsB, { color: dc.text }]}>{t('My Projects')}</Text>
+            </View>
+            <TouchableOpacity
+              style={[s.viewAll, { backgroundColor: dc.purple + '12' }]}
+              onPress={onPressMyProjects}
+              activeOpacity={0.8}
+            >
+              <Text style={[s.viewAllTxt, fs, { color: dc.purple }]}>
+                {isRTL ? `❯ ${t('View All')}` : `${t('View All')} ❯`}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {projLoading ? (
+            <ActivityIndicator size="small" color={dc.purple} style={{ marginTop: 16, alignSelf: 'center' }} />
+          ) : projects.length === 0 ? (
+            <TouchableOpacity
+              style={[s.emptyCard, { backgroundColor: dc.card, marginHorizontal: H_PAD }]}
+              onPress={onPressFab}
+              activeOpacity={0.85}
+            >
+              <MaterialCommunityIcons name="plus-circle-outline" size={38} color={dc.purple} />
+              <Text style={[s.emptyTitle, fsB, { color: dc.text }]}>{t('Start Your First Project')}</Text>
+              <Text style={[s.emptyBody, fs, { color: dc.textSec }]}>
+                {t('Create a new project and get connected with professional service providers')}
+              </Text>
+            </TouchableOpacity>
           ) : (
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.categoriesScroll}
-              snapToInterval={CARD_WIDTH + CARD_GAP}
-              decelerationRate="fast"
-              snapToAlignment="start"
+              contentContainerStyle={[s.scrollCardsContent, isRTL && { flexDirection: 'row-reverse' }]}
             >
-              {categories.map((cat, index) => {
-                const imgSrc = resolveCategoryImage(cat);
-                const svgUrl = getSvgUrl(cat);
-                const name = i18n.language === 'ar' && cat.nameAr ? cat.nameAr : cat.nameEn;
-                const hasImage = !!imgSrc;
-                const hasSvg = !!svgUrl;
-                
+              {projects.map(proj => {
+                const ss = statusStyle(proj.status);
                 return (
                   <TouchableOpacity
-                    key={cat.id}
-                    style={[styles.serviceCard, { backgroundColor: dc.cardBackground }, index === 0 && { marginLeft: 20 }]}
+                    key={proj.id}
+                    style={[s.scrollCard, { backgroundColor: dc.card }]}
+                    onPress={() => onPressProject?.(proj.id)}
                     activeOpacity={0.9}
-                    onPress={() => onPressCategory ? onPressCategory({ id: cat.id, nameEn: cat.nameEn, nameAr: cat.nameAr }) : onPressProjectStatus?.('pending')}
                   >
-                    {/* Image Container with Gradient Background */}
-                    <View style={styles.serviceCardImageWrapper}>
-                      <LinearGradient
-                        colors={hasImage || hasSvg ? [dc.primary + '15', dc.primary + '05'] : [dc.primary + '25', dc.primary + '15']}
-                        style={styles.serviceCardGradient}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                      >
-                        {hasSvg ? (
-                          <View style={styles.svgContainer}>
-                            <SvgUri
-                              width={CARD_WIDTH * 0.4}
-                              height={CARD_WIDTH * 0.4}
-                              uri={svgUrl}
-                              fill={dc.primary}
-                            />
-                          </View>
-                        ) : hasImage ? (
-                          <Image 
-                            source={imgSrc} 
-                            style={styles.serviceCardImage} 
-                            resizeMode="cover"
-                          />
-                        ) : (
-                          <View style={styles.serviceIconContainer}>
-                            <MaterialCommunityIcons 
-                              name={getServiceIcon(cat.nameEn) as any} 
-                              size={32} 
-                              color={dc.primary} 
-                            />
-                          </View>
-                        )}
-                      </LinearGradient>
-                      
-                    </View>
-                    
-                    {/* Content */}
-                    <View style={styles.serviceCardContent}>
-                      <Text style={[styles.serviceCardTitle, { color: dc.text }]} numberOfLines={2}>
-                        {name}
+                    <LinearGradient colors={['#FFF7ED', '#FFEDD5']} style={s.gradWrap}>
+                      {/* Top row */}
+                      <View style={[s.cardTop, isRTL && s.rowRev]}>
+                        <Text style={[s.cardNum, fs, { color: dc.gray400 }]}>#{proj.id}</Text>
+                        <View style={[s.pill, { backgroundColor: ss.bg }]}>
+                          <View style={[s.pillDot, { backgroundColor: ss.tc }]} />
+                          <Text style={[s.pillTxt, fs, { color: ss.tc }]}>{ss.label}</Text>
+                        </View>
+                      </View>
+                      {/* Title */}
+                      <Text style={[s.cardTitle, fsB, { color: dc.text }]} numberOfLines={2}>
+                        {proj.description || t('No description')}
                       </Text>
-                    </View>
+                      {/* Budget */}
+                      <View style={[s.cardBudget, isRTL && s.rowRev]}>
+                        <View style={s.riyalCircle}>
+                          <Text style={s.riyalTxt}>﷼</Text>
+                        </View>
+                        <Text style={[s.budgetTxt, fsB]}>
+                          {proj.budgetUnspecified || !proj.budget ? t('Flexible') : proj.budget.toLocaleString()}
+                        </Text>
+                      </View>
+                      {/* Service name */}
+                      {(proj.serviceName || proj.serviceNameAr) && (
+                        <Text style={[s.cardUser, fs, { color: dc.gray500 }]} numberOfLines={1}>
+                          {name(proj.serviceName, proj.serviceNameAr)}
+                        </Text>
+                      )}
+                      {/* Date */}
+                      <View style={[s.cardMeta, isRTL && s.rowRev]}>
+                        <Feather name="calendar" size={11} color={dc.gray400} />
+                        <Text style={[s.cardMetaTxt, fs, { color: dc.gray400 }]}>{fmtDate(proj.createdAt)}</Text>
+                      </View>
+                    </LinearGradient>
                   </TouchableOpacity>
                 );
               })}
@@ -633,750 +758,471 @@ const UserHomeScreen: React.FC<UserHomeScreenProps> = ({
           )}
         </View>
 
-        {/* ═══ Service Providers Section ═══ */}
-        <CopilotStep key="serviceProviders" text={t('coachMark.serviceProviders')} order={3} name="serviceProviders">
-          <WalkableView style={[styles.serviceProvidersBanner, { backgroundColor: dc.cardBackground }]}>
-            <View style={styles.spBannerContent}>
-              <View style={[styles.spBannerIcon, { backgroundColor: dc.primary + '12' }]}>
-                <Ionicons name="people" size={24} color={dc.primary} />
+        {/* ════ MY SMALL TASKS ════ */}
+        <View style={[s.section, { marginBottom: 80 }]}>
+          <View style={[s.secHead, isRTL && s.rowRev]}>
+            <View style={[s.secTitleRow, isRTL && s.rowRev]}>
+              <View style={[s.secIcon, { backgroundColor: dc.amber + '22' }]}>
+                <Ionicons name="list-outline" size={20} color={dc.amber} />
               </View>
-              <View style={styles.spBannerTextContainer}>
-                <Text style={[styles.spBannerTitle, { color: dc.text }]}>{t('Service Providers')}</Text>
-              </View>
+              <Text style={[s.secHeading, fsB, { color: dc.text }]}>{t('My Small Tasks')}</Text>
             </View>
             <TouchableOpacity
-              style={[styles.spBannerButton, { backgroundColor: dc.primary }]}
+              style={[s.viewAll, { backgroundColor: '#FFF7ED' }]}
+              onPress={onPressMyTasks}
               activeOpacity={0.8}
-              onPress={onPressServiceProvidersAll}
             >
-              <Text style={styles.spBannerButtonText}>{t('Browse')}</Text>
-              <Feather name="arrow-right" size={14} color="#fff" />
+              <Text style={[s.viewAllTxt, fs, { color: '#EA580C' }]}>
+                {isRTL ? `❯ ${t('View All')}` : `${t('View All')} ❯`}
+              </Text>
             </TouchableOpacity>
-          </WalkableView>
-        </CopilotStep>
-
-        {/* ═══ My Projects Section ═══ */}
-        <View style={styles.sectionWrapper}>
-          <View style={styles.sectionHeaderRow}>
-            <View style={styles.sectionTitleWrapper}>
-              <View style={[styles.sectionIcon, { backgroundColor: dc.purple + '12' }]}>
-                <MaterialCommunityIcons name="folder-outline" size={18} color={dc.purple} />
-              </View>
-              <Text style={[styles.sectionHeading, { color: dc.text }]}>{t('My Projects')}</Text>
-            </View>
-            {projects.length > 0 && (
-              <TouchableOpacity style={styles.seeAllBtn} onPress={onPressMyProjects}>
-                <Text style={[styles.seeAllText, { color: dc.purple }]}>{t('View All')}</Text>
-                <Feather name="chevron-right" size={14} color={dc.purple} />
-              </TouchableOpacity>
-            )}
           </View>
 
-          {projectsLoading ? (
-            <View style={[styles.projectsLoadingCard, { backgroundColor: dc.cardBackground }]}>
-              <ActivityIndicator size="large" color={dc.primary} />
-              <Text style={[styles.loadingText, { color: dc.textSecondary }]}>{t('Loading projects...')}</Text>
-            </View>
-          ) : projects.length > 0 ? (
-            <View style={styles.projectsListContainer}>
-              {projects.map((project, index) => {
-                const sc = getStatusColors(project.status);
+          {tasksLoading ? (
+            <ActivityIndicator size="small" color={dc.amber} style={{ marginTop: 16, alignSelf: 'center' }} />
+          ) : myTasks.length === 0 ? (
+            <TouchableOpacity
+              style={[s.emptyCard, { backgroundColor: dc.card, marginHorizontal: H_PAD }]}
+              onPress={() => onPressCreateSmallTask?.()}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="flash-outline" size={38} color={dc.amber} />
+              <Text style={[s.emptyTitle, fsB, { color: dc.text }]}>
+                {t('No small tasks yet. Create one to get started!')}
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={[s.scrollCardsContent, isRTL && { flexDirection: 'row-reverse' }]}
+            >
+              {myTasks.map(task => {
+                const ss = statusStyle(task.status);
+                const taskName = name(task.taskTypeNameEn ?? task.description, task.taskTypeNameAr ?? task.description);
                 return (
                   <TouchableOpacity
-                    key={project.id}
-                    style={[styles.projectListCard, { backgroundColor: dc.cardBackground }]}
+                    key={task.id}
+                    style={[s.scrollCard, { backgroundColor: dc.card }]}
                     activeOpacity={0.9}
-                    onPress={() => onPressProject?.(project.id)}
                   >
-                    {/* Left accent bar */}
-                    <View style={[styles.projectAccent, { backgroundColor: sc.text }]} />
-
-                    <View style={styles.projectListContent}>
-                      {/* Top row: icon + title + status */}
-                      <View style={styles.projectListTop}>
-                        <View style={[styles.projectListIconBox, { backgroundColor: sc.bg }]}>
-                          <MaterialCommunityIcons name={getProjectIcon(project.status)} size={20} color={sc.text} />
+                    <LinearGradient colors={['#FFFBEB', '#FEF3C7']} style={s.gradWrap}>
+                      {/* Top row */}
+                      <View style={[s.cardTop, isRTL && s.rowRev]}>
+                        <View style={[s.cardTop, isRTL && s.rowRev, { gap: 3, flexShrink: 1 }]}>
+                          <Ionicons name="people-outline" size={13} color={dc.gray400} />
+                          <Text style={[s.cardNum, fs, { color: dc.gray400 }]}>{task.bidsCount ?? 0}</Text>
                         </View>
-                        <View style={styles.projectListInfo}>
-                          <Text style={[styles.projectListTitle, { color: dc.text }]} numberOfLines={1}>
-                            {project.description || t('No description')}
-                          </Text>
-                          <View style={styles.projectListMeta}>
-                            {project.serviceName && (
-                              <View style={styles.projectListServiceTag}>
-                                <Ionicons name="briefcase-outline" size={10} color={dc.gray500} />
-                                <Text style={[styles.projectListServiceText, { color: dc.gray500 }]} numberOfLines={1}>
-                                  {i18n.language === 'ar' && project.serviceNameAr ? project.serviceNameAr : project.serviceName}
-                                </Text>
-                              </View>
-                            )}
-                            <Text style={[styles.projectListDate, { color: dc.gray400 }]}>
-                              {formatDate(project.createdAt)}
-                            </Text>
-                          </View>
+                        <View style={[s.pill, { backgroundColor: ss.bg }]}>
+                          <View style={[s.pillDot, { backgroundColor: ss.tc }]} />
+                          <Text style={[s.pillTxt, fs, { color: ss.tc }]}>{ss.label}</Text>
                         </View>
                       </View>
-
-                      {/* Bottom row: budget + status badge + arrow */}
-                      <View style={styles.projectListBottom}>
-                        <View style={{ flexDirection: i18n.language === 'ar' ? 'row-reverse' : 'row', alignItems: 'center', gap: 4 }}>
-                          <ExpoImage source={riyalLogo} style={{ width: 14, height: 14 }} contentFit="contain" />
-                          <Text style={[styles.projectListBudget, { color: dc.text }]}>
-                            {project.budget?.toLocaleString() || '0'}
-                          </Text>
-                        </View>
-                        <View style={[styles.projectListStatusBadge, { backgroundColor: sc.bg }]}>
-                          <View style={[styles.projectListStatusDot, { backgroundColor: sc.text }]} />
-                          <Text style={[styles.projectListStatusText, { color: sc.text }]}>{sc.label}</Text>
-                        </View>
-                        <Feather name="chevron-right" size={16} color={dc.gray300} />
+                      {/* Title */}
+                      <Text style={[s.cardTitle, fsB, { color: dc.text }]} numberOfLines={2}>
+                        {taskName || '—'}
+                      </Text>
+                      {/* Username */}
+                      {task.userName && (
+                        <Text style={[s.cardUser, fs, { color: dc.gray500 }]} numberOfLines={1}>
+                          {task.userName}
+                        </Text>
+                      )}
+                      {/* Date */}
+                      <View style={[s.cardMeta, isRTL && s.rowRev]}>
+                        <Feather name="calendar" size={11} color={dc.gray400} />
+                        <Text style={[s.cardMetaTxt, fs, { color: dc.gray400 }]}>{fmtDate(task.createdAt)}</Text>
                       </View>
-                    </View>
+                      {/* Address */}
+                      {!!task.address && (
+                        <View style={[s.cardMeta, isRTL && s.rowRev]}>
+                          <Ionicons name="information-circle" size={11} color={dc.primary} />
+                          <Text style={[s.cardMetaTxt, fs, { color: dc.gray400 }]} numberOfLines={1}>{task.address}</Text>
+                        </View>
+                      )}
+                    </LinearGradient>
                   </TouchableOpacity>
                 );
               })}
-            </View>
-          ) : (
-            <TouchableOpacity
-              style={[styles.emptyStateCard, { backgroundColor: dc.cardBackground }]}
-              activeOpacity={0.8}
-              onPress={onPressMyProjects}
-            >
-              <LinearGradient
-                colors={isDarkMode ? [dc.purpleLight, '#1a1033'] : ['#f5f0ff', '#ede9fe']}
-                style={styles.emptyStateIconContainer}
-              >
-                <MaterialCommunityIcons name="plus" size={32} color={dc.purple} />
-              </LinearGradient>
-              <Text style={[styles.emptyStateTitle, { color: dc.text }]}>{t('Start Your First Project')}</Text>
-              <Text style={[styles.emptyStateDescription, { color: dc.gray400 }]}>
-                {t('Create a new project and get connected with professional service providers')}
-              </Text>
-              <View style={[styles.createProjectBtn, { backgroundColor: dc.purple }]}>
-                <Text style={styles.createProjectBtnText}>{t('Create Project')}</Text>
-                <Feather name="arrow-right" size={16} color="#fff" />
-              </View>
-            </TouchableOpacity>
+            </ScrollView>
           )}
         </View>
 
-        {/* ═══ Quick Actions Grid ═══ */}
-        <View style={styles.sectionWrapper}>
-          <View style={styles.sectionHeaderRow}>
-            <View style={styles.sectionTitleWrapper}>
-              <View style={[styles.sectionIcon, { backgroundColor: dc.green + '12' }]}>
-                <Feather name="grid" size={16} color={dc.green} />
-              </View>
-              <Text style={[styles.sectionHeading, { color: dc.text }]}>{t('Quick Actions')}</Text>
-            </View>
-          </View>
-
-          <View style={styles.quickActionsGrid}>
-            <TouchableOpacity
-              style={[styles.quickActionCard, { backgroundColor: dc.cardBackground }]}
-              activeOpacity={0.9}
-              onPress={onPressMyTasks}
-            >
-              <View style={[styles.quickActionIconBox, { backgroundColor: dc.orangeLight }]}>
-                <MaterialCommunityIcons name="clipboard-list-outline" size={24} color={dc.orange} />
-              </View>
-              <Text style={[styles.quickActionTitle, { color: dc.text }]}>{t('My Task Requests')}</Text>
-              <Text style={[styles.quickActionSubtitle, { color: dc.textSecondary }]}>{t('View tasks')}</Text>
-            </TouchableOpacity>
-
-            {/* Messages button removed */}
-          </View>
-        </View>
-
-        {/* ═══ Premium Banner ═══ */}
-        <TouchableOpacity
-          style={styles.premiumCard}
-          activeOpacity={0.9}
-          onPress={onPressPremiumUpgrade}
-        >
-          <LinearGradient
-            colors={isDarkMode ? ['#7c3aed', '#4c1d95'] : ['#7c3aed', '#5b21b6']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.premiumGradient}
-          >
-            <View style={styles.premiumContent}>
-              <View style={styles.premiumLeft}>
-                <View style={styles.premiumCircle}>
-                  <MaterialCommunityIcons name="crown" size={28} color="#fbbf24" />
-                </View>
-              </View>
-              <View style={styles.premiumRight}>
-                <View style={styles.premiumOfferRow}>
-                  <View style={styles.premiumOfferBadge}>
-                    <Text style={styles.premiumOfferText}>{t('50% OFF')}</Text>
-                  </View>
-                </View>
-                <Text style={styles.premiumTitle}>{t('Premium Subscription')}</Text>
-                <Text style={styles.premiumSubtitle}>{t('Get 3 months FREE')}</Text>
-                <Text style={styles.premiumDescription}>
-                  {t('Unlock unlimited bids and priority support')}
-                </Text>
-                <View style={styles.premiumButton}>
-                  <Text style={styles.premiumButtonText}>{t('Upgrade Now')}</Text>
-                  <Feather name="arrow-right" size={14} color="#fff" />
-                </View>
-              </View>
-            </View>
-          </LinearGradient>
-        </TouchableOpacity>
-
-        {/* Bottom spacer */}
-        <View style={{ height: 40 }} />
       </ScrollView>
 
-      {/* ═══ FAB ═══ */}
+      {/* ════ FAB ════ */}
       <TouchableOpacity
-        style={styles.fab}
+        style={[s.fab, { [isRTL ? 'left' : 'right']: 20, backgroundColor: dc.primary }]}
         activeOpacity={0.9}
         onPress={onPressFab}
       >
-        <LinearGradient
-          colors={[dc.primary, dc.primaryDark]}
-          style={styles.fabGradient}
-        >
-          <MaterialCommunityIcons name="robot" size={26} color="#fff" />
-        </LinearGradient>
+        <MaterialCommunityIcons name="robot" size={26} color="#fff" />
       </TouchableOpacity>
 
-      {/* ═══ CHATBOT BUTTON (Bottom Right) ═══ */}
-      {onPressChatbot && (
-        <TouchableOpacity
-          style={[styles.chatFab, { backgroundColor: dc.primary }]}
-          onPress={onPressChatbot}
-          activeOpacity={0.9}
-        >
-          <MaterialCommunityIcons name="robot" size={28} color="#fff" />
-          <View style={styles.chatFabBadge}>
-            <Text style={styles.chatFabBadgeText}>AI</Text>
-          </View>
-        </TouchableOpacity>
-      )}
+      {/* ════ SUBCATEGORY MODAL ════ */}
+      <Modal
+        visible={modalVisible}
+        transparent
+        animationType="none"
+        onRequestClose={closeCatModal}
+        statusBarTranslucent
+      >
+        <Pressable style={s.modalOverlay} onPress={closeCatModal}>
+          <Animated.View
+            style={[
+              s.modalSheet,
+              { backgroundColor: dc.card },
+              {
+                transform: [{
+                  translateY: modalAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [500, 0],
+                  }),
+                }],
+                opacity: modalAnim,
+              },
+            ]}
+          >
+            <Pressable onPress={() => {}}>
+              {/* Handle bar */}
+              <View style={[s.modalHandle, { backgroundColor: dc.border }]} />
+
+              {/* Header */}
+              {selectedCat && (
+                <View style={[s.modalHeader, isRTL && s.rowRev]}>
+                  <View style={[s.modalTitleRow, isRTL && s.rowRev]}>
+                    <View style={[s.modalIconCircle, { backgroundColor: dc.purple + '15' }]}>
+                      {resolveSvgUrl(selectedCat)
+                        ? <SvgUri width={22} height={22} uri={resolveSvgUrl(selectedCat)!} fill={dc.purple} />
+                        : <MaterialCommunityIcons name={getServiceIcon(selectedCat.nameEn)} size={20} color={dc.purple} />
+                      }
+                    </View>
+                    <Text style={[s.modalTitle, fsB, { color: dc.text }]}>
+                      {name(selectedCat.nameEn, selectedCat.nameAr)}
+                    </Text>
+                  </View>
+                  <TouchableOpacity onPress={closeCatModal} style={s.modalCloseBtn} activeOpacity={0.7}>
+                    <Ionicons name="close" size={20} color={dc.gray400} />
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Subcategory grid */}
+              <ScrollView
+                style={{ maxHeight: 380 }}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={s.modalGrid}
+              >
+                {selectedCat && loadingSubcat === selectedCat.id ? (
+                  <ActivityIndicator size="large" color={dc.purple} style={{ marginVertical: 40, alignSelf: 'center' }} />
+                ) : selectedCat && (subcatsMap[selectedCat.id] || []).length === 0 ? (
+                  <Text style={[s.subcatEmpty, fs, { color: dc.textSec, textAlign: 'center', marginVertical: 32 }]}>
+                    {t('No subcategories')}
+                  </Text>
+                ) : (
+                  <View style={[s.subcatGrid, isRTL && { flexDirection: 'row-reverse' }]}>
+                    {(selectedCat ? (subcatsMap[selectedCat.id] || []) : []).map(sub => {
+                      const subSvg = resolveSvgUrl(sub);
+                      const subIcon = getServiceIcon(sub.nameEn);
+                      const subLabel = name(sub.nameEn, sub.nameAr);
+                      return (
+                        <TouchableOpacity
+                          key={sub.id}
+                          style={[s.subcatItem, { backgroundColor: isDarkMode ? dc.border : '#F8FAFC' }]}
+                          onPress={() => {
+                            closeCatModal();
+                            setTimeout(() => {
+                              onPressCategory?.({ id: sub.id, nameEn: sub.nameEn, nameAr: sub.nameAr });
+                            }, 250);
+                          }}
+                          activeOpacity={0.8}
+                        >
+                          <View style={[s.subcatCircle, { backgroundColor: dc.white }]}>
+                            {subSvg
+                              ? <SvgUri width={22} height={22} uri={subSvg} fill={dc.primary} />
+                              : <MaterialCommunityIcons name={subIcon} size={20} color={dc.primary} />
+                            }
+                          </View>
+                          <Text style={[s.subcatLabel, fs, { color: dc.text }]} numberOfLines={2}>{subLabel}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
+              </ScrollView>
+            </Pressable>
+          </Animated.View>
+        </Pressable>
+      </Modal>
     </View>
   );
 };
 
 export default UserHomeScreen;
 
-const styles = StyleSheet.create({
-  root: { flex: 1 },
-  container: { flex: 1 },
-  contentContainer: { paddingBottom: 80 },
+// ─── Styles ───────────────────────────────────────────────────────────────────
+const CARD_R = 16;
+const SUB_COL = (SCREEN_WIDTH - H_PAD * 2 - 44) / 3;
 
-  // ═══ Hero Section ═══
-  heroGradient: {
-    paddingTop: Platform.OS === 'ios' ? 16 : 20,
-    paddingBottom: 24,
-    paddingHorizontal: 20,
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
+const s = StyleSheet.create({
+  root: { flex: 1 },
+  scroll: { flex: 1 },
+  scrollContent: { paddingBottom: 0 },
+  rowRev: { flexDirection: 'row-reverse' },
+
+  // ── Hero
+  hero: {
+    paddingTop: Platform.OS === 'ios' ? 10 : 14,
+    paddingBottom: 22,
+    paddingHorizontal: H_PAD,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
   },
-  heroSearchContainer: {
-    // Relative positioned to anchor absolute search results
-    position: 'relative',
-    zIndex: 1000,
-  },
-  heroSearchBar: {
+  searchWrap: { position: 'relative', zIndex: 1000 },
+  searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#fff',
     borderRadius: 14,
     paddingHorizontal: 14,
-    paddingVertical: Platform.OS === 'ios' ? 12 : 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  heroSearchInput: {
-    flex: 1,
-    marginLeft: 10,
-    fontSize: 15,
-    fontWeight: '500',
-  },
-  heroFilterBtn: {
-    width: 46,
-    height: 46,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  heroChips: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 14,
-  },
-  heroChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-  },
-  heroChipActive: {
-    backgroundColor: 'rgba(255,255,255,0.25)',
-  },
-  heroChipText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#1e3a8a',
-  },
-  heroChipTextActive: {
-    color: '#fff',
-  },
-
-  // Quick Stats
-  quickStatsRow: {
-    flexDirection: 'row',
-    marginTop: 20,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 16,
-    padding: 14,
+    paddingVertical: Platform.OS === 'ios' ? 12 : 9,
     gap: 8,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8 },
+      android: { elevation: 4 },
+    }),
   },
-  quickStatBox: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 6,
-  },
-  quickStatIconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  quickStatValue: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#fff',
-  },
-  quickStatLabel: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: 'rgba(255,255,255,0.7)',
-  },
-
-  // ═══ Search Results ═══
-  searchResultsContainer: {
+  searchInput: { flex: 1, fontSize: 15, fontWeight: '500' },
+  searchDrop: {
     position: 'absolute',
-    top: 55,
+    top: 52,
     left: 0,
     right: 0,
+    borderRadius: 14,
+    paddingVertical: 4,
     zIndex: 9999,
-    borderRadius: 16,
-    padding: 16,
-    maxHeight: 300,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-    elevation: 10,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 10 },
+      android: { elevation: 10 },
+    }),
   },
-  searchResultsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  searchResultsList: {
-    maxHeight: 300,
-  },
-  searchResultsTitle: { fontSize: 15, fontWeight: '600' },
-  closeResultsText: { fontSize: 13, fontWeight: '600' },
-  noResultsContainer: { alignItems: 'center', paddingVertical: 24 },
-  noResultsText: { marginTop: 10, fontSize: 14, fontWeight: '500' },
-  searchResultItem: {
+  searchEmpty: { padding: 16, textAlign: 'center', fontSize: 14 },
+  searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-  },
-  resultIconContainer: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  resultTextContainer: { flex: 1 },
-  resultTitle: { fontSize: 14, fontWeight: '600' },
-  resultSubtitle: { fontSize: 12, fontWeight: '400', marginTop: 2 },
-
-  // ═══ Section Shared ═══
-  sectionWrapper: { marginTop: 28 },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    marginBottom: 16,
-  },
-  sectionTitleWrapper: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  sectionIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  sectionHeading: { fontSize: 18, fontWeight: '700' },
-  seeAllBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  seeAllText: { fontSize: 13, fontWeight: '600' },
-
-  // ═══ Service Cards ═══
-  categoriesScroll: { 
-    paddingRight: 20, 
-    paddingVertical: 8,
-    gap: CARD_GAP,
-  },
-  categoriesLoader: { 
-    marginHorizontal: 20, 
-    paddingVertical: 40, 
-    borderRadius: 20, 
-    alignItems: 'center', 
-    justifyContent: 'center',
-  },
-  loaderText: { marginTop: 12, fontSize: 14, fontWeight: '500' },
-  serviceCard: {
-    width: CARD_WIDTH,
-    borderRadius: 16,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 4,
-    marginBottom: 4,
-  },
-  serviceCardImageWrapper: {
-    width: '100%',
-    height: CARD_WIDTH * 0.7,
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  serviceCardGradient: {
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  serviceCardImage: { 
-    width: '80%', 
-    height: '80%',
-    borderRadius: 12,
-  },
-  serviceIconContainer: { 
-    width: 48, 
-    height: 48, 
-    borderRadius: 24, 
-    alignItems: 'center', 
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.3)',
-  },
-  svgContainer: {
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  serviceCardContent: { 
-    padding: 10,
-    paddingBottom: 12,
-  },
-  serviceCardTitle: { 
-    fontSize: 13, 
-    fontWeight: '600', 
-    lineHeight: 18, 
-    textAlign: 'center',
-  },
-
-  // ═══ Service Providers Banner ═══
-  serviceProvidersBanner: {
-    marginHorizontal: 20,
-    marginTop: 24,
-    borderRadius: 16,
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  spBannerContent: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: 12 },
-  spBannerIcon: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  spBannerTextContainer: { flex: 1, justifyContent: 'center' },
-  spBannerTitle: { fontSize: 15, fontWeight: '700' },
-  spBannerButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 10,
-  },
-  spBannerButtonText: { color: '#fff', fontSize: 13, fontWeight: '600' },
-
-  // ═══ Project List Cards ═══
-  projectsLoadingCard: {
-    marginHorizontal: 20,
-    paddingVertical: 40,
-    borderRadius: 16,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  loadingText: { marginTop: 12, fontSize: 14, fontWeight: '500' },
-  projectsListContainer: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 14,
+    borderBottomWidth: 1,
     gap: 10,
   },
-  projectListCard: {
+  searchIcon: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  searchRowText: { flex: 1, fontSize: 14, fontWeight: '500' },
+
+  // ── Section shared
+  section: { marginTop: 20 },
+  secHead: {
     flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: H_PAD,
+    marginBottom: 14,
+  },
+  secTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  secIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  secHeading: { fontSize: 16, fontWeight: '700' },
+  viewAll: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20 },
+  viewAllTxt: { fontSize: 13, fontWeight: '600' },
+
+  // ── Banner
+  bannerCard: {
+    borderRadius: 18,
+    padding: 18,
+    minHeight: 90,
+    justifyContent: 'center',
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 8 },
+      android: { elevation: 3 },
+    }),
+  },
+  bannerRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  bannerIcon: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 4 },
+      android: { elevation: 3 },
+    }),
+  },
+  bannerTexts: { flex: 1 },
+  bannerTitle: { fontSize: 16, fontWeight: '800', marginBottom: 4 },
+  bannerSub: { fontSize: 12, fontWeight: '500', lineHeight: 17 },
+  dots: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 10, gap: 6 },
+  dot: { borderRadius: 4, height: 8 },
+  dotActive: { width: 22 },
+  dotInactive: { width: 8, backgroundColor: '#CBD5E1' },
+
+  // ── Quick scroll items
+  qScroll: { paddingHorizontal: H_PAD, paddingRight: H_PAD + 8, gap: 12 },
+  qItem: { width: 72, alignItems: 'center', gap: 6 },
+  qCircle: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 5 },
+      android: { elevation: 2 },
+    }),
+  },
+  qLabel: { fontSize: 11, fontWeight: '600', textAlign: 'center', lineHeight: 14 },
+
+  // ── Subcategory grid (inside modal)
+  subcatEmpty: { textAlign: 'center', padding: 12, fontSize: 13 },
+  subcatGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  subcatItem: {
+    width: SUB_COL,
+    alignItems: 'center',
+    padding: 10,
     borderRadius: 14,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  projectAccent: {
-    width: 4,
-    borderTopLeftRadius: 14,
-    borderBottomLeftRadius: 14,
-  },
-  projectListContent: {
-    flex: 1,
-    padding: 14,
-    gap: 12,
-  },
-  projectListTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  projectListIconBox: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  projectListInfo: { flex: 1 },
-  projectListTitle: { fontSize: 15, fontWeight: '600', lineHeight: 20 },
-  projectListMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
-  projectListServiceTag: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  projectListServiceText: { fontSize: 11, fontWeight: '500', maxWidth: 120 },
-  projectListDate: { fontSize: 11, fontWeight: '400' },
-  projectListBottom: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  projectListBudget: { fontSize: 17, fontWeight: '700', flex: 1 },
-  projectListStatusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
-    marginRight: 8,
-  },
-  projectListStatusDot: { width: 5, height: 5, borderRadius: 3 },
-  projectListStatusText: { fontSize: 11, fontWeight: '600', textTransform: 'capitalize' as any },
-
-  // Empty State
-  emptyStateCard: {
-    marginHorizontal: 20,
-    paddingVertical: 32,
-    paddingHorizontal: 24,
-    borderRadius: 16,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  emptyStateIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  emptyStateTitle: { fontSize: 18, fontWeight: '700', marginBottom: 8 },
-  emptyStateDescription: { fontSize: 14, textAlign: 'center' as any, lineHeight: 20, marginBottom: 20 },
-  createProjectBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 10,
-  },
-  createProjectBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
-
-  // ═══ Quick Actions Grid ═══
-  quickActionsGrid: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    gap: 12,
-  },
-  quickActionCard: {
-    flex: 1,
-    borderRadius: 16,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  quickActionIconBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  quickActionTitle: { fontSize: 14, fontWeight: '600', marginBottom: 4 },
-  quickActionSubtitle: { fontSize: 12, fontWeight: '400' },
-
-  // ═══ Premium Card ═══
-  premiumCard: {
-    marginHorizontal: 20,
-    marginTop: 28,
-    borderRadius: 20,
-    overflow: 'hidden',
-    shadowColor: '#7c3aed',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  premiumGradient: {
-    padding: 20,
-  },
-  premiumContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  premiumLeft: { marginRight: 16 },
-  premiumCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  premiumRight: { flex: 1 },
-  premiumOfferRow: { flexDirection: 'row', marginBottom: 8 },
-  premiumOfferBadge: {
-    backgroundColor: '#ef4444',
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 12,
-  },
-  premiumOfferText: { color: '#fff', fontSize: 11, fontWeight: '700' },
-  premiumTitle: { color: '#fff', fontSize: 17, fontWeight: '700' },
-  premiumSubtitle: { color: 'rgba(255,255,255,0.9)', fontSize: 14, fontWeight: '600', marginTop: 2 },
-  premiumDescription: { color: 'rgba(255,255,255,0.7)', fontSize: 12, marginTop: 6, lineHeight: 18 },
-  premiumButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start' as any,
-    marginTop: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
     gap: 6,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4 },
+      android: { elevation: 1 },
+    }),
   },
-  premiumButtonText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+  subcatCircle: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  subcatLabel: { fontSize: 11, textAlign: 'center', fontWeight: '500', lineHeight: 14 },
 
-  // ═══ FAB ═══
+  // ── Subcategory modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingBottom: Platform.OS === 'ios' ? 32 : 20,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.12, shadowRadius: 16 },
+      android: { elevation: 20 },
+    }),
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(0,0,0,0.08)',
+  },
+  modalTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+  modalIconCircle: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  modalTitle: { fontSize: 16, fontWeight: '700', flex: 1 },
+  modalCloseBtn: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.06)',
+    alignItems: 'center', justifyContent: 'center',
+    marginLeft: 8,
+  },
+  modalGrid: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 },
+
+  // ── Horizontal scroll cards (My Projects / My Small Tasks)
+  scrollCardsContent: {
+    paddingHorizontal: H_PAD,
+    paddingVertical: 4,
+    paddingEnd: H_PAD,
+  },
+  scrollCard: {
+    width: CARD_SCROLL_WIDTH,
+    marginEnd: CARD_GAP,
+    borderRadius: CARD_R,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 6 },
+      android: { elevation: 3 },
+    }),
+  },
+
+  // ── Grid cards (legacy / modal)
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  gridCard: {
+    width: CARD_HALF,
+    borderRadius: CARD_R,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 6 },
+      android: { elevation: 3 },
+    }),
+  },
+  gradWrap: { padding: 12, minHeight: 148 },
+  cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 4 },
+  cardNum: { fontSize: 12 },
+  pill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 10,
+    gap: 4,
+    flexShrink: 1,
+  },
+  pillDot: { width: 5, height: 5, borderRadius: 3 },
+  pillTxt: { fontSize: 10, fontWeight: '600' },
+  cardTitle: { fontSize: 13, fontWeight: '700', marginBottom: 7, lineHeight: 17, minHeight: 34 },
+  cardBudget: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 4 },
+  riyalCircle: { width: 18, height: 18, borderRadius: 9, backgroundColor: 'rgba(22,163,74,0.15)', alignItems: 'center', justifyContent: 'center' },
+  riyalTxt: { fontSize: 10, fontWeight: '700', color: '#16A34A' },
+  budgetTxt: { fontSize: 13, fontWeight: '700', color: '#16A34A' },
+  cardUser: { fontSize: 11, marginBottom: 3 },
+  cardMeta: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  cardMetaTxt: { fontSize: 10, flex: 1 },
+
+  // ── Empty state
+  emptyCard: {
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    gap: 10,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 6 },
+      android: { elevation: 2 },
+    }),
+  },
+  emptyTitle: { fontSize: 14, fontWeight: '700', textAlign: 'center' },
+  emptyBody: { fontSize: 12, textAlign: 'center', lineHeight: 18 },
+
+  // ── FAB
   fab: {
     position: 'absolute',
-    right: 20,
     bottom: 20,
     width: 56,
     height: 56,
     borderRadius: 28,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  fabGradient: {
-    width: '100%',
-    height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-
-  // ═══ Fixed Chat FAB (Bottom Left) ═══
-  chatFab: {
-    position: 'absolute',
-    right: 20,
-    bottom: 100,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
     ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 8,
-      },
-      web: {
-        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)' as any,
-      },
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8 },
+      android: { elevation: 8 },
     }),
-  },
-  chatFabBadge: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    backgroundColor: '#10b981',
-    borderRadius: 12,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    minWidth: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#fff',
-  },
-  chatFabBadgeText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '700',
   },
 });

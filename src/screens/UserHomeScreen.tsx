@@ -962,6 +962,18 @@ export default function UserHomeScreen({
                 setActiveTab('projects');
                 setCurrentProjectsFilter('running');
               }}
+              onPressCreateProject={(serviceId) => {
+                setActiveTab('new');
+                setNewProjectSubView('ai');
+              }}
+              onPressCreateSmallTask={(taskTypeId) => {
+                setActiveTab('new');
+                setNewProjectSubView('ai');
+              }}
+              onPressMySmallTasks={() => {
+                setActiveTab('projects');
+                setCurrentProjectsFilter('available');
+              }}
             />
           )
         )}
@@ -2064,6 +2076,18 @@ export default function UserHomeScreen({
                 console.log('🔵 [UserHomeScreen] Project clicked from home (web), id:', projectId);
                 setActiveTab('projects');
                 setCurrentProjectsFilter('running');
+              }}
+              onPressCreateProject={(serviceId) => {
+                setActiveTab('new');
+                setNewProjectSubView('ai');
+              }}
+              onPressCreateSmallTask={(taskTypeId) => {
+                setActiveTab('new');
+                setNewProjectSubView('ai');
+              }}
+              onPressMySmallTasks={() => {
+                setActiveTab('projects');
+                setCurrentProjectsFilter('available');
               }}
             />
           )

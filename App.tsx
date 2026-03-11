@@ -366,8 +366,19 @@ export default function App() {
         msg.includes('Could not load bundle') ||
         msg.includes('LoadBundleFromServerRequestError') ||
         error?.name === 'LoadBundleFromServerRequestError';
+      const isNetworkError =
+        msg.includes('Network request failed') ||
+        msg.includes('Failed to fetch') ||
+        msg.toLowerCase().includes('network');
       if (!isBundleError) {
-        console.error('❌ Failed to check for new notifications:', error);
+        if (isNetworkError) {
+          // Backend unreachable or device offline – expected when API is down or no connection
+          if (__DEV__) {
+            console.warn('⚠️ Notifications check skipped (network unreachable). Will retry.');
+          }
+        } else {
+          console.error('❌ Failed to check for new notifications:', error);
+        }
       }
     }
   };
