@@ -9,7 +9,7 @@
  *               or submit a bid.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -109,7 +109,7 @@ interface PendingProjectScreenProps {
   onBidNow?: () => void;
 }
 
-// ===== PHASE CARD COMPONENT =====
+// ===== PHASE CARD COMPONENT (theme-aware) =====
 const PhaseCard = ({
   phase,
   formatBudget,
@@ -118,7 +118,39 @@ const PhaseCard = ({
   formatBudget: (amount: number) => string;
 }) => {
   const { t } = useTranslation();
-  
+  const { colors } = useTheme();
+  const c = useMemo(() => ({
+    ...COLORS,
+    bgWhite: colors.cardBackground,
+    textBody: colors.text,
+    textSecondary: colors.textSecondary,
+    primary10: colors.primary + '20',
+    primary80: colors.primary,
+    green80: colors.success,
+  }), [colors]);
+  const phaseStyles = useMemo(() => StyleSheet.create({
+    card: {
+      borderWidth: 1,
+      borderColor: c.primary10,
+      borderRadius: 8,
+      padding: 16,
+      marginBottom: 10,
+      gap: 16,
+      backgroundColor: c.bgWhite,
+    },
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 6 },
+    headerLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
+    numberBadge: {
+      width: 24, height: 24, borderRadius: 6, backgroundColor: c.primary10, justifyContent: 'center', alignItems: 'center',
+    },
+    numberText: { fontSize: 12, fontWeight: '400', color: c.primary80 },
+    title: { fontSize: 12, fontWeight: '400', color: c.textBody, flex: 1 },
+    price: { fontSize: 10, fontWeight: '600', color: c.green80 },
+    description: { fontSize: 12, fontWeight: '400', color: c.textBody, lineHeight: 18 },
+    durationRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    durationText: { fontSize: 12, fontWeight: '400', color: c.textSecondary },
+  }), [c]);
+
   return (
     <View style={phaseStyles.card}>
       <View style={phaseStyles.header}>
@@ -130,84 +162,14 @@ const PhaseCard = ({
         </View>
         <Text style={phaseStyles.price}>{formatBudget(phase.moneySpent)}</Text>
       </View>
-      
-      <Text style={phaseStyles.description} numberOfLines={3}>
-        {phase.description}
-      </Text>
-      
+      <Text style={phaseStyles.description} numberOfLines={3}>{phase.description}</Text>
       <View style={phaseStyles.durationRow}>
-        <Ionicons name="time-outline" size={12} color={COLORS.textSecondary} />
-        <Text style={phaseStyles.durationText}>
-          {Math.ceil(phase.timeSpentDays / 7)} {t('Week')}
-        </Text>
+        <Ionicons name="time-outline" size={12} color={c.textSecondary} />
+        <Text style={phaseStyles.durationText}>{Math.ceil(phase.timeSpentDays / 7)} {t('Week')}</Text>
       </View>
     </View>
   );
 };
-
-const phaseStyles = StyleSheet.create({
-  card: {
-    borderWidth: 1,
-    borderColor: COLORS.primary10,
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 10,
-    gap: 16,
-    backgroundColor: COLORS.bgWhite,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: 6,
-  },
-  headerLeft: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  numberBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    backgroundColor: COLORS.primary10,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  numberText: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: COLORS.primary80,
-  },
-  title: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: COLORS.textBody,
-    flex: 1,
-  },
-  price: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: COLORS.green80,
-  },
-  description: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: COLORS.textBody,
-    lineHeight: 18,
-  },
-  durationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  durationText: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: COLORS.textSecondary,
-  },
-});
 
 // ===== MAIN COMPONENT =====
 export default function PendingProjectScreen({
@@ -224,6 +186,27 @@ export default function PendingProjectScreen({
   const { colors } = useTheme();
   const { fontFamily, scaledSize } = useFontFamily();
   const insets = useSafeAreaInsets();
+  const c = useMemo(() => ({
+    ...COLORS,
+    bgWhite: colors.cardBackground,
+    textHeader: colors.text,
+    textBody: colors.text,
+    textSecondary: colors.textSecondary,
+    textDividers: colors.border,
+    primary10: colors.primary + '20',
+    primary60: colors.primary,
+    primary70: colors.primary,
+    primary80: colors.primary,
+    primary100: colors.primary,
+    textWhite: colors.white,
+    green10: colors.success + '20',
+    green80: colors.success,
+    green90: colors.success,
+    purple10: colors.cardBackground,
+    purple100: colors.text,
+    amber10: colors.warning + '25',
+    amber60: colors.warning,
+  }), [colors]);
   const [phases, setPhases] = useState<Phase[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [visitRequests, setVisitRequests] = useState<VisitRequest[]>([]);
@@ -422,11 +405,13 @@ export default function PendingProjectScreen({
     }
   };
 
+  const styles = useMemo(() => makeStyles(c), [c]);
+
   if (isLoading) {
     return (
-      <View style={[styles.container, { backgroundColor: COLORS.bgWhite, paddingTop: insets.top }]}>
+      <View style={[styles.container, { backgroundColor: c.bgWhite, paddingTop: insets.top }]}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={COLORS.primary60} />
+          <ActivityIndicator size="large" color={c.primary60} />
           <Text style={[styles.loadingText, { fontSize: scaledSize(14) }]}>{t('Loading project...')}</Text>
         </View>
       </View>
@@ -434,12 +419,12 @@ export default function PendingProjectScreen({
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: COLORS.bgWhite, paddingTop: IS_LARGE_WEB ? 0 : insets.top }]}>
+    <View style={[styles.container, { backgroundColor: c.bgWhite, paddingTop: IS_LARGE_WEB ? 0 : insets.top }]}>
       {/* Header - Hidden on large web */}
       {!IS_LARGE_WEB && (
         <View style={[styles.header]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={24} color={COLORS.textBody} />
+          <Ionicons name="chevron-back" size={24} color={c.textBody} />
         </TouchableOpacity>
         <View style={styles.headerTitleContainer}>
             <Text style={[styles.headerTitle, { fontSize: scaledSize(16) }]}>
@@ -465,7 +450,7 @@ export default function PendingProjectScreen({
         {IS_LARGE_WEB && (
           <View style={styles.titleSectionLargeWeb}>
             <TouchableOpacity onPress={onBack} style={styles.titleBackButton}>
-              <Ionicons name="chevron-back" size={24} color={COLORS.textHeader} />
+              <Ionicons name="chevron-back" size={24} color={c.textHeader} />
             </TouchableOpacity>
             <View style={styles.titleContainer}>
               <Text style={[styles.titleMainText, { fontSize: scaledSize(42) }]}>
@@ -489,9 +474,9 @@ export default function PendingProjectScreen({
         <View style={styles.section}>
           <Text style={[styles.sectionHeaderTitle, { fontSize: scaledSize(16) }]}>{t('Project Overview')}</Text>
           <View style={[styles.requestIdCreatedRow, { flexDirection: i18n.language === 'ar' ? 'row-reverse' : 'row' }]}>
-            <Text style={[styles.requestIdText, { color: COLORS.textSecondary }]}>#{project.id}</Text>
+            <Text style={[styles.requestIdText, { color: c.textSecondary }]}>#{project.id}</Text>
             {project.createdAt ? (
-              <Text style={[styles.createdText, { color: COLORS.textSecondary }]}>
+              <Text style={[styles.createdText, { color: c.textSecondary }]}>
                 {t('Created')}: {formatDate(project.createdAt)}
               </Text>
             ) : null}
@@ -507,7 +492,7 @@ export default function PendingProjectScreen({
           <View style={[styles.statsRow, IS_LARGE_WEB && styles.statsRowLargeWeb]}>
             <View style={[styles.statCard, styles.budgetCard, IS_LARGE_WEB && styles.statCardLargeWeb]}>
               <View style={[styles.statHeader, IS_LARGE_WEB && styles.statHeaderLargeWeb]}>
-                <Ionicons name="cash-outline" size={IS_LARGE_WEB ? 20 : 12} color={COLORS.primary80} />
+                <Ionicons name="cash-outline" size={IS_LARGE_WEB ? 20 : 12} color={c.primary80} />
                 <Text style={[styles.statTitle, IS_LARGE_WEB && styles.statTitleLargeWeb]}>
                   {t('Total Budget')}
                 </Text>
@@ -518,8 +503,8 @@ export default function PendingProjectScreen({
             </View>
             <View style={[styles.statCard, styles.durationCard, IS_LARGE_WEB && styles.statCardLargeWeb]}>
               <View style={[styles.statHeader, IS_LARGE_WEB && styles.statHeaderLargeWeb]}>
-                <Ionicons name="time-outline" size={IS_LARGE_WEB ? 20 : 12} color={COLORS.green90} />
-                <Text style={[styles.statTitle, { color: COLORS.green90 }, IS_LARGE_WEB && styles.statTitleLargeWeb]}>
+                <Ionicons name="time-outline" size={IS_LARGE_WEB ? 20 : 12} color={c.green90} />
+                <Text style={[styles.statTitle, { color: c.green90 }, IS_LARGE_WEB && styles.statTitleLargeWeb]}>
                   {t('Duration')}
                 </Text>
               </View>
@@ -533,7 +518,7 @@ export default function PendingProjectScreen({
         {/* Description Section */}
         <View style={styles.section}>
           <View style={[styles.sectionHeader, IS_LARGE_WEB && styles.sectionHeaderLargeWeb]}>
-            <Ionicons name="document-text-outline" size={IS_LARGE_WEB ? 24 : 12} color={COLORS.primary80} />
+            <Ionicons name="document-text-outline" size={IS_LARGE_WEB ? 24 : 12} color={c.primary80} />
             <Text style={[styles.sectionLabel, IS_LARGE_WEB && styles.sectionLabelLargeWeb]}>
               {t('Description')}
             </Text>
@@ -548,7 +533,7 @@ export default function PendingProjectScreen({
         {/* Address Section */}
         <View style={styles.section}>
           <View style={[styles.sectionHeader, IS_LARGE_WEB && styles.sectionHeaderLargeWeb]}>
-            <Ionicons name="location-outline" size={IS_LARGE_WEB ? 24 : 12} color={COLORS.primary80} />
+            <Ionicons name="location-outline" size={IS_LARGE_WEB ? 24 : 12} color={c.primary80} />
             <Text style={[styles.sectionLabel, IS_LARGE_WEB && styles.sectionLabelLargeWeb]}>
               {t('Project Address')}
             </Text>
@@ -564,28 +549,28 @@ export default function PendingProjectScreen({
         {!isTechnician && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Ionicons name="options-outline" size={12} color={COLORS.primary80} />
+              <Ionicons name="options-outline" size={12} color={c.primary80} />
               <Text style={styles.sectionLabel}>{t('Project Options')}</Text>
             </View>
             <View style={styles.optionsContainer}>
               {/* Needs House Visit */}
               <View style={styles.optionRow}>
                 <View style={styles.optionInfo}>
-                  <Ionicons name="home-outline" size={16} color={COLORS.primary80} />
+                  <Ionicons name="home-outline" size={16} color={c.primary80} />
                   <Text style={styles.optionLabel}>{t('Needs House Visit')}</Text>
                 </View>
                 <View style={[
                   styles.optionBadge,
-                  { backgroundColor: needsVisit ? COLORS.green10 : COLORS.primary10 }
+                  { backgroundColor: needsVisit ? c.green10 : c.primary10 }
                 ]}>
                   <Ionicons 
                     name={needsVisit ? "checkmark-circle" : "close-circle"} 
                     size={14} 
-                    color={needsVisit ? COLORS.green80 : COLORS.textSecondary} 
+                    color={needsVisit ? c.green80 : c.textSecondary} 
                   />
                   <Text style={[
                     styles.optionBadgeText,
-                    { color: needsVisit ? COLORS.green80 : COLORS.textSecondary }
+                    { color: needsVisit ? c.green80 : c.textSecondary }
                   ]}>
                     {needsVisit ? t('Yes') : t('No')}
                   </Text>
@@ -595,21 +580,21 @@ export default function PendingProjectScreen({
               {/* Needs Booking */}
               <View style={styles.optionRow}>
                 <View style={styles.optionInfo}>
-                  <Ionicons name="calendar-outline" size={16} color={COLORS.primary80} />
+                  <Ionicons name="calendar-outline" size={16} color={c.primary80} />
                   <Text style={styles.optionLabel}>{t('Needs Booking')}</Text>
                 </View>
                 <View style={[
                   styles.optionBadge,
-                  { backgroundColor: needsBooking ? COLORS.green10 : COLORS.primary10 }
+                  { backgroundColor: needsBooking ? c.green10 : c.primary10 }
                 ]}>
                   <Ionicons 
                     name={needsBooking ? "checkmark-circle" : "close-circle"} 
                     size={14} 
-                    color={needsBooking ? COLORS.green80 : COLORS.textSecondary} 
+                    color={needsBooking ? c.green80 : c.textSecondary} 
                   />
                   <Text style={[
                     styles.optionBadgeText,
-                    { color: needsBooking ? COLORS.green80 : COLORS.textSecondary }
+                    { color: needsBooking ? c.green80 : c.textSecondary }
                   ]}>
                     {needsBooking ? t('Yes') : t('No')}
                   </Text>
@@ -623,18 +608,18 @@ export default function PendingProjectScreen({
         {!isTechnician && (
           <View style={[styles.section, styles.visitRequestsSection]}>
             <View style={styles.sectionHeader}>
-              <Ionicons name="home-outline" size={12} color={COLORS.amber60} />
-              <Text style={[styles.sectionLabel, { color: COLORS.amber60 }]}>{t('Visit Requests')}</Text>
+              <Ionicons name="home-outline" size={12} color={c.amber60} />
+              <Text style={[styles.sectionLabel, { color: c.amber60 }]}>{t('Visit Requests')}</Text>
             </View>
 
             {isLoadingVisits ? (
               <View style={styles.inlineLoadingRow}>
-                <ActivityIndicator size="small" color={COLORS.primary60} />
+                <ActivityIndicator size="small" color={c.primary60} />
                 <Text style={styles.inlineLoadingText}>{t('Loading visits...')}</Text>
               </View>
             ) : visitsError ? (
               <View style={styles.errorBox}>
-                <Ionicons name="alert-circle-outline" size={16} color={COLORS.purple100} />
+                <Ionicons name="alert-circle-outline" size={16} color={c.purple100} />
                 <Text style={styles.errorText}>{visitsError}</Text>
               </View>
             ) : visitRequests.length === 0 ? (
@@ -648,15 +633,15 @@ export default function PendingProjectScreen({
                   const status = (vr.status || '').toUpperCase();
                   const isApproved = status === 'APPROVED' || status === 'ACCEPTED';
                   const isRejected = status === 'REJECTED' || status === 'DECLINED';
-                  const badgeBg = isApproved ? COLORS.green10 : isRejected ? COLORS.purple10 : COLORS.primary10;
-                  const badgeText = isApproved ? COLORS.green90 : isRejected ? COLORS.purple100 : COLORS.primary80;
+                  const badgeBg = isApproved ? c.green10 : isRejected ? c.purple10 : c.primary10;
+                  const badgeText = isApproved ? c.green90 : isRejected ? c.purple100 : c.primary80;
 
                   return (
                     <View key={vr.id} style={styles.visitCard}>
                       <View style={styles.visitCardHeader}>
                         <View style={styles.visitCardHeaderLeft}>
-                          <View style={[styles.visitAvatar, { backgroundColor: COLORS.primary10 }]}>
-                            <Ionicons name="person-outline" size={14} color={COLORS.primary80} />
+                          <View style={[styles.visitAvatar, { backgroundColor: c.primary10 }]}>
+                            <Ionicons name="person-outline" size={14} color={c.primary80} />
                           </View>
                           <View style={{ flex: 1 }}>
                             <Text style={styles.visitTechnicianName} numberOfLines={1}>
@@ -675,14 +660,14 @@ export default function PendingProjectScreen({
                       </View>
 
                       <View style={styles.visitDatesRow}>
-                        <Ionicons name="calendar-outline" size={12} color={COLORS.textSecondary} />
+                        <Ionicons name="calendar-outline" size={12} color={c.textSecondary} />
                         <Text style={styles.visitDateText}>
                           {t('Requested On')}: {formatDate(vr.createdAt)}
                         </Text>
                       </View>
                       {!!vr.requestedDate && (
                         <View style={styles.visitDatesRow}>
-                          <Ionicons name="time-outline" size={12} color={COLORS.textSecondary} />
+                          <Ionicons name="time-outline" size={12} color={c.textSecondary} />
                           <Text style={styles.visitDateText}>
                             {t('Requested Date')}: {formatDate(vr.requestedDate)}
                           </Text>
@@ -705,7 +690,7 @@ export default function PendingProjectScreen({
                             setBookingModalVisible(true);
                           }}
                         >
-                          <Ionicons name="calendar-outline" size={14} color={COLORS.textWhite} />
+                          <Ionicons name="calendar-outline" size={14} color={c.textWhite} />
                           <Text style={styles.bookButtonText}>{t('Book')}</Text>
                         </TouchableOpacity>
                       )}
@@ -721,7 +706,7 @@ export default function PendingProjectScreen({
         {project.requirements && project.requirements.length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Ionicons name="document-text-outline" size={12} color={COLORS.primary80} />
+              <Ionicons name="document-text-outline" size={12} color={c.primary80} />
               <Text style={styles.sectionLabel}>{t('Requirements')}</Text>
             </View>
             <View style={styles.descriptionBox}>
@@ -739,7 +724,7 @@ export default function PendingProjectScreen({
         {phases.length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Ionicons name="document-text-outline" size={12} color={COLORS.primary80} />
+              <Ionicons name="document-text-outline" size={12} color={c.primary80} />
               <Text style={styles.sectionLabel}>{t('Work Phases')}</Text>
             </View>
             {phases.map((phase) => (
@@ -846,7 +831,8 @@ export default function PendingProjectScreen({
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(c: typeof COLORS) {
+  return StyleSheet.create({
   container: {
     flex: 1,
   },
@@ -882,7 +868,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: COLORS.textHeader,
+    color: c.textHeader,
   },
   headerTitleLargeWeb: {
     fontSize: 34,
@@ -891,7 +877,7 @@ const styles = StyleSheet.create({
   headerSubtitle: {
     fontSize: 10,
     fontWeight: '300',
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
   },
   headerSubtitleLargeWeb: {
     fontSize: 16,
@@ -906,7 +892,7 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: COLORS.textDividers,
+    backgroundColor: c.textDividers,
     marginHorizontal: 16,
     marginTop: 8,
   },
@@ -939,7 +925,7 @@ const styles = StyleSheet.create({
   sectionHeaderTitle: {
     fontSize: 16,
     fontWeight: '400',
-    color: COLORS.textHeader,
+    color: c.textHeader,
     marginBottom: 12,
   },
   requestIdCreatedRow: {
@@ -959,7 +945,7 @@ const styles = StyleSheet.create({
   sectionDescription: {
     fontSize: 14,
     fontWeight: '300',
-    color: COLORS.textBody,
+    color: c.textBody,
     lineHeight: 21,
     marginBottom: 16,
   },
@@ -993,12 +979,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   budgetCard: {
-    backgroundColor: COLORS.primary10,
-    borderColor: COLORS.textHeader,
+    backgroundColor: c.primary10,
+    borderColor: c.textHeader,
   },
   durationCard: {
-    backgroundColor: COLORS.green10,
-    borderColor: COLORS.green80,
+    backgroundColor: c.green10,
+    borderColor: c.green80,
   },
   statHeader: {
     flexDirection: 'row',
@@ -1008,12 +994,12 @@ const styles = StyleSheet.create({
   statTitle: {
     fontSize: 12,
     fontWeight: '400',
-    color: COLORS.primary80,
+    color: c.primary80,
   },
   statValue: {
     fontSize: 12,
     fontWeight: '400',
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -1028,14 +1014,14 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 12,
     fontWeight: '400',
-    color: COLORS.primary80,
+    color: c.primary80,
   },
   sectionLabelLargeWeb: {
     fontSize: 16,
   },
   descriptionBox: {
     borderWidth: 0.5,
-    borderColor: COLORS.textDividers,
+    borderColor: c.textDividers,
     borderRadius: 6,
     padding: 16,
   },
@@ -1046,7 +1032,7 @@ const styles = StyleSheet.create({
   descriptionText: {
     fontSize: 12,
     fontWeight: '400',
-    color: COLORS.textBody,
+    color: c.textBody,
     lineHeight: 18,
   },
   descriptionTextLargeWeb: {
@@ -1061,13 +1047,13 @@ const styles = StyleSheet.create({
   },
   bulletPoint: {
     fontSize: 12,
-    color: COLORS.textBody,
+    color: c.textBody,
   },
   requirementText: {
     flex: 1,
     fontSize: 12,
     fontWeight: '400',
-    color: COLORS.textBody,
+    color: c.textBody,
     lineHeight: 18,
   },
   optionsContainer: {
@@ -1077,9 +1063,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: COLORS.bgWhite,
+    backgroundColor: c.bgWhite,
     borderWidth: 0.5,
-    borderColor: COLORS.textDividers,
+    borderColor: c.textDividers,
     borderRadius: 8,
     padding: 16,
   },
@@ -1091,7 +1077,7 @@ const styles = StyleSheet.create({
   optionLabel: {
     fontSize: 14,
     fontWeight: '400',
-    color: COLORS.textBody,
+    color: c.textBody,
   },
   optionBadge: {
     flexDirection: 'row',
@@ -1106,9 +1092,9 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   visitRequestsSection: {
-    backgroundColor: COLORS.amber10,
+    backgroundColor: c.amber10,
     borderWidth: 0.5,
-    borderColor: COLORS.amber60,
+    borderColor: c.amber60,
     borderRadius: 8,
     padding: 12,
   },
@@ -1121,7 +1107,7 @@ const styles = StyleSheet.create({
   inlineLoadingText: {
     fontSize: 12,
     fontWeight: '400',
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
   },
   errorBox: {
     flexDirection: 'row',
@@ -1129,33 +1115,33 @@ const styles = StyleSheet.create({
     gap: 8,
     padding: 12,
     borderRadius: 8,
-    backgroundColor: COLORS.purple10,
+    backgroundColor: c.purple10,
     borderWidth: 0.5,
-    borderColor: COLORS.purple100,
+    borderColor: c.purple100,
   },
   errorText: {
     flex: 1,
     fontSize: 12,
     fontWeight: '400',
-    color: COLORS.purple100,
+    color: c.purple100,
   },
   emptyBox: {
     padding: 16,
     borderRadius: 8,
     borderWidth: 0.5,
-    borderColor: COLORS.amber60,
-    backgroundColor: COLORS.bgWhite,
+    borderColor: c.amber60,
+    backgroundColor: c.bgWhite,
     gap: 6,
   },
   emptyBoxTitle: {
     fontSize: 12,
     fontWeight: '600',
-    color: COLORS.textBody,
+    color: c.textBody,
   },
   emptyBoxSubtext: {
     fontSize: 12,
     fontWeight: '400',
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
     lineHeight: 18,
   },
   visitList: {
@@ -1163,10 +1149,10 @@ const styles = StyleSheet.create({
   },
   visitCard: {
     borderWidth: 1,
-    borderColor: COLORS.amber60,
+    borderColor: c.amber60,
     borderRadius: 8,
     padding: 16,
-    backgroundColor: COLORS.bgWhite,
+    backgroundColor: c.bgWhite,
     gap: 12,
   },
   visitCardHeader: {
@@ -1191,12 +1177,12 @@ const styles = StyleSheet.create({
   visitTechnicianName: {
     fontSize: 14,
     fontWeight: '600',
-    color: COLORS.textBody,
+    color: c.textBody,
   },
   visitMetaText: {
     fontSize: 10,
     fontWeight: '300',
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
     marginTop: 2,
   },
   visitStatusBadge: {
@@ -1216,32 +1202,32 @@ const styles = StyleSheet.create({
   visitDateText: {
     fontSize: 12,
     fontWeight: '400',
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
   },
   visitNotesBox: {
     borderWidth: 0.5,
-    borderColor: COLORS.amber60,
+    borderColor: c.amber60,
     borderRadius: 8,
     padding: 12,
-    backgroundColor: COLORS.amber10,
+    backgroundColor: c.amber10,
     gap: 6,
   },
   visitNotesLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: COLORS.amber60,
+    color: c.amber60,
   },
   visitNotesText: {
     fontSize: 12,
     fontWeight: '400',
-    color: COLORS.textBody,
+    color: c.textBody,
     lineHeight: 18,
   },
   bookButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.primary60,
+    backgroundColor: c.primary60,
     borderRadius: 8,
     padding: 12,
     marginTop: 12,
@@ -1250,7 +1236,7 @@ const styles = StyleSheet.create({
   bookButtonText: {
     fontSize: 12,
     fontWeight: '400',
-    color: COLORS.textWhite,
+    color: c.textWhite,
   },
   actionButtons: {
     gap: 12,
@@ -1262,7 +1248,7 @@ const styles = StyleSheet.create({
     marginTop: 32,
   },
   primaryButton: {
-    backgroundColor: COLORS.primary60,
+    backgroundColor: c.primary60,
     borderRadius: 8,
     padding: 16,
     alignItems: 'center',
@@ -1277,7 +1263,7 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     fontSize: 16,
     fontWeight: '400',
-    color: COLORS.textWhite,
+    color: c.textWhite,
     textAlign: 'center',
   },
   primaryButtonTextLargeWeb: {
@@ -1285,9 +1271,9 @@ const styles = StyleSheet.create({
     fontWeight: '400',
   },
   secondaryButton: {
-    backgroundColor: COLORS.purple10,
+    backgroundColor: c.purple10,
     borderWidth: 1,
-    borderColor: COLORS.purple100,
+    borderColor: c.purple100,
     borderRadius: 8,
     padding: 16,
     alignItems: 'center',
@@ -1302,7 +1288,7 @@ const styles = StyleSheet.create({
   secondaryButtonText: {
     fontSize: 16,
     fontWeight: '400',
-    color: COLORS.purple100,
+    color: c.purple100,
     textAlign: 'center',
   },
   secondaryButtonTextLargeWeb: {
@@ -1318,7 +1304,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 14,
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
   },
   // Title Section - Large Web (Figma Design)
   titleSectionLargeWeb: {
@@ -1342,14 +1328,14 @@ const styles = StyleSheet.create({
   titleMainText: {
     fontSize: 42,
     fontWeight: '700',
-    color: COLORS.textHeader,
+    color: c.textHeader,
     lineHeight: 42,
   },
   titleSubtext: {
     fontSize: 20,
     fontWeight: '300',
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
     lineHeight: 20,
   },
-});
-
+  });
+}

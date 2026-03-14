@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform, Alert, ActivityIndicator, ScrollView, Image } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Platform, Alert, ActivityIndicator, ScrollView, Image, AppState } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
@@ -50,28 +50,54 @@ export default function VoiceAIScreen({ onBack }: VoiceAIScreenProps) {
   const scrollViewRef = useRef<ScrollView>(null);
   const webAudioRef = useRef<HTMLAudioElement | null>(null);
 
+  const soundRef = useRef<Audio.Sound | null>(null);
+  const recordingRef = useRef<any>(null);
+
+  // Keep refs in sync with state so the AppState listener always
+  // sees the latest instances without re-subscribing.
+  useEffect(() => { soundRef.current = sound; }, [sound]);
+  useEffect(() => { recordingRef.current = recording; }, [recording]);
+
+  const releaseAllAudio = useCallback(() => {
+    if (soundRef.current) {
+      soundRef.current.unloadAsync().catch(() => {});
+      soundRef.current = null;
+      setSound(null);
+    }
+    if (recordingRef.current) {
+      recordingRef.current.stopAndUnloadAsync().catch(() => {});
+      recordingRef.current = null;
+      setRecording(null);
+    }
+    if (webAudioRef.current) {
+      webAudioRef.current.pause();
+      webAudioRef.current = null;
+    }
+    setIsRecording(false);
+    setIsSpeaking(false);
+  }, []);
+
+  // Unload ExoPlayer when app goes to background to prevent the
+  // "Player is accessed on the wrong thread" crash in AVManager.onHostDestroy
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'background' || state === 'inactive') {
+        releaseAllAudio();
+      }
+    });
+    return () => sub.remove();
+  }, [releaseAllAudio]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (recordingTimeoutRef.current) {
         clearTimeout(recordingTimeoutRef.current);
       }
-      if (sound) {
-        sound.unloadAsync().catch(() => {
-          // Ignore errors if already unloaded
-        });
-      }
-      if (recording) {
-        recording.stopAndUnloadAsync().catch(() => {
-          // Ignore errors if already unloaded
-        });
-      }
-      if (webAudioRef.current) {
-        webAudioRef.current.pause();
-        webAudioRef.current = null;
-      }
+      releaseAllAudio();
     };
-  }, [sound, recording]);
+  }, [releaseAllAudio]);
 
   const startRecording = async () => {
     try {

@@ -8,7 +8,7 @@
  * - Technician: Can view project details and their submitted bid status
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -1024,8 +1024,33 @@ export default function BidReceivedProjectScreen({
   const { colors } = useTheme();
   const { fontFamily, scaledSize } = useFontFamily();
   const insets = useSafeAreaInsets();
+  const c = useMemo(() => ({
+    ...COLORS,
+    bgWhite: colors.cardBackground,
+    textHeader: colors.text,
+    textBody: colors.text,
+    textSecondary: colors.textSecondary,
+    textDividers: colors.border,
+    primary10: colors.primary + '20',
+    primary60: colors.primary,
+    primary70: colors.primary,
+    primary80: colors.primary,
+    primary100: colors.primary,
+    textWhite: colors.white,
+    green10: colors.success + '20',
+    green60: colors.success,
+    green80: colors.success,
+    green90: colors.success,
+    purple10: colors.cardBackground,
+    purple100: colors.text,
+    purple70: colors.primary,
+    purple60: colors.primary,
+    amber60: colors.warning,
+    amber70: colors.warning,
+  }), [colors]);
   const [bids, setBids] = useState<Bid[]>([]);
   const [visitRequests, setVisitRequests] = useState<VisitRequest[]>([]);
+  // Use theme-aware palette in JSX: use c. instead of COLORS. for container and inline colors
   const [phases, setPhases] = useState<Phase[]>([]);
   const [myBid, setMyBid] = useState<Bid | null>(null);
   const [isMyBidModalVisible, setIsMyBidModalVisible] = useState(false);
@@ -1717,9 +1742,9 @@ export default function BidReceivedProjectScreen({
 
   if (isLoading) {
     return (
-      <View style={[styles.container, { backgroundColor: COLORS.bgWhite, paddingTop: insets.top }]}>
+      <View style={[styles.container, { backgroundColor: c.bgWhite, paddingTop: insets.top }]}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={COLORS.primary60} />
+          <ActivityIndicator size="large" color={c.primary60} />
           <Text style={[styles.loadingText, { fontSize: scaledSize(14) }]}>{t('Loading...')}</Text>
         </View>
       </View>
@@ -1727,12 +1752,12 @@ export default function BidReceivedProjectScreen({
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: COLORS.bgWhite, paddingTop: IS_LARGE_WEB ? 0 : insets.top }]}>
+    <View style={[styles.container, { backgroundColor: c.bgWhite, paddingTop: IS_LARGE_WEB ? 0 : insets.top }]}>
       {/* Header - Hidden on large web */}
       {!IS_LARGE_WEB && (
       <View style={styles.header}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={24} color={COLORS.textHeader} />
+          <Ionicons name="chevron-back" size={24} color={c.textHeader} />
         </TouchableOpacity>
         <View style={styles.headerTitleContainer}>
             <Text style={[styles.headerTitle, { fontSize: scaledSize(16) }]}>
@@ -1758,7 +1783,7 @@ export default function BidReceivedProjectScreen({
         {IS_LARGE_WEB && (
           <View style={styles.titleSectionLargeWeb}>
             <TouchableOpacity onPress={onBack} style={styles.titleBackButton}>
-              <Ionicons name="chevron-back" size={24} color={COLORS.textHeader} />
+              <Ionicons name="chevron-back" size={24} color={c.textHeader} />
             </TouchableOpacity>
             <View style={styles.titleContainer}>
               <Text style={[styles.titleMainText, { fontSize: scaledSize(42) }]}>

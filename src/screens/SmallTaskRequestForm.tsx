@@ -9,17 +9,26 @@ import {
   ActivityIndicator,
   Animated,
   Platform,
-  Alert,
+  Dimensions,
 } from 'react-native';
-import { Image as ExpoImage } from 'expo-image';
 import { useTranslation } from 'react-i18next';
-import { Ionicons, Feather } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createSmallTaskRequest, type SmallTaskType, type CreateSmallTaskRequestBody } from '../services/SmallTaskService';
 import { storage } from '../utils/storage';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
 import LocationPicker from '../components/LocationPicker';
+import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+
+// iOS-matching design colors
+const COLORS = {
+  primaryLight: '#1A6DB4',
+  primaryDark: '#4D8EC5',
+  borderLight: 'rgba(26, 109, 180, 0.2)',
+  borderDark: 'rgba(77, 142, 197, 0.3)',
+  success: '#28A745',
+};
 
 interface SmallTaskRequestFormProps {
   taskType: SmallTaskType;
@@ -37,12 +46,12 @@ export default function SmallTaskRequestForm({
   const insets = useSafeAreaInsets();
   const isRTL = i18n.language === 'ar';
   const isDarkMode = theme === 'dark';
+  const screenWidth = Dimensions.get('window').width;
+  
   const [description, setDescription] = useState('');
   const [address, setAddress] = useState('');
   const [latitude, setLatitude] = useState<number | null>(null);
   const [longitude, setLongitude] = useState<number | null>(null);
-  const [budget, setBudget] = useState('');
-  const [duration, setDuration] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showMapPicker, setShowMapPicker] = useState(false);
   
@@ -51,28 +60,10 @@ export default function SmallTaskRequestForm({
 
   const { alertState, showError, showSuccess, hideAlert } = useAlertPopup();
 
-  const riyalLogo = theme === 'dark'
-    ? require('../../assets/saudi_riyal_logo_dark.svg')
-    : require('../../assets/saudi_riyal_logo.svg');
-
-  const formatBudget = (budget: number) => {
-    return new Intl.NumberFormat('en-US').format(budget);
-  };
-
-  const formatDuration = (minutes: number) => {
-    if (minutes < 60) {
-      return `${minutes} ${t('min')}`;
-    }
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    if (mins === 0) {
-      return `${hours} ${t('hour')}${hours > 1 ? 's' : ''}`;
-    }
-    return `${hours}h ${mins}m`;
-  };
+  const primaryColor = isDarkMode ? COLORS.primaryDark : COLORS.primaryLight;
+  const borderColor = isDarkMode ? COLORS.borderDark : COLORS.borderLight;
 
   useEffect(() => {
-    // Entrance animation
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -88,26 +79,30 @@ export default function SmallTaskRequestForm({
     ]).start();
   }, []);
 
+  const isFormValid = 
+    description.trim().length > 0 && 
+    description.length <= 1000 && 
+    address.trim().length > 0;
+
   const handleSubmit = async () => {
     setIsSubmitting(true);
 
     try {
       const token = await storage.getAuthToken();
       if (!token) {
-        showError(t('Please login again'), t('Error'));
+        showError(t('authentication_required'), t('error'));
         setIsSubmitting(false);
         return;
       }
 
       if (!description.trim()) {
-        showError(t('Please enter a description'), t('Validation Error'));
+        showError(t('describe_task_requirements'), t('validation_error'));
         setIsSubmitting(false);
         return;
       }
 
-      // Align with web: description + location (lat/long) required; address optional
-      if (latitude == null || longitude == null) {
-        showError(t('Please select location on map'), t('Validation Error'));
+      if (!address.trim()) {
+        showError(t('enter_service_address'), t('validation_error'));
         setIsSubmitting(false);
         return;
       }
@@ -115,14 +110,14 @@ export default function SmallTaskRequestForm({
       const body: CreateSmallTaskRequestBody = {
         taskTypeId: taskType.id,
         description: description.trim(),
-        address: address.trim() || undefined,
-        latitude,
-        longitude,
+        address: address.trim(),
+        latitude: latitude ?? undefined,
+        longitude: longitude ?? undefined,
       };
 
       await createSmallTaskRequest(body);
 
-      showSuccess(t('Small task request created successfully'), t('Success'));
+      showSuccess(t('request_submitted_successfully'), t('success'));
 
       Animated.parallel([
         Animated.timing(fadeAnim, {
@@ -142,12 +137,20 @@ export default function SmallTaskRequestForm({
       });
     } catch (error: any) {
       console.error('Error creating small task request:', error);
-      showError(error.message || t('Error creating task request'), t('Error'));
+      showError(error.message || t('failed_to_submit_request'), t('error'));
       setIsSubmitting(false);
     }
   };
 
   const taskName = i18n.language === 'ar' ? taskType.nameAr : taskType.nameEn;
+
+  // Default map region (Riyadh)
+  const mapRegion = {
+    latitude: latitude ?? 24.7136,
+    longitude: longitude ?? 46.6753,
+    latitudeDelta: 0.01,
+    longitudeDelta: 0.01,
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -160,27 +163,16 @@ export default function SmallTaskRequestForm({
           flexDirection: isRTL ? 'row-reverse' : 'row',
         }
       ]}>
-        <TouchableOpacity 
-          onPress={onBack} 
-          style={[
-            styles.backButton,
-            {
-              left: isRTL ? undefined : 20,
-              right: isRTL ? 20 : undefined,
-            }
-          ]}
-        >
+        <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <Ionicons 
             name={isRTL ? "arrow-forward" : "arrow-back"} 
             size={24} 
-            color={colors.text} 
+            color={primaryColor} 
           />
         </TouchableOpacity>
-        <View style={styles.headerTitleContainer}>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>
-            {t('Create Small Task')}
-          </Text>
-        </View>
+        <Text style={[styles.headerTitle, { color: primaryColor }]}>
+          {t('create_task_request')}
+        </Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -197,204 +189,147 @@ export default function SmallTaskRequestForm({
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
-          {/* Task Type Info Card */}
-          <View style={[styles.infoCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
-            <View style={styles.taskTypeHeader}>
-              <View style={[styles.iconContainer, { backgroundColor: colors.primary + '15' }]}>
-                <Ionicons name="construct" size={32} color={colors.primary} />
+          {/* Task Type Info Card - iOS style */}
+          <View style={[
+            styles.taskTypeCard, 
+            { 
+              backgroundColor: colors.cardBackground, 
+              borderColor: borderColor,
+            }
+          ]}>
+            <View style={[
+              styles.taskTypeRow, 
+              { flexDirection: isRTL ? 'row-reverse' : 'row' }
+            ]}>
+              <View style={[styles.iconCircle, { backgroundColor: primaryColor + '15' }]}>
+                <Ionicons name="checkmark-circle" size={20} color={primaryColor} />
               </View>
-              <Text style={[styles.taskTypeName, { color: colors.text }]}>
-                {taskName}
-              </Text>
-              {taskType.description && (
-                <Text style={[styles.taskTypeDescription, { color: colors.textSecondary }]}>
-                  {taskType.description}
+              <View style={[
+                styles.taskTypeInfo, 
+                { alignItems: isRTL ? 'flex-end' : 'flex-start' }
+              ]}>
+                <Text style={[styles.selectedTaskLabel, { color: colors.textSecondary }]}>
+                  {t('selected_task')}
                 </Text>
-              )}
+                <Text style={[styles.taskTypeName, { color: colors.text }]}>
+                  {taskName}
+                </Text>
+              </View>
             </View>
           </View>
 
-          {/* Description Input */}
+          {/* Description Section */}
           <View style={styles.inputSection}>
             <Text style={[
               styles.inputLabel, 
-              { 
-                color: colors.text,
-                textAlign: isRTL ? 'right' : 'left',
-              }
+              { color: colors.text, textAlign: isRTL ? 'right' : 'left' }
             ]}>
-              {t('Description')} *
+              {t('task_description')}
             </Text>
             <TextInput
               style={[
                 styles.textArea,
                 {
                   backgroundColor: colors.cardBackground,
-                  borderColor: colors.border,
+                  borderColor: borderColor,
                   color: colors.text,
+                  textAlign: isRTL ? 'right' : 'left',
                 },
               ]}
-              placeholder={t('Describe your task in detail...')}
+              placeholder={t('describe_task_requirements')}
               placeholderTextColor={colors.textSecondary}
               value={description}
               onChangeText={setDescription}
               multiline
               numberOfLines={6}
               textAlignVertical="top"
+              maxLength={1000}
             />
+            <Text style={[
+              styles.hintText, 
+              { color: colors.textSecondary, textAlign: isRTL ? 'right' : 'left' }
+            ]}>
+              {t('max_1000_characters')}
+            </Text>
           </View>
 
-          {/* Budget Input */}
+          {/* Address Section */}
           <View style={styles.inputSection}>
             <Text style={[
               styles.inputLabel, 
-              { 
-                color: colors.text,
-                textAlign: isRTL ? 'right' : 'left',
-              }
+              { color: colors.text, textAlign: isRTL ? 'right' : 'left' }
             ]}>
-              {t('Budget')} *
+              {t('service_address')}
             </Text>
-            <View style={[
-              styles.budgetInputContainer, 
-              { 
-                backgroundColor: colors.cardBackground, 
-                borderColor: colors.border,
-                flexDirection: isRTL ? 'row-reverse' : 'row',
-              }
-            ]}>
-              <ExpoImage
-                source={riyalLogo}
-                style={styles.riyalLogo}
-                contentFit="contain"
-              />
-              <TextInput
-                style={[
-                  styles.budgetInput, 
-                  { 
-                    color: colors.text,
-                    textAlign: isRTL ? 'right' : 'left',
-                  }
-                ]}
-                placeholder={t('Enter budget amount')}
-                placeholderTextColor={colors.textSecondary}
-                value={budget}
-                onChangeText={setBudget}
-                keyboardType="numeric"
-              />
-            </View>
-            {taskType.basePrice != null && taskType.basePrice > 0 && (
-              <Text style={[
-                styles.hintText, 
-                { 
-                  color: colors.textSecondary,
-                  textAlign: isRTL ? 'right' : 'left',
-                }
-              ]}>
-                {t('Base price')}: {formatBudget(taskType.basePrice)}
-              </Text>
-            )}
-          </View>
-
-          {/* Duration Input */}
-          <View style={styles.inputSection}>
-            <Text style={[
-              styles.inputLabel, 
-              { 
-                color: colors.text,
-                textAlign: isRTL ? 'right' : 'left',
-              }
-            ]}>
-              {t('Estimated Duration')} *
-            </Text>
-            <View style={[
-              styles.durationInputContainer, 
-              { 
-                backgroundColor: colors.cardBackground, 
-                borderColor: colors.border,
-                flexDirection: isRTL ? 'row-reverse' : 'row',
-              }
-            ]}>
-              <Ionicons name="time-outline" size={20} color={colors.textSecondary} />
-              <TextInput
-                style={[
-                  styles.durationInput, 
-                  { 
-                    color: colors.text,
-                    textAlign: isRTL ? 'right' : 'left',
-                  }
-                ]}
-                placeholder={t('Enter duration in hours')}
-                placeholderTextColor={colors.textSecondary}
-                value={duration}
-                onChangeText={setDuration}
-                keyboardType="numeric"
-              />
-              <Text style={[styles.durationUnit, { color: colors.textSecondary }]}>
-                {t('hours')}
-              </Text>
-            </View>
-            {taskType.estimatedDuration != null && taskType.estimatedDuration > 0 && (
-              <Text style={[
-                styles.hintText, 
-                { 
-                  color: colors.textSecondary,
-                  textAlign: isRTL ? 'right' : 'left',
-                }
-              ]}>
-                {t('Estimated duration')}: {formatDuration(taskType.estimatedDuration)}
-              </Text>
-            )}
-          </View>
-
-          {/* Address Input */}
-          <View style={styles.inputSection}>
-            <Text style={[
-              styles.inputLabel, 
-              { 
-                color: colors.text,
-                textAlign: isRTL ? 'right' : 'left',
-              }
-            ]}>
-              {t('Address')} *
-            </Text>
-            <TouchableOpacity
+            
+            {/* Address Input */}
+            <TextInput
               style={[
-                styles.addressButton,
+                styles.addressInput,
                 {
                   backgroundColor: colors.cardBackground,
-                  borderColor: colors.border,
-                  flexDirection: isRTL ? 'row-reverse' : 'row',
+                  borderColor: borderColor,
+                  color: colors.text,
+                  textAlign: isRTL ? 'right' : 'left',
                 },
+              ]}
+              placeholder={t('enter_service_address')}
+              placeholderTextColor={colors.textSecondary}
+              value={address}
+              onChangeText={setAddress}
+            />
+
+            {/* Map Picker Button */}
+            <TouchableOpacity
+              style={[
+                styles.mapPickerButton,
+                { backgroundColor: primaryColor + '15' },
+                { flexDirection: isRTL ? 'row-reverse' : 'row' },
               ]}
               onPress={() => setShowMapPicker(true)}
               activeOpacity={0.7}
             >
-              <Ionicons 
-                name={address ? "location" : "map-outline"} 
-                size={20} 
-                color={colors.primary} 
-              />
-              <Text 
-                style={[
-                  styles.addressText,
-                  { 
-                    color: address ? colors.text : colors.textSecondary,
-                    flex: 1,
-                    textAlign: isRTL ? 'right' : 'left',
-                  },
-                ]}
-                numberOfLines={1}
-              >
-                {address || t('Select location on map')}
+              <Ionicons name="location" size={16} color={primaryColor} />
+              <Text style={[styles.mapPickerText, { color: primaryColor }]}>
+                {t('select_location_on_map')}
               </Text>
               <Ionicons 
                 name={isRTL ? "chevron-back" : "chevron-forward"} 
-                size={18} 
-                color={colors.textSecondary} 
+                size={12} 
+                color={primaryColor} 
               />
             </TouchableOpacity>
+
+            {/* Map Preview */}
+            <View style={styles.mapPreviewContainer}>
+              <MapView
+                style={styles.mapPreview}
+                provider={PROVIDER_GOOGLE}
+                region={mapRegion}
+                scrollEnabled={false}
+                zoomEnabled={false}
+                pitchEnabled={false}
+                rotateEnabled={false}
+              >
+                {latitude && longitude && (
+                  <Marker
+                    coordinate={{ latitude, longitude }}
+                    pinColor={primaryColor}
+                  />
+                )}
+              </MapView>
+              
+              {/* Expand button overlay */}
+              <TouchableOpacity
+                style={styles.expandButton}
+                onPress={() => setShowMapPicker(true)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="expand-outline" size={12} color="#141B34" />
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Submit Button */}
@@ -402,21 +337,22 @@ export default function SmallTaskRequestForm({
             style={[
               styles.submitButton,
               {
-                backgroundColor: colors.primary,
+                backgroundColor: isFormValid ? COLORS.success : colors.textSecondary,
                 opacity: isSubmitting ? 0.6 : 1,
               },
+              { flexDirection: isRTL ? 'row-reverse' : 'row' },
             ]}
             onPress={handleSubmit}
-            disabled={isSubmitting}
+            disabled={!isFormValid || isSubmitting}
             activeOpacity={0.8}
           >
             {isSubmitting ? (
               <ActivityIndicator size="small" color="#FFFFFF" />
             ) : (
               <>
-                <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
+                <Ionicons name="paper-plane" size={16} color="#FFFFFF" />
                 <Text style={styles.submitButtonText}>
-                  {t('Create Task Request')}
+                  {t('submit_request')}
                 </Text>
               </>
             )}
@@ -465,21 +401,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 16,
     borderBottomWidth: 1,
-    position: 'relative',
   },
   backButton: {
     padding: 8,
-    position: 'absolute',
-    zIndex: 1,
-  },
-  headerTitleContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '700',
+    flex: 1,
     textAlign: 'center',
   },
   content: {
@@ -489,127 +418,115 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: 20,
+    padding: 24,
     paddingBottom: 80,
   },
-  infoCard: {
+  taskTypeCard: {
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
     marginBottom: 24,
-    ...Platform.select({
-      ios: {
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
   },
-  taskTypeHeader: {
+  taskTypeRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
+    gap: 12,
   },
-  iconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+  iconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
+  },
+  taskTypeInfo: {
+    flex: 1,
+  },
+  selectedTaskLabel: {
+    fontSize: 12,
+    marginBottom: 4,
   },
   taskTypeName: {
     fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 4,
-    textAlign: 'center',
-  },
-  taskTypeDescription: {
-    fontSize: 14,
-    lineHeight: 20,
-    textAlign: 'center',
-    marginTop: 4,
+    fontWeight: '600',
   },
   inputSection: {
     marginBottom: 20,
   },
   inputLabel: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
-    marginBottom: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 14,
-    minHeight: 48,
-  },
-  addressButton: {
-    alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    minHeight: 48,
-    gap: 12,
-  },
-  addressText: {
-    fontSize: 14,
-  },
-  budgetInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 8,
-  },
-  riyalLogo: {
-    width: 20,
-    height: 20,
-  },
-  budgetInput: {
-    flex: 1,
-    fontSize: 14,
-    minHeight: 24,
-  },
-  durationInputContainer: {
-    alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 8,
-  },
-  durationInput: {
-    flex: 1,
-    fontSize: 14,
-    minHeight: 24,
-  },
-  durationUnit: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  hintText: {
-    fontSize: 12,
-    marginTop: 4,
-    fontStyle: 'italic',
+    marginBottom: 12,
   },
   textArea: {
     borderWidth: 1,
     borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 14,
     fontSize: 14,
     minHeight: 120,
+    lineHeight: 20,
+  },
+  hintText: {
+    fontSize: 12,
+    marginTop: 8,
+  },
+  addressInput: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 14,
+    minHeight: 48,
+    marginBottom: 12,
+  },
+  mapPickerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    gap: 8,
+    marginBottom: 12,
+  },
+  mapPickerText: {
+    fontSize: 14,
+    fontWeight: '500',
+    flex: 1,
+  },
+  mapPreviewContainer: {
+    height: 163,
+    borderRadius: 16,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  mapPreview: {
+    flex: 1,
+  },
+  expandButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.25,
+        shadowRadius: 3,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
   },
   submitButton: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 16,
@@ -618,6 +535,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     ...Platform.select({
       ios: {
+        shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
         shadowRadius: 8,
@@ -629,7 +547,7 @@ const styles = StyleSheet.create({
   },
   submitButtonText: {
     color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 18,
+    fontWeight: '600',
   },
 });

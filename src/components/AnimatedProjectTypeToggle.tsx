@@ -82,11 +82,11 @@ export default function AnimatedProjectTypeToggle({
     outputRange: [0, (containerWidthState - 12) * 0.5], // 50% of available width (container - 12px padding)
   });
 
-  // Use blue colors - use theme primary for active, light blue background
-  const bgColor = isDarkMode ? '#1A2E3D' : blueToggleColors.blueBg; // Darker blue background for dark mode
-  const activeColor = isDarkMode ? colors.primary : blueToggleColors.blueActive; // Use theme primary or blue
-  const textColor = isDarkMode ? '#FFFFFF' : '#FFFFFF'; // White text on blue active
-  const inactiveTextColor = isDarkMode ? '#CCCCCC' : blueToggleColors.textDark;
+  // Use theme in dark mode, blue palette in light mode
+  const bgColor = isDarkMode ? (colors.cardBackground || '#1C1C1E') : blueToggleColors.blueBg;
+  const activeColor = isDarkMode ? colors.primary : blueToggleColors.blueActive;
+  const textColor = isDarkMode ? colors.white : '#FFFFFF';
+  const inactiveTextColor = isDarkMode ? colors.textSecondary : blueToggleColors.textDark;
 
   return (
     <View 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,11 @@ import { useTheme } from '../../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { useFontFamily } from '../../context/FontContext';
 import { LinearGradient } from 'expo-linear-gradient';
+import StaggeredAppearView from '../../components/StaggeredAppearView';
+import PressableScaleView from '../../components/PressableScaleView';
+import BonyadLogo from '../../components/BonyadLogo';
+import ChatbotFab from '../../components/ChatbotFab';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { buildApiUrl, API_ENDPOINTS } from '../../config/api';
 import { storage } from '../../utils/storage';
 import { getAvailableRequests } from '../../services/SmallTaskService';
@@ -21,6 +26,7 @@ import type { SmallTaskRequest } from '../../types/smallTasks';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const H_PADDING = 16;
+const BANNER_PAGE_WIDTH = SCREEN_WIDTH - H_PADDING * 2;
 const SECTION_GAP = 16;
 const CARD_GAP = 12;
 const CARD_RADIUS = 18;
@@ -45,18 +51,38 @@ const COLORS = {
   yellowBorder: '#FDE68A',
   projectCardGradient: ['#EFF6FF', '#DBEAFE'] as const,
   smallTaskCardGradient: ['#FFFBEB', '#FEF3C7'] as const,
-  // Banner
+  // Banner (light)
   bannerGradient: ['#F0FDF4', '#DCFCE7', '#BBF7D0'] as const,
   bannerTitle: '#166534',
   bannerSubtitle: '#15803D',
   bannerButtonGradient: ['#16A34A', '#22C55E'] as const,
   dotInactive: '#CBD5E1',
+  // Banner dark mode (matches iOS)
+  bannerGradientDark: ['#1B2D1B', '#2D4A2D', '#1E3A1E'] as const,
+  bannerTitleDark: '#86EFAC',
+  bannerSubtitleDark: 'rgba(255,255,255,0.85)',
+  bannerButtonGradientDark: ['#15803D', '#16A34A'] as const,
   // Quick actions
   quickActionPurple: '#E9D5FF',
   quickActionOrange: '#FED7AA',
   quickActionGreen: '#BBF7D0',
   quickActionLabel: '#374151',
 };
+
+// 5 feature banners (matches iOS AdvertisementComponent)
+const BANNERS: Array<{
+  icon: string;
+  titleKey: string;
+  descKey: string;
+  gradientLight: readonly [string, string, ...string[]];
+  gradientDark: readonly [string, string, ...string[]];
+}> = [
+  { icon: 'account-group', titleKey: 'banner_find_experts_title', descKey: 'banner_find_experts_desc', gradientLight: ['#FFFFFF', '#E3F2FD', '#BBDEFB'], gradientDark: ['#1A1A2E', '#16213E', '#0F3460'] },
+  { icon: 'hammer', titleKey: 'banner_post_projects_title', descKey: 'banner_post_projects_desc', gradientLight: ['#FFFFFF', '#E8F5E9', '#C8E6C9'], gradientDark: ['#1B2D1B', '#2D4A2D', '#1E3A1E'] },
+  { icon: 'calendar-clock', titleKey: 'banner_book_appointments_title', descKey: 'banner_book_appointments_desc', gradientLight: ['#FFFFFF', '#FFF3E0', '#FFE0B2'], gradientDark: ['#2D2416', '#3D2E1A', '#4A3822'] },
+  { icon: 'shield-check', titleKey: 'banner_verified_technicians_title', descKey: 'banner_verified_technicians_desc', gradientLight: ['#FFFFFF', '#F3E5F5', '#E1BEE7'], gradientDark: ['#2A1B2E', '#3D2A42', '#2E1F33'] },
+  { icon: 'robot', titleKey: 'banner_ai_assistant_title', descKey: 'banner_ai_assistant_desc', gradientLight: ['#FFFFFF', '#E0F7FA', '#B2EBF2'], gradientDark: ['#0D2137', '#143250', '#1A4060'] },
+];
 
 type ProjectStatus =
   | 'approved'
@@ -81,14 +107,22 @@ interface ApiProject {
   [key: string]: unknown;
 }
 
+const IOS_PRIMARY = '#00A5F4';
+const IOS_CHAT = '#4C9AD5';
+
 interface TechnicalHomeScreenProps {
   userName?: string;
+  unreadNotificationCount?: number;
+  onPressChat?: () => void;
+  onPressNotifications?: () => void;
+  onPressInfo?: () => void;
   onPressAvailableProject?: (status: ProjectStatus) => void;
   onPressTaskCategory?: (status: ProjectStatus) => void;
+  onPressSmallTask?: (task: SmallTaskRequest) => void;
+  onPressProject?: (project: ApiProject) => void;
   onPressReferAndEarn?: () => void;
   onPressFab?: () => void;
   onPressChatbot?: () => void;
-  onPressInfo?: () => void;
   onPressPortfolio?: () => void;
   onPressSchedule?: () => void;
   onPressAnalytics?: () => void;
@@ -98,22 +132,32 @@ interface TechnicalHomeScreenProps {
 export default function TechnicalHomeScreen({
   onPressAvailableProject,
   onPressTaskCategory,
+  onPressSmallTask,
+  onPressProject,
   onPressFab,
+  onPressChatbot,
   onPressPortfolio,
   onPressSchedule,
   onPressAnalytics,
   onPressSupport,
+  onPressChat,
+  onPressNotifications,
+  onPressInfo,
+  unreadNotificationCount = 0,
 }: TechnicalHomeScreenProps) {
   const { t, i18n } = useTranslation();
   const { colors: themeColors, theme } = useTheme();
   const { fontFamily, boldFontFamily, scaledSize } = useFontFamily();
   const isRTL = i18n.language === 'ar';
   const isDarkMode = theme === 'dark';
+  const primaryColor = isDarkMode ? themeColors.primary : IOS_PRIMARY;
 
   const [projects, setProjects] = useState<ApiProject[]>([]);
   const [smallTasks, setSmallTasks] = useState<SmallTaskRequest[]>([]);
   const [loadingProjects, setLoadingProjects] = useState(true);
   const [loadingTasks, setLoadingTasks] = useState(true);
+  const [bannerIndex, setBannerIndex] = useState(0);
+  const bannerScrollRef = useRef<ScrollView>(null);
 
   const fontStyle = { fontFamily: fontFamily || undefined };
   const boldFontStyle = { fontFamily: boldFontFamily || fontFamily || undefined };
@@ -190,55 +234,125 @@ export default function TechnicalHomeScreen({
 
   const projectCards = projects.slice(0, 2);
   const taskCards = smallTasks.slice(0, 2);
-  const bannerActiveIndex = 3; // 4th dot active (0-based)
+
+  const insets = useSafeAreaInsets();
+
+  const onBannerScroll = (e: { nativeEvent: { contentOffset: { x: number }; layoutMeasurement: { width: number } } }) => {
+    const x = e.nativeEvent.contentOffset.x;
+    const w = e.nativeEvent.layoutMeasurement.width || BANNER_PAGE_WIDTH;
+    const index = Math.round(x / w);
+    if (index >= 0 && index < BANNERS.length) setBannerIndex(index);
+  };
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setBannerIndex((prev) => {
+        const next = (prev + 1) % BANNERS.length;
+        bannerScrollRef.current?.scrollTo({ x: next * BANNER_PAGE_WIDTH, animated: true });
+        return next;
+      });
+    }, 4000);
+    return () => clearInterval(timer);
+  }, []);
 
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: isDarkMode ? themeColors.background : COLORS.background }]}
-      contentContainerStyle={styles.content}
-      showsVerticalScrollIndicator={false}
-    >
-      {/* Section 1: Banner Card "انشر مشروعك" */}
-      <View style={[styles.section, { marginBottom: 8 }]}>
-        <TouchableOpacity activeOpacity={0.95} style={styles.bannerTouchable}>
-          <LinearGradient
-            colors={COLORS.bannerGradient}
-            style={styles.bannerCard}
-          >
-            <View style={[styles.bannerContent, isRTL && styles.bannerContentRTL]}>
-              <View style={styles.bannerIconWrap}>
-                <LinearGradient
-                  colors={COLORS.bannerButtonGradient}
-                  style={styles.bannerIconGradient}
-                >
-                  <MaterialCommunityIcons name="hammer" size={26} color="#fff" />
-                </LinearGradient>
+    <View style={[styles.container, styles.wrapper, { backgroundColor: isDarkMode ? themeColors.background : COLORS.background }]}>
+      {/* iOS-style: single ScrollView, top bar first child so whole page scrolls */}
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[
+          styles.scrollContentWrap,
+          { paddingBottom: Math.max(insets.bottom, 24) + 120 },
+        ]}
+        showsVerticalScrollIndicator={false}
+        bounces={true}
+        nestedScrollEnabled={true}
+      >
+        {/* Top bar — first item in scroll (matches iOS TechnicianHomeContentView) */}
+        <View style={[styles.iosTopBar, isRTL && styles.iosTopBarRTL, { paddingTop: Math.max(insets.top, 12), backgroundColor: isDarkMode ? themeColors.background : COLORS.background }]}>
+          <View style={styles.iosTopBarLogo}>
+            <BonyadLogo size="small" responsive={false} variant={isDarkMode ? 'light' : 'dark'} />
+          </View>
+          <View style={[styles.iosTopBarIcons, isRTL && styles.iosTopBarIconsRTL]}>
+            <TouchableOpacity style={styles.iosTopBarIconBtn} onPress={onPressChat} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Ionicons name="chatbubbles-outline" size={24} color={primaryColor} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.iosTopBarIconBtn} onPress={onPressInfo} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Ionicons name="information-circle-outline" size={24} color={primaryColor} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.iosTopBarIconBtn} onPress={onPressNotifications} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <View>
+                <Ionicons name="notifications-outline" size={24} color={primaryColor} />
+                {unreadNotificationCount > 0 && (
+                  <View style={[styles.iosNotificationBadge, { backgroundColor: '#FF3B30' }]} />
+                )}
               </View>
-              <View style={[styles.bannerTextWrap, isRTL && styles.bannerTextWrapRTL]}>
-                <Text style={[styles.bannerTitle, fontStyle]} numberOfLines={1}>
-                  {t('Post your project')}
-                </Text>
-                <Text style={[styles.bannerSubtitle, fontStyle]} numberOfLines={2}>
-                  {t('Get competitive offers from qualified technicians')}
-                </Text>
-              </View>
-            </View>
-          </LinearGradient>
-        </TouchableOpacity>
-        <View style={styles.paginationDots}>
-          {[0, 1, 2, 3, 4].map((i) => (
-            <View
-              key={i}
-              style={[
-                i === bannerActiveIndex ? styles.paginationDotActive : styles.paginationDotInactive,
-                i === bannerActiveIndex && { backgroundColor: COLORS.blue },
-              ]}
-            />
-          ))}
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
+
+        {/* Main content — same horizontal padding as iOS */}
+        <View style={styles.content}>
+      {/* Section 1: Horizontal banner carousel (5 cards, swipe left/right — matches iOS AdvertisementComponent) */}
+      <StaggeredAppearView index={0}>
+        <View style={[styles.section, { marginBottom: SECTION_GAP }]}>
+          <ScrollView
+            ref={bannerScrollRef}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onMomentumScrollEnd={onBannerScroll}
+            onScroll={onBannerScroll}
+            scrollEventThrottle={32}
+            style={styles.bannerScroll}
+            contentContainerStyle={styles.bannerScrollContent}
+            decelerationRate="fast"
+          >
+            {BANNERS.map((banner, index) => (
+              <View key={index} style={[styles.bannerPage, { width: BANNER_PAGE_WIDTH }]}>
+                <TouchableOpacity activeOpacity={0.95} style={styles.bannerTouchable}>
+                  <LinearGradient
+                    colors={isDarkMode ? [...banner.gradientDark] : [...banner.gradientLight]}
+                    style={styles.bannerCard}
+                  >
+                    <View style={[styles.bannerContent, isRTL && styles.bannerContentRTL]}>
+                      <View style={styles.bannerIconWrap}>
+                        <View style={[styles.bannerIconGradient, { backgroundColor: isDarkMode ? 'rgba(0,165,244,0.25)' : 'rgba(0,165,244,0.15)' }]}>
+                          <MaterialCommunityIcons name={banner.icon as any} size={26} color={IOS_PRIMARY} />
+                        </View>
+                      </View>
+                      <View style={[styles.bannerTextWrap, isRTL && styles.bannerTextWrapRTL]}>
+                        <Text style={[styles.bannerTitle, fontStyle, isDarkMode && { color: COLORS.bannerTitleDark }]} numberOfLines={1}>
+                          {t(banner.titleKey)}
+                        </Text>
+                        <Text style={[styles.bannerSubtitle, fontStyle, isDarkMode && { color: COLORS.bannerSubtitleDark }]} numberOfLines={2}>
+                          {t(banner.descKey)}
+                        </Text>
+                      </View>
+                    </View>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            ))}
+          </ScrollView>
+          <View style={styles.paginationDots}>
+            {BANNERS.map((_, i) => (
+              <View
+                key={i}
+                style={[
+                  i === bannerIndex ? styles.paginationDotActive : styles.paginationDotInactive,
+                  i === bannerIndex && { backgroundColor: COLORS.blue },
+                  !isDarkMode && i !== bannerIndex && { backgroundColor: COLORS.dotInactive },
+                  isDarkMode && i !== bannerIndex && { backgroundColor: 'rgba(255,255,255,0.3)' },
+                ]}
+              />
+            ))}
+          </View>
+        </View>
+      </StaggeredAppearView>
 
       {/* Section 2: Title "Available Opportunities" */}
+      <StaggeredAppearView index={1}>
       <Text
         style={[
           styles.mainTitle,
@@ -249,8 +363,10 @@ export default function TechnicalHomeScreen({
       >
         {t('Available Opportunities')}
       </Text>
+      </StaggeredAppearView>
 
       {/* Section 2: Available Projects */}
+      <StaggeredAppearView index={2}>
       <View style={styles.section}>
         <View style={[styles.sectionHeader, isRTL && styles.sectionHeaderRTL]}>
           <View style={[styles.sectionTitleRow, isRTL && styles.sectionTitleRowRTL]}>
@@ -284,12 +400,7 @@ export default function TechnicalHomeScreen({
               </Text>
             ) : (
               projectCards.map((project) => (
-                <TouchableOpacity
-                  key={project.id}
-                  style={styles.cardWrapper}
-                  onPress={() => onPressAvailableProject?.('pending')}
-                  activeOpacity={0.9}
-                >
+                <PressableScaleView key={project.id} style={styles.cardWrapper} onPress={() => onPressProject?.(project)}>
                   <LinearGradient
                     colors={COLORS.projectCardGradient}
                     style={[styles.projectCard, isDarkMode && styles.cardBorderDark]}
@@ -334,14 +445,16 @@ export default function TechnicalHomeScreen({
                       </View>
                     </View>
                   </LinearGradient>
-                </TouchableOpacity>
+                </PressableScaleView>
               ))
             )}
           </View>
         )}
       </View>
+      </StaggeredAppearView>
 
       {/* Section 3: Small Tasks */}
+      <StaggeredAppearView index={3}>
       <View style={styles.section}>
         <View style={[styles.sectionHeader, isRTL && styles.sectionHeaderRTL]}>
           <View style={[styles.sectionTitleRow, isRTL && styles.sectionTitleRowRTL]}>
@@ -375,12 +488,7 @@ export default function TechnicalHomeScreen({
               </Text>
             ) : (
               taskCards.map((task) => (
-                <TouchableOpacity
-                  key={task.id}
-                  style={styles.cardWrapper}
-                  onPress={() => onPressTaskCategory?.('small_tasks')}
-                  activeOpacity={0.9}
-                >
+                <PressableScaleView key={task.id} style={styles.cardWrapper} onPress={() => onPressSmallTask?.(task)}>
                   <LinearGradient
                     colors={COLORS.smallTaskCardGradient}
                     style={[styles.smallTaskCard, isDarkMode && styles.cardBorderDark]}
@@ -434,80 +542,109 @@ export default function TechnicalHomeScreen({
                       </View>
                     </View>
                   </LinearGradient>
-                </TouchableOpacity>
+                </PressableScaleView>
               ))
             )}
           </View>
         )}
       </View>
+      </StaggeredAppearView>
 
       {/* Section 5: Quick Action Cards */}
+      <StaggeredAppearView index={4}>
       <View style={[styles.section, { marginBottom: SECTION_GAP }]}>
         <View style={[styles.quickActionsRow, isRTL && styles.quickActionsRowRTL]}>
-          <TouchableOpacity style={styles.quickActionCard} onPress={() => onPressPortfolio?.()} activeOpacity={0.85}>
+          <PressableScaleView style={styles.quickActionCard} onPress={() => onPressPortfolio?.()}>
             <View style={[styles.quickActionIconWrap, { backgroundColor: COLORS.quickActionPurple }]}>
               <Feather name="folder" size={22} color="#7C3AED" />
             </View>
             <Text style={[styles.quickActionLabel, fontStyle]} numberOfLines={1}>
               {t('Business gallery')}
             </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.quickActionCard}
-            onPress={() => onPressAvailableProject?.('in_progress')}
-            activeOpacity={0.85}
-          >
+          </PressableScaleView>
+          <PressableScaleView style={styles.quickActionCard} onPress={() => onPressAvailableProject?.('in_progress')}>
             <View style={[styles.quickActionIconWrap, { backgroundColor: COLORS.quickActionOrange }]}>
               <Feather name="briefcase" size={22} color={COLORS.orange} />
             </View>
             <Text style={[styles.quickActionLabel, fontStyle]} numberOfLines={1}>
               {t('In Progress')}
             </Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.quickActionCard} onPress={() => onPressSchedule?.()} activeOpacity={0.85}>
+          </PressableScaleView>
+          <PressableScaleView style={styles.quickActionCard} onPress={() => onPressSchedule?.()}>
             <View style={[styles.quickActionIconWrap, { backgroundColor: COLORS.quickActionGreen }]}>
               <Feather name="calendar" size={22} color={COLORS.green} />
             </View>
             <Text style={[styles.quickActionLabel, fontStyle]} numberOfLines={1}>
               {t('My appointments')}
             </Text>
-          </TouchableOpacity>
+          </PressableScaleView>
         </View>
       </View>
+      </StaggeredAppearView>
 
-      {/* FAB - Small Tasks */}
-      {onPressFab && (
+        </View>
+      </ScrollView>
+      {/* iOS-style Chatbot FAB when provided; otherwise legacy FAB for small tasks */}
+      {onPressChatbot ? (
+        <ChatbotFab onPress={onPressChatbot} primaryColor={primaryColor} primaryDark={themeColors.primary} />
+      ) : onPressFab ? (
         <TouchableOpacity
-          style={[
-            styles.fab,
-            { backgroundColor: themeColors.primary },
-            isRTL ? styles.fabRTL : styles.fabLTR,
-          ]}
+          style={[styles.fab, { backgroundColor: themeColors.primary }, isRTL ? styles.fabRTL : styles.fabLTR]}
           onPress={onPressFab}
           activeOpacity={0.9}
         >
           <MaterialCommunityIcons name="robot" size={26} color="#fff" />
         </TouchableOpacity>
-      )}
-
-      <View style={{ height: 100 }} />
-    </ScrollView>
+      ) : null}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
+  wrapper: { flex: 1 },
+  scroll: { flex: 1 },
+  scrollContentWrap: {},
   content: {
     paddingHorizontal: H_PADDING,
-    paddingTop: 12,
+    paddingTop: 8,
     paddingBottom: 24,
+  },
+  iosTopBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    height: 44,
+    paddingHorizontal: H_PADDING,
+    marginBottom: 8,
+  },
+  iosTopBarRTL: { flexDirection: 'row-reverse' },
+  iosTopBarLogo: {},
+  iosTopBarIcons: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  iosTopBarIconsRTL: { flexDirection: 'row-reverse' },
+  iosTopBarIconBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  iosNotificationBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   textRight: {
     textAlign: 'right',
   },
-  // Banner
+  // Banner carousel
+  bannerScroll: {
+    width: BANNER_PAGE_WIDTH,
+    alignSelf: 'center',
+  },
+  bannerScrollContent: {
+    flexDirection: 'row',
+  },
+  bannerPage: {
+    paddingHorizontal: 0,
+  },
   bannerTouchable: {
     borderRadius: 20,
     ...Platform.select({

@@ -19,6 +19,8 @@ import { Surface, Card } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image as ExpoImage } from 'expo-image';
 import BonyadLogo from '../components/BonyadLogo';
+import AppTopBar from '../components/AppTopBar';
+import GlassTabBar, { TECHNICIAN_TABS } from '../components/GlassTabBar';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import ProjectsScreen from './ProjectsScreen';
@@ -124,6 +126,9 @@ export default function TechnicianHomeScreen({
   const [selectedSmallTask, setSelectedSmallTask] = useState<SmallTaskRequest | null>(null);
   const [smallTasksRefreshTrigger, setSmallTasksRefreshTrigger] = useState(0);
 
+  // Initial project for auto-opening detail when tapping a card from home
+  const [initialProjectForDetail, setInitialProjectForDetail] = useState<any>(null);
+
   // Commission Payment state
   const [showCommissionPayment, setShowCommissionPayment] = useState(false);
   const [commissionCheckoutRequest, setCommissionCheckoutRequest] = useState<any>(null);
@@ -132,9 +137,12 @@ export default function TechnicianHomeScreen({
   // Copilot coach guide
   const { start: startCoachTour } = useCopilot();
 
-  // Animation values for dropdowns
+  // Animation values for dropdowns and tab transition
   const mobileDropdownAnim = useRef(new Animated.Value(0)).current;
   const desktopDropdownAnim = useRef(new Animated.Value(0)).current;
+  const tabContentOpacity = useRef(new Animated.Value(1)).current;
+  const tabContentTranslateY = useRef(new Animated.Value(0)).current;
+  const prevActiveTabRef = useRef(activeTab);
 
   // RTL detection
   const isRTL = i18n.language === 'ar';
@@ -191,6 +199,30 @@ export default function TechnicianHomeScreen({
       setSelectedChat(null);
       setShowChatList(true);
     }
+    if (activeTab !== 'projects') {
+      setInitialProjectForDetail(null);
+    }
+  }, [activeTab]);
+
+  // Tab content transition animation
+  useEffect(() => {
+    if (prevActiveTabRef.current === activeTab) return;
+    prevActiveTabRef.current = activeTab;
+    tabContentOpacity.setValue(0);
+    tabContentTranslateY.setValue(18);
+    Animated.parallel([
+      Animated.timing(tabContentOpacity, {
+        toValue: 1,
+        duration: 280,
+        useNativeDriver: true,
+      }),
+      Animated.spring(tabContentTranslateY, {
+        toValue: 0,
+        tension: 280,
+        friction: 20,
+        useNativeDriver: true,
+      }),
+    ]).start();
   }, [activeTab]);
 
   // Responsive state - updates on window resize
@@ -291,8 +323,7 @@ export default function TechnicianHomeScreen({
       if (token) {
         // Check if it's a network error
         if (error?.message?.includes('Network request failed') || error?.message?.includes('Failed to fetch')) {
-          // Network error - might be offline, silently handle it
-          console.log('⚠️ Network error fetching unread count (may be offline)');
+          // Network error - might be offline, silently handle (no log to avoid spam)
         } else {
           console.error('❌ Error fetching unread count:', error);
         }
@@ -345,49 +376,33 @@ export default function TechnicianHomeScreen({
   }, [activeTab]);
 
 
-  // Render mobile layout
+  // Render mobile layout — iOS-style: on home tab (content only), hide parent top bar
   if (shouldRenderMobile) {
+    const isHomeTabOnly = activeTab === 'home' && !smallTasksView && !showCommissionPayment && !commissionCheckoutRequest;
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        {/* TOP BAR - Figma Design (Node 58:2467) */}
-        <View style={[styles.figmaTopBar, {
-          paddingTop: Math.max(insets.top, 10),
-          backgroundColor: isDarkMode ? colors.cardBackground : colors.primary
-        }]}>
-          {/* Logo Section */}
-          <View style={styles.figmaLogoContainer}>
-            <BonyadLogo size="medium" />
-          </View>
-          {/* Icons Section */}
-          <View style={styles.figmaTopBarIcons}>
-            <TouchableOpacity style={styles.figmaIconButton} onPress={() => onShowNotifications?.()}>
-              <Ionicons
-                name="notifications-outline"
-                size={24}
-                color={isDarkMode ? colors.text : '#E6EFF7'}
-              />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.figmaIconButton} onPress={() => onShowChat?.()}>
-              <Ionicons
-                name="chatbubble-outline"
-                size={24}
-                color={isDarkMode ? colors.text : '#E6EFF7'}
-              />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.figmaIconButton} onPress={() => startCoachTour()}>
-              <Ionicons
-                name="information-circle-outline"
-                size={24}
-                color={isDarkMode ? colors.text : '#E6EFF7'}
-              />
-            </TouchableOpacity>
-          </View>
-        </View>
+        {/* Top bar — same as home screen (logo + Chat | Info | Notifications) */}
+        {!isHomeTabOnly && (
+          <AppTopBar
+            primaryColor={isDarkMode ? colors.primary : (colors.primary || '#00A5F4')}
+            isDark={isDarkMode}
+            backgroundColor={colors.background}
+            unreadNotificationCount={unreadNotificationCount}
+            onPressChat={() => onShowChat?.()}
+            onPressInfo={startCoachTour}
+            onPressNotifications={() => onShowNotifications?.()}
+          />
+        )}
 
-        {/* Render tab content */}
+        {/* Render tab content — animated transition */}
+        <Animated.View style={{ flex: 1, opacity: tabContentOpacity, transform: [{ translateY: tabContentTranslateY }] }}>
         {activeTab === 'home' && !smallTasksView && (
           <TechnicalHomeScreenContent
             userName={userProfile?.name}
+            unreadNotificationCount={unreadNotificationCount}
+            onPressChat={onShowChat}
+            onPressNotifications={onShowNotifications}
+            onPressInfo={startCoachTour}
             onPressAvailableProject={(status) => {
               if (status === 'small_tasks') {
                 setSmallTasksView('list');
@@ -413,33 +428,34 @@ export default function TechnicianHomeScreen({
               }
               setActiveTab('projects');
             }}
+            onPressSmallTask={(task) => {
+              setSelectedSmallTask(task);
+              setSmallTasksView('detail');
+            }}
+            onPressProject={(project) => {
+              setInitialProjectForDetail(project);
+              setCurrentProjectsFilter('available');
+              setActiveTab('projects');
+            }}
             onPressReferAndEarn={() => {
-              // Show commission payment screen within home tab
               setShowCommissionPayment(true);
             }}
             onPressFab={() => {
-              // FAB - Quick action to view available small tasks
               setSmallTasksView('list');
             }}
             onPressChatbot={onShowChatbot}
-            // Quick Actions
             onPressPortfolio={() => {
-              // Navigate to portfolio management
               setProfileSubView('portfolio');
               setActiveTab('profile');
             }}
             onPressSchedule={() => {
-              // Navigate to availability/schedule
               setProfileSubView('availability');
               setActiveTab('profile');
             }}
             onPressAnalytics={() => {
-              // Show analytics - for now show a popup or navigate to a screen
-              // Using appointments as a placeholder for analytics dashboard
               onShowAppointments?.();
             }}
             onPressSupport={() => {
-              // Navigate to support tickets
               onShowSupportTickets?.();
             }}
           />
@@ -527,14 +543,13 @@ export default function TechnicianHomeScreen({
           <View style={{ flex: 1 }}>
             <ProjectsScreen
               onRequestVisit={(userId, userName, projectId) => {
-                // For technicians, requesting a visit means booking an appointment with the user
-                // This will be handled by the booking system
                 console.log('🔵 [TechnicianHomeScreen] Request visit for user:', userId, 'project:', projectId);
-                // TODO: Implement visit request flow for technicians
               }}
               filter={currentProjectsFilter}
+              initialProject={initialProjectForDetail}
               onFilterChange={(newFilter) => {
                 setCurrentProjectsFilter(newFilter as any);
+                setInitialProjectForDetail(null);
               }}
               onOpenChat={onNavigateToChatDetail || (() => { })}
             />
@@ -733,85 +748,20 @@ export default function TechnicianHomeScreen({
             ) : null}
           </View>
         )}
+        </Animated.View>
 
-        {/* TAB BAR - Figma Design (Node 58:2493) */}
-        <View style={[styles.figmaTabBarContainer, { paddingBottom: Math.max(insets.bottom, 0), backgroundColor: isDarkMode ? colors.cardBackground : '#FFFFFF', borderTopColor: isDarkMode ? colors.border : '#00549B' }]}>
-          <View style={[styles.figmaTabBar, { backgroundColor: isDarkMode ? colors.cardBackground : '#FFFFFF' }]}>
-
-
-
-            {/* Calendar */}
-            <TouchableOpacity
-              style={styles.figmaTabItem}
-              onPress={() => setActiveTab('appointments')}
-            >
-              <Ionicons
-                name={activeTab === 'appointments' ? "calendar" : "calendar-outline"}
-                size={24}
-                color={activeTab === 'appointments' ? colors.primary : (isDarkMode ? colors.textSecondary : "#6E6E6E")}
-              />
-              <Text style={[
-                styles.figmaTabLabel,
-                { color: activeTab === 'appointments' ? colors.primary : (isDarkMode ? colors.textSecondary : "#383838"), fontSize: scaledSize(12) }
-              ]}>
-                {t('Calendar')}
-              </Text>
-            </TouchableOpacity>
-
-            {/* Home */}
-            <TouchableOpacity
-              style={styles.figmaTabItem}
-              onPress={() => setActiveTab('home')}
-            >
-              <Ionicons
-                name={activeTab === 'home' ? "home" : "home-outline"}
-                size={24}
-                color={activeTab === 'home' ? colors.primary : (isDarkMode ? colors.textSecondary : "#383838")}
-              />
-              <Text style={[
-                styles.figmaTabLabel,
-                { color: activeTab === 'home' ? colors.primary : (isDarkMode ? colors.textSecondary : "#383838"), fontSize: scaledSize(12) }
-              ]}>
-                {t('Home')}
-              </Text>
-            </TouchableOpacity>
-
-            {/* Payments/Wallet */}
-            <TouchableOpacity
-              style={styles.figmaTabItem}
-              onPress={() => setActiveTab('wallet')}
-            >
-              <Ionicons
-                name={activeTab === 'wallet' ? "card" : "card-outline"}
-                size={24}
-                color={activeTab === 'wallet' ? colors.primary : (isDarkMode ? colors.textSecondary : "#6E6E6E")}
-              />
-              <Text style={[
-                styles.figmaTabLabel,
-                { color: activeTab === 'wallet' ? colors.primary : (isDarkMode ? colors.textSecondary : "#383838"), fontSize: scaledSize(12) }
-              ]}>
-                {t('Payments')}
-              </Text>
-            </TouchableOpacity>
-
-            {/* Profile */}
-            <TouchableOpacity
-              style={styles.figmaTabItem}
-              onPress={() => setActiveTab('profile')}
-            >
-              <Ionicons
-                name={activeTab === 'profile' ? "person" : "person-outline"}
-                size={24}
-                color={activeTab === 'profile' ? colors.primary : (isDarkMode ? colors.textSecondary : "#6E6E6E")}
-              />
-              <Text style={[
-                styles.figmaTabLabel,
-                { color: activeTab === 'profile' ? colors.primary : (isDarkMode ? colors.textSecondary : "#383838"), fontSize: scaledSize(12) }
-              ]}>
-                {t('Profile')}
-              </Text>
-            </TouchableOpacity>
-          </View>
+        {/* Glass tab bar — iOS-style with water-drop press */}
+        <View style={styles.glassTabBarContainer}>
+          <GlassTabBar
+            activeTab={['home', 'projects', 'appointments', 'wallet', 'profile'].includes(activeTab) ? (activeTab === 'projects' ? 'home' : activeTab) : 'home'}
+            onTabPress={(tab) => setActiveTab(tab)}
+            tabs={TECHNICIAN_TABS}
+            primaryColor={colors.primary}
+            primaryColorDark={colors.primaryDark || '#1A6DB4'}
+            isDark={isDarkMode}
+            bottomInset={insets.bottom}
+            t={t}
+          />
         </View>
 
       </View>
@@ -968,6 +918,10 @@ export default function TechnicianHomeScreen({
         {activeTab === 'home' && (
           <TechnicalHomeScreenContent
             userName={userProfile?.name}
+            unreadNotificationCount={unreadNotificationCount}
+            onPressChat={onShowChat}
+            onPressNotifications={onShowNotifications}
+            onPressInfo={startCoachTour}
             onPressAvailableProject={(status) => {
               if (status === 'approved' || status === 'pending') {
                 setCurrentProjectsFilter(status === 'approved' ? 'available' : 'available');
@@ -989,32 +943,34 @@ export default function TechnicianHomeScreen({
               }
               setActiveTab('projects');
             }}
+            onPressSmallTask={(task) => {
+              setSelectedSmallTask(task);
+              setSmallTasksView('detail');
+            }}
+            onPressProject={(project) => {
+              setInitialProjectForDetail(project);
+              setCurrentProjectsFilter('available');
+              setActiveTab('projects');
+            }}
             onPressReferAndEarn={() => {
-              // Show commission payment screen within home tab
               setShowCommissionPayment(true);
             }}
             onPressFab={() => {
-              // FAB - Quick action to view available small tasks
               setSmallTasksView('list');
             }}
             onPressChatbot={onShowChatbot}
-            // Quick Actions
             onPressPortfolio={() => {
-              // Navigate to portfolio management
               setProfileSubView('portfolio');
               setActiveTab('profile');
             }}
             onPressSchedule={() => {
-              // Navigate to availability/schedule
               setProfileSubView('availability');
               setActiveTab('profile');
             }}
             onPressAnalytics={() => {
-              // Show analytics - for now show appointments as placeholder
               onShowAppointments?.();
             }}
             onPressSupport={() => {
-              // Navigate to support tickets
               onShowSupportTickets?.();
             }}
           />
@@ -1053,14 +1009,13 @@ export default function TechnicianHomeScreen({
             <View style={styles.mainContentWrapper}>
               <ProjectsScreen
                 onRequestVisit={(userId, userName, projectId) => {
-                  // For technicians, requesting a visit means booking an appointment with the user
-                  // This will be handled by the booking system
                   console.log('🔵 [TechnicianHomeScreen] Request visit for user:', userId, 'project:', projectId);
-                  // TODO: Implement visit request flow for technicians
                 }}
                 filter={currentProjectsFilter}
+                initialProject={initialProjectForDetail}
                 onFilterChange={(newFilter) => {
                   setCurrentProjectsFilter(newFilter as any);
+                  setInitialProjectForDetail(null);
                 }}
                 onOpenChat={onNavigateToChatDetail || (() => { })}
               />
@@ -1358,7 +1313,14 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: '#FFB703', // Amber/60
   },
-  // Figma Bottom Tab Bar Styles (Node 58:2493)
+  glassTabBarContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    ...Platform.select({ web: { position: 'fixed' as any } }),
+  },
+  // Figma Bottom Tab Bar Styles (Node 58:2493) — legacy
   figmaTabBarContainer: {
     position: 'absolute',
     bottom: 0,

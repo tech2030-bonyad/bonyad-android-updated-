@@ -11,6 +11,7 @@ expo-debug.log
 build/
 dist/
 android/app/build/
+android/.kotlin/
 ios/build/
 ios/Pods/
 ios/DerivedData/

@@ -294,9 +294,11 @@ export default function AlertPopup({
           {/* Title */}
           <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
 
-          {/* Message */}
-          {message && (
-            <Text style={[styles.message, { color: colors.textSecondary }]}>{message}</Text>
+          {/* Message - ensure string (React Native Text cannot render objects) */}
+          {message != null && message !== '' && (
+            <Text style={[styles.message, { color: colors.textSecondary }]}>
+              {typeof message === 'string' ? message : (message?.message ?? String(message))}
+            </Text>
           )}
 
           {/* Countdown or Buttons */}

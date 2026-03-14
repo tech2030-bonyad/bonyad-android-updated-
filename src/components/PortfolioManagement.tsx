@@ -19,8 +19,10 @@ import { useFontFamily } from '../context/FontContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { storage } from '../utils/storage';
 import {
   getTechnicianPortfolio,
+  getMyPortfolio,
   TechnicianPortfolio,
   PortfolioProject,
 } from '../services/TechnicianService';
@@ -50,7 +52,7 @@ interface PortfolioManagementProps {
 }
 
 export default function PortfolioManagement({
-  technicianId,
+  technicianId: technicianIdProp,
   isOwnProfile = false,
   onBack,
 }: PortfolioManagementProps) {
@@ -60,6 +62,19 @@ export default function PortfolioManagement({
   const riyalLogo = theme === 'dark'
     ? require('../../assets/saudi_riyal_logo_dark.svg')
     : require('../../assets/saudi_riyal_logo.svg');
+
+  // Resolve current user from storage when prop is 0 (e.g. after web refresh or stale parent state)
+  const [technicianId, setTechnicianId] = useState(technicianIdProp);
+  useEffect(() => {
+    if (technicianIdProp > 0) {
+      setTechnicianId(technicianIdProp);
+      return;
+    }
+    storage.getUserId().then((id) => {
+      if (id != null && id > 0) setTechnicianId(id);
+      else setTechnicianId(technicianIdProp);
+    });
+  }, [technicianIdProp]);
   
   // Responsive state
   const [screenWidth, setScreenWidth] = useState(Dimensions.get('window').width);
@@ -138,16 +153,21 @@ export default function PortfolioManagement({
   };
   
   useEffect(() => {
-    loadPortfolio();
     if (isOwnProfile) {
+      loadPortfolio();
       loadPDFInfo();
       loadUserProfile();
+      return;
     }
+    if (technicianId <= 0) return;
+    loadPortfolio();
   }, [technicianId, isOwnProfile]);
   
   const loadUserProfile = async () => {
     try {
       const profile = await getUserProfile();
+      console.log('👤 [PortfolioManagement] Profile returned by /users/profile:');
+      console.log('   id:', profile?.id, 'name:', profile?.name || profile?.firstName, 'phone:', profile?.phoneNumber);
       setUserProfile(profile);
     } catch (error) {
       console.error('❌ [PortfolioManagement] Error loading user profile:', error);
@@ -165,9 +185,20 @@ export default function PortfolioManagement({
   };
   
   const loadPortfolio = async () => {
+    console.log('🔄 [PortfolioManagement] loadPortfolio called - isOwnProfile:', isOwnProfile, 'technicianIdProp:', technicianIdProp, 'technicianId:', technicianId);
     setIsLoading(true);
     try {
-      const portfolioData = await getTechnicianPortfolio(technicianId);
+      let portfolioData: TechnicianPortfolio | null;
+      if (isOwnProfile) {
+        console.log('📤 [PortfolioManagement] Using getMyPortfolio() (token-based, no userId)');
+        portfolioData = await getMyPortfolio();
+      } else if (technicianId > 0) {
+        console.log('📤 [PortfolioManagement] Using getTechnicianPortfolio with id:', technicianId);
+        portfolioData = await getTechnicianPortfolio(technicianId);
+      } else {
+        portfolioData = null;
+      }
+      console.log('✅ [PortfolioManagement] Portfolio loaded, projects:', portfolioData?.pastProjects?.length || 0);
       setPortfolio(portfolioData);
     } catch (err: any) {
       console.error('❌ [PortfolioManagement] Error loading portfolio:', err);
@@ -354,7 +385,7 @@ export default function PortfolioManagement({
       showSuccess(successMessage, t('Success'));
     } catch (err: any) {
       console.error('❌ [PortfolioManagement] Error saving project:', err);
-      showError(err.message || t('Failed to save project'), t('Error'));
+      showError(typeof err?.message === 'string' ? err.message : t('Failed to save project'), t('Error'));
     } finally {
       setIsSaving(false);
     }
@@ -402,7 +433,7 @@ export default function PortfolioManagement({
       );
     } catch (error: any) {
       console.error('❌ [PortfolioManagement] Error generating PDF:', error);
-      showError(error.message || t('Failed to generate PDF'), t('Error'));
+      showError(typeof error?.message === 'string' ? error.message : t('Failed to generate PDF'), t('Error'));
     } finally {
       setIsGeneratingPDF(false);
     }
@@ -505,7 +536,7 @@ export default function PortfolioManagement({
           showSuccess(t('Project deleted successfully'), t('Success'));
         } catch (err: any) {
           console.error('❌ [PortfolioManagement] Error deleting project:', err);
-          showError(err.message || t('Failed to delete project'), t('Error'));
+          showError(typeof err?.message === 'string' ? err.message : t('Failed to delete project'), t('Error'));
         }
       },
       t('Delete')
@@ -646,14 +677,14 @@ export default function PortfolioManagement({
           )}
         
         {/* Bio Section */}
-        {portfolio?.bio && (
+        {portfolio?.bio ? (
           <View style={[styles.bioCard, { backgroundColor: colors.cardBackground }]}>
             <Text style={[styles.bioTitle, { color: colors.text }]}>{t('About')}</Text>
             <Text style={[styles.bioText, { color: colors.textSecondary }]}>
               {portfolio.bio}
             </Text>
           </View>
-        )}
+        ) : null}
         
           {/* Past Projects Section with Blue Left Border */}
           <View style={styles.figmaSectionHeader}>
@@ -691,7 +722,7 @@ export default function PortfolioManagement({
                       return (
                   <View key={project.id} style={[styles.figmaProjectCard, { backgroundColor: colors.cardBackground, borderColor: '#A3A3A3' }]}>
                     {/* Project Image */}
-                    {firstPhoto && (
+                    {firstPhoto ? (
                       <View style={styles.projectImageContainer}>
                           <Image
                           source={{ uri: firstPhoto }}
@@ -699,7 +730,7 @@ export default function PortfolioManagement({
                           resizeMode="cover"
                         />
                           </View>
-                    )}
+                    ) : null}
                     
                     {/* Divider */}
                     <View style={styles.projectDivider} />
@@ -710,18 +741,18 @@ export default function PortfolioManagement({
                       </Text>
                     
                     {/* Project Description */}
-                    {project.description && (
+                    {project.description ? (
                       <Text style={[styles.figmaProjectDescription, { color: '#A3A3A3' }]}>
                         {project.description}
                       </Text>
-                    )}
+                    ) : null}
                     
                     {/* Project Date */}
-                    {formattedDate && (
+                    {formattedDate ? (
                       <Text style={[styles.figmaProjectDate, { color: '#A3A3A3' }]}>
                         {formattedDate}
                       </Text>
-                    )}
+                    ) : null}
                     
                     {/* Edit and Delete Buttons */}
                     {isOwnProfile && (
@@ -861,104 +892,80 @@ export default function PortfolioManagement({
       >
         <View style={styles.desktopContent}>
           {/* Bio Section */}
-          {portfolio?.bio && (
+          {portfolio?.bio ? (
             <View style={[styles.desktopBioCard, { backgroundColor: colors.cardBackground }]}>
               <Text style={[styles.desktopBioTitle, { color: colors.text }]}>{t('About')}</Text>
               <Text style={[styles.desktopBioText, { color: colors.textSecondary }]}>
                 {portfolio.bio}
               </Text>
             </View>
-          )}
+          ) : null}
           
-          {/* Projects Grid */}
+          {/* Projects Grid - Instagram Style */}
           {pastProjects.length > 0 ? (
             <View style={styles.desktopProjectsGrid}>
-              {pastProjects.map((project) => (
-                <View key={project.id} style={[styles.desktopProjectCard, { backgroundColor: colors.cardBackground }]}>
-                  <View style={styles.desktopProjectHeader}>
-                    <Text style={[styles.desktopProjectTitle, { color: colors.text }]}>
-                      {project.title}
-                    </Text>
-                    {isOwnProfile && (
-                      <View style={styles.desktopProjectActions}>
-                        <TouchableOpacity
-                          style={[styles.desktopActionButton, { backgroundColor: colors.primary + '20' }]}
-                          onPress={() => handleEditProject(project)}
-                        >
-                          <Ionicons name="create-outline" size={18} color={colors.primary} />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[styles.desktopActionButton, { backgroundColor: '#EF4444' + '20' }]}
-                          onPress={() => handleDeleteProject(project)}
-                        >
-                          <Ionicons name="trash-outline" size={18} color="#EF4444" />
-                        </TouchableOpacity>
-                      </View>
-                    )}
-                  </View>
-                  
-                  {project.description && (
-                    <Text style={[styles.desktopProjectDescription, { color: colors.textSecondary }]}>
-                      {project.description}
-                    </Text>
-                  )}
-                  
-                  {((project.photos && project.photos.length > 0) || (project.files && project.files.length > 0)) && (
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      style={styles.desktopProjectPhotos}
-                    >
-                      {(project.photos || project.files || []).map((photo, index) => {
-                        const photoUrl = normalizeImageUrl(photo);
-                        return (
+              {pastProjects.map((project) => {
+                const photos = project.photos || project.files || [];
+                const firstPhoto = photos.length > 0 ? normalizeImageUrl(photos[0]) : null;
+                return (
+                  <TouchableOpacity
+                    key={project.id}
+                    style={[styles.desktopProjectCard, { backgroundColor: colors.cardBackground }]}
+                    activeOpacity={0.85}
+                    onPress={() => {
+                      if (photos.length > 0) {
+                        setSlideshowPhotos(photos.map(p => normalizeImageUrl(p)));
+                        setCurrentPhotoIndex(0);
+                        setShowPhotoSlideshow(true);
+                      }
+                    }}
+                  >
+                    <View style={styles.igCardImageWrap}>
+                      {firstPhoto ? (
+                        <Image source={{ uri: firstPhoto }} style={styles.igCardImage} resizeMode="cover" />
+                      ) : (
+                        <View style={[styles.igCardImage, styles.igCardPlaceholder]}>
+                          <Ionicons name="briefcase-outline" size={40} color={colors.textSecondary} />
+                        </View>
+                      )}
+                      {photos.length > 1 && (
+                        <View style={styles.igMultiBadge}>
+                          <Ionicons name="copy" size={14} color="#fff" />
+                        </View>
+                      )}
+                      {isOwnProfile && (
+                        <View style={styles.igActions}>
                           <TouchableOpacity
-                            key={index}
-                            onPress={(e) => {
-                              e.stopPropagation();
-                              const allPhotos = (project.photos || project.files || []).map(p => normalizeImageUrl(p));
-                              if (allPhotos.length > 0) {
-                                setSlideshowPhotos(allPhotos);
-                                setCurrentPhotoIndex(index);
-                                setShowPhotoSlideshow(true);
-                              }
-                            }}
-                            activeOpacity={0.7}
-                            style={styles.desktopProjectPhotoContainer}
+                            style={styles.igActionBtn}
+                            onPress={(e) => { e.stopPropagation(); handleEditProject(project); }}
                           >
-                            <Image
-                              source={{ uri: photoUrl }}
-                              style={styles.desktopProjectPhoto}
-                            />
-                            <View style={styles.photoOverlay}>
-                              <Ionicons name="expand" size={18} color="#fff" />
-                            </View>
+                            <Ionicons name="create-outline" size={16} color="#fff" />
                           </TouchableOpacity>
-                        );
-                      })}
-                    </ScrollView>
-                  )}
-                  
-                  <View style={styles.desktopProjectDetails}>
-                    {project.location && (
-                      <View style={styles.desktopProjectDetail}>
-                        <Ionicons name="location" size={16} color={colors.textSecondary} />
-                        <Text style={[styles.desktopProjectDetailText, { color: colors.textSecondary }]}>
-                          {project.location}
-                        </Text>
-                      </View>
-                    )}
-                    {project.projectValue && (
-                      <View style={styles.desktopProjectDetail}>
-                        <Image source={riyalLogo} style={styles.riyalLogoSmall} resizeMode="contain" />
-                        <Text style={[styles.desktopProjectDetailText, { color: colors.textSecondary }]}>
-                          {project.projectValue.toLocaleString()}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                </View>
-              ))}
+                          <TouchableOpacity
+                            style={[styles.igActionBtn, { backgroundColor: 'rgba(239,68,68,0.8)' }]}
+                            onPress={(e) => { e.stopPropagation(); handleDeleteProject(project); }}
+                          >
+                            <Ionicons name="trash-outline" size={16} color="#fff" />
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    </View>
+                    <View style={styles.igCardFooter}>
+                      <Text style={[styles.igCardTitle, { color: colors.text }]} numberOfLines={1}>
+                        {project.title}
+                      </Text>
+                      {project.location ? (
+                        <View style={styles.igCardMeta}>
+                          <Ionicons name="location-outline" size={13} color={colors.textSecondary} />
+                          <Text style={[styles.igCardMetaText, { color: colors.textSecondary }]} numberOfLines={1}>
+                            {project.location}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           ) : (
             <View style={[styles.desktopEmptyState, { backgroundColor: colors.cardBackground }]}>
@@ -1442,7 +1449,7 @@ export default function PortfolioManagement({
             <ScrollView style={styles.modalScrollView}>
               {pdfInfo && (
                 <>
-                  {pdfInfo.qrCodeUrl && (
+                  {pdfInfo.qrCodeUrl ? (
                     <View style={styles.qrCodeContainer}>
                       <Text style={[styles.label, { color: colors.text, marginBottom: 12 }]}>
                         {t('QR Code')}
@@ -1453,9 +1460,9 @@ export default function PortfolioManagement({
                         resizeMode="contain"
                       />
                     </View>
-                  )}
+                  ) : null}
                   
-                  {pdfInfo.companyName && (
+                  {pdfInfo.companyName ? (
                     <View style={styles.pdfInfoRow}>
                       <Text style={[styles.label, { color: colors.text }]}>
                         {t('Company')}:
@@ -1464,7 +1471,7 @@ export default function PortfolioManagement({
                         {pdfInfo.companyName}
                       </Text>
                     </View>
-                  )}
+                  ) : null}
                   
                   <View style={styles.pdfInfoRow}>
                     <Text style={[styles.label, { color: colors.text }]}>
@@ -1497,7 +1504,7 @@ export default function PortfolioManagement({
                     </TouchableOpacity>
                   </View>
                   
-                  {pdfInfo.publicUrl && (
+                  {pdfInfo.publicUrl ? (
                     <View style={styles.pdfLinkContainer}>
                       <Text style={[styles.label, { color: colors.text, marginBottom: 8 }]}>
                         {t('Public Link')}:
@@ -1515,7 +1522,7 @@ export default function PortfolioManagement({
                         </Text>
                       </TouchableOpacity>
                     </View>
-                  )}
+                  ) : null}
                 </>
               )}
             </ScrollView>
@@ -2178,14 +2185,13 @@ const styles = StyleSheet.create({
   desktopProjectsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 24,
+    gap: 4,
   },
   desktopProjectCard: {
-    flex: 1,
-    minWidth: 400,
-    maxWidth: 500,
-    padding: 24,
-    borderRadius: 16,
+    width: '32.66%',
+    padding: 0,
+    borderRadius: 8,
+    overflow: 'hidden' as const,
     ...Platform.select({
       web: {
         boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
@@ -2195,69 +2201,61 @@ const styles = StyleSheet.create({
       },
     }),
   },
-  desktopProjectHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 16,
+  igCardImageWrap: {
+    width: '100%',
+    aspectRatio: 1,
+    position: 'relative' as const,
   },
-  desktopProjectTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    flex: 1,
-    marginRight: 12,
+  igCardImage: {
+    width: '100%',
+    height: '100%',
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
   },
-  desktopProjectActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  desktopActionButton: {
-    padding: 8,
-    borderRadius: 8,
-  },
-  desktopProjectDescription: {
-    fontSize: 14,
-    lineHeight: 22,
-    marginBottom: 16,
-    opacity: 0.8,
-  },
-  desktopProjectPhotos: {
-    marginBottom: 16,
-  },
-  desktopProjectPhotoContainer: {
-    position: 'relative',
-    marginRight: 12,
-    ...Platform.select({
-      web: {
-        cursor: 'pointer',
-      } as any,
-    }),
-  },
-  desktopProjectPhoto: {
-    width: 180,
-    height: 180,
-    borderRadius: 12,
-    ...Platform.select({
-      web: {
-        boxShadow: '0 2px 6px rgba(0, 0, 0, 0.1)',
-      } as any,
-      default: {
-        elevation: 2,
-      },
-    }),
-  },
-  desktopProjectDetails: {
-    flexDirection: 'row',
-    gap: 16,
-    flexWrap: 'wrap',
-  },
-  desktopProjectDetail: {
-    flexDirection: 'row',
+  igCardPlaceholder: {
+    justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#f0f0f0',
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+  },
+  igMultiBadge: {
+    position: 'absolute' as const,
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: 4,
+    padding: 4,
+  },
+  igActions: {
+    position: 'absolute' as const,
+    bottom: 8,
+    right: 8,
+    flexDirection: 'row',
     gap: 6,
   },
-  desktopProjectDetailText: {
+  igActionBtn: {
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: 6,
+    padding: 6,
+  },
+  igCardFooter: {
+    padding: 10,
+  },
+  igCardTitle: {
     fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  igCardMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginTop: 2,
+  },
+  igCardMetaText: {
+    fontSize: 12,
+    flex: 1,
   },
   desktopEmptyState: {
     padding: 48,

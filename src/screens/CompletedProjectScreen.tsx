@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -87,6 +87,24 @@ export default function CompletedProjectScreen({
   const { fontFamily, scaledSize } = useFontFamily();
   const insets = useSafeAreaInsets();
   const isRTL = i18n.language === 'ar';
+  const c = useMemo(() => ({
+    ...COLORS,
+    bgWhite: colors.cardBackground,
+    textHeader: colors.text,
+    textBody: colors.text,
+    textSecondary: colors.textSecondary,
+    textDividers: colors.border,
+    primary10: colors.primary + '20',
+    primary60: colors.primary,
+    primary70: colors.primary,
+    primary100: colors.primary,
+    textWhite: colors.white,
+    green10: colors.success + '20',
+    green60: colors.success,
+    green70: colors.success,
+    green80: colors.success,
+    green90: colors.success,
+  }), [colors]);
   
   const screenWidth = Dimensions.get('window').width;
   const IS_WEB = Platform.OS === 'web';
@@ -642,7 +660,7 @@ export default function CompletedProjectScreen({
 
   return (
     <>
-      <View style={[styles.container, { backgroundColor: COLORS.bgWhite, paddingTop: IS_LARGE_WEB ? 0 : Math.max(insets.top, 16) }]}>
+      <View style={[styles.container, { backgroundColor: c.bgWhite, paddingTop: IS_LARGE_WEB ? 0 : Math.max(insets.top, 16) }]}>
         {/* Header - Hidden on large web */}
         {!IS_LARGE_WEB && (
         <View style={[styles.header, { paddingTop: Math.max(insets.top, 16) }]}>
@@ -651,7 +669,7 @@ export default function CompletedProjectScreen({
               <Ionicons 
                 name={isRTL ? "chevron-forward" : "chevron-back"} 
                 size={28} 
-                color={COLORS.primary100} 
+                color={c.primary100} 
               />
             </TouchableOpacity>
             <View style={[styles.headerTextContainer, isRTL && styles.headerTextContainerRTL]}>
@@ -669,7 +687,7 @@ export default function CompletedProjectScreen({
         {/* Content */}
         {isLoading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={COLORS.primary60} />
+            <ActivityIndicator size="large" color={c.primary60} />
             <Text style={[styles.loadingText, { fontSize: scaledSize(14) }]}>{t('Loading...')}</Text>
           </View>
         ) : (
@@ -688,7 +706,7 @@ export default function CompletedProjectScreen({
                   <Ionicons 
                     name={isRTL ? "chevron-forward" : "chevron-back"} 
                     size={24} 
-                    color={COLORS.primary100} 
+                    color={c.primary100} 
                   />
                 </TouchableOpacity>
                 <View style={styles.titleContainer}>
@@ -711,7 +729,7 @@ export default function CompletedProjectScreen({
             {/* Completion Success Section */}
             <View style={styles.successSection}>
               <View style={styles.successIcon}>
-                <Ionicons name="checkmark-circle" size={32} color={COLORS.green60} />
+                <Ionicons name="checkmark-circle" size={32} color={c.green60} />
               </View>
               <Text style={[styles.successTitle, { fontSize: scaledSize(20) }]}>{t('Project Completed!')}</Text>
               <Text style={[styles.successSubtitle, { fontSize: scaledSize(16) }]}>

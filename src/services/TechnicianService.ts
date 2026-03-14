@@ -1,5 +1,5 @@
 import { storage } from '../utils/storage';
-import { API_ENDPOINTS, buildApiUrlWithParams, API_BASE_URL } from '../config/api';
+import { API_ENDPOINTS, buildApiUrl, buildApiUrlWithParams, API_BASE_URL } from '../config/api';
 
 /**
  * Technician Profile Interface
@@ -138,6 +138,54 @@ export const getTechnicianProfile = async (technicianId: number): Promise<Techni
  * @param technicianId - The technician's user ID
  * @returns Promise with technician portfolio data or null if not found
  */
+export const getMyPortfolio = async (): Promise<TechnicianPortfolio | null> => {
+  try {
+    const token = await storage.getAuthToken();
+    if (!token) throw new Error('No authentication token found');
+
+    const storedUserId = await storage.getUserId();
+    const url = buildApiUrl(API_ENDPOINTS.PORTFOLIO.MY);
+
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('📤 [TechnicianService] Fetching MY portfolio (token-based)');
+    console.log('📤 [TechnicianService] URL:', url);
+    console.log('📤 [TechnicianService] Stored userId (for debug):', storedUserId);
+    console.log('📤 [TechnicianService] Token (first 30):', token?.substring(0, 30));
+    console.log('═══════════════════════════════════════════════════════════');
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const status = response.status;
+    console.log('📥 [TechnicianService] My Portfolio Response Status:', status);
+
+    if (!response.ok) {
+      if (status === 404 || status === 400) {
+        console.log('ℹ️ [TechnicianService] No portfolio found for current user');
+        return null;
+      }
+      const errorText = await response.text();
+      console.error('❌ [TechnicianService] Error response:', errorText);
+      throw new Error(`Failed to fetch my portfolio: ${status}`);
+    }
+
+    const portfolio = await response.json();
+    console.log('✅ [TechnicianService] My portfolio loaded');
+    console.log('   userId in response:', portfolio.userId || portfolio.user_id || 'N/A');
+    console.log('   bio:', portfolio.bio?.substring(0, 50) || 'N/A');
+    console.log('   projects:', portfolio.pastProjects?.length || 0);
+    return portfolio;
+  } catch (error: any) {
+    console.error('❌ [TechnicianService] Error fetching my portfolio:', error);
+    throw error;
+  }
+};
+
 export const getTechnicianPortfolio = async (technicianId: number): Promise<TechnicianPortfolio | null> => {
   try {
     const token = await storage.getAuthToken();
@@ -166,8 +214,8 @@ export const getTechnicianPortfolio = async (technicianId: number): Promise<Tech
     console.log('📥 [TechnicianService] Portfolio Response Status:', status);
     
     if (!response.ok) {
-      if (status === 404) {
-        // No portfolio found - this is not an error
+      if (status === 404 || status === 400) {
+        // No portfolio found (404 or 400 "Portfolio not found") - not an error
         console.log('ℹ️ [TechnicianService] No portfolio found for technician:', technicianId);
         return null;
       }
@@ -177,8 +225,9 @@ export const getTechnicianPortfolio = async (technicianId: number): Promise<Tech
       
       try {
         const errorJson = JSON.parse(errorText);
-        throw new Error(errorJson.message || `Failed to fetch portfolio: ${status}`);
-      } catch {
+        throw new Error(errorJson.message || errorJson.error || `Failed to fetch portfolio: ${status}`);
+      } catch (parseErr: any) {
+        if (parseErr?.message?.startsWith('Failed to fetch')) throw parseErr;
         throw new Error(`Failed to fetch portfolio: ${status}`);
       }
     }

@@ -43,19 +43,47 @@ export type ServiceCategory = ServiceCategoryOrSub;
 export type ServiceSubcategory = ServiceCategoryOrSub;
 
 /**
- * Helper function to get the active image URL for a service
- * Uses useSvg flag to determine whether to use SVG or photo
+ * Get the display icon path/URL for a category or subcategory (same as web).
+ * Priority: useSvg && svgUrl → imageUrl → iconUrl (legacy).
+ * Returns the raw path (e.g. "/uploads/...") or full URL if already absolute.
+ */
+export function getDisplayIconUrl(service: ServiceCategoryOrSub): string | null {
+  if (service.useSvg && service.svgUrl && String(service.svgUrl).trim()) {
+    return service.svgUrl;
+  }
+  if (service.imageUrl && String(service.imageUrl).trim()) {
+    return service.imageUrl;
+  }
+  if (service.iconUrl && String(service.iconUrl).trim()) {
+    return service.iconUrl;
+  }
+  const raw = service as Record<string, unknown>;
+  const icon = raw.icon ?? raw.image;
+  if (icon && typeof icon === 'string' && icon.trim()) {
+    return icon.trim();
+  }
+  return null;
+}
+
+/**
+ * Get full URL for the display icon (same logic as web getImageUrl).
+ * Use this when rendering: prepend server base URL to relative paths.
+ */
+export function getDisplayIconFullUrl(service: ServiceCategoryOrSub): string | null {
+  const path = getDisplayIconUrl(service);
+  if (!path) return null;
+  const s = path.trim();
+  if (s.startsWith('http://') || s.startsWith('https://')) return s;
+  const base = getServerBaseUrl();
+  return `${base}${s.startsWith('/') ? s : '/' + s}`;
+}
+
+/**
+ * Helper function to get the active image URL for a service (legacy).
+ * Prefer getDisplayIconUrl + getDisplayIconFullUrl for consistency with web.
  */
 export function getServiceImageUrl(service: ServiceCategoryOrSub): string | null {
-  const baseUrl = getServerBaseUrl();
-  
-  if (service.useSvg && service.svgUrl) {
-    return `${baseUrl}${service.svgUrl}`;
-  } else if (service.imageUrl) {
-    return `${baseUrl}${service.imageUrl}`;
-  }
-  
-  return null;
+  return getDisplayIconFullUrl(service);
 }
 
 /**

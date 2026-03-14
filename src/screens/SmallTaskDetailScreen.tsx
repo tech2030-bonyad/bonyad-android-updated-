@@ -16,7 +16,6 @@ import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { storage } from '../utils/storage';
-import SmallTaskPhaseBar from '../components/SmallTaskPhaseBar';
 import SmallTaskBidFormModal from '../components/SmallTaskBidFormModal';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
 import { getBidsOnRequest, acceptBid, rejectBid, updateRequestStatus } from '../services/SmallTaskService';
@@ -302,15 +301,7 @@ export default function SmallTaskDetailScreen({
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Phase Bar */}
-          <View style={styles.phaseBarContainer}>
-            <SmallTaskPhaseBar
-              currentStatus={currentStatus}
-              onStatusChange={handleStatusChange}
-            />
-          </View>
-
-          {/* Task Info Card */}
+          {/* Task Info Card - iOS style (no phase bar) */}
           <View style={[styles.infoCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
             <View style={styles.taskHeader}>
               <View style={[styles.iconContainer, { backgroundColor: colors.primary + '15' }]}>

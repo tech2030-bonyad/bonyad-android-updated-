@@ -43,14 +43,16 @@ export default function CreationMethodScreen({
   onChooseManual,
 }: CreationMethodScreenProps) {
   const { t, i18n } = useTranslation();
-  const { colors } = useTheme();
+  const { colors, theme } = useTheme();
   const { fontFamily, scaledSize } = useFontFamily();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  
+  const isDarkMode = theme === 'dark';
+
   const isRTL = i18n.language === 'ar';
   const isWeb = Platform.OS === 'web';
   const isLargeScreen = isWeb && width >= 768;
+  const cardElevation = isDarkMode && Platform.OS === 'android' ? 2 : 6;
 
   const categoryName = isRTL && category.nameAr ? category.nameAr : category.nameEn;
   const subcategoryName = isRTL && subcategory.nameAr ? subcategory.nameAr : subcategory.nameEn;
@@ -77,7 +79,7 @@ export default function CreationMethodScreen({
         <View style={styles.headerRight} />
       </View>
 
-      <View style={styles.content}>
+      <View style={[styles.content, { backgroundColor: colors.background }]}>
         {/* Info Section */}
         <View style={styles.infoSection}>
           <View style={[styles.categoryBadge, { backgroundColor: colors.primary + '15' }]}>
@@ -95,7 +97,12 @@ export default function CreationMethodScreen({
         <View style={[styles.cardsContainer, isLargeScreen && styles.cardsContainerRow]}>
           {/* AI Method Card */}
           <TouchableOpacity
-            style={[styles.methodCard, { backgroundColor: colors.cardBackground }, isLargeScreen && styles.methodCardWide]}
+            style={[
+              styles.methodCard,
+              { backgroundColor: colors.cardBackground },
+              Platform.OS === 'android' && { elevation: cardElevation },
+              isLargeScreen && styles.methodCardWide,
+            ]}
             onPress={() => onChooseAI(category, subcategory)}
             activeOpacity={0.9}
           >
@@ -106,7 +113,7 @@ export default function CreationMethodScreen({
               end={{ x: 1, y: 1 }}
             >
               <View style={[styles.iconContainer, { backgroundColor: colors.primary }]}>
-                <MaterialCommunityIcons name="robot" size={32} color="#fff" />
+                <MaterialCommunityIcons name="robot" size={32} color={colors.white} />
               </View>
               <Text style={[styles.cardTitle, { color: colors.text }]}>
                 {t('AI Assistant')}
@@ -125,7 +132,12 @@ export default function CreationMethodScreen({
 
           {/* Manual Method Card */}
           <TouchableOpacity
-            style={[styles.methodCard, { backgroundColor: colors.cardBackground }, isLargeScreen && styles.methodCardWide]}
+            style={[
+              styles.methodCard,
+              { backgroundColor: colors.cardBackground },
+              Platform.OS === 'android' && { elevation: cardElevation },
+              isLargeScreen && styles.methodCardWide,
+            ]}
             onPress={() => onChooseManual(category, subcategory)}
             activeOpacity={0.9}
           >
@@ -136,7 +148,7 @@ export default function CreationMethodScreen({
               end={{ x: 1, y: 1 }}
             >
               <View style={[styles.iconContainer, { backgroundColor: colors.warning }]}>
-                <MaterialCommunityIcons name="file-document-edit" size={32} color="#fff" />
+                <MaterialCommunityIcons name="file-document-edit" size={32} color={colors.white} />
               </View>
               <Text style={[styles.cardTitle, { color: colors.text }]}>
                 {t('Manual Entry')}

@@ -106,7 +106,7 @@ export default function ProjectTypeSelectionScreen({
         ]}
       >
         <ScrollView
-          style={styles.scrollView}
+          style={[styles.scrollView, { backgroundColor: colors.background }]}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
@@ -130,6 +130,7 @@ export default function ProjectTypeSelectionScreen({
                 backgroundColor: colors.cardBackground,
                 borderColor: colors.primary + '30',
                 shadowColor: colors.primary,
+                ...(isDarkMode && Platform.OS === 'android' ? { elevation: 2 } : {}),
               },
             ]}
             onPress={() => handleSelect(onSelectLarge)}
@@ -143,21 +144,22 @@ export default function ProjectTypeSelectionScreen({
             </Text>
           </TouchableOpacity>
 
-          {/* Small Task Option */}
+          {/* Small Task Option (theme-aware warning/amber) */}
           <TouchableOpacity
             style={[
               styles.optionCard,
               {
                 backgroundColor: colors.cardBackground,
-                borderColor: '#FFB703' + '30',
-                shadowColor: '#FFB703',
+                borderColor: colors.warning + '40',
+                shadowColor: colors.warning,
+                ...(isDarkMode && Platform.OS === 'android' ? { elevation: 2 } : {}),
               },
             ]}
             onPress={() => handleSelect(onSelectSmall)}
             activeOpacity={0.8}
           >
-            <View style={[styles.iconContainer, { backgroundColor: '#FFB703' + '15' }]}>
-              <Ionicons name="construct-outline" size={48} color="#FFB703" />
+            <View style={[styles.iconContainer, { backgroundColor: colors.warning + '20' }]}>
+              <Ionicons name="construct-outline" size={48} color={colors.warning} />
             </View>
             <Text style={[styles.optionTitle, { color: colors.text }]}>
               {t('Small Task')}

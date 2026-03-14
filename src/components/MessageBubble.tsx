@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Image, Linking, TouchableOpacity, Platform } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, Image, Linking, TouchableOpacity, Platform, AppState } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Audio as ExpoAudio } from 'expo-av';
 import { ChatMessage } from '../types/chat';
@@ -117,15 +117,33 @@ function VoiceNotePlayer({
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [position, setPosition] = useState(0);
+  const soundRef = useRef<ExpoAudio.Sound | null>(null);
+
+  const unloadSound = useCallback(() => {
+    if (soundRef.current) {
+      soundRef.current.unloadAsync().catch(() => {});
+      soundRef.current = null;
+      setSound(null);
+      setIsPlaying(false);
+    }
+  }, []);
+
+  // Unload ExoPlayer when app goes to background to prevent the
+  // "Player is accessed on the wrong thread" crash in AVManager.onHostDestroy
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'background' || state === 'inactive') {
+        unloadSound();
+      }
+    });
+    return () => sub.remove();
+  }, [unloadSound]);
 
   // Initialize audio on mount
   useEffect(() => {
     if (Platform.OS === 'web') {
-      // Web: Create HTML5 Audio element using browser's native Audio
-      if (!Audio) {
-        console.error('❌ [Web] Browser Audio API not available');
-        return;
-      }
+      if (!Audio) return;
       const audio = new Audio(uri);
       audio.preload = 'auto';
       
@@ -138,8 +156,7 @@ function VoiceNotePlayer({
         setPosition(audio.currentTime);
       };
       
-      audio.onerror = (e) => {
-        console.error('❌ [Web] Audio error:', e);
+      audio.onerror = () => {
         setIsPlaying(false);
       };
       
@@ -151,22 +168,16 @@ function VoiceNotePlayer({
         setAudioElement(null);
       };
     } else {
-      // Native: Load audio with Expo AV
       let isMounted = true;
-      let soundInstance: any = null;
       
-      // Check if ExpoAudio is available
-      if (!ExpoAudio || !ExpoAudio.Sound) {
-        console.error('❌ [Native] ExpoAudio.Sound is not available');
-        return () => {};
-      }
+      if (!ExpoAudio || !ExpoAudio.Sound) return () => {};
       
       ExpoAudio.Sound.createAsync(
         { uri },
         { shouldPlay: false }
       ).then(({ sound: newSound }) => {
         if (isMounted) {
-          soundInstance = newSound;
+          soundRef.current = newSound;
           setSound(newSound);
           
           newSound.setOnPlaybackStatusUpdate((status: any) => {
@@ -180,8 +191,7 @@ function VoiceNotePlayer({
             }
           });
         } else {
-          // Component unmounted, clean up
-          newSound.unloadAsync().catch(console.error);
+          newSound.unloadAsync().catch(() => {});
         }
       }).catch((error) => {
         console.error('❌ [Native] Error loading audio:', error);
@@ -189,12 +199,10 @@ function VoiceNotePlayer({
       
       return () => {
         isMounted = false;
-        if (soundInstance) {
-          soundInstance.unloadAsync().catch(console.error);
-        }
+        unloadSound();
       };
     }
-  }, [uri]);
+  }, [uri, unloadSound]);
 
   const playPause = async () => {
     try {

@@ -1,6 +1,5 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { useFontFamily } from '../../context/FontContext';
@@ -17,7 +16,6 @@ export default function EmptyBidsState({ message, submessage }: EmptyBidsStatePr
 
   return (
     <View style={styles.container}>
-      <Ionicons name="cash-outline" size={48} color={colors.textDividers} />
       <Text style={[styles.message, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>
         {message || t('No bids yet')}
       </Text>

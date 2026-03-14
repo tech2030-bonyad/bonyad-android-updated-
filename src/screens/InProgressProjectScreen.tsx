@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -98,6 +98,25 @@ export default function InProgressProjectScreen({
   const { fontFamily, scaledSize } = useFontFamily();
   const insets = useSafeAreaInsets();
   const isRTL = i18n.language === 'ar';
+  const c = useMemo(() => ({
+    ...COLORS,
+    bgWhite: colors.cardBackground,
+    textHeader: colors.text,
+    textBody: colors.text,
+    textSecondary: colors.textSecondary,
+    textDividers: colors.border,
+    primary10: colors.primary + '20',
+    primary60: colors.primary,
+    textWhite: colors.white,
+    green10: colors.success + '20',
+    green60: colors.success,
+    green70: colors.success,
+    green80: colors.success,
+    amber10: colors.warning + '25',
+    amber60: colors.warning,
+    amber50: colors.warning,
+    bgGray: colors.gray100,
+  }), [colors]);
   
   const screenWidth = Dimensions.get('window').width;
   const IS_WEB = Platform.OS === 'web';
@@ -712,7 +731,7 @@ export default function InProgressProjectScreen({
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: COLORS.bgWhite, paddingTop: IS_LARGE_WEB ? 0 : insets.top }]}>
+    <View style={[styles.container, { backgroundColor: c.bgWhite, paddingTop: IS_LARGE_WEB ? 0 : insets.top }]}>
       {/* Title Section - Hidden on large web */}
       {!IS_LARGE_WEB && (
         <View style={styles.titleSection}>
@@ -720,7 +739,7 @@ export default function InProgressProjectScreen({
             <Ionicons
               name={isRTL ? 'chevron-forward' : 'chevron-back'}
               size={24}
-              color={COLORS.textBody}
+              color={c.textBody}
             />
           </TouchableOpacity>
           <View style={styles.titleContainer}>
@@ -733,7 +752,7 @@ export default function InProgressProjectScreen({
           </View>
           {onNavigateToChangeRequests && project?.id != null ? (
             <TouchableOpacity onPress={() => onNavigateToChangeRequests(project.id)} style={styles.changeRequestsLink}>
-              <Ionicons name="document-text-outline" size={20} color={COLORS.primary60} />
+              <Ionicons name="document-text-outline" size={20} color={c.primary60} />
             </TouchableOpacity>
           ) : (
             <View style={{ width: 24 }} />
@@ -819,12 +838,12 @@ export default function InProgressProjectScreen({
         {/* Loading State */}
         {isLoading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={COLORS.primary60} />
+            <ActivityIndicator size="large" color={c.primary60} />
             <Text style={[styles.loadingText, { fontSize: scaledSize(14) }]}>{t('Loading phases...')}</Text>
           </View>
         ) : phases.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Ionicons name="folder-outline" size={64} color={COLORS.textDividers} />
+            <Ionicons name="folder-outline" size={64} color={c.textDividers} />
             <Text style={styles.emptyText}>{t('No phases available yet')}</Text>
           </View>
         ) : (

@@ -19,24 +19,20 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { buildApiUrl } from '../config/api';
 import { storage } from '../utils/storage';
 import { getRequestDetails } from '../services/SmallTaskService';
-import SmallTaskPhaseBar from '../components/SmallTaskPhaseBar';
-import SmallTaskStatusTimeline from '../components/SmallTaskStatusTimeline';
 import SmallTaskReviewForm from '../components/SmallTaskReviewForm';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
 import { SmallTaskRequest } from '../types/smallTasks';
 
+// iOS-matching design colors
 const COLORS = {
-  primary60: '#005DAC',
-  primary10: '#E6EFF7',
-  green80: '#008B3E',
+  primaryLight: '#1A6DB4',
+  primaryDark: '#4D8EC5',
+  borderLight: 'rgba(26, 109, 180, 0.2)',
+  borderDark: 'rgba(77, 142, 197, 0.3)',
+  statusCompleted: '#34C759',
   green10: '#E6F5EC',
-  textHeader: '#003867',
-  textBody: '#383838',
-  textSecondary: '#A3A3A3',
-  textWhite: '#FFFFFF',
-  bgWhite: '#FFFFFF',
   amber60: '#FFB703',
-  amber10: '#FFF8E6',
+  textWhite: '#FFFFFF',
 };
 
 interface CompletedSmallTaskScreenProps {
@@ -86,6 +82,9 @@ export default function CompletedSmallTaskScreen({
   const checkmarkScale = useRef(new Animated.Value(0)).current;
 
   const { alertState, showError, showSuccess, hideAlert } = useAlertPopup();
+
+  const primaryColor = isDarkMode ? COLORS.primaryDark : COLORS.primaryLight;
+  const borderColor = isDarkMode ? COLORS.borderDark : COLORS.borderLight;
 
   const riyalLogo = isDarkMode
     ? require('../../assets/saudi_riyal_logo_dark.svg')
@@ -260,7 +259,7 @@ export default function CompletedSmallTaskScreen({
     return (
       <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
+          <ActivityIndicator size="large" color={primaryColor} />
           <Text style={[styles.loadingText, { color: colors.text }]}>{t('Loading...')}</Text>
         </View>
       </View>
@@ -279,7 +278,7 @@ export default function CompletedSmallTaskScreen({
             {error || t('Something went wrong. Please try again.')}
           </Text>
           <TouchableOpacity
-            style={[styles.retryButton, { backgroundColor: colors.primary }]}
+            style={[styles.retryButton, { backgroundColor: primaryColor }]}
             onPress={loadData}
           >
             <Ionicons name="refresh" size={20} color="#FFFFFF" />
@@ -294,20 +293,13 @@ export default function CompletedSmallTaskScreen({
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Top Bar - Back Button and Status Icon */}
-      <View style={[styles.topBar, { paddingTop: IS_ANDROID ? insets.top : (IS_ANDROID_TABLET ? 0 : insets.top) }]}>
-        {IS_ANDROID ? (
-          <TouchableOpacity onPress={onBack} style={styles.androidBackButton}>
-            <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={24} color={colors.text} />
-          </TouchableOpacity>
-        ) : !IS_ANDROID_TABLET ? (
-          <TouchableOpacity onPress={onBack} style={styles.backButton}>
-            <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={24} color={colors.text} />
-          </TouchableOpacity>
-        ) : null}
-        <View style={[styles.statusBadge, { backgroundColor: COLORS.green10 }]}>
-          <Text style={[styles.statusText, { color: COLORS.green80 }]}>{t('Completed')}</Text>
-        </View>
+      {/* Header - iOS style */}
+      <View style={[styles.header, { paddingTop: insets.top, borderBottomColor: colors.border }, isRTL && { flexDirection: 'row-reverse' }]}>
+        <TouchableOpacity onPress={onBack} style={styles.headerBackButton}>
+          <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={24} color={primaryColor} />
+        </TouchableOpacity>
+        <Text style={[styles.headerTitle, { color: primaryColor }]}>{t('task_request_details')}</Text>
+        <View style={styles.headerSpacer} />
       </View>
 
       {/* Content */}
@@ -325,12 +317,7 @@ export default function CompletedSmallTaskScreen({
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Phase Bar */}
-          <View style={styles.phaseBarContainer}>
-            <SmallTaskPhaseBar currentStatus="COMPLETED" onStatusChange={() => {}} />
-          </View>
-
-          {/* Success Animation */}
+          {/* Success Animation - iOS style */}
           <Animated.View
             style={[
               styles.successContainer,
@@ -349,7 +336,7 @@ export default function CompletedSmallTaskScreen({
                 },
               ]}
             >
-              <Ionicons name="checkmark-done-circle" size={64} color={COLORS.green80} />
+              <Ionicons name="checkmark-done-circle" size={64} color={COLORS.statusCompleted} />
             </Animated.View>
             <Text style={[styles.successTitle, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '700' }]}>
               {t('Task Completed!')}
@@ -359,88 +346,77 @@ export default function CompletedSmallTaskScreen({
             </Text>
           </Animated.View>
 
-          {/* Status Timeline */}
-          <View style={styles.timelineContainer}>
-            <SmallTaskStatusTimeline
-              currentStatus="COMPLETED"
-              assignedTechnicianName={taskDetails.assignedTechnicianName}
-              completedAt={completedAt}
-            />
+          {/* Status Card - iOS style */}
+          <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: COLORS.statusCompleted + '30' }]}>
+            <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('status')}</Text>
+            <View style={[styles.statusRow, isRTL && { flexDirection: 'row-reverse' }]}>
+              <View style={[styles.statusDot, { backgroundColor: COLORS.statusCompleted }]} />
+              <Text style={[styles.statusValue, { color: COLORS.statusCompleted }]}>{t('completed')}</Text>
+            </View>
           </View>
 
-          {/* Task Info - Direct Fields (No Card) */}
-          <View style={styles.taskInfoSection}>
-            {/* Task Icon and Name + Request ID (same as web) */}
-            <View style={styles.taskHeaderSection}>
-              <View style={[styles.iconContainer, { backgroundColor: COLORS.green10 }]}>
-                <Ionicons name="checkmark-circle" size={32} color={COLORS.green80} />
-              </View>
-              <View style={styles.taskInfo}>
-                <Text style={[styles.requestIdText, { color: colors.textSecondary }]}>#{taskDetails.id}</Text>
-                <Text style={[styles.taskName, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '700' }]}>
-                  {taskName}
+          {/* Task Type Card */}
+          <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: borderColor }]}>
+            <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('task_type')}</Text>
+            <Text style={[styles.cardValue, { color: colors.text }]}>{taskName}</Text>
+          </View>
+
+          {/* Description Card */}
+          {taskDetails.description ? (
+            <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: borderColor }]}>
+              <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('description')}</Text>
+              <Text style={[styles.cardValue, { color: colors.text, textAlign: isRTL ? 'right' : 'left' }]}>{taskDetails.description}</Text>
+            </View>
+          ) : null}
+
+          {/* Address Card */}
+          {taskDetails.address ? (
+            <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: borderColor }]}>
+              <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('address')}</Text>
+              <Text style={[styles.cardValue, { color: colors.text, textAlign: isRTL ? 'right' : 'left' }]}>{taskDetails.address}</Text>
+            </View>
+          ) : null}
+
+          {/* Created At Card */}
+          {taskDetails.createdAt ? (
+            <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: borderColor }]}>
+              <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('created_at')}</Text>
+              <Text style={[styles.cardValue, { color: colors.text }]}>{formatDate(taskDetails.createdAt)}</Text>
+            </View>
+          ) : null}
+
+          {/* Completed Date Card */}
+          {completedAt ? (
+            <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: borderColor }]}>
+              <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('Completed Date')}</Text>
+              <Text style={[styles.cardValue, { color: colors.text }]}>{formatDate(completedAt)}</Text>
+            </View>
+          ) : null}
+
+          {/* Final Amount Card */}
+          {(taskDetails.budget || taskDetails.amount) ? (
+            <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: borderColor }]}>
+              <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('Final Amount')}</Text>
+              <View style={[styles.budgetAmountRow, isRTL && { flexDirection: 'row-reverse' }]}>
+                <ExpoImage source={riyalLogo} style={styles.riyalLogo} contentFit="contain" />
+                <Text style={[styles.budgetAmount, { color: primaryColor, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '700' }]}>
+                  {formatBudget(taskDetails.budget || taskDetails.amount || 0)}
                 </Text>
               </View>
             </View>
+          ) : null}
 
-            {/* Created date (same as web) */}
-            {taskDetails.createdAt && (
-              <View style={styles.fieldSection}>
-                <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{t('Created')}</Text>
-                <Text style={[styles.fieldValue, { color: colors.text }]}>
-                  {formatDate(taskDetails.createdAt)}
-                </Text>
-              </View>
-            )}
-
-            {/* Description */}
-            {taskDetails.description && (
-              <View style={styles.fieldSection}>
-                <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{t('Description')}</Text>
-                <Text style={[styles.fieldValue, { color: colors.text, fontFamily: fonts?.body || fontFamily }]}>
-                  {taskDetails.description}
-                </Text>
-              </View>
-            )}
-
-            {/* Completed Date */}
-            {completedAt && (
-              <View style={styles.fieldSection}>
-                <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{t('Completed Date')}</Text>
-                <View style={styles.dateRow}>
-                  <Ionicons name="calendar-outline" size={18} color={colors.primary} />
-                  <Text style={[styles.fieldValue, { color: colors.text }]}>
-                    {formatDate(completedAt)}
-                  </Text>
-                </View>
-              </View>
-            )}
-
-            {/* Final Amount */}
-            {(taskDetails.budget || taskDetails.amount) && (
-              <View style={styles.fieldSection}>
-                <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{t('Final Amount')}</Text>
-                <View style={styles.budgetAmountRow}>
-                  <ExpoImage source={riyalLogo} style={styles.riyalLogo} contentFit="contain" />
-                  <Text style={[styles.budgetAmount, { color: colors.primary, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '700' }]}>
-                    {formatBudget(taskDetails.budget || taskDetails.amount || 0)}
-                  </Text>
-                </View>
-              </View>
-            )}
-          </View>
-
-          {/* Technician/User - Direct Fields (No Card) */}
+          {/* Technician/User */}
           <View style={styles.contactSection}>
             <Text style={[styles.sectionTitle, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '700' }]}>
               {isTechnician ? t('Client') : t('Technician')}
             </Text>
-            <View style={styles.contactInfoRow}>
-              <View style={[styles.contactIconContainer, { backgroundColor: colors.primary + '15' }]}>
+            <View style={[styles.contactInfoRow, isRTL && { flexDirection: 'row-reverse' }]}>
+              <View style={[styles.contactIconContainer, { backgroundColor: primaryColor + '15' }]}>
                 <Ionicons
                   name={isTechnician ? 'person-outline' : 'construct-outline'}
                   size={24}
-                  color={colors.primary}
+                  color={primaryColor}
                 />
               </View>
               <View style={styles.contactDetails}>
@@ -455,15 +431,15 @@ export default function CompletedSmallTaskScreen({
                   style={[styles.viewProfileButton, { borderColor: colors.border }]}
                   onPress={() => onViewTechnician(taskDetails.assignedTechnicianId || 0)}
                 >
-                  <Ionicons name="person-outline" size={16} color={colors.primary} />
-                  <Text style={[styles.viewProfileText, { color: colors.primary, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>
+                  <Ionicons name="person-outline" size={16} color={primaryColor} />
+                  <Text style={[styles.viewProfileText, { color: primaryColor, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>
                     {t('View Profile')}
                   </Text>
                 </TouchableOpacity>
               )}
               {onOpenChat && (
                 <TouchableOpacity
-                  style={[styles.chatButton, { backgroundColor: colors.primary }]}
+                  style={[styles.chatButton, { backgroundColor: primaryColor }]}
                   onPress={handleOpenChat}
                 >
                   <Ionicons name="chatbubble-outline" size={18} color={COLORS.textWhite} />
@@ -481,8 +457,8 @@ export default function CompletedSmallTaskScreen({
               </Text>
               {hasReview ? (
                 <View style={[styles.reviewSubmitted, { backgroundColor: COLORS.green10 }]}>
-                  <Ionicons name="checkmark-circle" size={24} color={COLORS.green80} />
-                  <Text style={[styles.reviewSubmittedText, { color: COLORS.green80, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>
+                  <Ionicons name="checkmark-circle" size={24} color={COLORS.statusCompleted} />
+                  <Text style={[styles.reviewSubmittedText, { color: COLORS.statusCompleted, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>
                     {t('Review submitted')}
                   </Text>
                 </View>
@@ -504,7 +480,7 @@ export default function CompletedSmallTaskScreen({
           <View style={styles.actionButtonsContainer}>
             {onViewAllTasks && (
               <TouchableOpacity
-                style={[styles.actionButton, { backgroundColor: colors.primary }]}
+                style={[styles.actionButton, { backgroundColor: primaryColor }]}
                 onPress={onViewAllTasks}
               >
                 <Ionicons name="list-outline" size={20} color={COLORS.textWhite} />
@@ -554,44 +530,28 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 16,
   },
-  topBar: {
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
   },
-  androidBackButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...Platform.select({
-      android: {
-        elevation: 4,
-      },
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-      },
-    }),
-  },
-  backButton: {
+  headerBackButton: {
     width: 40,
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    flex: 1,
+    textAlign: 'center',
+  },
+  headerSpacer: {
+    width: 40,
   },
   content: {
     flex: 1,
@@ -600,14 +560,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 100,
-  },
-  phaseBarContainer: {
-    marginBottom: 16,
+    padding: 24,
+    paddingBottom: 120,
   },
   successContainer: {
     alignItems: 'center',
-    marginHorizontal: 16,
     marginBottom: 24,
     paddingVertical: 24,
   },
@@ -628,63 +585,34 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
   },
-  timelineContainer: {
-    marginHorizontal: 16,
-    marginBottom: 24,
+  card: {
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 12,
   },
-  taskInfoSection: {
-    marginHorizontal: 20,
-    marginBottom: 24,
-  },
-  taskHeaderSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 24,
-    gap: 16,
-  },
-  iconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  taskInfo: {
-    flex: 1,
-  },
-  requestIdText: {
-    fontSize: 12,
+  cardLabel: {
+    fontSize: 14,
     fontWeight: '500',
-    marginBottom: 6,
-  },
-  taskName: {
-    fontSize: 22,
-    fontWeight: '700',
-    lineHeight: 28,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  fieldSection: {
-    marginBottom: 20,
-  },
-  fieldLabel: {
-    fontSize: 13,
-    fontWeight: '600',
     marginBottom: 8,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
-  fieldValue: {
+  cardValue: {
     fontSize: 16,
     lineHeight: 24,
   },
-  dateRow: {
+  statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginTop: 4,
+    gap: 8,
+  },
+  statusDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  statusValue: {
+    fontSize: 16,
+    fontWeight: '600',
   },
   budgetAmountRow: {
     flexDirection: 'row',
@@ -701,7 +629,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   contactSection: {
-    marginHorizontal: 20,
+    marginTop: 8,
     marginBottom: 24,
   },
   sectionTitle: {
@@ -757,7 +685,6 @@ const styles = StyleSheet.create({
     color: COLORS.textWhite,
   },
   reviewSection: {
-    marginHorizontal: 20,
     marginBottom: 24,
   },
   reviewSubmitted: {

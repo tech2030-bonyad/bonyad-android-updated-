@@ -4,145 +4,80 @@ import { ChatMessage } from '../types/chat';
 import { storage } from '../utils/storage';
 import { getMQTTBrokerUrl } from '../config/env';
 
-// Use mqtt.js for all platforms (Web, Android, iOS)
-// mqtt.js supports TCP connections on all platforms
 let mqtt: any = null;
 let mqttLoadPromise: Promise<any> | null = null;
+let mqttPermanentlyUnavailable = false;
 
-// Dynamically load mqtt
+/**
+ * Resolve the mqtt object with a `connect` function from a raw module.
+ * mqtt.js v5 can export differently depending on the bundler:
+ *   - CJS:  module.exports = { connect, ... }
+ *   - ESM-wrapped: { default: { connect, ... } }
+ *   - Metro/RN: may wrap in { default: ... }
+ */
+function resolveMqttConnect(mod: any): any | null {
+  if (!mod) return null;
+  if (typeof mod.connect === 'function') return mod;
+  if (mod.default && typeof mod.default.connect === 'function') return mod.default;
+  if (mod.default && typeof mod.default === 'function') return { connect: mod.default };
+  return null;
+}
+
 const loadMqtt = async (): Promise<any> => {
-  if (mqtt) {
-    return mqtt;
-  }
-  
-  if (mqttLoadPromise) {
-    return mqttLoadPromise;
-  }
-  
+  if (mqtt) return mqtt;
+  if (mqttPermanentlyUnavailable) return null;
+  if (mqttLoadPromise) return mqttLoadPromise;
+
   mqttLoadPromise = (async () => {
     try {
+      let mqttModule: any;
+
       if (Platform.OS === 'web') {
-        // Web: Import mqtt - try different import paths
-        // mqtt.js v5 uses different export structure
-        let mqttModule: any;
-        
-        // Import mqtt - try regular mqtt first (works better with bundlers)
-        // mqtt/dist/mqtt can have export issues, so use regular mqtt import
         try {
           mqttModule = await import('mqtt');
-          console.log('📦 [MQTT] Imported mqtt module');
-        } catch (e: any) {
-          // Fallback to mqtt/dist/mqtt if regular import fails
-          console.warn('⚠️ [MQTT] mqtt failed, trying mqtt/dist/mqtt...');
+        } catch {
           try {
-            // @ts-ignore - mqtt/dist/mqtt works at runtime even if TypeScript complains
+            // @ts-ignore
             mqttModule = await import('mqtt/dist/mqtt');
-            console.log('📦 [MQTT] Imported mqtt/dist/mqtt module (fallback)');
           } catch (e2: any) {
-            console.error('❌ [MQTT] Failed to import mqtt:', e2?.message);
-            throw e2 || e;
+            throw e2;
           }
-        }
-        
-        // mqtt/dist/mqtt exports the mqtt module as default
-        // The structure is: { default: { connect: function, ... }, ... }
-        // We need to extract the actual mqtt module from default
-        
-        // mqtt/dist/mqtt.js exports: exports8.default = mqtt (where mqtt is the full module)
-        // So mqttModule.default should be the mqtt module object with connect method
-        if (mqttModule.default) {
-          // Default is the mqtt module object
-          if (typeof mqttModule.default === 'object' && typeof mqttModule.default.connect === 'function') {
-            // Perfect! default is the mqtt module with connect
-            mqtt = mqttModule.default;
-          } else if (typeof mqttModule.default === 'function') {
-            // Default is the connect function itself
-            mqtt = {
-              connect: mqttModule.default,
-            };
-          } else {
-            // Default is an object, use it
-            mqtt = mqttModule.default;
-          }
-        } else if (mqttModule.connect && typeof mqttModule.connect === 'function') {
-          // Named export connect
-          mqtt = mqttModule;
-        } else {
-          // Use module as-is
-          mqtt = mqttModule;
-        }
-        
-        // Final verification
-        if (mqtt && typeof mqtt.connect === 'function') {
-          console.log('✅ [MQTT] Library loaded successfully (web)');
-          return mqtt;
-        } else {
-          // Debug: Log the actual structure
-          console.error('❌ [MQTT] connect function not found');
-          console.error('❌ [MQTT] Full module:', mqttModule);
-          console.error('❌ [MQTT] Default value:', mqttModule.default);
-          if (mqttModule.default && typeof mqttModule.default === 'object') {
-            console.error('❌ [MQTT] Default object keys:', Object.keys(mqttModule.default));
-            console.error('❌ [MQTT] Default object sample:', Object.keys(mqttModule.default).slice(0, 20).reduce((acc: any, key) => {
-              acc[key] = typeof mqttModule.default[key];
-              return acc;
-            }, {}));
-          }
-          console.error('❌ [MQTT] Module keys:', Object.keys(mqttModule));
-          console.error('❌ [MQTT] mqtt object:', mqtt);
-          console.error('❌ [MQTT] mqtt keys:', mqtt ? Object.keys(mqtt) : 'null');
-          
-          // Try one more fallback: use the module directly if it has connect
-          if (mqttModule && typeof (mqttModule as any).connect === 'function') {
-            console.log('✅ [MQTT] Found connect on module directly');
-            mqtt = mqttModule as any;
-            return mqtt;
-          }
-          
-          throw new Error('mqtt.connect is not a function after import');
         }
       } else {
-        // Native: Use require
-        mqtt = require('mqtt');
-        if (mqtt && typeof mqtt.connect === 'function') {
-          console.log('✅ [MQTT] Library loaded successfully (native)');
-          return mqtt;
-        } else {
-          throw new Error('mqtt.connect is not a function after require');
-        }
+        mqttModule = require('mqtt');
       }
+
+      const resolved = resolveMqttConnect(mqttModule);
+      if (resolved) {
+        mqtt = resolved;
+        console.log(`✅ [MQTT] Library loaded (${Platform.OS})`);
+        return mqtt;
+      }
+
+      throw new Error('mqtt.connect not found in module exports');
     } catch (e: any) {
-      console.error('❌ [MQTT] Failed to load mqtt library:', e?.message || e);
-      console.error('❌ [MQTT] Error stack:', e?.stack);
-      console.error('❌ [MQTT] Please ensure mqtt is installed: npm install mqtt');
+      console.warn(`⚠️ [MQTT] Library unavailable (${Platform.OS}):`, e?.message || e);
       mqtt = null;
       mqttLoadPromise = null;
+      mqttPermanentlyUnavailable = true;
       return null;
     }
   })();
-  
+
   return mqttLoadPromise;
 };
 
-// Try to load mqtt immediately (non-blocking, won't crash if it fails)
-// For web, we need to handle it differently
-if (Platform.OS === 'web') {
-  // Web: Will load on first use via async import
-  console.log('ℹ️ [MQTT] Web platform - will load library on first use');
-} else {
-  // Native: Try to load synchronously
+// Eagerly load on native (non-blocking on failure)
+if (Platform.OS !== 'web') {
   try {
-    mqtt = require('mqtt');
-    // Verify it's the correct object
-    if (mqtt && typeof mqtt.connect === 'function') {
-      console.log('✅ [MQTT] Library pre-loaded successfully (native)');
-    } else {
-      console.warn('⚠️ [MQTT] Library loaded but connect method not found');
-      mqtt = null;
+    const mod = require('mqtt');
+    const resolved = resolveMqttConnect(mod);
+    if (resolved) {
+      mqtt = resolved;
+      console.log('✅ [MQTT] Library pre-loaded (native)');
     }
-  } catch (e) {
-    // Will load async later - this is fine
-    console.log('ℹ️ [MQTT] Will load library on first use (native)');
+  } catch {
+    // will attempt async load later
   }
 }
 
@@ -179,17 +114,9 @@ class MqttChatService {
    * Connect to MQTT broker
    */
   async connect(roomId: string): Promise<boolean> {
-    // Try to load mqtt if not already loaded
     if (!mqtt) {
-      try {
-        const loaded = await loadMqtt();
-        if (!loaded || !mqtt) {
-          console.warn('⚠️ [MQTT] Library not available. MQTT features will be disabled.');
-          console.warn('⚠️ [MQTT] Please install: npm install mqtt');
-          return false;
-        }
-      } catch (e: any) {
-        console.warn('⚠️ [MQTT] Failed to load library (non-critical):', e?.message || e);
+      const loaded = await loadMqtt();
+      if (!loaded || !mqtt) {
         return false;
       }
     }
@@ -229,15 +156,7 @@ class MqttChatService {
       options.protocol = 'wss';
       options.rejectUnauthorized = true;
       
-      console.log('🔌 [MQTT] Connecting to broker (same URI as web):');
-      console.log('   URL:', connectionUrl);
-      console.log('   ClientID:', clientID);
-      console.log('   Username:', this.token ? this.token.substring(0, 20) + '...' : 'none');
-      console.log('   KeepAlive:', this.KEEP_ALIVE);
-      console.log('   ReconnectPeriod: 2000ms');
-      console.log('   Clean: true');
-      console.log('   Protocol: wss, rejectUnauthorized: true (same as web)');
-      console.log('   Platform:', Platform.OS);
+      console.log(`🔌 [MQTT] Connecting to ${connectionUrl} (${Platform.OS})`);
       
       // Check if mqtt.connect exists
       if (!mqtt || typeof mqtt.connect !== 'function') {
@@ -287,7 +206,7 @@ class MqttChatService {
         });
       });
     } catch (error: any) {
-      console.error('❌ [MQTT] Failed to connect:', error);
+      console.warn('⚠️ [MQTT] Connection failed:', error?.message || error);
       return false;
     }
   }
@@ -395,12 +314,11 @@ class MqttChatService {
       console.log(`✅ [MQTT] Callback set for ${typingTopic}`);
     }
 
-    // Connect if not connected or different room
     if (!this.isConnected || this.currentRoomId !== roomId) {
       this.currentRoomId = roomId;
       const connected = await this.connect(roomId);
       if (!connected) {
-        console.error('❌ [MQTT] Failed to connect');
+        console.warn('⚠️ [MQTT] Not connected - chat will use polling');
         return false;
       }
     } else {

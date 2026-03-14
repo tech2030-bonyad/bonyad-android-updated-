@@ -8,18 +8,14 @@ import {
   ActivityIndicator,
   Platform,
   Animated,
-  Dimensions,
   RefreshControl,
 } from 'react-native';
-import { Image as ExpoImage } from 'expo-image';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
-import { useFontFamily } from '../context/FontContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { storage } from '../utils/storage';
 import { getRequestDetails, getBidsOnRequest, acceptBid, rejectBid, cancelRequest } from '../services/SmallTaskService';
-import SmallTaskPhaseBar from '../components/SmallTaskPhaseBar';
 import SmallTaskBidFormModal from '../components/SmallTaskBidFormModal';
 import SmallTaskBidCard from '../components/SmallTaskBidCard';
 import SmallTaskBidComparisonView from '../components/SmallTaskBidComparisonView';
@@ -30,23 +26,18 @@ import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
 import ConfirmationPopup, { useConfirmationPopup } from '../components/ConfirmationPopup';
 import { SmallTaskRequest, SmallTaskBid } from '../types/smallTasks';
 
-// Design tokens
+// iOS-matching design colors
 const COLORS = {
-  primary60: '#005DAC',
-  primary10: '#E6EFF7',
-  primary80: '#004A8A',
-  green80: '#008B3E',
-  green10: '#E6F5EC',
-  textHeader: '#003867',
-  textBody: '#383838',
-  textSecondary: '#A3A3A3',
-  textDividers: '#D9D9D9',
-  textWhite: '#FFFFFF',
-  bgWhite: '#FFFFFF',
-  error: '#EF4444',
-  error10: '#FEE2E2',
-  amber60: '#FFB703',
-  amber10: '#FFF8E6',
+  primaryLight: '#1A6DB4',
+  primaryDark: '#4D8EC5',
+  borderLight: 'rgba(26, 109, 180, 0.2)',
+  borderDark: 'rgba(77, 142, 197, 0.3)',
+  statusPending: '#FF9500',
+  statusAccepted: '#007AFF',
+  statusInProgress: '#AF52DE',
+  statusCompleted: '#34C759',
+  statusCancelled: '#8E8E93',
+  error: '#FF3B30',
 };
 
 interface PendingSmallTaskScreenProps {
@@ -66,22 +57,15 @@ export default function PendingSmallTaskScreen({
 }: PendingSmallTaskScreenProps) {
   const { t, i18n } = useTranslation();
   const { colors, theme } = useTheme();
-  const { fontFamily, fonts, scaledSize } = useFontFamily();
   const insets = useSafeAreaInsets();
   const isRTL = i18n.language === 'ar';
   const isDarkMode = theme === 'dark';
-  const screenWidth = Dimensions.get('window').width;
-  const screenHeight = Dimensions.get('window').height;
-  // Android-only responsive design for tablets
-  const IS_ANDROID = Platform.OS === 'android';
-  const IS_ANDROID_TABLET = IS_ANDROID && (screenWidth >= 600 || (screenWidth >= 480 && screenHeight >= 800));
 
   const [taskDetails, setTaskDetails] = useState<SmallTaskRequest>(task);
   const [bids, setBids] = useState<SmallTaskBid[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [hasError, setHasError] = useState(false);
   const [showBidModal, setShowBidModal] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -89,21 +73,17 @@ export default function PendingSmallTaskScreen({
   const [userRole, setUserRole] = useState<'user' | 'technician'>('user');
   const [myBidId, setMyBidId] = useState<number | null>(null);
 
-  // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
-  const scaleAnim = useRef(new Animated.Value(0.95)).current;
   const buttonAnim = useRef(new Animated.Value(0)).current;
 
   const { alertState, showError, showSuccess, hideAlert } = useAlertPopup();
   const { confirmState, showConfirmation, hideConfirmation } = useConfirmationPopup();
 
-  const riyalLogo = isDarkMode
-    ? require('../../assets/saudi_riyal_logo_dark.svg')
-    : require('../../assets/saudi_riyal_logo.svg');
+  const primaryColor = isDarkMode ? COLORS.primaryDark : COLORS.primaryLight;
+  const borderColor = isDarkMode ? COLORS.borderDark : COLORS.borderLight;
 
   useEffect(() => {
-    // Entrance animation
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -116,15 +96,8 @@ export default function PendingSmallTaskScreen({
         friction: 7,
         useNativeDriver: true,
       }),
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        tension: 50,
-        friction: 7,
-        useNativeDriver: true,
-      }),
     ]).start();
 
-    // Button animation delay
     Animated.spring(buttonAnim, {
       toValue: 1,
       tension: 50,
@@ -138,26 +111,19 @@ export default function PendingSmallTaskScreen({
   }, []);
 
   const checkUserRole = async () => {
-    try {
-      const role = await storage.getUserRole();
-      setUserRole(role === 'TECHNICIAN' ? 'technician' : 'user');
-    } catch (error) {
-      console.error('Error checking user role:', error);
-    }
+    const role = await storage.getUserRole();
+    setUserRole(role === 'TECHNICIAN' ? 'technician' : 'user');
   };
 
   const loadData = async () => {
     setIsLoading(true);
     setError(null);
-    setHasError(false);
     try {
       await loadTaskDetails();
-      // Only the requester can view bids; technicians get "Only the requester can view bids" from API
       if (!isTechnician) {
         await loadBids();
       } else {
         setBids([]);
-        // For technician: check if they already bid via my-bids (optional - could call getMyBids and find this request)
         const userId = await storage.getUserId();
         if (userId != null && task.id) {
           try {
@@ -165,42 +131,31 @@ export default function PendingSmallTaskScreen({
             const { bids: myBids } = await getMyBids();
             const myBid = myBids.find((b: { smallTaskRequestId?: number }) => b.smallTaskRequestId === task.id);
             if (myBid && (myBid as any).id) setMyBidId((myBid as any).id);
-          } catch (_) {
-            // ignore
-          }
+          } catch (_) {}
         }
       }
     } catch (err) {
       console.error('Error loading data:', err);
-      setError(t('Failed to load data. Please try again.'));
-      setHasError(true);
+      setError(t('failed_to_load_data'));
     } finally {
       setIsLoading(false);
     }
   };
 
   const loadTaskDetails = async () => {
-    try {
-      const data = await getRequestDetails(task.id);
-      setTaskDetails({
-        ...data,
-        taskType: data.taskTypeId
-          ? { id: data.taskTypeId, nameAr: data.taskTypeNameAr || '', nameEn: data.taskTypeNameEn || '' }
-          : undefined,
-      } as SmallTaskRequest);
-    } catch (error) {
-      console.error('Error loading task details:', error);
-    }
+    const data = await getRequestDetails(task.id);
+    setTaskDetails({
+      ...data,
+      taskType: data.taskTypeId
+        ? { id: data.taskTypeId, nameAr: data.taskTypeNameAr || '', nameEn: data.taskTypeNameEn || '' }
+        : undefined,
+    } as SmallTaskRequest);
   };
 
   const loadBids = async () => {
-    if (isTechnician) return; // Only requester can view bids
-    try {
-      const list = await getBidsOnRequest(task.id);
-      setBids(list as SmallTaskBid[]);
-    } catch (error) {
-      console.error('Error loading bids:', error);
-    }
+    if (isTechnician) return;
+    const list = await getBidsOnRequest(task.id);
+    setBids(list as SmallTaskBid[]);
   };
 
   const handleRefresh = async () => {
@@ -211,17 +166,16 @@ export default function PendingSmallTaskScreen({
 
   const handleAcceptBid = async (bidId: number) => {
     showConfirmation(
-      t('Accept Bid'),
-      t('Are you sure you want to accept this bid? Other bids will be rejected.'),
+      t('accept_bid'),
+      t('confirm_accept_bid_message'),
       async () => {
         try {
           await acceptBid(task.id, bidId);
-          showSuccess(t('Bid accepted successfully'), t('Success'));
+          showSuccess(t('bid_accepted_successfully'), t('success'));
           await loadData();
           onSuccess?.();
         } catch (error) {
-          console.error('Error accepting bid:', error);
-          showError(t('Error accepting bid'), t('Error'));
+          showError(t('error_accepting_bid'), t('error'));
         }
       }
     );
@@ -229,16 +183,15 @@ export default function PendingSmallTaskScreen({
 
   const handleRejectBid = async (bidId: number) => {
     showConfirmation(
-      t('Reject Bid'),
-      t('Are you sure you want to reject this bid?'),
+      t('reject_bid'),
+      t('confirm_reject_bid'),
       async () => {
         try {
           await rejectBid(bidId);
-          showSuccess(t('Bid rejected'), t('Success'));
+          showSuccess(t('bid_rejected'), t('success'));
           await loadData();
         } catch (error) {
-          console.error('Error rejecting bid:', error);
-          showError(t('Error rejecting bid'), t('Error'));
+          showError(t('error_rejecting_bid'), t('error'));
         }
       }
     );
@@ -247,29 +200,20 @@ export default function PendingSmallTaskScreen({
   const handleCancelRequest = async () => {
     try {
       await cancelRequest(task.id);
-      showSuccess(t('Task request cancelled successfully'), t('Success'));
+      showSuccess(t('request_cancelled_successfully'), t('success'));
       onSuccess?.();
       onBack();
     } catch (error: unknown) {
-      console.error('Error cancelling request:', error);
-      showError((error as Error).message || t('Error cancelling request'), t('Error'));
+      showError((error as Error).message || t('error_cancelling_request'), t('error'));
     }
   };
 
-  const formatBudget = (amount: number) => {
-    return new Intl.NumberFormat(i18n.language === 'ar' ? 'ar-SA' : 'en-US', {
-      style: 'currency',
-      currency: 'SAR',
-      minimumFractionDigits: 0,
-    }).format(amount);
-  };
-
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string): string => {
     try {
       const date = new Date(dateString);
       return date.toLocaleDateString(i18n.language === 'ar' ? 'ar-SA' : 'en-US', {
         year: 'numeric',
-        month: 'short',
+        month: 'long',
         day: 'numeric',
       });
     } catch {
@@ -277,42 +221,61 @@ export default function PendingSmallTaskScreen({
     }
   };
 
+  const getStatusColor = (status: string): string => {
+    switch (status?.toUpperCase()) {
+      case 'PENDING': return COLORS.statusPending;
+      case 'ACCEPTED': return COLORS.statusAccepted;
+      case 'IN_PROGRESS': return COLORS.statusInProgress;
+      case 'COMPLETED': return COLORS.statusCompleted;
+      case 'CANCELLED': return COLORS.statusCancelled;
+      default: return COLORS.statusCancelled;
+    }
+  };
+
+  const getStatusLabel = (status: string): string => {
+    const statusMap: { [key: string]: string } = {
+      'PENDING': t('pending'),
+      'ACCEPTED': t('accepted'),
+      'IN_PROGRESS': t('in_progress'),
+      'COMPLETED': t('completed'),
+      'CANCELLED': t('cancelled'),
+    };
+    return statusMap[status?.toUpperCase()] || status;
+  };
+
   const taskName = taskDetails?.taskType
     ? i18n.language === 'ar'
-      ? taskDetails.taskType?.nameAr || t('Task')
-      : taskDetails.taskType?.nameEn || t('Task')
-    : t('Task');
+      ? taskDetails.taskType?.nameAr || t('task')
+      : taskDetails.taskType?.nameEn || t('task')
+    : t('task');
 
-  if (isLoading && !hasError) {
+  const statusColor = getStatusColor(taskDetails.status);
+  const canCancel = taskDetails.status === 'PENDING' || taskDetails.status === 'ACCEPTED';
+
+  if (isLoading) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, { color: colors.text }]}>{t('Loading...')}</Text>
+          <ActivityIndicator size="large" color={primaryColor} />
+          <Text style={[styles.loadingText, { color: colors.text }]}>{t('loading')}</Text>
         </View>
       </View>
     );
   }
 
-  if (hasError) {
+  if (error) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
         <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle-outline" size={64} color={colors.error} />
-          <Text style={[styles.errorTitle, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '700' }]}>
-            {t('Error')}
-          </Text>
-          <Text style={[styles.errorMessage, { color: colors.textSecondary }]}>
-            {error || t('Something went wrong. Please try again.')}
-          </Text>
+          <Ionicons name="alert-circle-outline" size={64} color={COLORS.error} />
+          <Text style={[styles.errorTitle, { color: colors.text }]}>{t('error')}</Text>
+          <Text style={[styles.errorMessage, { color: colors.textSecondary }]}>{error}</Text>
           <TouchableOpacity
-            style={[styles.retryButton, { backgroundColor: colors.primary }]}
+            style={[styles.retryButton, { backgroundColor: primaryColor }]}
             onPress={loadData}
           >
             <Ionicons name="refresh" size={20} color="#FFFFFF" />
-            <Text style={[styles.retryButtonText, { fontFamily: fonts?.button || fontFamily, fontWeight: '600' }]}>
-              {t('Retry')}
-            </Text>
+            <Text style={styles.retryButtonText}>{t('retry')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -321,42 +284,38 @@ export default function PendingSmallTaskScreen({
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Top Bar - Back Button and Status Icon */}
-      <View style={[styles.topBar, { paddingTop: IS_ANDROID ? insets.top : (IS_ANDROID_TABLET ? 0 : insets.top) }]}>
-        {IS_ANDROID ? (
-          <TouchableOpacity onPress={onBack} style={styles.androidBackButton}>
-            <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={24} color={colors.text} />
-          </TouchableOpacity>
-        ) : !IS_ANDROID_TABLET ? (
-          <TouchableOpacity onPress={onBack} style={styles.backButton}>
-            <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={24} color={colors.text} />
-          </TouchableOpacity>
-        ) : null}
-        <View style={styles.topBarRight}>
-          <View style={[styles.statusBadge, { backgroundColor: COLORS.amber10 }]}>
-            <Text style={[styles.statusText, { color: COLORS.amber60 }]}>{t('Pending')}</Text>
-          </View>
-          {userRole === 'user' && (
-            <View style={styles.headerActions}>
-              <TouchableOpacity onPress={() => setShowEditModal(true)} style={styles.editButton}>
-                <Ionicons name="create-outline" size={20} color={colors.primary} />
+      {/* Header */}
+      <View style={[
+        styles.header,
+        { paddingTop: insets.top, borderBottomColor: colors.border },
+        { flexDirection: isRTL ? 'row-reverse' : 'row' },
+      ]}>
+        <TouchableOpacity onPress={onBack} style={styles.backButton}>
+          <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={24} color={primaryColor} />
+        </TouchableOpacity>
+        
+        <Text style={[styles.headerTitle, { color: primaryColor }]}>
+          {t('task_request_details')}
+        </Text>
+
+        <View style={[styles.headerActions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+          {userRole === 'user' && canCancel && (
+            <>
+              <TouchableOpacity onPress={() => setShowEditModal(true)} style={styles.actionButton}>
+                <Ionicons name="create-outline" size={20} color={primaryColor} />
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => setShowCancelModal(true)} style={styles.cancelButton}>
-                <Ionicons name="trash-outline" size={20} color={colors.error} />
+              <TouchableOpacity onPress={() => setShowCancelModal(true)} style={styles.actionButton}>
+                <Ionicons name="trash-outline" size={20} color={COLORS.error} />
               </TouchableOpacity>
-            </View>
+            </>
           )}
         </View>
       </View>
 
-      {/* Content */}
       <Animated.View
         style={[
           styles.content,
-          {
-            opacity: fadeAnim,
-            transform: [{ translateY: slideAnim }, { scale: scaleAnim }],
-          },
+          { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
         ]}
       >
         <ScrollView
@@ -364,86 +323,82 @@ export default function PendingSmallTaskScreen({
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
+            <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={primaryColor} />
           }
         >
-          {/* Phase Bar */}
-          <View style={styles.phaseBarContainer}>
-            <SmallTaskPhaseBar currentStatus="PENDING" onStatusChange={() => {}} />
-          </View>
-
-          {/* Task Info - Direct Fields (No Card) */}
-          <View style={styles.taskInfoSection}>
-            {/* Task Icon and Name + Request ID & Status (same as web) */}
-            <View style={styles.taskHeaderSection}>
-              <View style={[styles.iconContainer, { backgroundColor: colors.primary + '15' }]}>
-                <Ionicons name="construct" size={32} color={colors.primary} />
-              </View>
-              <View style={styles.taskInfo}>
-                <View style={[styles.requestIdStatusRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-                  <Text style={[styles.requestIdText, { color: colors.textSecondary }]}>#{taskDetails.id}</Text>
-                  <View style={[styles.cardStatusBadge, { backgroundColor: '#FFB70320' }]}>
-                    <Text style={[styles.cardStatusBadgeText, { color: '#FFB703' }]}>{t('Pending')}</Text>
-                  </View>
-                </View>
-                <Text style={[styles.taskName, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '700' }]}>
-                  {taskName}
-                </Text>
-              </View>
+          {/* Status Card - iOS style (no phase bar, just status card with colored border) */}
+          <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: statusColor + '30' }]}>
+            <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('status')}</Text>
+            <View style={[styles.statusRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+              <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+              <Text style={[styles.statusValue, { color: statusColor }]}>
+                {getStatusLabel(taskDetails.status)}
+              </Text>
             </View>
-
-            {/* Created date (same as web) */}
-            {taskDetails.createdAt && (
-              <View style={styles.fieldSection}>
-                <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{t('Created')}</Text>
-                <Text style={[styles.fieldValue, { color: colors.text }]}>
-                  {new Date(taskDetails.createdAt).toLocaleDateString(i18n.language === 'ar' ? 'ar-SA' : 'en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-                </Text>
-              </View>
-            )}
-
-            {/* Description */}
-            {taskDetails.description && (
-              <View style={styles.fieldSection}>
-                <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{t('Description')}</Text>
-                <Text style={[styles.fieldValue, { color: colors.text, fontFamily: fonts?.body || fontFamily }]}>
-                  {taskDetails.description}
-                </Text>
-              </View>
-            )}
-
-            {/* Address */}
-            {taskDetails.address && (
-              <View style={styles.fieldSection}>
-                <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{t('Address')}</Text>
-                <View style={styles.addressRow}>
-                  <Ionicons name="location-outline" size={18} color={colors.primary} />
-                  <Text style={[styles.fieldValue, { color: colors.text }]}>{taskDetails.address}</Text>
-                </View>
-              </View>
-            )}
-
-            {/* Budget */}
-            {(taskDetails.budget || taskDetails.amount) && (
-              <View style={styles.fieldSection}>
-                <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{t('Budget')}</Text>
-                <View style={styles.budgetRow}>
-                  <ExpoImage source={riyalLogo} style={styles.riyalLogo} contentFit="contain" />
-                  <Text style={[styles.budgetText, { color: colors.primary, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '700' }]}>
-                    {formatBudget(taskDetails.budget || taskDetails.amount || 0)}
-                  </Text>
-                </View>
-              </View>
-            )}
           </View>
+
+          {/* Task Type Card */}
+          <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: borderColor }]}>
+            <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('task_type')}</Text>
+            <Text style={[styles.cardValue, { color: colors.text }]}>{taskName}</Text>
+          </View>
+
+          {/* Description Card */}
+          {taskDetails.description && (
+            <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: borderColor }]}>
+              <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('description')}</Text>
+              <Text style={[styles.cardValue, { color: colors.text, textAlign: isRTL ? 'right' : 'left' }]}>
+                {taskDetails.description}
+              </Text>
+            </View>
+          )}
+
+          {/* Address Card */}
+          {taskDetails.address && (
+            <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: borderColor }]}>
+              <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('address')}</Text>
+              <Text style={[styles.cardValue, { color: colors.text, textAlign: isRTL ? 'right' : 'left' }]}>{taskDetails.address}</Text>
+            </View>
+          )}
+
+          {/* Bids Card - iOS style with hand.raised.fill icon and View Bids button */}
+          <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: borderColor }]}>
+            <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('bids')}</Text>
+            <View style={[styles.bidsRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+              <View style={[styles.bidsInfo, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+                <Text style={[styles.bidsCountText, { color: colors.text }]}>
+                  {bids.length} {bids.length === 1 ? t('bid') : t('bids')}
+                </Text>
+              </View>
+              {/* View Bids button - iOS style */}
+              {bids.length > 0 && userRole === 'user' && (
+                <TouchableOpacity
+                  style={[styles.viewBidsButton, { backgroundColor: primaryColor }]}
+                  onPress={() => {/* Scroll to bids section */}}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.viewBidsButtonText}>{t('view_bids')}</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+
+          {/* Created Date Card */}
+          {taskDetails.createdAt && (
+            <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: borderColor }]}>
+              <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('created_at')}</Text>
+              <Text style={[styles.cardValue, { color: colors.text }]}>
+                {formatDate(taskDetails.createdAt)}
+              </Text>
+            </View>
+          )}
 
           {/* Bids Section - For Users */}
           {userRole === 'user' && (
             <View style={styles.bidsSection}>
-              <View style={styles.sectionHeader}>
-                <Ionicons name="people-outline" size={20} color={colors.primary} />
-                <Text style={[styles.sectionTitle, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '700' }]}>
-                  {t('Bids Received')} ({bids.length})
+              <View style={[styles.sectionHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+                <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                  {t('bids_received')} ({bids.length})
                 </Text>
                 {bids.length > 0 && (
                   <TouchableOpacity
@@ -453,7 +408,7 @@ export default function PendingSmallTaskScreen({
                     <Ionicons
                       name={viewMode === 'list' ? 'grid-outline' : 'list-outline'}
                       size={20}
-                      color={colors.primary}
+                      color={primaryColor}
                     />
                   </TouchableOpacity>
                 )}
@@ -461,8 +416,8 @@ export default function PendingSmallTaskScreen({
 
               {bids.length === 0 ? (
                 <EmptyBidsState
-                  message={t('No bids yet')}
-                  submessage={t('Technicians will start bidding soon')}
+                  message={t('no_bids_yet')}
+                  submessage={t('technicians_will_start_bidding_soon')}
                 />
               ) : viewMode === 'comparison' ? (
                 <SmallTaskBidComparisonView
@@ -470,7 +425,7 @@ export default function PendingSmallTaskScreen({
                   onAccept={handleAcceptBid}
                   onReject={handleRejectBid}
                   onViewTechnician={(technicianId) => onViewTechnician?.(technicianId)}
-                  formatBudget={formatBudget}
+                  formatBudget={(amount: number) => new Intl.NumberFormat('en-US').format(amount) + ' SAR'}
                 />
               ) : (
                 bids.map((bid, index) => (
@@ -481,7 +436,7 @@ export default function PendingSmallTaskScreen({
                     onAccept={() => handleAcceptBid(bid.id)}
                     onReject={() => handleRejectBid(bid.id)}
                     onViewTechnician={() => onViewTechnician?.(bid.technicianId)}
-                    formatBudget={formatBudget}
+                    formatBudget={(amount: number) => new Intl.NumberFormat('en-US').format(amount) + ' SAR'}
                     isUser={true}
                   />
                 ))
@@ -491,14 +446,23 @@ export default function PendingSmallTaskScreen({
 
           {/* For Technicians - Show if already bid */}
           {isTechnician && myBidId && (
-            <View style={[styles.myBidSection, { backgroundColor: COLORS.green10 }]}>
-              <View style={styles.myBidInfo}>
-                <Ionicons name="checkmark-circle" size={24} color={COLORS.green80} />
-                <Text style={[styles.myBidText, { color: COLORS.green80, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>
-                  {t('You have already submitted a bid for this task')}
-                </Text>
-              </View>
+            <View style={[styles.myBidSection, { backgroundColor: COLORS.statusCompleted + '15' }]}>
+              <Ionicons name="checkmark-circle" size={24} color={COLORS.statusCompleted} />
+              <Text style={[styles.myBidText, { color: COLORS.statusCompleted }]}>
+                {t('you_have_already_submitted_a_bid')}
+              </Text>
             </View>
+          )}
+
+          {/* Cancel Button - iOS style with xmark.circle.fill icon */}
+          {userRole === 'user' && canCancel && (
+            <TouchableOpacity
+              style={[styles.cancelButton, { backgroundColor: COLORS.error }]}
+              onPress={() => setShowCancelModal(true)}
+            >
+              <Ionicons name="close-circle" size={18} color="#FFFFFF" style={styles.cancelButtonIcon} />
+              <Text style={styles.cancelButtonText}>{t('cancel_request')}</Text>
+            </TouchableOpacity>
           )}
         </ScrollView>
       </Animated.View>
@@ -511,30 +475,23 @@ export default function PendingSmallTaskScreen({
             {
               opacity: buttonAnim,
               transform: [
-                {
-                  translateY: buttonAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [100, 0],
-                  }),
-                },
+                { translateY: buttonAnim.interpolate({ inputRange: [0, 1], outputRange: [100, 0] }) },
                 { scale: buttonAnim },
               ],
             },
           ]}
         >
           <TouchableOpacity
-            style={[styles.floatingButton, { backgroundColor: colors.primary }]}
+            style={[styles.floatingButton, { backgroundColor: primaryColor }]}
             onPress={() => setShowBidModal(true)}
             activeOpacity={0.8}
           >
-            <Text style={[styles.floatingButtonText, { fontFamily: fonts?.button || fontFamily, fontWeight: '600' }]}>
-              {t('Submit Bid')}
-            </Text>
+            <Text style={styles.floatingButtonText}>{t('submit_bid')}</Text>
           </TouchableOpacity>
         </Animated.View>
       )}
 
-      {/* Bid Form Modal */}
+      {/* Modals */}
       <SmallTaskBidFormModal
         visible={showBidModal}
         task={taskDetails}
@@ -546,7 +503,6 @@ export default function PendingSmallTaskScreen({
         }}
       />
 
-      {/* Cancel Modal */}
       <SmallTaskCancelModal
         visible={showCancelModal}
         onClose={() => setShowCancelModal(false)}
@@ -554,7 +510,6 @@ export default function PendingSmallTaskScreen({
         taskName={taskName}
       />
 
-      {/* Edit Modal */}
       <SmallTaskEditModal
         visible={showEditModal}
         task={taskDetails}
@@ -566,7 +521,6 @@ export default function PendingSmallTaskScreen({
         }}
       />
 
-      {/* Alert Popup */}
       <AlertPopup
         visible={alertState.visible}
         title={alertState.title}
@@ -576,7 +530,6 @@ export default function PendingSmallTaskScreen({
         onClose={hideAlert}
       />
 
-      {/* Confirmation Popup */}
       <ConfirmationPopup
         visible={confirmState.visible}
         title={confirmState.title}
@@ -605,217 +558,6 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 16,
   },
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
-  },
-  androidBackButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...Platform.select({
-      android: {
-        elevation: 4,
-      },
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-      },
-    }),
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  topBarRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  headerActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  editButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  cancelButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  content: {
-    flex: 1,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 100,
-  },
-  phaseBarContainer: {
-    marginBottom: 16,
-  },
-  taskInfoSection: {
-    marginHorizontal: 20,
-    marginBottom: 24,
-  },
-  taskHeaderSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 24,
-    gap: 16,
-  },
-  iconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  taskInfo: {
-    flex: 1,
-  },
-  requestIdStatusRow: {
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 6,
-  },
-  requestIdText: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  cardStatusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  cardStatusBadgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  taskName: {
-    fontSize: 22,
-    fontWeight: '700',
-    lineHeight: 28,
-  },
-  fieldSection: {
-    marginBottom: 20,
-  },
-  fieldLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    marginBottom: 8,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  fieldValue: {
-    fontSize: 16,
-    lineHeight: 24,
-  },
-  addressRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    marginTop: 4,
-  },
-  budgetRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginTop: 8,
-  },
-  riyalLogo: {
-    width: 24,
-    height: 24,
-  },
-  budgetText: {
-    fontSize: 24,
-    fontWeight: '700',
-  },
-  bidsSection: {
-    marginHorizontal: 16,
-    marginBottom: 16,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-    gap: 8,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  viewModeButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  myBidSection: {
-    marginHorizontal: 20,
-    marginBottom: 24,
-    padding: 16,
-    borderRadius: 12,
-  },
-  myBidInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  myBidText: {
-    flex: 1,
-    fontSize: 14,
-  },
-  floatingButtonContainer: {
-    position: 'absolute',
-    bottom: 60,
-    left: 16,
-    right: 16,
-    zIndex: 10,
-  },
-  floatingButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  floatingButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.textWhite,
-  },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -843,6 +585,178 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   retryButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    flex: 1,
+    textAlign: 'center',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  actionButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  content: {
+    flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 24,
+    paddingBottom: 120,
+  },
+  card: {
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 12,
+  },
+  cardLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginBottom: 8,
+  },
+  cardValue: {
+    fontSize: 16,
+    lineHeight: 24,
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  statusDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  statusValue: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  bidsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  bidsInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  bidsCountText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  viewBidsButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  viewBidsButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  bidsSection: {
+    marginTop: 16,
+    marginBottom: 16,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 8,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    flex: 1,
+  },
+  viewModeButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  myBidSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+    gap: 12,
+  },
+  myBidText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  cancelButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  cancelButtonIcon: {
+    marginRight: 8,
+  },
+  cancelButtonText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  floatingButtonContainer: {
+    position: 'absolute',
+    bottom: 60,
+    left: 16,
+    right: 16,
+    zIndex: 10,
+  },
+  floatingButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 12,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
+  },
+  floatingButtonText: {
     fontSize: 16,
     fontWeight: '600',
     color: '#FFFFFF',

@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Modal,
   TextInput,
+  Platform,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,8 +18,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Card } from 'react-native-paper';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
-import { storage } from '../utils/storage';
-import { API_BASE_URL, API_ENDPOINTS, buildApiUrl, buildApiUrlWithParams } from '../config/api';
+import { API_BASE_URL } from '../config/api';
+import { getMyPortfolio } from '../services/TechnicianService';
 import * as ImagePicker from 'expo-image-picker';
 import { showAlert, showError, showSuccess } from '../utils/alert';
 import { uploadPortfolioPhoto, addPortfolioProject } from '../services/PortfolioService';
@@ -34,14 +35,16 @@ interface PortfolioItem {
   description: string;
   images: string[];
   date: string;
+  photos?: string[];
+  files?: string[];
 }
 
-export default function PortfolioScreen({ userId, onBack }: PortfolioScreenProps) {
+export default function PortfolioScreen({ userId: userIdProp, onBack }: PortfolioScreenProps) {
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { fontFamily, scaledSize } = useFontFamily();
-  
+
   const [portfolioItems, setPortfolioItems] = useState<PortfolioItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
@@ -49,50 +52,37 @@ export default function PortfolioScreen({ userId, onBack }: PortfolioScreenProps
   const [selectedImages, setSelectedImages] = useState<ImagePicker.ImagePickerAsset[]>([]);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [selectedProject, setSelectedProject] = useState<PortfolioItem | null>(null);
+
 
   useEffect(() => {
     fetchPortfolio();
-  }, [userId]);
+  }, []);
+
+  const mapProject = (p: any): PortfolioItem => ({
+    id: p.id,
+    title: p.title || '',
+    description: p.description || '',
+    images: p.photos || p.files || p.images || [],
+    date: p.startDate || p.endDate || p.date || '',
+  });
 
   const fetchPortfolio = async () => {
     setIsLoading(true);
     try {
-      const token = await storage.getAuthToken();
+      const data = await getMyPortfolio();
+      console.log('📥 [PortfolioScreen] My Portfolio Response:', data);
 
-      const response = await fetch(
-        buildApiUrlWithParams(API_ENDPOINTS.PORTFOLIO.BY_USER, { userId }),
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log('📥 [PortfolioScreen] API Response:', data);
-        
-        // Handle different response structures
-        if (Array.isArray(data)) {
-          // Direct array response
-          setPortfolioItems(data);
-        } else if (data && data.pastProjects && Array.isArray(data.pastProjects)) {
-          // Object with pastProjects array
-          setPortfolioItems(data.pastProjects);
-        } else if (data && Array.isArray(data.projects)) {
-          // Object with projects array
-          setPortfolioItems(data.projects);
-        } else {
-          // Empty array if structure is unexpected
-          console.warn('⚠️ [PortfolioScreen] Unexpected portfolio data structure:', data);
-          setPortfolioItems([]);
-        }
+      if (!data) {
+        setPortfolioItems([]);
+      } else if (data.pastProjects && Array.isArray(data.pastProjects)) {
+        setPortfolioItems(data.pastProjects.map(mapProject));
       } else {
-        console.error('Failed to fetch portfolio');
         setPortfolioItems([]);
       }
     } catch (error) {
       console.error('Error fetching portfolio:', error);
+      setPortfolioItems([]);
     } finally {
       setIsLoading(false);
     }
@@ -216,39 +206,86 @@ export default function PortfolioScreen({ userId, onBack }: PortfolioScreenProps
             </Text>
           </View>
         ) : (
-          <View style={styles.content}>
-            {Array.isArray(portfolioItems) ? portfolioItems.map((item) => (
-              <Card key={item.id} style={[styles.portfolioCard, { backgroundColor: colors.cardBackground }]}>
-                <Card.Content>
-                  <Text style={[styles.portfolioTitle, { color: colors.text, fontSize: scaledSize(16) }]}>{item.title}</Text>
-                  {item.description && (
-                    <Text style={[styles.portfolioDescription, { color: colors.textSecondary, fontSize: scaledSize(14) }]}>
-                      {item.description}
-                    </Text>
+          <View style={styles.gridContainer}>
+            {Array.isArray(portfolioItems) ? portfolioItems.map((item) => {
+              const firstImage = item.images?.[0];
+              const imageUri = firstImage
+                ? (firstImage.startsWith('http') ? firstImage : `${API_BASE_URL.replace('/api', '')}${firstImage}`)
+                : null;
+              const imageCount = item.images?.length || 0;
+
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  style={styles.gridItem}
+                  activeOpacity={0.85}
+                  onPress={() => {
+                    setSelectedProject(item);
+                  }}
+                >
+                  {imageUri ? (
+                    <Image
+                      source={{ uri: imageUri }}
+                      style={styles.gridImage}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View style={[styles.gridImage, styles.gridPlaceholder, { backgroundColor: colors.cardBackground }]}>
+                      <Ionicons name="briefcase-outline" size={40} color={colors.textSecondary} />
+                    </View>
                   )}
-                  {item.images && item.images.length > 0 && (
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imagesContainer}>
-                      {item.images.map((image, index) => (
-                        <Image
-                          key={index}
-                          source={{ uri: image.startsWith('http') ? image : `${API_BASE_URL.replace('/api', '')}${image}` }}
-                          style={styles.portfolioImage}
-                          resizeMode="cover"
-                        />
-                      ))}
-                    </ScrollView>
+                  {imageCount > 1 && (
+                    <View style={styles.gridBadge}>
+                      <Ionicons name="copy" size={14} color="#fff" />
+                    </View>
                   )}
-                  {item.date && (
-                    <Text style={[styles.portfolioDate, { color: colors.textSecondary, fontSize: scaledSize(12) }]}>
-                      {new Date(item.date).toLocaleDateString()}
-                    </Text>
-                  )}
-                </Card.Content>
-              </Card>
-            )) : null}
+                  <View style={[styles.gridOverlay]}>
+                    <Text style={styles.gridTitle} numberOfLines={1}>{item.title}</Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            }) : null}
           </View>
         )}
       </ScrollView>
+
+      {/* Project Detail Modal */}
+      {selectedProject && (
+        <Modal visible={!!selectedProject} animationType="fade" transparent>
+          <View style={styles.detailOverlay}>
+            <View style={[styles.detailCard, { backgroundColor: colors.cardBackground }]}>
+              <View style={styles.detailHeader}>
+                <Text style={[styles.detailTitle, { color: colors.text }]}>{selectedProject.title}</Text>
+                <TouchableOpacity onPress={() => setSelectedProject(null)}>
+                  <Ionicons name="close" size={24} color={colors.text} />
+                </TouchableOpacity>
+              </View>
+              {selectedProject.description ? (
+                <Text style={[styles.detailDescription, { color: colors.textSecondary }]}>
+                  {selectedProject.description}
+                </Text>
+              ) : null}
+              {selectedProject.images && selectedProject.images.length > 0 && (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.detailImagesScroll}>
+                  {selectedProject.images.map((image: string, index: number) => (
+                    <Image
+                      key={index}
+                      source={{ uri: image.startsWith('http') ? image : `${API_BASE_URL.replace('/api', '')}${image}` }}
+                      style={styles.detailImage}
+                      resizeMode="cover"
+                    />
+                  ))}
+                </ScrollView>
+              )}
+              {selectedProject.date ? (
+                <Text style={[styles.detailDate, { color: colors.textSecondary }]}>
+                  {new Date(selectedProject.date).toLocaleDateString()}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+        </Modal>
+      )}
 
       {/* Add Portfolio Modal */}
       <Modal visible={showAddModal} animationType="slide" transparent>
@@ -366,9 +403,6 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
-  content: {
-    padding: 20,
-  },
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -385,30 +419,95 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: 40,
   },
-  portfolioCard: {
-    marginBottom: 16,
-    borderRadius: 12,
+  gridContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    padding: 2,
   },
-  portfolioTitle: {
-    fontSize: 18,
+  gridItem: {
+    width: '33.33%',
+    aspectRatio: 1,
+    padding: 2,
+    position: 'relative' as const,
+  },
+  gridImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 4,
+  },
+  gridPlaceholder: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 4,
+  },
+  gridBadge: {
+    position: 'absolute' as const,
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: 4,
+    padding: 4,
+  },
+  gridOverlay: {
+    position: 'absolute' as const,
+    bottom: 2,
+    left: 2,
+    right: 2,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderBottomLeftRadius: 4,
+    borderBottomRightRadius: 4,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  gridTitle: {
+    color: '#fff',
+    fontSize: 12,
     fontWeight: '600',
-    marginBottom: 8,
   },
-  portfolioDescription: {
-    fontSize: 14,
+  detailOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  detailCard: {
+    width: '100%',
+    maxWidth: 600,
+    borderRadius: 16,
+    padding: 24,
+    ...Platform.select({
+      web: { boxShadow: '0 8px 32px rgba(0,0,0,0.25)' } as any,
+      default: { elevation: 8 },
+    }),
+  },
+  detailHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 12,
-    lineHeight: 20,
   },
-  imagesContainer: {
-    marginVertical: 12,
+  detailTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    flex: 1,
+    marginRight: 16,
   },
-  portfolioImage: {
-    width: 150,
-    height: 150,
-    borderRadius: 8,
+  detailDescription: {
+    fontSize: 14,
+    lineHeight: 22,
+    marginBottom: 16,
+  },
+  detailImagesScroll: {
+    marginBottom: 12,
+  },
+  detailImage: {
+    width: 260,
+    height: 260,
+    borderRadius: 12,
     marginRight: 12,
   },
-  portfolioDate: {
+  detailDate: {
     fontSize: 12,
     marginTop: 8,
   },

@@ -12,7 +12,7 @@
     "clear": "expo start --clear",
     "dev": "./dev.sh",
     "build:web": "npx expo export --platform web --output-dir web-build && node scripts/update-asset-paths.js",
-    "build:apk": "cd android && ./gradlew assembleRelease && echo '✅ APK built at android/app/build/outputs/apk/release/app-release.apk'",
+    "build:apk": "./scripts/build-apk.sh",
     "build:dev:android": "eas build --profile development --platform android",
     "build:prod:android": "eas build --profile production --platform android"
   },

@@ -63,6 +63,10 @@ interface ProjectsScreenProps {
   filter?: 'all' | 'available' | 'running' | 'completed' | 'bid_received' | 'direct_offers';
   /** When set, filter available projects by this service category id (e.g. from Home → Category → View available projects) */
   initialServiceCategoryId?: number | null;
+  /** When set, auto-open this project's detail screen on first mount (pass the full project object) */
+  initialProject?: any;
+  /** When set, auto-open this small task's detail screen on first mount (pass the full task object) */
+  initialSmallTask?: any;
   onOpenChat?: (roomId: string, receiverId: number, receiverName: string, projectId?: number | null) => void;
   onViewTechnician?: (technicianId: number) => void;
   onBookAppointment?: (technicianId: number, technicianName: string, projectId?: number) => void;
@@ -143,7 +147,7 @@ const FIGMA_COLORS = {
   white: '#FFFFFF',
 };
 
-export default function ProjectsScreen({ onBack, filter = 'available', initialServiceCategoryId, onOpenChat, onViewTechnician, onBookAppointment, onRequestVisit, onFilterChange }: ProjectsScreenProps) {
+export default function ProjectsScreen({ onBack, filter = 'available', initialServiceCategoryId, initialProject, initialSmallTask, onOpenChat, onViewTechnician, onBookAppointment, onRequestVisit, onFilterChange }: ProjectsScreenProps) {
   const { t, i18n } = useTranslation();
   const { colors, theme } = useTheme();
   const { fontFamily, scaledSize } = useFontFamily();
@@ -191,6 +195,10 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
   const { alertState, showError, showSuccess, hideAlert } = useAlertPopup();
   const { confirmState, showDeleteConfirmation, hideConfirmation } = useConfirmationPopup();
 
+  // Refs to ensure auto-open effects only fire once per mount
+  const didOpenInitialProject = useRef(false);
+  const didOpenInitialTask = useRef(false);
+
   // Update local filter when prop changes
   useEffect(() => {
     setLocalFilter(filter);
@@ -202,6 +210,35 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
       setServiceCategoryFilterId(initialServiceCategoryId);
     }
   }, [initialServiceCategoryId]);
+
+  // Auto-open a specific project when initialProject is provided (e.g. from Home screen card tap).
+  // Uses the project object directly — no extra API call, status is already correct.
+  useEffect(() => {
+    if (!initialProject || !userRole || didOpenInitialProject.current) return;
+    didOpenInitialProject.current = true;
+    handleProjectCardPress(initialProject as Project);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialProject, userRole]);
+
+  // Auto-open a specific small task when initialSmallTask is provided (e.g. from Home screen card tap).
+  // Uses the task object directly — no extra API call, status is already correct.
+  useEffect(() => {
+    if (!initialSmallTask || !userRole || didOpenInitialTask.current) return;
+    didOpenInitialTask.current = true;
+    setProjectType('small');
+    const status = (initialSmallTask.status || 'PENDING').toUpperCase();
+    switch (status) {
+      case 'PENDING': setCurrentPage('pending-small-task'); break;
+      case 'ACCEPTED':
+      case 'ASSIGNED': setCurrentPage('assigned-small-task'); break;
+      case 'IN_PROGRESS': setCurrentPage('in-progress-small-task'); break;
+      case 'COMPLETED': setCurrentPage('completed-small-task'); break;
+      case 'CANCELLED': setCurrentPage('small-task-detail'); break;
+      default: setCurrentPage('small-task-detail');
+    }
+    setSelectedProject(initialSmallTask as any);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialSmallTask, userRole]);
 
   // Calculate responsive breakpoints
   const IS_WEB = Platform.OS === 'web';
@@ -803,23 +840,22 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
     }
   };
 
-  // Figma-styled project card for grid layout
+  // Figma-styled project card for grid layout (theme-aware)
   const renderFigmaProjectCard = ({ item, index }: { item: Project; index: number }) => {
     const serviceName = i18n.language === 'ar' ? item.serviceNameAr : item.serviceNameEn;
-    
     return (
       <TouchableOpacity
         style={[
           styles.figmaProjectCard,
-          { marginRight: index % 2 === 0 ? CARD_GAP : 0 },
+          { marginRight: index % 2 === 0 ? CARD_GAP : 0, backgroundColor: colors.cardBackground, borderColor: colors.border },
         ]}
         onPress={() => handleProjectCardPress(item)}
         activeOpacity={0.7}
       >
-        <Text style={styles.figmaProjectTitle} numberOfLines={1}>
+        <Text style={[styles.figmaProjectTitle, { color: colors.text }]} numberOfLines={1}>
           {serviceName || t('Project')}
         </Text>
-        <Text style={styles.figmaProjectDescription} numberOfLines={2}>
+        <Text style={[styles.figmaProjectDescription, { color: colors.textSecondary }]} numberOfLines={2}>
           {item.description || t('project description')}
         </Text>
       </TouchableOpacity>
@@ -1334,7 +1370,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Android Design - New Redesign */}
       {Platform.OS === 'android' ? (
-        <View style={styles.androidContainer}>
+        <View style={[styles.androidContainer, { backgroundColor: colors.background }]}>
           {/* Project Type Selector - Toggle (always visible) */}
           <View style={styles.androidProjectTypeSelector}>
             <AnimatedProjectTypeToggle
@@ -1349,14 +1385,14 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
           {/* Show Small Tasks or Large Projects */}
           {projectType === 'small' ? (
             <ScrollView
-              style={styles.androidContent}
+              style={[styles.androidContent, { backgroundColor: colors.background }]}
               contentContainerStyle={styles.androidContentContainer}
               showsVerticalScrollIndicator={false}
               refreshControl={
                 <RefreshControl
                   refreshing={refreshing}
                   onRefresh={onRefresh}
-                  tintColor="#1e5a9e"
+                  tintColor={colors.primary}
                 />
               }
             >
@@ -1398,35 +1434,35 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
             </ScrollView>
           ) : (
             <View style={{ flex: 1 }}>
-              {/* Header Section - Outside FlatList */}
-              <View style={styles.androidHeaderSection}>
+              {/* Header Section - Outside FlatList (dark mode supported) */}
+              <View style={[styles.androidHeaderSection, { backgroundColor: colors.cardBackground }]}>
                 <View style={styles.androidTitleSection}>
-                  <Text style={styles.androidPageTitle}>{t('My Projects')}</Text>
-                  <Text style={styles.androidProjectCount}>
+                  <Text style={[styles.androidPageTitle, { color: colors.text }]}>{t('My Projects')}</Text>
+                  <Text style={[styles.androidProjectCount, { color: colors.textSecondary }]}>
                     {filteredProjects.length} {t('Total Projects')}
                   </Text>
                 </View>
-                <View style={styles.androidSearchContainer}>
-                  <Feather name="search" size={20} color="#9ca3af" />
+                <View style={[styles.androidSearchContainer, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+                  <Feather name="search" size={20} color={colors.textSecondary} />
                   <TextInput
-                    style={styles.androidSearchInput}
+                    style={[styles.androidSearchInput, { color: colors.text }]}
                     placeholder={t('search for project..')}
-                    placeholderTextColor="#9ca3af"
+                    placeholderTextColor={colors.textSecondary}
                     value={searchQuery}
                     onChangeText={setSearchQuery}
                   />
                 </View>
                 <View style={styles.androidFilterContainer}>
                   <TouchableOpacity
-                    style={styles.androidFilterButton}
+                    style={[styles.androidFilterButton, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
                     onPress={toggleFilterDropdown}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.androidFilterButtonText}>
+                    <Text style={[styles.androidFilterButtonText, { color: colors.text }]}>
                       {getStatusFilterLabel(selectedCategory)}
                     </Text>
                     <Animated.View style={{ transform: [{ rotate: rotateInterpolate }] }}>
-                      <Feather name="chevron-down" size={20} color="#1e5a9e" />
+                      <Feather name="chevron-down" size={20} color={colors.primary} />
                     </Animated.View>
                   </TouchableOpacity>
                 </View>
@@ -1519,20 +1555,20 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
                 }}
                 ListEmptyComponent={
                   <View style={styles.androidEmptyContainer}>
-                    <Ionicons name="folder-outline" size={80} color="#9ca3af" />
-                    <Text style={styles.androidEmptyText}>
+                    <Ionicons name="folder-outline" size={80} color={colors.textSecondary} />
+                    <Text style={[styles.androidEmptyText, { color: colors.textSecondary }]}>
                       {t('No projects found')}
                     </Text>
                   </View>
                 }
                 contentContainerStyle={[styles.androidListContentContainer, filteredProjects.length === 0 && styles.androidListEmptyContent]}
-                style={styles.androidContent}
+                style={[styles.androidContent, { backgroundColor: colors.background }]}
                 showsVerticalScrollIndicator={true}
                 refreshControl={
                   <RefreshControl
                     refreshing={refreshing}
                     onRefresh={onRefresh}
-                    tintColor="#1e5a9e"
+                    tintColor={colors.primary}
                   />
                 }
               />
@@ -1548,7 +1584,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
                   <Animated.View
                     style={[
                       styles.androidFilterDropdownOverlay,
-                      { opacity: dropdownOpacity },
+                      { opacity: dropdownOpacity, backgroundColor: colors.cardBackground, borderColor: colors.border },
                     ]}
                   >
                     <ScrollView
@@ -1561,20 +1597,21 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
                       <TouchableOpacity
                         style={[
                           styles.androidFilterOption,
-                          selectedCategory === 'All' && styles.androidFilterOptionActive,
+                          { borderBottomColor: colors.border },
+                          selectedCategory === 'All' && { backgroundColor: colors.primary + '20' },
                         ]}
                         onPress={() => handleStatusSelect('All')}
                       >
                         <Text
                           style={[
                             styles.androidFilterOptionText,
-                            selectedCategory === 'All' && styles.androidFilterOptionTextActive,
+                            { color: selectedCategory === 'All' ? colors.primary : colors.textSecondary, fontWeight: selectedCategory === 'All' ? '600' : '400' },
                           ]}
                         >
                           {t('All')}
                         </Text>
                         {selectedCategory === 'All' && (
-                          <Feather name="check" size={16} color="#1e5a9e" />
+                          <Feather name="check" size={16} color={colors.primary} />
                         )}
                       </TouchableOpacity>
                       {getUniqueStatuses().map((status) => (
@@ -1582,21 +1619,22 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
                           key={status}
                           style={[
                             styles.androidFilterOption,
-                            selectedCategory === status && styles.androidFilterOptionActive,
+                            { borderBottomColor: colors.border },
+                            selectedCategory === status && { backgroundColor: colors.primary + '20' },
                           ]}
                           onPress={() => handleStatusSelect(status)}
                         >
                           <Text
                             style={[
                               styles.androidFilterOptionText,
-                              selectedCategory === status && styles.androidFilterOptionTextActive,
+                              { color: selectedCategory === status ? colors.primary : colors.textSecondary, fontWeight: selectedCategory === status ? '600' : '400' },
                             ]}
                             numberOfLines={1}
                           >
                             {getStatusLabel(status)}
                           </Text>
                           {selectedCategory === status && (
-                            <Feather name="check" size={16} color="#1e5a9e" />
+                            <Feather name="check" size={16} color={colors.primary} />
                           )}
                         </TouchableOpacity>
                       ))}
@@ -1607,13 +1645,13 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
             </View>
             )}
 
-          {/* FAB - Floating Action Button */}
+          {/* FAB - Floating Action Button (theme-aware) */}
           <TouchableOpacity
-            style={styles.androidFab}
+            style={[styles.androidFab, { backgroundColor: colors.primary }]}
             onPress={() => setCurrentPage('project-type-selection')}
             activeOpacity={0.8}
           >
-            <Feather name="plus" size={28} color="#ffffff" />
+            <Feather name="plus" size={28} color={colors.white} />
           </TouchableOpacity>
         </View>
       ) : (

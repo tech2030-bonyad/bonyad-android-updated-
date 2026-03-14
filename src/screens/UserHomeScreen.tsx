@@ -23,6 +23,8 @@ import { SvgXml } from 'react-native-svg';
 import { Image as ExpoImage } from 'expo-image';
 import { CopilotStep, walkthroughable, useCopilot } from 'react-native-copilot';
 import BonyadLogo from '../components/BonyadLogo';
+import AppTopBar from '../components/AppTopBar';
+import GlassTabBar, { type UserTabId } from '../components/GlassTabBar';
 import { coachMarksStorage } from '../utils/coachMarks';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
@@ -63,7 +65,7 @@ import { buildApiUrl, API_ENDPOINTS, getApiUrl, getServerBaseUrl } from '../conf
 import { storage } from '../utils/storage';
 import { FontFamily, FontWeights } from '../constants/Fonts';
 import UserHomeScreenContent from './home/UserHomeScreen';
-import type { CategoryInfo } from './home/UserHomeScreen';
+import type { CategoryInfo } from './CategorySubcategoryScreen';
 import CategorySubcategoryScreen from './CategorySubcategoryScreen';
 
 interface UserHomeScreenProps {
@@ -143,10 +145,13 @@ export default function UserHomeScreen({
   const [showProjectsDropdown, setShowProjectsDropdown] = useState(false);
   const [activeTab, setActiveTab] = useState<'home' | 'projects' | 'chat' | 'profile' | 'notifications' | 'appointments' | 'new' | 'service-technicians' | 'technician-profile' | 'services-list'>('home');
 
-  // Animation values for dropdowns
+  // Animation values for dropdowns and tab content transition
   const mobileDropdownAnim = useRef(new Animated.Value(0)).current;
   const desktopDropdownAnim = useRef(new Animated.Value(0)).current;
+  const tabContentOpacity = useRef(new Animated.Value(1)).current;
+  const tabContentTranslateY = useRef(new Animated.Value(0)).current;
   const tabScrollRef = useRef<ScrollView>(null);
+  const prevActiveTabRef = useRef(activeTab);
   const [showServicesList, setShowServicesList] = useState(false);
 
   // Helper to get tab index
@@ -170,11 +175,21 @@ export default function UserHomeScreen({
   const [selectedChat, setSelectedChat] = useState<{ roomId: string; receiverId: number; receiverName: string; projectId?: number | null } | null>(null);
   const [showChatList, setShowChatList] = useState(true);
   const [chatReturnContext, setChatReturnContext] = useState<'home' | 'service-technicians' | null>(null);
-  const [serviceTechniciansView, setServiceTechniciansView] = useState<{ serviceId: number; serviceName?: string; source?: 'search' | 'lookForBonyaders' } | null>(null);
+  const [serviceTechniciansView, setServiceTechniciansView] = useState<{ serviceId: number; serviceName?: string; source?: 'search' | 'lookForBonyaders' | 'category' } | null>(null);
   const [selectedTechnicianId, setSelectedTechnicianId] = useState<number | null>(null);
   const [hiringTechnician, setHiringTechnician] = useState<{ id: number; name?: string } | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<CategoryInfo | null>(null);
   const [projectsScreenCategoryId, setProjectsScreenCategoryId] = useState<number | null>(null);
+  const [pendingOpenProject, setPendingOpenProject] = useState<any>(null);
+  const [pendingOpenSmallTask, setPendingOpenSmallTask] = useState<any>(null);
+  const [manualFormInitial, setManualFormInitial] = useState<{
+    categoryId: number;
+    categoryNameEn: string;
+    categoryNameAr?: string;
+    subcategoryId?: number;
+    subcategoryNameEn?: string;
+    subcategoryNameAr?: string;
+  } | null>(null);
   const insets = useSafeAreaInsets();
   const { start: startCoachTour } = useCopilot();
   const [userProfile, setUserProfile] = useState<{ name?: string; avatar?: string; profileImage?: string } | null>(null);
@@ -215,8 +230,31 @@ export default function UserHomeScreen({
     }
     if (activeTab !== 'projects') {
       setProjectsScreenCategoryId(null);
+      setPendingOpenProject(null);
+      setPendingOpenSmallTask(null);
     }
   }, [activeTab, chatReturnContext]);
+
+  // Animate tab content transition when tab changes (slide-up + fade)
+  useEffect(() => {
+    if (prevActiveTabRef.current === activeTab) return;
+    prevActiveTabRef.current = activeTab;
+    tabContentOpacity.setValue(0);
+    tabContentTranslateY.setValue(18);
+    Animated.parallel([
+      Animated.timing(tabContentOpacity, {
+        toValue: 1,
+        duration: 280,
+        useNativeDriver: true,
+      }),
+      Animated.spring(tabContentTranslateY, {
+        toValue: 0,
+        tension: 280,
+        friction: 20,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [activeTab]);
 
   // Function to restart coach tour
   const handleRestartCoachTour = async () => {
@@ -320,7 +358,7 @@ export default function UserHomeScreen({
   const IS_MEDIUM_WEB = IS_WEB && screenWidth >= 768 && screenWidth < 1200;
   const IS_SMALL_WEB = IS_WEB && screenWidth < 768;
 
-  // Fetch user profile for navigation bar
+  // Fetch user profile for navigation bar (single effect, no duplicates)
   useEffect(() => {
     const fetchProfile = async () => {
       try {
@@ -351,56 +389,16 @@ export default function UserHomeScreen({
           });
         }
       } catch (error) {
-        console.error('Error fetching user profile:', error);
-        setUserProfile({ name: userName || 'User' });
-      }
-    };
-
-    if (true) {
-      fetchProfile();
-    }
-  }, [authToken, userName, IS_LARGE_WEB]);
-
-  // Fetch user profile for navigation bar
-  useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        const token = authToken || await storage.getAuthToken();
-        if (!token) return;
-
-        const response = await fetch(buildApiUrl(API_ENDPOINTS.USER.PROFILE), {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          // Construct full URL for profile image
-          if (data.profileImage && !data.profileImage.startsWith('http')) {
-            data.profileImage = `${getServerBaseUrl()}${data.profileImage}`;
-          }
-          if (data.avatar && !data.avatar.startsWith('http')) {
-            data.avatar = `${getServerBaseUrl()}${data.avatar}`;
-          }
-          setUserProfile({
-            name: data.name || userName || 'User',
-            avatar: data.profileImage || data.avatar,
-            profileImage: data.profileImage || data.avatar,
-          });
+        // Network unreachable / offline - use fallback; avoid noisy logs in __DEV__
+        if (__DEV__) {
+          console.warn('User profile fetch failed (network may be unreachable):', (error as Error)?.message ?? error);
         }
-      } catch (error) {
-        console.error('Error fetching user profile:', error);
         setUserProfile({ name: userName || 'User' });
       }
     };
 
-    if (true) {
-      fetchProfile();
-    }
-  }, [authToken, userName, IS_LARGE_WEB]);
+    fetchProfile();
+  }, [authToken, userName]);
 
   const openChat = useCallback(
     (
@@ -492,9 +490,6 @@ export default function UserHomeScreen({
       }
 
       const url = buildApiUrl(API_ENDPOINTS.NOTIFICATIONS.UNREAD_COUNT);
-      console.log('🔔 Fetching unread notification count...');
-      console.log(`   URL: ${url}`);
-      console.log(`   Token: ${token.substring(0, 20)}...`);
 
       const response = await fetch(url, {
         method: 'GET',
@@ -504,15 +499,11 @@ export default function UserHomeScreen({
         },
       });
 
-      console.log(`📥 Unread count response status: ${response.status}`);
-
       if (response.ok) {
         const data = await response.json();
-        console.log(`📥 Unread count response data:`, data);
 
         // API might return {count: number} or just a number
         const count = typeof data === 'number' ? data : (data.count || data.unreadCount || data.unread_count || 0);
-        console.log(`✅ Unread notification count: ${count}`);
         setUnreadNotificationCount(count);
         return count;
       } else {
@@ -531,8 +522,7 @@ export default function UserHomeScreen({
       if (token) {
         // Check if it's a network error
         if (error?.message?.includes('Network request failed') || error?.message?.includes('Failed to fetch')) {
-          // Network error - might be offline, silently handle it
-          console.log('⚠️ Network error fetching unread count (may be offline)');
+          // Network error - might be offline, silently handle (no log to avoid spam)
         } else {
           console.error('❌ Error fetching unread count:', error);
         }
@@ -584,7 +574,6 @@ export default function UserHomeScreen({
   // Refresh unread count when notifications tab becomes active
   useEffect(() => {
     if (activeTab === 'notifications') {
-      console.log('📱 Notifications tab opened, refreshing unread count...');
       fetchUnreadCount();
     }
   }, [activeTab]);
@@ -829,74 +818,33 @@ export default function UserHomeScreen({
   // Render Android style (always mobile) OR Web small/medium screen style
   const shouldRenderMobile = Platform.OS !== 'web' || IS_SMALL_WEB || IS_MEDIUM_WEB;
 
-  // Render mobile layout
+  // Render mobile layout — iOS-style: on home tab, content owns full screen (top bar inside home content)
   if (shouldRenderMobile) {
+    const isHomeTabOnly = activeTab === 'home' && !selectedCategory;
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        {/* TOP BAR - Figma Design (Node 58:2467) */}
-        <View style={[styles.figmaTopBar, {
-          paddingTop: Math.max(insets.top, 10),
-          backgroundColor: isDarkMode ? colors.cardBackground : colors.primary
-        }]}>
-          {/* Logo Section */}
-          <View style={styles.figmaLogoContainer}>
-            {/* 3D Cube Logo */}
-            <View style={styles.figmaLogoIcon}>
-              <ExpoImage
-                source={require('../../assets/bonyad-cube-logo.svg')}
-                style={{
-                  width: 53,
-                  height: 64,
-                } as any}
-                contentFit="contain"
-              />
-            </View>
-            {/* Logo Text */}
-            <View style={styles.figmaLogoTextContainer}>
-              <Text style={[styles.figmaLogoText, {
-                color: isDarkMode ? colors.text : '#E6EFF7'
-              }]}>Bonyad</Text>
-              <Text style={[styles.figmaLogoTextArabic, {
-                color: isDarkMode ? colors.text : '#E6EFF7'
-              }]}>بُنيـــاد</Text>
-            </View>
-          </View>
-          {/* Icons Section */}
-          <View style={styles.figmaTopBarIcons}>
-            <TouchableOpacity style={styles.figmaIconButton} onPress={() => setActiveTab('chat')}>
-              <Ionicons
-                name="chatbubbles-outline"
-                size={24}
-                color={isDarkMode ? colors.text : '#E6EFF7'}
-              />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.figmaIconButton} onPress={handleRestartCoachTour}>
-              <Ionicons
-                name="information-circle-outline"
-                size={24}
-                color={isDarkMode ? colors.text : '#E6EFF7'}
-              />
-            </TouchableOpacity>
-            <CopilotStep text={t('coachMark.notifications')} order={1} name="notifications">
-              <CoachTouchable style={styles.figmaIconButton} onPress={() => setActiveTab('notifications')}>
-                <View style={styles.figmaNotificationWrapper}>
-                  <Ionicons
-                    name="notifications-outline"
-                    size={24}
-                    color={isDarkMode ? colors.text : '#E6EFF7'}
-                  />
-                  {unreadNotificationCount > 0 && (
-                    <View style={styles.figmaNotificationBadge}>
-                      <View style={styles.figmaNotificationDot} />
-                    </View>
-                  )}
-                </View>
-              </CoachTouchable>
-            </CopilotStep>
-          </View>
-        </View>
+        {/* Top bar — same as home screen (logo + Chat | Info | Notifications) */}
+        {!isHomeTabOnly && (
+          <AppTopBar
+            primaryColor={isDarkMode ? colors.primary : (colors.primary || '#00A5F4')}
+            isDark={isDarkMode}
+            backgroundColor={colors.background}
+            unreadNotificationCount={unreadNotificationCount}
+            onPressChat={() => setActiveTab('chat')}
+            onPressInfo={handleRestartCoachTour}
+            onPressNotifications={() => setActiveTab('notifications')}
+            notificationsWrapper={({ onPress, children }) => (
+              <CopilotStep text={t('coachMark.notifications')} order={1} name="notifications">
+                <CoachTouchable style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }} onPress={onPress}>
+                  {children}
+                </CoachTouchable>
+              </CopilotStep>
+            )}
+          />
+        )}
 
-        {/* Render content based on active tab */}
+        {/* Render content based on active tab — animated transition */}
+        <Animated.View style={{ flex: 1, opacity: tabContentOpacity, transform: [{ translateY: tabContentTranslateY }] }}>
         {activeTab === 'home' && (
           selectedCategory ? (
             <CategorySubcategoryScreen
@@ -912,7 +860,8 @@ export default function UserHomeScreen({
           ) : (
             <UserHomeScreenContent
               userName={userProfile?.name}
-              onPressSearch={(query) => {
+              unreadNotificationCount={unreadNotificationCount}
+              onPressSearch={(query: string) => {
                 setSearchText(query);
                 if (query.trim().length > 0) {
                   setShowSearchResults(true);
@@ -932,14 +881,14 @@ export default function UserHomeScreen({
                 setActiveTab('profile');
                 setProfileSubView('subscription');
               }}
-              onPressNotifications={() => onShowNotifications?.()}
-              onPressMessages={() => onShowChat?.()}
-              onPressInfo={() => { }}
+              onPressNotifications={() => setActiveTab('notifications')}
+              onPressMessages={() => setActiveTab('chat')}
+              onPressInfo={handleRestartCoachTour}
               onPressFab={() => {
                 setActiveTab('new');
-                setNewProjectSubView('ai');
+                setNewProjectSubView('project-type-selection');
               }}
-              onPressProjectStatus={(status) => {
+              onPressProjectStatus={(status: 'pending' | 'running' | 'completed') => {
                 if (status === 'pending') {
                   setCurrentProjectsFilter('available');
                 } else if (status === 'running') {
@@ -949,26 +898,58 @@ export default function UserHomeScreen({
                 }
                 setActiveTab('projects');
               }}
-              onPressCategory={(cat) => {
+              onPressCategory={(cat: CategoryInfo) => {
                 if (onPressCategory) {
                   onPressCategory(cat);
                 } else {
                   setSelectedCategory(cat);
                 }
               }}
+              onPressSubcategory={(sub) => {
+                const serviceName = i18n.language === 'ar' && sub.nameAr ? sub.nameAr : sub.nameEn;
+                setServiceTechniciansView({ serviceId: sub.id, serviceName, source: 'category' });
+                setActiveTab('service-technicians');
+              }}
+              onPressCategoryForManual={(category) => {
+                setManualFormInitial({
+                  categoryId: category.id,
+                  categoryNameEn: category.nameEn || '',
+                  categoryNameAr: category.nameAr,
+                });
+                setActiveTab('new');
+                setNewProjectSubView('manual');
+              }}
+              onPressSubcategoryForManual={(category, subcategory) => {
+                setManualFormInitial({
+                  categoryId: category.id,
+                  categoryNameEn: category.nameEn || '',
+                  categoryNameAr: category.nameAr,
+                  subcategoryId: subcategory.id,
+                  subcategoryNameEn: subcategory.nameEn || '',
+                  subcategoryNameAr: subcategory.nameAr,
+                });
+                setActiveTab('new');
+                setNewProjectSubView('manual');
+              }}
               onPressChatbot={onShowChatbot}
-              onPressProject={(projectId) => {
-                console.log('🔵 [UserHomeScreen] Project clicked from home, id:', projectId);
+              onPressProject={(project) => {
+                setPendingOpenProject(project);
                 setActiveTab('projects');
                 setCurrentProjectsFilter('running');
               }}
-              onPressCreateProject={(serviceId) => {
-                setActiveTab('new');
-                setNewProjectSubView('ai');
+              onPressSmallTask={(task) => {
+                setPendingOpenSmallTask(task);
+                setActiveTab('projects');
+                setCurrentProjectsFilter('available');
               }}
-              onPressCreateSmallTask={(taskTypeId) => {
+              onPressAppointments={() => setActiveTab('appointments')}
+              onPressCreateProject={() => {
                 setActiveTab('new');
-                setNewProjectSubView('ai');
+                setNewProjectSubView('project-type-selection');
+              }}
+              onPressCreateSmallTask={() => {
+                setActiveTab('new');
+                setNewProjectSubView('small-task-type-selection');
               }}
               onPressMySmallTasks={() => {
                 setActiveTab('projects');
@@ -1397,6 +1378,8 @@ export default function UserHomeScreen({
             <ProjectsScreen
               filter={currentProjectsFilter}
               initialServiceCategoryId={projectsScreenCategoryId}
+              initialProject={pendingOpenProject}
+              initialSmallTask={pendingOpenSmallTask}
               onFilterChange={(newFilter) => {
                 setCurrentProjectsFilter(newFilter as any);
               }}
@@ -1687,128 +1670,46 @@ export default function UserHomeScreen({
                 onBack={() => {
                   setNewProjectSubView(null);
                   setHiringTechnician(null);
+                  setManualFormInitial(null);
                 }}
                 onSuccess={() => {
                   setHiringTechnician(null);
+                  setManualFormInitial(null);
                   setActiveTab('home');
                 }}
+                initialCategoryId={manualFormInitial?.categoryId}
+                initialCategoryName={i18n.language === 'ar' ? manualFormInitial?.categoryNameAr : manualFormInitial?.categoryNameEn}
+                initialSubcategoryId={manualFormInitial?.subcategoryId}
+                initialSubcategoryName={i18n.language === 'ar' ? manualFormInitial?.subcategoryNameAr : manualFormInitial?.subcategoryNameEn}
               />
             ) : null}
           </View>
         )}
+        </Animated.View>
 
-        {/* ═══ MODERN TAB BAR ═══ */}
-        <View style={[styles.modernTabBarContainer, {
-          paddingBottom: Math.max(insets.bottom, 6),
-          backgroundColor: isDarkMode ? colors.cardBackground : '#FFFFFF',
-        }]}>
-          <View style={styles.modernTabBarInner}>
-            {/* Home Tab */}
-            <TouchableOpacity
-              style={styles.modernTabItem}
-              activeOpacity={0.7}
-              onPress={() => setActiveTab('home')}
-            >
-              {activeTab === 'home' && (
-                <View style={[styles.modernTabActiveIndicator, { backgroundColor: colors.primary + '12' }]} />
-              )}
-              <Ionicons
-                name={activeTab === 'home' ? "home" : "home-outline"}
-                size={22}
-                color={activeTab === 'home' ? colors.primary : (isDarkMode ? colors.textSecondary : "#94a3b8")}
-              />
-              <Text style={[
-                styles.modernTabLabel,
-                activeTab === 'home' && styles.modernTabLabelActive,
-                { color: activeTab === 'home' ? colors.primary : (isDarkMode ? colors.textSecondary : "#94a3b8") }
-              ]}>
-                {t('Home')}
-              </Text>
-            </TouchableOpacity>
-
-            {/* New Project Tab (center action) */}
-            <TouchableOpacity
-              style={styles.modernTabItem}
-              activeOpacity={0.7}
-              onPress={() => {
-                setActiveTab('new');
-                setNewProjectSubView('project-type-selection');
-              }}
-            >
-              <View style={[styles.modernTabCenterBtn, { backgroundColor: colors.primary }]}>
-                <Ionicons name="add" size={24} color="#fff" />
-              </View>
-            </TouchableOpacity>
-
-            {/* Projects Tab */}
-            <TouchableOpacity
-              style={styles.modernTabItem}
-              activeOpacity={0.7}
-              onPress={() => setActiveTab('projects')}
-            >
-              {activeTab === 'projects' && (
-                <View style={[styles.modernTabActiveIndicator, { backgroundColor: colors.primary + '12' }]} />
-              )}
-              <Ionicons
-                name={activeTab === 'projects' ? "folder" : "folder-outline"}
-                size={22}
-                color={activeTab === 'projects' ? colors.primary : (isDarkMode ? colors.textSecondary : "#94a3b8")}
-              />
-              <Text style={[
-                styles.modernTabLabel,
-                activeTab === 'projects' && styles.modernTabLabelActive,
-                { color: activeTab === 'projects' ? colors.primary : (isDarkMode ? colors.textSecondary : "#94a3b8") }
-              ]}>
-                {t('Projects')}
-              </Text>
-            </TouchableOpacity>
-
-            {/* Chat Tab */}
-            <TouchableOpacity
-              style={styles.modernTabItem}
-              activeOpacity={0.7}
-              onPress={() => setActiveTab('chat')}
-            >
-              {activeTab === 'chat' && (
-                <View style={[styles.modernTabActiveIndicator, { backgroundColor: colors.primary + '12' }]} />
-              )}
-              <Ionicons
-                name={activeTab === 'chat' ? "chatbubbles" : "chatbubbles-outline"}
-                size={22}
-                color={activeTab === 'chat' ? colors.primary : (isDarkMode ? colors.textSecondary : "#94a3b8")}
-              />
-              <Text style={[
-                styles.modernTabLabel,
-                activeTab === 'chat' && styles.modernTabLabelActive,
-                { color: activeTab === 'chat' ? colors.primary : (isDarkMode ? colors.textSecondary : "#94a3b8") }
-              ]}>
-                {t('Chat')}
-              </Text>
-            </TouchableOpacity>
-
-            {/* Profile Tab */}
-            <TouchableOpacity
-              style={styles.modernTabItem}
-              activeOpacity={0.7}
-              onPress={() => setActiveTab('profile')}
-            >
-              {activeTab === 'profile' && (
-                <View style={[styles.modernTabActiveIndicator, { backgroundColor: colors.primary + '12' }]} />
-              )}
-              <Ionicons
-                name={activeTab === 'profile' ? "person" : "person-outline"}
-                size={22}
-                color={activeTab === 'profile' ? colors.primary : (isDarkMode ? colors.textSecondary : "#94a3b8")}
-              />
-              <Text style={[
-                styles.modernTabLabel,
-                activeTab === 'profile' && styles.modernTabLabelActive,
-                { color: activeTab === 'profile' ? colors.primary : (isDarkMode ? colors.textSecondary : "#94a3b8") }
-              ]}>
-                {t('Profile')}
-              </Text>
-            </TouchableOpacity>
-          </View>
+        {/* Glass tab bar — iOS-style with water-drop press */}
+        <View style={styles.glassTabBarContainer}>
+          <GlassTabBar
+            activeTab={
+              ['home', 'projects', 'new', 'chat', 'profile'].includes(activeTab)
+                ? (activeTab as UserTabId)
+                : activeTab === 'notifications'
+                  ? 'profile'
+                  : activeTab === 'appointments'
+                    ? 'home'
+                    : 'home'
+            }
+            onTabPress={(tab) => setActiveTab(tab as typeof activeTab)}
+            onNewPress={() => {
+              setActiveTab('new');
+              setNewProjectSubView('project-type-selection');
+            }}
+            primaryColor={colors.primary}
+            primaryColorDark={colors.primaryDark || '#1A6DB4'}
+            isDark={isDarkMode}
+            bottomInset={insets.bottom}
+            t={t}
+          />
         </View>
       </View>
     );
@@ -2027,7 +1928,8 @@ export default function UserHomeScreen({
           ) : (
             <UserHomeScreenContent
               userName={userProfile?.name}
-              onPressSearch={(query) => {
+              unreadNotificationCount={unreadNotificationCount}
+              onPressSearch={(query: string) => {
                 setSearchText(query);
                 if (query.trim().length > 0) {
                   setShowSearchResults(true);
@@ -2047,14 +1949,14 @@ export default function UserHomeScreen({
                 setActiveTab('profile');
                 setProfileSubView('subscription');
               }}
-              onPressNotifications={() => onShowNotifications?.()}
-              onPressMessages={() => onShowChat?.()}
-              onPressInfo={() => { }}
+              onPressNotifications={() => setActiveTab('notifications')}
+              onPressMessages={() => setActiveTab('chat')}
+              onPressInfo={handleRestartCoachTour}
               onPressFab={() => {
                 setActiveTab('new');
-                setNewProjectSubView('ai');
+                setNewProjectSubView('project-type-selection');
               }}
-              onPressProjectStatus={(status) => {
+              onPressProjectStatus={(status: 'pending' | 'running' | 'completed') => {
                 if (status === 'pending') {
                   setCurrentProjectsFilter('available');
                 } else if (status === 'running') {
@@ -2064,26 +1966,58 @@ export default function UserHomeScreen({
                 }
                 setActiveTab('projects');
               }}
-              onPressCategory={(cat) => {
+              onPressCategory={(cat: CategoryInfo) => {
                 if (onPressCategory) {
                   onPressCategory(cat);
                 } else {
                   setSelectedCategory(cat);
                 }
               }}
+              onPressSubcategory={(sub) => {
+                const serviceName = i18n.language === 'ar' && sub.nameAr ? sub.nameAr : sub.nameEn;
+                setServiceTechniciansView({ serviceId: sub.id, serviceName, source: 'category' });
+                setActiveTab('service-technicians');
+              }}
+              onPressCategoryForManual={(category) => {
+                setManualFormInitial({
+                  categoryId: category.id,
+                  categoryNameEn: category.nameEn || '',
+                  categoryNameAr: category.nameAr,
+                });
+                setActiveTab('new');
+                setNewProjectSubView('manual');
+              }}
+              onPressSubcategoryForManual={(category, subcategory) => {
+                setManualFormInitial({
+                  categoryId: category.id,
+                  categoryNameEn: category.nameEn || '',
+                  categoryNameAr: category.nameAr,
+                  subcategoryId: subcategory.id,
+                  subcategoryNameEn: subcategory.nameEn || '',
+                  subcategoryNameAr: subcategory.nameAr,
+                });
+                setActiveTab('new');
+                setNewProjectSubView('manual');
+              }}
               onPressChatbot={onShowChatbot}
-              onPressProject={(projectId) => {
-                console.log('🔵 [UserHomeScreen] Project clicked from home (web), id:', projectId);
+              onPressProject={(project) => {
+                setPendingOpenProject(project);
                 setActiveTab('projects');
                 setCurrentProjectsFilter('running');
               }}
-              onPressCreateProject={(serviceId) => {
-                setActiveTab('new');
-                setNewProjectSubView('ai');
+              onPressSmallTask={(task) => {
+                setPendingOpenSmallTask(task);
+                setActiveTab('projects');
+                setCurrentProjectsFilter('available');
               }}
-              onPressCreateSmallTask={(taskTypeId) => {
+              onPressAppointments={() => setActiveTab('appointments')}
+              onPressCreateProject={() => {
                 setActiveTab('new');
-                setNewProjectSubView('ai');
+                setNewProjectSubView('project-type-selection');
+              }}
+              onPressCreateSmallTask={() => {
+                setActiveTab('new');
+                setNewProjectSubView('small-task-type-selection');
               }}
               onPressMySmallTasks={() => {
                 setActiveTab('projects');
@@ -2379,6 +2313,8 @@ export default function UserHomeScreen({
               <ProjectsScreen
                 filter={currentProjectsFilter}
                 initialServiceCategoryId={projectsScreenCategoryId}
+                initialProject={pendingOpenProject}
+                initialSmallTask={pendingOpenSmallTask}
                 onFilterChange={(newFilter) => {
                   setCurrentProjectsFilter(newFilter as any);
                 }}
@@ -2667,11 +2603,17 @@ export default function UserHomeScreen({
                   onBack={() => {
                     setNewProjectSubView(null);
                     setHiringTechnician(null);
+                    setManualFormInitial(null);
                   }}
                   onSuccess={() => {
                     setHiringTechnician(null);
+                    setManualFormInitial(null);
                     setActiveTab('home');
                   }}
+                  initialCategoryId={manualFormInitial?.categoryId}
+                  initialCategoryName={i18n.language === 'ar' ? manualFormInitial?.categoryNameAr : manualFormInitial?.categoryNameEn}
+                  initialSubcategoryId={manualFormInitial?.subcategoryId}
+                  initialSubcategoryName={i18n.language === 'ar' ? manualFormInitial?.subcategoryNameAr : manualFormInitial?.subcategoryNameEn}
                 />
               ) : null}
             </View>
@@ -2759,7 +2701,17 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: '#FFB703', // Amber/60
   },
-  // ═══ Modern Tab Bar Styles ═══
+  // Glass tab bar (iOS-style) container — floats at bottom
+  glassTabBarContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    ...Platform.select({
+      web: { position: 'fixed' as any },
+    }),
+  },
+  // ═══ Modern Tab Bar Styles (legacy, kept for ref) ═══
   modernTabBarContainer: {
     position: 'absolute',
     bottom: 0,

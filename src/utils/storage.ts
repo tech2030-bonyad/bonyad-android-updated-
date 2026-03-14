@@ -71,7 +71,7 @@ export const storage = {
     }
   },
 
-  // Clear all auth data
+  // Clear all auth data (also resets onboarding/login counters so next signup shows onboarding)
   async clearAuthData() {
     try {
       await Promise.all([
@@ -79,6 +79,8 @@ export const storage = {
         AsyncStorage.removeItem(STORAGE_KEYS.USER_ROLE),
         AsyncStorage.removeItem(STORAGE_KEYS.USER_ID),
         AsyncStorage.removeItem(STORAGE_KEYS.DEVICE_TOKEN),
+        AsyncStorage.removeItem(STORAGE_KEYS.LOGIN_COUNT),
+        AsyncStorage.removeItem(STORAGE_KEYS.HAS_SEEN_ONBOARDING),
       ]);
       console.log('✅ Auth data cleared');
     } catch (error) {

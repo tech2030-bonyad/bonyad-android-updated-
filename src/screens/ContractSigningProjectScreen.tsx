@@ -7,7 +7,7 @@
  * - Technician: Can view contract details and download PDF
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -117,6 +117,25 @@ export default function ContractSigningProjectScreen({
   const { colors } = useTheme();
   const { fontFamily, scaledSize } = useFontFamily();
   const insets = useSafeAreaInsets();
+  const c = useMemo(() => ({
+    ...COLORS,
+    bgWhite: colors.cardBackground,
+    textHeader: colors.text,
+    textBody: colors.text,
+    textSecondary: colors.textSecondary,
+    textDividers: colors.border,
+    primary10: colors.primary + '20',
+    primary60: colors.primary,
+    primary70: colors.primary,
+    textWhite: colors.white,
+    green60: colors.success,
+    green70: colors.success,
+    purple10: colors.cardBackground,
+    purple60: colors.primary,
+    purple70: colors.primary,
+    amber10: colors.warning + '25',
+    amber60: colors.warning,
+  }), [colors]);
   const [phases, setPhases] = useState<Phase[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isTechnician, setIsTechnician] = useState(propIsTechnician ?? false);
@@ -227,11 +246,13 @@ export default function ContractSigningProjectScreen({
     }
   };
 
+  const styles = useMemo(() => makeStyles(c), [c]);
+
   if (isLoading) {
     return (
-      <View style={[styles.container, { backgroundColor: COLORS.bgWhite, paddingTop: insets.top }]}>
+      <View style={[styles.container, { backgroundColor: c.bgWhite, paddingTop: insets.top }]}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={COLORS.primary60} />
+          <ActivityIndicator size="large" color={c.primary60} />
           <Text style={[styles.loadingText, { fontSize: scaledSize(14) }]}>{t('Loading...')}</Text>
         </View>
       </View>
@@ -239,7 +260,7 @@ export default function ContractSigningProjectScreen({
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: COLORS.bgWhite, paddingTop: IS_LARGE_WEB ? 0 : insets.top }]}>
+    <View style={[styles.container, { backgroundColor: c.bgWhite, paddingTop: IS_LARGE_WEB ? 0 : insets.top }]}>
       {/* Header - Hidden on large web */}
       {!IS_LARGE_WEB && (
       <View style={[styles.header, isRTL && { flexDirection: 'row-reverse' }]}>
@@ -247,7 +268,7 @@ export default function ContractSigningProjectScreen({
           <Ionicons 
             name={isRTL ? "chevron-forward" : "chevron-back"} 
             size={24} 
-            color={COLORS.textHeader} 
+            color={c.textHeader} 
           />
         </TouchableOpacity>
         <View style={[styles.headerTitleContainer, isRTL && { alignItems: 'flex-end' }]}>
@@ -277,7 +298,7 @@ export default function ContractSigningProjectScreen({
               <Ionicons 
                 name={isRTL ? "chevron-forward" : "chevron-back"} 
                 size={24} 
-                color={COLORS.textHeader} 
+                color={c.textHeader} 
               />
             </TouchableOpacity>
             <View style={styles.titleContainer}>
@@ -327,7 +348,7 @@ export default function ContractSigningProjectScreen({
             activeOpacity={0.7}
           >
             <View style={styles.contractIconContainer}>
-              <Ionicons name="document-text-outline" size={24} color={COLORS.purple60} />
+              <Ionicons name="document-text-outline" size={24} color={c.purple60} />
             </View>
             <View style={[styles.contractHeaderInfo, isRTL && { alignItems: 'flex-end' }]}>
               <Text style={[styles.contractTitle, isRTL && { textAlign: 'right' }]}>
@@ -340,7 +361,7 @@ export default function ContractSigningProjectScreen({
             <Ionicons 
               name={isRTL ? "chevron-back" : "chevron-forward"} 
               size={20} 
-              color={COLORS.textSecondary} 
+              color={c.textSecondary} 
             />
           </TouchableOpacity>
 
@@ -408,7 +429,7 @@ export default function ContractSigningProjectScreen({
               onPress={handleDownloadContract}
               activeOpacity={0.8}
             >
-              <Ionicons name="download-outline" size={20} color={COLORS.primary70} />
+              <Ionicons name="download-outline" size={20} color={c.primary70} />
               <Text style={styles.downloadButtonText}>
                 {t('Download Contract (PDF)')}
               </Text>
@@ -420,7 +441,7 @@ export default function ContractSigningProjectScreen({
         {!isTechnician && (
           <View style={[styles.emailNotice, isRTL && { flexDirection: 'row-reverse' }]}>
             <View style={styles.emailIconContainer}>
-              <Ionicons name="checkmark-circle-outline" size={24} color={COLORS.green60} />
+              <Ionicons name="checkmark-circle-outline" size={24} color={c.green60} />
             </View>
             <View style={[styles.emailNoticeContent, isRTL && { alignItems: 'flex-end' }]}>
               <Text style={[styles.emailNoticeTitle, isRTL && { textAlign: 'right' }]}>
@@ -458,7 +479,8 @@ export default function ContractSigningProjectScreen({
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(c: typeof COLORS) {
+  return StyleSheet.create({
   container: {
     flex: 1,
   },
@@ -494,7 +516,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: COLORS.textHeader,
+    color: c.textHeader,
   },
   headerTitleLargeWeb: {
     fontSize: 34,
@@ -503,7 +525,7 @@ const styles = StyleSheet.create({
   headerSubtitle: {
     fontSize: 14,
     fontWeight: '300',
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
   },
   headerSubtitleLargeWeb: {
     fontSize: 16,
@@ -518,7 +540,7 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: COLORS.textDividers,
+    backgroundColor: c.textDividers,
     marginHorizontal: 16,
     marginTop: 8,
   },
@@ -549,16 +571,16 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 14,
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
   },
   // Contract Ready Badge
   badgeContainer: {
     alignItems: 'flex-start',
   },
   contractReadyBadge: {
-    backgroundColor: COLORS.purple10,
+    backgroundColor: c.purple10,
     borderWidth: 0.5,
-    borderColor: COLORS.purple70,
+    borderColor: c.purple70,
     borderRadius: 16,
     paddingHorizontal: 12,
     paddingVertical: 12,
@@ -566,7 +588,7 @@ const styles = StyleSheet.create({
   contractReadyText: {
     fontSize: 12,
     fontWeight: '400',
-    color: COLORS.purple70,
+    color: c.purple70,
   },
   // Section
   section: {
@@ -575,20 +597,20 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: '400',
-    color: COLORS.textHeader,
+    color: c.textHeader,
   },
   sectionDescription: {
     fontSize: 14,
     fontWeight: '300',
-    color: COLORS.textBody,
+    color: c.textBody,
     lineHeight: 21,
   },
   // Contract Card
   contractCard: {
     borderWidth: 0.5,
-    borderColor: COLORS.textDividers,
+    borderColor: c.textDividers,
     borderRadius: 6,
-    backgroundColor: COLORS.bgWhite,
+    backgroundColor: c.bgWhite,
     overflow: 'hidden',
   },
   contractHeader: {
@@ -601,9 +623,9 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 10,
-    backgroundColor: COLORS.purple10,
+    backgroundColor: c.purple10,
     borderWidth: 0.5,
-    borderColor: COLORS.purple60,
+    borderColor: c.purple60,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -614,12 +636,12 @@ const styles = StyleSheet.create({
   contractTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: COLORS.textHeader,
+    color: c.textHeader,
   },
   contractSubtitle: {
     fontSize: 14,
     fontWeight: '300',
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
   },
   contractDetails: {
     padding: 16,
@@ -633,12 +655,12 @@ const styles = StyleSheet.create({
   detailLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
   },
   detailValue: {
     fontSize: 14,
     fontWeight: '400',
-    color: COLORS.textBody,
+    color: c.textBody,
     textAlign: 'right',
     flex: 1,
     marginLeft: 16,
@@ -646,14 +668,14 @@ const styles = StyleSheet.create({
   detailValueGreen: {
     fontSize: 14,
     fontWeight: '400',
-    color: COLORS.green70,
+    color: c.green70,
     textAlign: 'right',
     flex: 1,
     marginLeft: 16,
   },
   detailDivider: {
     height: 1,
-    backgroundColor: COLORS.textDividers,
+    backgroundColor: c.textDividers,
   },
   downloadButtonContainer: {
     padding: 16,
@@ -663,9 +685,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.primary10,
+    backgroundColor: c.primary10,
     borderWidth: 0.5,
-    borderColor: COLORS.primary70,
+    borderColor: c.primary70,
     borderRadius: 8,
     padding: 16,
     gap: 12,
@@ -673,7 +695,7 @@ const styles = StyleSheet.create({
   downloadButtonText: {
     fontSize: 16,
     fontWeight: '400',
-    color: COLORS.primary70,
+    color: c.primary70,
   },
   // Email Notice
   emailNotice: {
@@ -681,10 +703,10 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     padding: 16,
     borderWidth: 0.5,
-    borderColor: COLORS.amber60,
+    borderColor: c.amber60,
     borderRadius: 6,
     gap: 16,
-    backgroundColor: COLORS.bgWhite,
+    backgroundColor: c.bgWhite,
   },
   // Title Section - Large Web (Figma Design)
   titleSectionLargeWeb: {
@@ -708,20 +730,20 @@ const styles = StyleSheet.create({
   titleMainText: {
     fontSize: 42,
     fontWeight: '700',
-    color: COLORS.textHeader,
+    color: c.textHeader,
     lineHeight: 42,
   },
   titleSubtext: {
     fontSize: 20,
     fontWeight: '300',
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
     lineHeight: 20,
   },
   emailIconContainer: {
     width: 48,
     height: 48,
     borderRadius: 6,
-    backgroundColor: COLORS.amber10,
+    backgroundColor: c.amber10,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -732,13 +754,13 @@ const styles = StyleSheet.create({
   emailNoticeTitle: {
     fontSize: 16,
     fontWeight: '400',
-    color: COLORS.textBody,
+    color: c.textBody,
   },
   emailNoticeDescription: {
     fontSize: 14,
     fontWeight: '300',
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
     lineHeight: 21,
   },
-});
-
+  });
+}

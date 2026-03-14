@@ -135,64 +135,77 @@ export default function NewProjectView({
     white: '#FFFFFF',
   };
 
-  // Render mobile layout - Figma Design
+  // Render mobile layout - theme-aware (dark mode supported)
   if (shouldRenderMobile) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top, backgroundColor: FIGMA.white }]}>
-        {/* Back Button - Figma style */}
+      <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
+        {/* Back Button */}
         <View style={styles.figmaBackContainer}>
           {onBack && (
             <TouchableOpacity onPress={onBack} style={styles.figmaBackButton}>
-              <Ionicons name="arrow-back" size={24} color={FIGMA.textBody} />
+              <Ionicons name="arrow-back" size={24} color={colors.text} />
             </TouchableOpacity>
           )}
         </View>
 
         <ScrollView
           contentContainerStyle={styles.figmaScrollContent}
+          style={{ backgroundColor: colors.background }}
           showsVerticalScrollIndicator={false}
         >
-          {/* Title - Figma style */}
+          {/* Title */}
           <View style={styles.figmaHeader}>
-            <Text style={styles.figmaTitle}>
+            <Text style={[styles.figmaTitle, { color: colors.text }]}>
               {technician ? t('Send Deal to') + ' ' + (technician.name || t('Technician')) : t('Create Project')}
             </Text>
           </View>
 
-          {/* Description - Figma style */}
-          <Text style={styles.figmaDescription}>
+          {/* Description */}
+          <Text style={[styles.figmaDescription, { color: colors.textSecondary }]}>
             {t('Describe your need and we will help you define the scope of work, cost estimate and the expected duration.')}
           </Text>
 
-          {/* Choice Cards - Figma style */}
+          {/* Choice Cards */}
           <View style={styles.figmaChoiceCards}>
             {/* AI Assistance Card */}
             <TouchableOpacity
-              style={styles.figmaAiCard}
+              style={[
+                styles.figmaAiCard,
+                {
+                  backgroundColor: colors.primary,
+                  borderColor: colors.primary + '99',
+                },
+              ]}
               onPress={onNavigateToAI}
               activeOpacity={0.8}
             >
               <View style={styles.figmaAiIcon}>
-                <Ionicons name="chatbubbles" size={28} color={FIGMA.textWhite} />
+                <Ionicons name="chatbubbles" size={28} color={colors.white} />
               </View>
               <View style={styles.figmaCardTextContainer}>
-                <Text style={styles.figmaAiCardTitle}>{t('Use AI Assistance')}</Text>
-                <Text style={styles.figmaAiCardSubtitle}>{t('Define your scope of work')}</Text>
+                <Text style={[styles.figmaAiCardTitle, { color: colors.white }]}>{t('Use AI Assistance')}</Text>
+                <Text style={[styles.figmaAiCardSubtitle, { color: colors.white, opacity: 0.9 }]}>{t('Define your scope of work')}</Text>
               </View>
             </TouchableOpacity>
 
             {/* Manual Card */}
             <TouchableOpacity
-              style={styles.figmaManualCard}
+              style={[
+                styles.figmaManualCard,
+                {
+                  backgroundColor: colors.cardBackground,
+                  borderColor: colors.primary + '60',
+                },
+              ]}
               onPress={onNavigateToManual}
               activeOpacity={0.8}
             >
               <View style={styles.figmaManualIcon}>
-                <Ionicons name="create-outline" size={28} color={FIGMA.purple60} />
+                <Ionicons name="create-outline" size={28} color={colors.primary} />
               </View>
               <View style={styles.figmaCardTextContainer}>
-                <Text style={styles.figmaManualCardTitle}>{t('Fill Manually')}</Text>
-                <Text style={styles.figmaManualCardSubtitle}>{t('Fill in all project details yourself')}</Text>
+                <Text style={[styles.figmaManualCardTitle, { color: colors.primary }]}>{t('Fill Manually')}</Text>
+                <Text style={[styles.figmaManualCardSubtitle, { color: colors.textSecondary }]}>{t('Fill in all project details yourself')}</Text>
               </View>
             </TouchableOpacity>
           </View>
@@ -244,7 +257,7 @@ export default function NewProjectView({
               activeOpacity={0.9}
             >
               <View style={[styles.desktopAiButtonContent, { backgroundColor: colors.primary }]}>
-                <Ionicons name="sparkles" size={48} color="#fff" />
+                <Ionicons name="sparkles" size={48} color={colors.white} />
                 <Text style={styles.desktopAiButtonTitle}>
                   {t('Use AI Assistant')}
                 </Text>

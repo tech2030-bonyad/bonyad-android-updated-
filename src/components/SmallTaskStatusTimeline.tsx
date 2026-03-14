@@ -5,6 +5,16 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 
+// iOS-matching design colors
+const COLORS = {
+  primaryLight: '#1A6DB4',
+  primaryDark: '#4D8EC5',
+  statusPending: '#FF9500',
+  statusAccepted: '#007AFF',
+  statusInProgress: '#AF52DE',
+  statusCompleted: '#34C759',
+};
+
 interface SmallTaskStatusTimelineProps {
   // Per README: PENDING → ACCEPTED (bid accepted, payment required) → IN_PROGRESS (payment done) → COMPLETED
   // ASSIGNED is legacy status, treated as ACCEPTED
@@ -19,15 +29,28 @@ export default function SmallTaskStatusTimeline({
   completedAt,
 }: SmallTaskStatusTimelineProps) {
   const { t } = useTranslation();
-  const { colors } = useTheme();
+  const { colors, theme } = useTheme();
   const { fontFamily, fonts } = useFontFamily();
+  const isDarkMode = theme === 'dark';
+  const primaryColor = isDarkMode ? COLORS.primaryDark : COLORS.primaryLight;
+
+  const getStatusColor = (status: string): string => {
+    switch (status) {
+      case 'PENDING': return COLORS.statusPending;
+      case 'ACCEPTED': return COLORS.statusAccepted;
+      case 'IN_PROGRESS': return COLORS.statusInProgress;
+      case 'COMPLETED': return COLORS.statusCompleted;
+      default: return colors.textSecondary;
+    }
+  };
 
   // Per README: PENDING → ACCEPTED (payment required) → IN_PROGRESS (paid) → COMPLETED
+  // iOS-matching icons (SF Symbols equivalents)
   const statuses = [
-    { status: 'PENDING', label: t('Pending'), icon: 'time-outline' },
-    { status: 'ACCEPTED', label: t('Accepted'), icon: 'card-outline' }, // Payment required
-    { status: 'IN_PROGRESS', label: t('In Progress'), icon: 'construct-outline' },
-    { status: 'COMPLETED', label: t('Completed'), icon: 'checkmark-done-circle-outline' },
+    { status: 'PENDING', label: t('Pending'), icon: 'time' },
+    { status: 'ACCEPTED', label: t('Accepted'), icon: 'checkmark-circle' }, // iOS: checkmark.circle.fill
+    { status: 'IN_PROGRESS', label: t('In Progress'), icon: 'play-circle' }, // iOS: play.circle.fill
+    { status: 'COMPLETED', label: t('Completed'), icon: 'checkmark-done-circle' }, // iOS: checkmark.circle.fill
   ];
 
   const getStatusIndex = (status: string) => {
@@ -46,6 +69,8 @@ export default function SmallTaskStatusTimeline({
         const isActive = item.status === normalizedCurrentStatus;
         const isPast = currentIndex > index;
         const isFuture = currentIndex < index;
+        const statusColor = getStatusColor(item.status);
+        const activeColor = isActive ? statusColor : (isPast ? primaryColor : colors.border);
 
         return (
           <View key={item.status} style={styles.statusItem}>
@@ -55,23 +80,23 @@ export default function SmallTaskStatusTimeline({
                 style={[
                   styles.connector,
                   {
-                    backgroundColor: isPast || isActive ? colors.primary : colors.border,
+                    backgroundColor: isPast || isActive ? primaryColor : colors.border,
                   },
                 ]}
               />
             )}
 
-            {/* Status Circle */}
+            {/* Status Circle - iOS style with status-specific colors */}
             <View
               style={[
                 styles.statusCircle,
                 {
                   backgroundColor: isActive
-                    ? colors.primary
+                    ? statusColor
                     : isPast
-                    ? colors.primary + '40'
+                    ? primaryColor + '40'
                     : colors.border,
-                  borderColor: isActive ? colors.primary : colors.border,
+                  borderColor: isActive ? statusColor : (isPast ? primaryColor : colors.border),
                 },
               ]}
             >
@@ -87,7 +112,7 @@ export default function SmallTaskStatusTimeline({
               style={[
                 styles.statusLabel,
                 {
-                  color: isActive ? colors.primary : colors.textSecondary,
+                  color: isActive ? statusColor : colors.textSecondary,
                   fontFamily: isActive ? (fonts?.primaryBold || fontFamily) : (fonts?.body || fontFamily),
                   fontWeight: isActive ? '600' : '400',
                 },

@@ -7,7 +7,7 @@
  * - Technician: Can view project summary, phases, and edit pending phases
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -802,6 +802,25 @@ export default function ApprovedProjectScreen({
   const { colors } = useTheme();
   const { fontFamily, scaledSize } = useFontFamily();
   const insets = useSafeAreaInsets();
+  const c = useMemo(() => ({
+    ...COLORS,
+    bgWhite: colors.cardBackground,
+    textHeader: colors.text,
+    textBody: colors.text,
+    textSecondary: colors.textSecondary,
+    textDividers: colors.border,
+    primary10: colors.primary + '20',
+    primary60: colors.primary,
+    primary70: colors.primary,
+    textWhite: colors.white,
+    green10: colors.success + '20',
+    green60: colors.success,
+    green80: colors.success,
+    purple10: colors.cardBackground,
+    purple100: colors.text,
+    amber10: colors.warning + '25',
+    amber60: colors.warning,
+  }), [colors]);
   const [phases, setPhases] = useState<Phase[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isTechnician, setIsTechnician] = useState(propIsTechnician ?? false);
@@ -1094,9 +1113,9 @@ export default function ApprovedProjectScreen({
 
   if (isLoading) {
     return (
-      <View style={[styles.container, { backgroundColor: COLORS.bgWhite, paddingTop: insets.top }]}>
+      <View style={[styles.container, { backgroundColor: c.bgWhite, paddingTop: insets.top }]}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={COLORS.primary60} />
+          <ActivityIndicator size="large" color={c.primary60} />
           <Text style={[styles.loadingText, { fontSize: scaledSize(14) }]}>{t('Loading...')}</Text>
         </View>
       </View>
@@ -1104,7 +1123,7 @@ export default function ApprovedProjectScreen({
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: COLORS.bgWhite, paddingTop: IS_LARGE_WEB ? 0 : insets.top }]}>
+    <View style={[styles.container, { backgroundColor: c.bgWhite, paddingTop: IS_LARGE_WEB ? 0 : insets.top }]}>
       {/* Header - Hidden on large web */}
       {!IS_LARGE_WEB && (
       <View style={[styles.header, isRTL && { flexDirection: 'row-reverse' }]}>
@@ -1112,7 +1131,7 @@ export default function ApprovedProjectScreen({
           <Ionicons 
             name={isRTL ? "chevron-forward" : "chevron-back"} 
             size={24} 
-            color={COLORS.textHeader} 
+            color={c.textHeader} 
           />
         </TouchableOpacity>
         <View style={[styles.headerTitleContainer, isRTL && { alignItems: 'flex-end' }]}>
@@ -1125,7 +1144,7 @@ export default function ApprovedProjectScreen({
         </View>
         {onNavigateToChangeRequests && project?.id != null && (
           <TouchableOpacity onPress={() => onNavigateToChangeRequests(project.id)} style={styles.changeRequestsLink}>
-            <Ionicons name="document-text-outline" size={18} color={COLORS.primary60} />
+            <Ionicons name="document-text-outline" size={18} color={c.primary60} />
             <Text style={styles.changeRequestsLinkText}>{t('Change requests')}</Text>
           </TouchableOpacity>
         )}

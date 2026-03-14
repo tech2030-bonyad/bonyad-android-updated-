@@ -18,23 +18,19 @@ import { useFontFamily } from '../context/FontContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { storage } from '../utils/storage';
 import { getRequestDetails, updateRequestStatus } from '../services/SmallTaskService';
-import SmallTaskPhaseBar from '../components/SmallTaskPhaseBar';
-import SmallTaskStatusTimeline from '../components/SmallTaskStatusTimeline';
-import SmallTaskProgressBar from '../components/SmallTaskProgressBar';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
 import ConfirmationPopup, { useConfirmationPopup } from '../components/ConfirmationPopup';
 import { SmallTaskRequest } from '../types/smallTasks';
 
+// iOS-matching design colors
 const COLORS = {
-  primary60: '#005DAC',
-  primary10: '#E6EFF7',
-  green80: '#008B3E',
-  green10: '#E6F5EC',
-  textHeader: '#003867',
-  textBody: '#383838',
-  textSecondary: '#A3A3A3',
+  primaryLight: '#1A6DB4',
+  primaryDark: '#4D8EC5',
+  borderLight: 'rgba(26, 109, 180, 0.2)',
+  borderDark: 'rgba(77, 142, 197, 0.3)',
+  statusInProgress: '#AF52DE',
+  success: '#28A745',
   textWhite: '#FFFFFF',
-  bgWhite: '#FFFFFF',
 };
 
 interface InProgressSmallTaskScreenProps {
@@ -81,9 +77,20 @@ export default function InProgressSmallTaskScreen({
   const { alertState, showError, showSuccess, hideAlert } = useAlertPopup();
   const { confirmState, showConfirmation, hideConfirmation } = useConfirmationPopup();
 
-  const riyalLogo = isDarkMode
-    ? require('../../assets/saudi_riyal_logo_dark.svg')
-    : require('../../assets/saudi_riyal_logo.svg');
+  const primaryColor = isDarkMode ? COLORS.primaryDark : COLORS.primaryLight;
+  const borderColor = isDarkMode ? COLORS.borderDark : COLORS.borderLight;
+
+  const formatDate = (dateString: string) => {
+    try {
+      return new Date(dateString).toLocaleDateString(i18n.language === 'ar' ? 'ar-SA' : 'en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      });
+    } catch {
+      return dateString;
+    }
+  };
 
   useEffect(() => {
     // Entrance animation
@@ -225,7 +232,7 @@ export default function InProgressSmallTaskScreen({
     return (
       <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
+          <ActivityIndicator size="large" color={primaryColor} />
           <Text style={[styles.loadingText, { color: colors.text }]}>{t('Loading...')}</Text>
         </View>
       </View>
@@ -244,7 +251,7 @@ export default function InProgressSmallTaskScreen({
             {error || t('Something went wrong. Please try again.')}
           </Text>
           <TouchableOpacity
-            style={[styles.retryButton, { backgroundColor: colors.primary }]}
+            style={[styles.retryButton, { backgroundColor: primaryColor }]}
             onPress={loadData}
           >
             <Ionicons name="refresh" size={20} color="#FFFFFF" />
@@ -259,20 +266,13 @@ export default function InProgressSmallTaskScreen({
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Top Bar - Back Button and Status Icon */}
-      <View style={[styles.topBar, { paddingTop: IS_ANDROID ? insets.top : (IS_ANDROID_TABLET ? 0 : insets.top) }]}>
-        {IS_ANDROID ? (
-          <TouchableOpacity onPress={onBack} style={styles.androidBackButton}>
-            <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={24} color={colors.text} />
-          </TouchableOpacity>
-        ) : !IS_ANDROID_TABLET ? (
-          <TouchableOpacity onPress={onBack} style={styles.backButton}>
-            <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={24} color={colors.text} />
-          </TouchableOpacity>
-        ) : null}
-        <View style={[styles.statusBadge, { backgroundColor: colors.primary + '20' }]}>
-          <Text style={[styles.statusText, { color: colors.primary }]}>{t('In Progress')}</Text>
-        </View>
+      {/* Header - iOS style */}
+      <View style={[styles.header, { paddingTop: insets.top, borderBottomColor: colors.border }, isRTL && { flexDirection: 'row-reverse' }]}>
+        <TouchableOpacity onPress={onBack} style={styles.headerBackButton}>
+          <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={24} color={primaryColor} />
+        </TouchableOpacity>
+        <Text style={[styles.headerTitle, { color: primaryColor }]}>{t('task_request_details')}</Text>
+        <View style={styles.headerSpacer} />
       </View>
 
       {/* Content */}
@@ -290,79 +290,56 @@ export default function InProgressSmallTaskScreen({
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Phase Bar */}
-          <View style={styles.phaseBarContainer}>
-            <SmallTaskPhaseBar currentStatus="IN_PROGRESS" onStatusChange={() => {}} />
-          </View>
-
-          {/* Status Timeline */}
-          <View style={styles.timelineContainer}>
-            <SmallTaskStatusTimeline currentStatus="IN_PROGRESS" />
-          </View>
-
-          {/* Progress Bar */}
-          <View style={styles.progressContainer}>
-            <SmallTaskProgressBar progress={progress} />
-          </View>
-
-          {/* Task Info - Direct Fields (No Card) */}
-          <View style={styles.taskInfoSection}>
-            {/* Task Icon and Name + Request ID (same as web) */}
-            <View style={styles.taskHeaderSection}>
-              <View style={[styles.iconContainer, { backgroundColor: colors.primary + '15' }]}>
-                <Ionicons name="construct" size={32} color={colors.primary} />
-              </View>
-              <View style={styles.taskInfo}>
-                <Text style={[styles.requestIdText, { color: colors.textSecondary }]}>#{taskDetails.id}</Text>
-                <Text style={[styles.taskName, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '700' }]}>
-                  {taskName}
-                </Text>
-              </View>
+          {/* Status Card - iOS style */}
+          <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: COLORS.statusInProgress + '30' }]}>
+            <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('status')}</Text>
+            <View style={[styles.statusRow, isRTL && { flexDirection: 'row-reverse' }]}>
+              <View style={[styles.statusDot, { backgroundColor: COLORS.statusInProgress }]} />
+              <Text style={[styles.statusValue, { color: COLORS.statusInProgress }]}>{t('in_progress')}</Text>
             </View>
-
-            {/* Created date (same as web) */}
-            {taskDetails.createdAt && (
-              <View style={styles.fieldSection}>
-                <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{t('Created')}</Text>
-                <Text style={[styles.fieldValue, { color: colors.text }]}>
-                  {new Date(taskDetails.createdAt).toLocaleDateString(i18n.language === 'ar' ? 'ar-SA' : 'en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-                </Text>
-              </View>
-            )}
-
-            {/* Description */}
-            {taskDetails.description && (
-              <View style={styles.fieldSection}>
-                <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{t('Description')}</Text>
-                <Text style={[styles.fieldValue, { color: colors.text, fontFamily: fonts?.body || fontFamily }]}>
-                  {taskDetails.description}
-                </Text>
-              </View>
-            )}
-
-            {/* Address */}
-            {taskDetails.address && (
-              <View style={styles.fieldSection}>
-                <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{t('Address')}</Text>
-                <View style={styles.addressRow}>
-                  <Ionicons name="location-outline" size={18} color={colors.primary} />
-                  <Text style={[styles.fieldValue, { color: colors.text }]}>{taskDetails.address}</Text>
-                </View>
-              </View>
-            )}
           </View>
 
-          {/* Contact - Direct Fields (No Card) */}
+          {/* Task Type Card */}
+          <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: borderColor }]}>
+            <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('task_type')}</Text>
+            <Text style={[styles.cardValue, { color: colors.text }]}>{taskName}</Text>
+          </View>
+
+          {/* Description Card */}
+          {taskDetails.description ? (
+            <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: borderColor }]}>
+              <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('description')}</Text>
+              <Text style={[styles.cardValue, { color: colors.text, textAlign: isRTL ? 'right' : 'left' }]}>{taskDetails.description}</Text>
+            </View>
+          ) : null}
+
+          {/* Address Card */}
+          {taskDetails.address ? (
+            <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: borderColor }]}>
+              <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('address')}</Text>
+              <Text style={[styles.cardValue, { color: colors.text, textAlign: isRTL ? 'right' : 'left' }]}>{taskDetails.address}</Text>
+            </View>
+          ) : null}
+
+          {/* Created At Card */}
+          {taskDetails.createdAt ? (
+            <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: borderColor }]}>
+              <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('created_at')}</Text>
+              <Text style={[styles.cardValue, { color: colors.text }]}>{formatDate(taskDetails.createdAt)}</Text>
+            </View>
+          ) : null}
+
+          {/* Contact */}
           <View style={styles.contactSection}>
             <Text style={[styles.sectionTitle, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '700' }]}>
               {isTechnician ? t('Client') : t('Technician')}
             </Text>
-            <View style={styles.contactInfoRow}>
-              <View style={[styles.contactIconContainer, { backgroundColor: colors.primary + '15' }]}>
+            <View style={[styles.contactInfoRow, isRTL && { flexDirection: 'row-reverse' }]}>
+              <View style={[styles.contactIconContainer, { backgroundColor: primaryColor + '15' }]}>
                 <Ionicons
                   name={isTechnician ? 'person-outline' : 'construct-outline'}
                   size={24}
-                  color={colors.primary}
+                  color={primaryColor}
                 />
               </View>
               <View style={styles.contactDetails}>
@@ -373,7 +350,7 @@ export default function InProgressSmallTaskScreen({
                 </Text>
               </View>
               <TouchableOpacity
-                style={[styles.chatButton, { backgroundColor: colors.primary }]}
+                style={[styles.chatButton, { backgroundColor: primaryColor }]}
                 onPress={handleOpenChat}
               >
                 <Ionicons name="chatbubble-outline" size={18} color={COLORS.textWhite} />
@@ -404,7 +381,7 @@ export default function InProgressSmallTaskScreen({
           ]}
         >
           <TouchableOpacity
-            style={[styles.floatingButton, { backgroundColor: COLORS.green80 }]}
+            style={[styles.floatingButton, { backgroundColor: COLORS.success }]}
             onPress={handleMarkComplete}
             disabled={isCompleting}
             activeOpacity={0.8}
@@ -462,48 +439,28 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 16,
   },
-  topBar: {
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
   },
-  androidBackButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...Platform.select({
-      android: {
-        elevation: 4,
-      },
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-      },
-    }),
-  },
-  backButton: {
+  headerBackButton: {
     width: 40,
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    flex: 1,
+    textAlign: 'center',
   },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '600',
+  headerSpacer: {
+    width: 40,
   },
   content: {
     flex: 1,
@@ -512,71 +469,40 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 100,
+    padding: 24,
+    paddingBottom: 120,
   },
-  phaseBarContainer: {
-    marginBottom: 16,
+  card: {
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 12,
   },
-  timelineContainer: {
-    marginHorizontal: 16,
-    marginBottom: 16,
-  },
-  progressContainer: {
-    marginHorizontal: 16,
-    marginBottom: 24,
-  },
-  taskInfoSection: {
-    marginHorizontal: 20,
-    marginBottom: 24,
-  },
-  taskHeaderSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 24,
-    gap: 16,
-  },
-  iconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  taskInfo: {
-    flex: 1,
-  },
-  requestIdText: {
-    fontSize: 12,
+  cardLabel: {
+    fontSize: 14,
     fontWeight: '500',
-    marginBottom: 6,
-  },
-  taskName: {
-    fontSize: 22,
-    fontWeight: '700',
-    lineHeight: 28,
-  },
-  fieldSection: {
-    marginBottom: 20,
-  },
-  fieldLabel: {
-    fontSize: 13,
-    fontWeight: '600',
     marginBottom: 8,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
-  fieldValue: {
+  cardValue: {
     fontSize: 16,
     lineHeight: 24,
   },
-  addressRow: {
+  statusRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    marginTop: 4,
+    alignItems: 'center',
+    gap: 8,
+  },
+  statusDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  statusValue: {
+    fontSize: 16,
+    fontWeight: '600',
   },
   contactSection: {
-    marginHorizontal: 20,
+    marginTop: 8,
     marginBottom: 24,
   },
   sectionTitle: {

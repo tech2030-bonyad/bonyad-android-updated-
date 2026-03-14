@@ -88,6 +88,9 @@ export default function App() {
   const [changeRequestId, setChangeRequestId] = useState<number | null>(null);
   const [previousScreenBeforeChangeRequests, setPreviousScreenBeforeChangeRequests] = useState<Screen | null>(null);
   
+  // After product-tour onboarding, navigate to this screen (for technicians who need complete profile / waiting approval etc.)
+  const postOnboardingScreenRef = useRef<Screen | null>(null);
+
   // Bundle load error message (when Metro unreachable)
   const [bundleLoadError, setBundleLoadError] = useState<string | null>(null);
   
@@ -181,9 +184,10 @@ export default function App() {
         // Navigate based on onboarded and profileComplete status (technician: same order as web)
         const role = authResult.role.toLowerCase() as 'user' | 'technician';
 
+        const hasSeenTour = await storage.hasSeenOnboarding();
+
         if (role === 'technician') {
           const status = authResult.user?.status;
-          // Priority 1: Complete Profile (before waiting approval)
           if (!authResult.profileComplete) {
             console.log('📍 Technician profile incomplete - redirecting to complete profile');
             setCurrentScreen('technicianCompleteProfile');
@@ -193,15 +197,20 @@ export default function App() {
           } else if (!authResult.onboarded) {
             console.log('📍 Technician not onboarded - redirecting to onboarding');
             setCurrentScreen('technicianOnboarding');
+          } else if (!hasSeenTour && Platform.OS !== 'web') {
+            console.log('📍 Technician fully onboarded but hasn\'t seen product tour - showing tour');
+            setCurrentScreen('onboarding');
           } else {
             console.log('📍 Technician fully onboarded - going to home');
             setCurrentScreen('home');
           }
         } else {
-          // User role
           if (!authResult.profileComplete) {
             console.log('📍 User profile incomplete - redirecting to profile edit');
             setCurrentScreen('editProfile');
+          } else if (!hasSeenTour && Platform.OS !== 'web') {
+            console.log('📍 User hasn\'t seen product tour - showing tour');
+            setCurrentScreen('onboarding');
           } else {
             console.log('📍 User profile complete - going to home');
             setCurrentScreen('home');
@@ -209,7 +218,8 @@ export default function App() {
         }
       } else {
         console.log('❌ No valid session found - user needs to login');
-        // Clear any invalid auth state
+        // Clear any invalid auth state + reset onboarding counters
+        await storage.clearAuthData();
         setAuthToken('');
         setUserId(0);
         setUserRole('user');
@@ -372,10 +382,7 @@ export default function App() {
         msg.toLowerCase().includes('network');
       if (!isBundleError) {
         if (isNetworkError) {
-          // Backend unreachable or device offline – expected when API is down or no connection
-          if (__DEV__) {
-            console.warn('⚠️ Notifications check skipped (network unreachable). Will retry.');
-          }
+          // Backend unreachable or device offline – expected when API is down or no connection; skip log to avoid spam
         } else {
           console.error('❌ Failed to check for new notifications:', error);
         }
@@ -445,10 +452,9 @@ export default function App() {
       }, 100);
     }
 
-    // Call checkSession on mount (only on native, web goes directly to welcome)
-    if (Platform.OS !== 'web') {
-      checkSession();
-    }
+    // Call checkSession on mount to restore auth (token, userId) from storage on both native and web
+    // So portfolio and other screens always have the current user id (e.g. after web refresh)
+    checkSession();
   }, [checkSession]);
 
   // Handle app lifecycle for WebSocket (Android only) and check notifications on active
@@ -632,11 +638,13 @@ export default function App() {
     setUserRole(role.toLowerCase() as 'user' | 'technician');
 
     presenceService.markOnline().catch(() => {});
+    const prevLoginCount = await storage.getLoginCount();
     await storage.incrementLoginCount();
+    // Show product-tour onboarding after first signup (count was 0 before increment), regardless of hasSeenOnboarding
+    const isFirstSignup = prevLoginCount === 0;
 
     if (role.toLowerCase() === 'technician') {
       try {
-        // Pass token explicitly so we use the one we have (avoid storage race)
         const technicianStatus = await getTechnicianStatus(token);
         if (!technicianStatus.profileComplete) {
           console.log('📍 Technician profile incomplete - redirecting to complete profile');
@@ -669,13 +677,12 @@ export default function App() {
         return;
       } catch (err) {
         console.warn('⚠️ getTechnicianStatus failed after OTP:', err);
-        // New technician signup: always send to Complete Profile first (match web flow), never home
         navigateToScreen('technicianCompleteProfile');
         return;
       }
     }
 
-    // User: connect WebSocket and go home
+    // User: connect WebSocket
     console.log('🔌 Connecting to WebSocket after signup verification...');
     const connectionResult = await OnlineStatusService.connect(token);
     if (connectionResult.connected) {
@@ -718,7 +725,13 @@ export default function App() {
       }
     }
 
-    navigateToScreen('home');
+    if (isFirstSignup && Platform.OS !== 'web') {
+      console.log('📍 First signup - showing onboarding');
+      postOnboardingScreenRef.current = 'home';
+      navigateToScreen('onboarding');
+    } else {
+      navigateToScreen('home');
+    }
   };
 
   // Handle logout with WebSocket disconnection
@@ -749,6 +762,8 @@ export default function App() {
 
     // Clear auth data from storage
     await storage.clearAuthData();
+    await storage.clearLoginCount();
+    await storage.clearOnboardingStatus();
     console.log('✅ Auth data cleared from storage');
 
     await onboardingStorage.clear();
@@ -846,6 +861,7 @@ export default function App() {
               setServiceProvidersBookingTechnician={setServiceProvidersBookingTechnician}
               bundleLoadError={bundleLoadError}
               setBundleLoadError={setBundleLoadError}
+              postOnboardingScreenRef={postOnboardingScreenRef}
             />
           </View>
         </GlobalAlertProvider>
@@ -926,6 +942,7 @@ function AppContent({
   setServiceProvidersBookingTechnician,
   bundleLoadError,
   setBundleLoadError,
+  postOnboardingScreenRef,
 }: any) {
   const { colors } = useTheme();
 
@@ -1028,10 +1045,21 @@ function AppContent({
 
           {currentScreen === 'onboarding' && (
             <OnboardingScreen
+              variant={userRole === 'technician' ? 'technician' : 'user'}
               onFinish={async () => {
-                console.log('✅ Onboarding completed - navigating to login');
                 await storage.setOnboardingCompleted();
-                navigate('login');
+                const nextScreen = postOnboardingScreenRef.current;
+                postOnboardingScreenRef.current = null;
+                if (nextScreen) {
+                  console.log('✅ Onboarding completed - navigating to:', nextScreen);
+                  navigate(nextScreen);
+                } else if (authToken) {
+                  console.log('✅ Onboarding completed (authenticated) - navigating to home');
+                  navigate('home');
+                } else {
+                  console.log('✅ Onboarding completed - navigating to login');
+                  navigate('login');
+                }
               }}
             />
           )}
@@ -1224,7 +1252,14 @@ function AppContent({
               userId={userId}
               onFinished={async () => {
                 presenceService.markOnline().catch(() => {});
-                navigate('home');
+                const hasSeenTour = await storage.hasSeenOnboarding();
+                if (!hasSeenTour && Platform.OS !== 'web') {
+                  console.log('📍 Technician setup done - showing product tour before home');
+                  postOnboardingScreenRef.current = 'home';
+                  navigate('onboarding');
+                } else {
+                  navigate('home');
+                }
               }}
             />
           )}

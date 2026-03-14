@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,1223 +6,935 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  ActivityIndicator,
   Dimensions,
-  StatusBar,
   Platform,
+  ActivityIndicator,
   Animated,
-  Modal,
-  Pressable,
+  Image,
 } from 'react-native';
-import { Feather, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
-import { SvgUri } from 'react-native-svg';
-import { useTheme } from '../../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
+import { Ionicons, Feather } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTheme } from '../../context/ThemeContext';
 import { useFontFamily } from '../../context/FontContext';
-import { AnimatedStatTicker } from '../../components/AnimatedStatTicker';
 import { LinearGradient } from 'expo-linear-gradient';
-import { CopilotStep, walkthroughable } from 'react-native-copilot';
-import {
-  getCategories,
-  getSubcategories,
-  ServiceCategory,
-  ServiceSubcategory,
-} from '../../services/ServiceService';
-import { getServerBaseUrl, buildApiUrl, API_ENDPOINTS } from '../../config/api';
+import StaggeredAppearView from '../../components/StaggeredAppearView';
+import PressableScaleView from '../../components/PressableScaleView';
+import BonyadLogo from '../../components/BonyadLogo';
+import ChatbotFab from '../../components/ChatbotFab';
+import { buildApiUrl, API_ENDPOINTS } from '../../config/api';
 import { storage } from '../../utils/storage';
-import { getSmallTaskTypes, getMyRequests, SmallTaskRequestApi } from '../../services/SmallTaskService';
+import { getMyRequests } from '../../services/SmallTaskService';
+import { getCategories, getSubcategories, getDisplayIconFullUrl, type ServiceCategory, type ServiceSubcategory } from '../../services/ServiceService';
+import type { SmallTaskRequest } from '../../types/smallTasks';
+import type { CategoryInfo } from '../CategorySubcategoryScreen';
 
-
-const WalkableView = walkthroughable((props: any) => <View {...props} collapsable={false} />);
+export type { CategoryInfo };
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const H_PAD = 16;
-const BANNER_W = SCREEN_WIDTH - H_PAD * 2;
-const CARD_HALF = (SCREEN_WIDTH - H_PAD * 2 - 12) / 2;
-const CARD_SCROLL_WIDTH = Math.min(280, SCREEN_WIDTH * 0.78);
-const CARD_GAP = 12;
+const H_PADDING = 16;
+const SECTION_SPACING = 20;
+const SEARCH_RADIUS = 14;
+const CARD_RADIUS = 12;
+const IOS_PRIMARY = '#00A5F4';
+const IOS_CHAT = '#4C9AD5';
+const CARD_WIDTH = 160;
+const CATEGORY_CARD_SIZE = 140;
+const SUBCATEGORY_CARD_WIDTH = 150;
+const SUBCATEGORY_CARD_HEIGHT = 140;
+const SUBCATEGORY_STAGGER_MS = 45;
+const INLINE_SLIDE_DURATION = 220;
 
-// ─── Icon helpers ──────────────────────────────────────────────────────────────
-type MCIcon = keyof typeof MaterialCommunityIcons.glyphMap;
-
-function getServiceIcon(nameEn: string): MCIcon {
-  const n = nameEn.toLowerCase();
-  if (n.includes('construct') || n.includes('build')) return 'hammer';
-  if (n.includes('design')) return 'pencil-ruler';
-  if (n.includes('consult')) return 'account-tie';
-  if (n.includes('electric')) return 'lightning-bolt';
-  if (n.includes('plumb') || n.includes('water')) return 'water-pump';
-  if (n.includes('paint')) return 'format-paint';
-  if (n.includes('clean')) return 'broom';
-  if (n.includes('garden') || n.includes('landscape')) return 'flower';
-  if (n.includes('security')) return 'shield-check';
-  if (n.includes('move') || n.includes('transport')) return 'truck';
-  if (n.includes('repair') || n.includes('fix')) return 'tools';
-  if (n.includes('roof')) return 'home-roof';
-  if (n.includes('floor')) return 'floor-plan';
-  if (n.includes('air') || n.includes('hvac') || n.includes('ac')) return 'air-conditioner';
-  if (n.includes('finance')) return 'cash-multiple';
-  if (n.includes('supervis')) return 'account-supervisor';
-  return 'briefcase-outline';
+/** Subcategory card with stagger appear animation (web-style: icon area + title + description) */
+function StaggeredSubcategoryCard({
+  index,
+  sub,
+  isRTL,
+  colors,
+  primaryColor,
+  iconBg,
+  iconFg,
+  resolveServiceImage,
+  getSubcategoryIconName,
+  fontStyle,
+  onPress,
+}: {
+  index: number;
+  sub: ServiceSubcategory;
+  isRTL: boolean;
+  colors: { cardBackground: string; text: string; textSecondary: string; border: string };
+  primaryColor: string;
+  iconBg: string;
+  iconFg: string;
+  resolveServiceImage: (item: ServiceSubcategory) => { uri: string } | null;
+  getSubcategoryIconName: (name: string) => keyof typeof Ionicons.glyphMap;
+  fontStyle: object;
+  onPress: () => void;
+}) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateX = useRef(new Animated.Value(isRTL ? 24 : -24)).current;
+  useEffect(() => {
+    const t = setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+        Animated.timing(translateX, { toValue: 0, duration: 200, useNativeDriver: true }),
+      ]).start();
+    }, index * SUBCATEGORY_STAGGER_MS);
+    return () => clearTimeout(t);
+  }, [index, opacity, translateX, isRTL]);
+  const subName = isRTL && sub.nameAr ? sub.nameAr : sub.nameEn;
+  const subDesc = isRTL && sub.descriptionAr ? sub.descriptionAr : (sub.descriptionEn || sub.description || '');
+  const subImg = resolveServiceImage(sub);
+  const iconName = getSubcategoryIconName(sub.nameEn);
+  return (
+    <Animated.View style={{ opacity, transform: [{ translateX }] }}>
+      <PressableScaleView
+        style={[styles.subcategoryCardWeb, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
+        onPress={onPress}
+      >
+        <View style={[styles.subcategoryCardWebIconWrap, { backgroundColor: iconBg }]}>
+          {subImg ? (
+            <Image source={subImg} style={styles.subcategoryCardWebImage} resizeMode="contain" />
+          ) : (
+            <View style={styles.subcategoryCardWebIconFallback}>
+              <Ionicons name={iconName} size={36} color={iconFg} />
+            </View>
+          )}
+        </View>
+        <Text style={[styles.subcategoryCardTitleWeb, { color: colors.text }, fontStyle]} numberOfLines={2}>{subName}</Text>
+        {subDesc ? (
+          <Text style={[styles.subcategoryCardDescWeb, { color: colors.textSecondary }, fontStyle]} numberOfLines={2}>{subDesc}</Text>
+        ) : null}
+      </PressableScaleView>
+    </Animated.View>
+  );
 }
 
-function getTaskIcon(nameEn = '', nameAr = ''): MCIcon {
-  const n = (nameEn + ' ' + nameAr).toLowerCase();
-  if (n.includes('ac') || n.includes('air') || n.includes('مكيف')) return 'air-conditioner';
-  if (n.includes('drill') || n.includes('حفر')) return 'hammer-wrench';
-  if (n.includes('plumb') || n.includes('سباك')) return 'water-pump';
-  if (n.includes('electric') || n.includes('كهرب')) return 'lightning-bolt';
-  if (n.includes('paint') || n.includes('دهان')) return 'format-paint';
-  if (n.includes('clean') || n.includes('تنظيف')) return 'broom';
-  if (n.includes('design') || n.includes('3d') || n.includes('تصميم')) return 'pencil-ruler';
-  if (n.includes('construct') || n.includes('build') || n.includes('بناء')) return 'hammer';
-  return 'hammer-wrench';
-}
-
-function resolveSvgUrl(item: { svgUrl?: string | null }): string | null {
-  if (!item.svgUrl) return null;
-  return item.svgUrl.startsWith('http') ? item.svgUrl : `${getServerBaseUrl()}${item.svgUrl}`;
-}
-
-// ─── Types ─────────────────────────────────────────────────────────────────────
-type ProjectStatus = 'pending' | 'running' | 'completed';
-
-interface Project {
+export interface ApiProject {
   id: number;
-  description: string;
-  status: string;
-  budget: number;
-  budgetUnspecified?: boolean;
+  status?: string;
+  description?: string;
   address?: string;
-  createdAt: string;
-  serviceName?: string;
+  budget?: number | null;
+  serviceNameEn?: string;
   serviceNameAr?: string;
-  userName?: string;
+  serviceId?: number;
+  createdAt?: string;
+  timeRequiredDays?: number;
+  [key: string]: unknown;
 }
 
-interface TaskType {
-  id: number;
-  nameEn: string;
-  nameAr?: string;
-  svgUrl?: string | null;
-  imageUrl?: string | null;
-  useSvg?: boolean;
-}
+// Feature banners matching iOS AdvertisementComponent (5 items) – light and dark gradients
+const FEATURE_BANNERS = [
+  { icon: 'people' as const, titleKey: 'Find experts', descKey: 'Connect with verified technicians', colors: ['#FFFFFF', '#E3F2FD', '#BBDEFB'] as const, colorsDark: ['#1A1A2E', '#16213E', '#0F3460'] as const },
+  { icon: 'hammer' as const, titleKey: 'Post project', descKey: 'Get competitive offers', colors: ['#FFFFFF', '#E8F5E9', '#C8E6C9'] as const, colorsDark: ['#1B2D1B', '#2D4A2D', '#1E3A1E'] as const },
+  { icon: 'calendar' as const, titleKey: 'Book appointments', descKey: 'Schedule visits easily', colors: ['#FFFFFF', '#FFF3E0', '#FFE0B2'] as const, colorsDark: ['#2D2416', '#3D2E1A', '#4A3822'] as const },
+  { icon: 'shield-checkmark' as const, titleKey: 'Verified', descKey: 'Trusted professionals', colors: ['#FFFFFF', '#F3E5F5', '#E1BEE7'] as const, colorsDark: ['#2A1B2E', '#3D2A42', '#2E1F33'] as const },
+  { icon: 'sparkles' as const, titleKey: 'AI assistant', descKey: 'Smart recommendations', colors: ['#FFFFFF', '#E0F7FA', '#B2EBF2'] as const, colorsDark: ['#0D2137', '#143250', '#1A4060'] as const },
+];
 
-export interface CategoryInfo {
-  id: number;
-  nameEn: string;
-  nameAr?: string;
-}
-
-export interface UserHomeScreenProps {
+export interface UserHomeScreenContentProps {
   userName?: string;
   onPressSearch?: (query: string) => void;
   onPressOpenServices?: () => void;
   onPressServiceProvidersAll?: () => void;
   onPressMyProjects?: () => void;
-  onPressProject?: (projectId: number) => void;
   onPressMyTasks?: () => void;
   onPressPremiumUpgrade?: () => void;
   onPressNotifications?: () => void;
   onPressMessages?: () => void;
   onPressInfo?: () => void;
   onPressFab?: () => void;
-  onPressProjectStatus?: (status: ProjectStatus) => void;
+  onPressProjectStatus?: (status: 'pending' | 'running' | 'completed') => void;
   onPressCategory?: (category: CategoryInfo) => void;
+  /** When user selects a subcategory from the categories modal – e.g. open service technicians */
+  onPressSubcategory?: (subcategory: ServiceSubcategory) => void;
+  /** Open manual project form with this category pre-selected (no subcategory) */
+  onPressCategoryForManual?: (category: ServiceCategory) => void;
+  /** Open manual project form with this category and subcategory pre-selected */
+  onPressSubcategoryForManual?: (category: ServiceCategory, subcategory: ServiceSubcategory) => void;
   onPressChatbot?: () => void;
-  onShowServiceProviders?: () => void;
-  onPressCreateProject?: (serviceId?: number) => void;
-  onPressCreateSmallTask?: (taskTypeId?: number) => void;
+  onPressProject?: (project: ApiProject) => void;
+  onPressCreateProject?: (serviceId: number) => void;
+  onPressCreateSmallTask?: (taskTypeId: number) => void;
   onPressMySmallTasks?: () => void;
+  onPressSmallTask?: (task: SmallTaskRequest) => void;
+  onPressAppointments?: () => void;
+  unreadNotificationCount?: number;
 }
 
-// ─── Banner slides ─────────────────────────────────────────────────────────────
-const BANNERS = [
-  {
-    key: 'technicians',
-    titleKey: 'Find Expert Technicians',
-    subtitleKey: 'Browse verified professionals for all your construction needs',
-    gradient: ['#EFF6FF', '#DBEAFE', '#BFDBFE'] as const,
-    iconName: 'account-group' as MCIcon,
-    iconGrad: ['#2563EB', '#3B82F6'] as const,
-    titleColor: '#1E3A8A',
-    subtitleColor: '#1D4ED8',
-  },
-  {
-    key: 'project',
-    titleKey: 'Post your project',
-    subtitleKey: 'Get competitive offers from qualified technicians',
-    gradient: ['#F0FDF4', '#DCFCE7', '#BBF7D0'] as const,
-    iconName: 'briefcase' as MCIcon,
-    iconGrad: ['#16A34A', '#22C55E'] as const,
-    titleColor: '#166534',
-    subtitleColor: '#15803D',
-  },
-  {
-    key: 'smalltask',
-    titleKey: 'Quick Services',
-    subtitleKey: 'Browse small tasks by type',
-    gradient: ['#FFFBEB', '#FEF3C7', '#FDE68A'] as const,
-    iconName: 'lightning-bolt' as MCIcon,
-    iconGrad: ['#D97706', '#F59E0B'] as const,
-    titleColor: '#92400E',
-    subtitleColor: '#B45309',
-  },
-];
-
-// ──────────────────────────────────────────────────────────────────────────────
-const UserHomeScreen: React.FC<UserHomeScreenProps> = ({
-  userName,
+export default function UserHomeScreenContent({
+  onPressSearch,
   onPressOpenServices,
   onPressMyProjects,
-  onPressProject,
   onPressMyTasks,
   onPressFab,
   onPressProjectStatus,
   onPressCategory,
+  onPressSubcategory,
+  onPressCategoryForManual,
+  onPressSubcategoryForManual,
   onPressChatbot,
+  onPressProject,
   onPressCreateProject,
   onPressCreateSmallTask,
-}) => {
+  onPressMySmallTasks,
+  onPressSmallTask,
+  onPressAppointments,
+  onPressNotifications,
+  onPressMessages,
+  onPressInfo,
+  unreadNotificationCount = 0,
+}: UserHomeScreenContentProps) {
   const { t, i18n } = useTranslation();
-  const { colors: themeColors, theme } = useTheme();
-  const { fontFamily, boldFontFamily } = useFontFamily();
+  const insets = useSafeAreaInsets();
+  const { colors, theme } = useTheme();
+  const { fontFamily, boldFontFamily, scaledSize } = useFontFamily();
   const isRTL = i18n.language === 'ar';
-  const isDarkMode = theme === 'dark';
+  const isDark = theme === 'dark';
 
-  const fs = { fontFamily: fontFamily || undefined };
-  const fsB = { fontFamily: boldFontFamily || fontFamily || undefined };
-
-  // ─── Colours ───────────────────────────────────────────────────────────────
-  const dc = {
-    primary: themeColors.primary,
-    primaryDark: themeColors.primaryDark,
-    purple: isDarkMode ? '#a78bfa' : '#7c3aed',
-    green: isDarkMode ? '#34d399' : '#16a34a',
-    amber: isDarkMode ? '#fbbf24' : '#f59e0b',
-    gray100: isDarkMode ? '#1e293b' : '#f1f5f9',
-    gray400: isDarkMode ? '#94a3b8' : '#94a3b8',
-    gray500: isDarkMode ? '#64748b' : '#64748b',
-    background: themeColors.background,
-    card: themeColors.cardBackground,
-    text: themeColors.text,
-    textSec: themeColors.textSecondary,
-    border: (themeColors as any).border || '#e5e7eb',
-    white: themeColors.white ?? '#FFFFFF',
-  };
-
-  // ─── State ─────────────────────────────────────────────────────────────────
   const [searchText, setSearchText] = useState('');
-  const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const [showSearch, setShowSearch] = useState(false);
+  const [bannerIndex, setBannerIndex] = useState(0);
+  const bannerScrollRef = useRef<ScrollView>(null);
+  const [projects, setProjects] = useState<ApiProject[]>([]);
+  const [smallTasks, setSmallTasks] = useState<SmallTaskRequest[]>([]);
+  const [loadingProjects, setLoadingProjects] = useState(true);
+  const [loadingTasks, setLoadingTasks] = useState(true);
 
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
-  const [catsLoading, setCatsLoading] = useState(true);
-  const [subcatsMap, setSubcatsMap] = useState<Record<number, ServiceSubcategory[]>>({});
-  const [loadingSubcat, setLoadingSubcat] = useState<number | null>(null);
-  const [selectedCat, setSelectedCat] = useState<ServiceCategory | null>(null);
-  const [modalVisible, setModalVisible] = useState(false);
-  const modalAnim = useRef(new Animated.Value(0)).current;
+  const [loadingCategories, setLoadingCategories] = useState(true);
+  const [selectedCategoryForModal, setSelectedCategoryForModal] = useState<ServiceCategory | null>(null);
+  const [subcategoriesForModal, setSubcategoriesForModal] = useState<ServiceSubcategory[]>([]);
+  const [loadingSubcategories, setLoadingSubcategories] = useState(false);
 
-  const [taskTypes, setTaskTypes] = useState<TaskType[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [projLoading, setProjLoading] = useState(true);
-  const [myTasks, setMyTasks] = useState<SmallTaskRequestApi[]>([]);
-  const [tasksLoading, setTasksLoading] = useState(true);
+  const fontStyle = { fontFamily: fontFamily || undefined };
+  const boldStyle = { fontFamily: boldFontFamily || fontFamily || undefined };
 
-  const [activeBanner, setActiveBanner] = useState(0);
-  const bannerRef = useRef<ScrollView>(null);
-  const bannerIdxRef = useRef(0);
-
-  // ─── Auto-scroll banner ────────────────────────────────────────────────────
-  useEffect(() => {
-    const timer = setInterval(() => {
-      const next = (bannerIdxRef.current + 1) % BANNERS.length;
-      bannerIdxRef.current = next;
-      bannerRef.current?.scrollTo({ x: next * BANNER_W, animated: true });
-      setActiveBanner(next);
-    }, 4000);
-    return () => clearInterval(timer);
-  }, []);
-
-  // ─── Fetch categories ──────────────────────────────────────────────────────
-  useEffect(() => {
-    let alive = true;
-    getCategories()
-      .then(list => { if (alive) setCategories(list); })
-      .catch(() => {})
-      .finally(() => { if (alive) setCatsLoading(false); });
-    return () => { alive = false; };
-  }, []);
-
-  // ─── Fetch task types ──────────────────────────────────────────────────────
-  useEffect(() => {
-    let alive = true;
-    getSmallTaskTypes()
-      .then(types => { if (alive) setTaskTypes(types as TaskType[]); })
-      .catch(() => {});
-    return () => { alive = false; };
-  }, []);
-
-  // ─── Fetch user projects ───────────────────────────────────────────────────
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const token = await storage.getAuthToken();
-        if (!token) { if (alive) { setProjects([]); setProjLoading(false); } return; }
-        const res = await fetch(buildApiUrl(API_ENDPOINTS.PROJECTS.MY_PROJECTS), {
-          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        });
-        if (res.ok) {
-          const raw = await res.json();
-          const arr = Array.isArray(raw) ? raw : (raw?.projects ?? raw?.data ?? []);
-          if (alive) setProjects(arr.slice(0, 6));
-        } else if (alive) { setProjects([]); }
-      } catch { if (alive) setProjects([]); }
-      finally { if (alive) setProjLoading(false); }
-    })();
-    return () => { alive = false; };
-  }, []);
-
-  // ─── Fetch user's small task requests ─────────────────────────────────────
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const list = await getMyRequests();
-        if (alive) setMyTasks(Array.isArray(list) ? list.slice(0, 6) : []);
-      } catch { if (alive) setMyTasks([]); }
-      finally { if (alive) setTasksLoading(false); }
-    })();
-    return () => { alive = false; };
-  }, []);
-
-  // ─── Fetch subcategories (cached) ─────────────────────────────────────────
-  const fetchSubcats = useCallback(async (catId: number) => {
-    if (subcatsMap[catId] !== undefined) return;
-    setLoadingSubcat(catId);
+  const loadProjects = useCallback(async () => {
     try {
-      const subs = await getSubcategories(catId);
-      setSubcatsMap(prev => ({ ...prev, [catId]: subs }));
+      const token = await storage.getAuthToken();
+      if (!token) {
+        setProjects([]);
+        return;
+      }
+      const url = buildApiUrl(API_ENDPOINTS.PROJECTS.MY_PROJECTS);
+      const res = await fetch(url, {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      });
+      if (!res.ok) {
+        setProjects([]);
+        return;
+      }
+      const data = await res.json();
+      const list = Array.isArray(data) ? data : (data?.projects ?? data?.data ?? []);
+      setProjects(Array.isArray(list) ? list.slice(0, 6) : []);
     } catch {
-      setSubcatsMap(prev => ({ ...prev, [catId]: [] }));
+      setProjects([]);
     } finally {
-      setLoadingSubcat(null);
+      setLoadingProjects(false);
     }
-  }, [subcatsMap]);
+  }, []);
 
-  // ─── Open / close subcategory modal ───────────────────────────────────────
-  const openCatModal = useCallback((cat: ServiceCategory) => {
-    setSelectedCat(cat);
-    setModalVisible(true);
-    modalAnim.setValue(0);
-    Animated.spring(modalAnim, {
-      toValue: 1,
-      useNativeDriver: true,
-      tension: 65,
-      friction: 11,
-    }).start();
-    fetchSubcats(cat.id);
-  }, [fetchSubcats, modalAnim]);
+  const loadSmallTasks = useCallback(async () => {
+    try {
+      const list = await getMyRequests();
+      const mapped: SmallTaskRequest[] = (list || []).slice(0, 6).map((r: any) => ({
+        id: r.id,
+        taskTypeId: r.taskTypeId,
+        taskTypeNameAr: r.taskTypeNameAr,
+        taskTypeNameEn: r.taskTypeNameEn,
+        description: r.description ?? '',
+        address: r.address ?? '',
+        status: (r.status ?? 'PENDING') as SmallTaskRequest['status'],
+        bidsCount: r.bidsCount ?? 0,
+        bidCount: r.bidCount ?? 0,
+        userName: r.userName,
+        createdAt: r.createdAt ?? '',
+      }));
+      setSmallTasks(mapped);
+    } catch {
+      setSmallTasks([]);
+    } finally {
+      setLoadingTasks(false);
+    }
+  }, []);
 
-  const closeCatModal = useCallback(() => {
-    Animated.timing(modalAnim, {
-      toValue: 0,
-      duration: 220,
-      useNativeDriver: true,
-    }).start(() => {
-      setModalVisible(false);
-      setSelectedCat(null);
+  useEffect(() => {
+    loadProjects();
+    loadSmallTasks();
+  }, [loadProjects, loadSmallTasks]);
+
+  const loadCategories = useCallback(async () => {
+    setLoadingCategories(true);
+    try {
+      const list = await getCategories();
+      setCategories(list);
+    } catch {
+      setCategories([]);
+    } finally {
+      setLoadingCategories(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadCategories();
+  }, [loadCategories]);
+
+  const inlineSubcatOpacity = useRef(new Animated.Value(0)).current;
+  const inlineSubcatTranslateX = useRef(new Animated.Value(isRTL ? 80 : -80)).current;
+
+  const handleCategoryPress = useCallback(async (category: ServiceCategory) => {
+    if (onPressCategoryForManual) {
+      onPressCategoryForManual(category);
+      return;
+    }
+    if (selectedCategoryForModal?.id === category.id) {
+      Animated.parallel([
+        Animated.timing(inlineSubcatOpacity, {
+          toValue: 0,
+          duration: INLINE_SLIDE_DURATION,
+          useNativeDriver: true,
+        }),
+        Animated.timing(inlineSubcatTranslateX, {
+          toValue: isRTL ? 80 : -80,
+          duration: INLINE_SLIDE_DURATION,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        setSelectedCategoryForModal(null);
+        setSubcategoriesForModal([]);
+        inlineSubcatTranslateX.setValue(isRTL ? 80 : -80);
+      });
+      return;
+    }
+    setSelectedCategoryForModal(category);
+    setLoadingSubcategories(true);
+    setSubcategoriesForModal([]);
+    inlineSubcatOpacity.setValue(0);
+    inlineSubcatTranslateX.setValue(isRTL ? 80 : -80);
+    try {
+      const subs = await getSubcategories(category.id);
+      setSubcategoriesForModal(subs);
+    } catch {
+      setSubcategoriesForModal([]);
+    } finally {
+      setLoadingSubcategories(false);
+      Animated.parallel([
+        Animated.timing(inlineSubcatOpacity, {
+          toValue: 1,
+          duration: INLINE_SLIDE_DURATION,
+          useNativeDriver: true,
+        }),
+        Animated.timing(inlineSubcatTranslateX, {
+          toValue: 0,
+          duration: INLINE_SLIDE_DURATION,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [onPressCategoryForManual, selectedCategoryForModal?.id, isRTL, inlineSubcatOpacity, inlineSubcatTranslateX]);
+
+  const closeSubcategoriesModal = useCallback(() => {
+    if (!selectedCategoryForModal) return;
+    Animated.parallel([
+      Animated.timing(inlineSubcatOpacity, {
+        toValue: 0,
+        duration: INLINE_SLIDE_DURATION,
+        useNativeDriver: true,
+      }),
+      Animated.timing(inlineSubcatTranslateX, {
+        toValue: isRTL ? 80 : -80,
+        duration: INLINE_SLIDE_DURATION,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setSelectedCategoryForModal(null);
+      setSubcategoriesForModal([]);
+      inlineSubcatTranslateX.setValue(isRTL ? 80 : -80);
     });
-  }, [modalAnim]);
+  }, [selectedCategoryForModal, isRTL, inlineSubcatOpacity, inlineSubcatTranslateX]);
 
-  // ─── Search ────────────────────────────────────────────────────────────────
-  const searchTimer = useRef<NodeJS.Timeout | null>(null);
+  const handleSubcategoryPress = useCallback(
+    (sub: ServiceSubcategory) => {
+      if (onPressSubcategoryForManual && selectedCategoryForModal) {
+        onPressSubcategoryForManual(selectedCategoryForModal, sub);
+        closeSubcategoriesModal();
+        return;
+      }
+      closeSubcategoriesModal();
+      onPressSubcategory?.(sub);
+    },
+    [onPressSubcategory, onPressSubcategoryForManual, selectedCategoryForModal, closeSubcategoriesModal]
+  );
+
+  /** Same as web: getDisplayIconFullUrl (useSvg→svgUrl, else imageUrl, else iconUrl). RN Image cannot show SVG so we return null for .svg and show fallback icon. */
+  const resolveServiceImage = (item: ServiceCategory | ServiceSubcategory): { uri: string } | null => {
+    const url = getDisplayIconFullUrl(item);
+    if (!url) return null;
+    if (item.useSvg || url.toLowerCase().endsWith('.svg')) return null;
+    return { uri: url };
+  };
+
+  /** Web-style category icon fallback by name */
+  const getCategoryIconName = (nameEn: string): keyof typeof Ionicons.glyphMap => {
+    const n = (nameEn || '').toLowerCase();
+    if (n.includes('plumb')) return 'water-outline';
+    if (n.includes('electric')) return 'flash-outline';
+    if (n.includes('ac') || n.includes('hvac') || n.includes('air')) return 'snow-outline';
+    if (n.includes('paint')) return 'color-palette-outline';
+    if (n.includes('carpent') || n.includes('wood')) return 'hammer-outline';
+    if (n.includes('clean')) return 'sparkles-outline';
+    if (n.includes('construct') || n.includes('build')) return 'construct-outline';
+    if (n.includes('design')) return 'brush-outline';
+    if (n.includes('garden') || n.includes('landscape')) return 'leaf-outline';
+    if (n.includes('security')) return 'shield-checkmark-outline';
+    if (n.includes('move') || n.includes('transport')) return 'car-outline';
+    if (n.includes('repair')) return 'build-outline';
+    return 'grid-outline';
+  };
+
+  const getSubcategoryIconName = (nameEn: string): keyof typeof Ionicons.glyphMap => getCategoryIconName(nameEn);
+
+  const iconBg = isDark ? '#000000' : '#FFFFFF';
+  const iconFg = isDark ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.85)';
+
+  const getTaskTypeName = (task: SmallTaskRequest) =>
+    isRTL ? (task.taskTypeNameAr ?? task.taskType?.nameAr ?? task.taskTypeNameEn) : (task.taskTypeNameEn ?? task.taskType?.nameEn ?? task.taskTypeNameAr);
+
   const handleSearchChange = (text: string) => {
     setSearchText(text);
-    if (searchTimer.current) clearTimeout(searchTimer.current);
-    if (!text.trim()) { setShowSearch(false); setSearchResults([]); return; }
-    searchTimer.current = setTimeout(() => {
-      setSearchLoading(true);
-      setShowSearch(true);
-      const q = text.toLowerCase();
-      const results = [
-        ...categories
-          .filter(c => c.nameEn?.toLowerCase().includes(q) || c.nameAr?.toLowerCase().includes(q))
-          .map(c => ({ ...c, sType: 'service' })),
-        ...taskTypes
-          .filter(tt => tt.nameEn?.toLowerCase().includes(q) || tt.nameAr?.toLowerCase().includes(q))
-          .map(tt => ({ ...tt, sType: 'task' })),
-      ];
-      setSearchResults(results);
-      setSearchLoading(false);
-    }, 400);
+    onPressSearch?.(text);
   };
 
-  // ─── Helpers ───────────────────────────────────────────────────────────────
-  const statusStyle = (status: string) => {
-    switch (status?.toLowerCase()) {
-      case 'pending': return { bg: '#FFFBEB', tc: '#D97706', label: t('Pending') };
-      case 'bid_received': return { bg: '#F5F3FF', tc: '#7C3AED', label: t('Bid Received') };
-      case 'running':
-      case 'in_progress': return { bg: '#EFF6FF', tc: '#2563EB', label: t('In Progress') };
-      case 'approved': return { bg: '#F0FDF4', tc: '#16A34A', label: t('Approved') };
-      case 'completed': return { bg: '#F0FDF4', tc: '#16A34A', label: t('Completed') };
-      case 'cancelled': return { bg: '#FEF2F2', tc: '#EF4444', label: t('Cancelled') };
-      default: return { bg: dc.gray100, tc: dc.gray500, label: status?.replace(/_/g, ' ') || t('Unknown') };
-    }
+  const handleBannerScroll = (e: { nativeEvent: { contentOffset: { x: number }; layoutMeasurement: { width: number } } }) => {
+    const x = e.nativeEvent.contentOffset.x;
+    const w = e.nativeEvent.layoutMeasurement.width;
+    const index = Math.round(x / w);
+    if (index >= 0 && index < FEATURE_BANNERS.length) setBannerIndex(index);
   };
 
-  const fmtDate = (d: string) => {
-    if (!d) return '';
-    return new Date(d).toLocaleDateString(isRTL ? 'ar-SA' : 'en-US', { month: 'short', day: 'numeric' });
-  };
+  const primaryColor = isDark ? colors.primary : IOS_PRIMARY;
 
-  const name = (en?: string, ar?: string) => isRTL && ar ? ar : (en ?? '');
-
-  // Project count stats for ticker
-  const pCounts = {
-    pending: projects.filter(p => ['pending', 'bid_received'].includes(p.status?.toLowerCase())).length,
-    running: projects.filter(p => ['running', 'in_progress', 'approved'].includes(p.status?.toLowerCase())).length,
-    completed: projects.filter(p => p.status?.toLowerCase() === 'completed').length,
-  };
-
-  // Quick Build items: first 6 task types + first 6 categories
-  const quickItems: Array<(TaskType & { itype: 'task' }) | (ServiceCategory & { itype: 'cat' })> = [
-    ...taskTypes.slice(0, 6).map(tt => ({ ...tt, itype: 'task' as const })),
-    ...categories.slice(0, 6).map(c => ({ ...c, itype: 'cat' as const })),
-  ];
-
-  // ─── Render ────────────────────────────────────────────────────────────────
   return (
-    <View style={[s.root, { backgroundColor: dc.background }]}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-
-      <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false} nestedScrollEnabled>
-
-        {/* ════ HERO: search + stats ════ */}
-        <LinearGradient
-          colors={isDarkMode ? [dc.primary, '#1a365d'] : ['#ffffff', '#3b82f6']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={s.hero}
-        >
-          {/* Stat ticker */}
-          <View style={{ marginBottom: 14 }}>
-            <AnimatedStatTicker stats={[
-              { label: t('Welcome back'), value: userName || t('User'), icon: 'account', color: '#fff', bgColor: 'rgba(255,255,255,0.2)' },
-              { label: t('Pending'), value: String(pCounts.pending), icon: 'clock-outline', color: '#fbbf24', bgColor: 'rgba(251,191,36,0.2)' },
-              { label: t('Running'), value: String(pCounts.running), icon: 'hammer-wrench', color: '#60a5fa', bgColor: 'rgba(96,165,250,0.2)' },
-              { label: t('Completed'), value: String(pCounts.completed), icon: 'check-circle-outline', color: '#34d399', bgColor: 'rgba(52,211,153,0.2)' },
-            ]} />
-          </View>
-
-          {/* Search bar */}
-          <View style={s.searchWrap}>
-            <View style={[s.searchBar, isRTL && s.rowRev]}>
-              <Feather name="search" size={18} color={dc.gray400} />
-              <TextInput
-                style={[s.searchInput, fs, { color: dc.text }, isRTL && { textAlign: 'right' }]}
-                placeholder={t('Search services, tasks, providers...')}
-                placeholderTextColor={dc.gray400}
-                value={searchText}
-                onChangeText={handleSearchChange}
-                returnKeyType="search"
-              />
-              {searchText.length > 0 && (
-                <TouchableOpacity onPress={() => { setSearchText(''); setShowSearch(false); }}>
-                  <Ionicons name="close-circle" size={18} color={dc.gray400} />
-                </TouchableOpacity>
+    <View style={[styles.container, styles.wrapper, { backgroundColor: colors.background }]}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[
+          styles.content,
+          styles.contentScroll,
+          { paddingTop: Math.max(insets.top, 12), paddingBottom: Math.max(insets.bottom, 24) + 120 },
+        ]}
+        showsVerticalScrollIndicator={false}
+        bounces={true}
+        nestedScrollEnabled={true}
+        directionalLockEnabled={true}
+      >
+      {/* Top bar — same button order & icons as the non-home top bar: Chat | Info | Notifications */}
+      <View style={[styles.iosTopBar, isRTL && styles.iosTopBarRTL]}>
+        <View style={styles.iosTopBarLogo}>
+          <BonyadLogo size="small" responsive={false} variant={isDark ? 'light' : 'dark'} />
+        </View>
+        <View style={[styles.iosTopBarIcons, isRTL && styles.iosTopBarIconsRTL]}>
+          {/* Chat — same as non-home bar setActiveTab('chat') */}
+          <TouchableOpacity style={styles.iosTopBarIconBtn} onPress={onPressMessages} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Ionicons name="chatbubbles-outline" size={24} color={primaryColor} />
+          </TouchableOpacity>
+          {/* Info / Coach tour — same as non-home bar handleRestartCoachTour */}
+          <TouchableOpacity style={styles.iosTopBarIconBtn} onPress={onPressInfo} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Ionicons name="information-circle-outline" size={24} color={primaryColor} />
+          </TouchableOpacity>
+          {/* Notifications — same as non-home bar setActiveTab('notifications') */}
+          <TouchableOpacity style={styles.iosTopBarIconBtn} onPress={onPressNotifications} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <View>
+              <Ionicons name="notifications-outline" size={24} color={primaryColor} />
+              {unreadNotificationCount > 0 && (
+                <View style={[styles.iosNotificationBadge, { backgroundColor: '#FF3B30' }]} />
               )}
             </View>
+          </TouchableOpacity>
+        </View>
+      </View>
 
-            {/* Search dropdown */}
-            {showSearch && (
-              <View style={[s.searchDrop, { backgroundColor: dc.card }]}>
-                {searchLoading ? (
-                  <ActivityIndicator size="small" color={dc.primary} style={{ padding: 16 }} />
-                ) : searchResults.length === 0 ? (
-                  <Text style={[s.searchEmpty, fs, { color: dc.textSec }]}>{t('No results found')}</Text>
-                ) : searchResults.slice(0, 6).map((item, idx) => (
-                  <TouchableOpacity
-                    key={idx}
-                    style={[s.searchRow, { borderBottomColor: dc.border }, isRTL && s.rowRev]}
-                    onPress={() => {
-                      setShowSearch(false); setSearchText('');
-                      if (item.sType === 'service') onPressCategory?.({ id: item.id, nameEn: item.nameEn, nameAr: item.nameAr });
-                      else onPressCreateSmallTask?.(item.id);
-                    }}
-                  >
-                    <View style={[s.searchIcon, { backgroundColor: dc.primary + '15' }]}>
-                      <Ionicons name={item.sType === 'task' ? 'hammer-outline' : 'briefcase-outline'} size={16} color={dc.primary} />
+      {/* 1. Search bar - frosted style (iOS): cornerRadius 14, shadow radius 10, y 4 */}
+      <StaggeredAppearView index={0}>
+        <View style={[styles.searchWrap, { backgroundColor: isDark ? colors.cardBackground : 'rgba(255,255,255,0.9)', borderColor: `${primaryColor}26` }, isDark ? undefined : styles.searchShadow]}>
+          <Ionicons name="search" size={18} color={primaryColor} />
+          <TextInput
+            style={[styles.searchInput, { color: colors.text }, fontStyle]}
+            placeholder={t('Search services or providers')}
+            placeholderTextColor={colors.textTertiary}
+            value={searchText}
+            onChangeText={handleSearchChange}
+            returnKeyType="search"
+          />
+          {searchText.length > 0 && (
+            <TouchableOpacity onPress={() => { setSearchText(''); onPressSearch?.(''); }} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Ionicons name="close-circle" size={20} color={colors.textTertiary} />
+            </TouchableOpacity>
+          )}
+        </View>
+      </StaggeredAppearView>
+
+      {/* 2. Advertisement / feature banners carousel (iOS height 140, capsule dots) */}
+      <StaggeredAppearView index={1} style={{ marginTop: SECTION_SPACING }}>
+        <ScrollView
+          ref={bannerScrollRef}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          onMomentumScrollEnd={handleBannerScroll}
+          style={[styles.bannerScroll, { height: 160 }]}
+          contentContainerStyle={styles.bannerContent}
+          nestedScrollEnabled={true}
+          scrollEventThrottle={16}
+        >
+          {FEATURE_BANNERS.map((banner, i) => (
+            <View key={i} style={[styles.bannerPage, { width: SCREEN_WIDTH }]}>
+              <LinearGradient colors={isDark ? [...banner.colorsDark] : [...banner.colors]} style={styles.bannerCard}>
+                <View style={[styles.bannerRow, isRTL && styles.bannerRowRTL]}>
+                  <View style={[styles.bannerIconCircle, { backgroundColor: isDark ? `${primaryColor}40` : `${primaryColor}20` }]}>
+                    <Ionicons name={banner.icon} size={28} color={primaryColor} />
+                  </View>
+                  <View style={[styles.bannerTextWrap, isRTL && styles.bannerTextWrapRTL]}>
+                    <Text style={[styles.bannerTitle, { color: colors.text }, boldStyle]}>{t(banner.titleKey)}</Text>
+                    <Text style={[styles.bannerDesc, { color: colors.textSecondary }, fontStyle]}>{t(banner.descKey)}</Text>
+                  </View>
+                </View>
+              </LinearGradient>
+            </View>
+          ))}
+        </ScrollView>
+        <View style={[styles.dots, isRTL && styles.dotsRTL]}>
+          {FEATURE_BANNERS.map((_, i) => (
+            <View
+              key={i}
+              style={[
+                styles.dot,
+                i === bannerIndex && styles.dotActive,
+                i === bannerIndex && { backgroundColor: primaryColor },
+                i !== bannerIndex && { backgroundColor: isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.2)' },
+              ]}
+            />
+          ))}
+        </View>
+      </StaggeredAppearView>
+
+      {/* 3. Quick actions - circular icons (iOS QuickActionsSection) with press scale */}
+      <StaggeredAppearView index={2} style={{ marginTop: SECTION_SPACING }}>
+        <View style={[styles.quickActions, isRTL && styles.quickActionsRTL]}>
+          <PressableScaleView style={styles.quickActionItem} onPress={() => onPressCreateProject?.(0)}>
+            <View style={[styles.quickActionCircle, { backgroundColor: `${primaryColor}18` }]}>
+              <Feather name="folder-plus" size={24} color={primaryColor} />
+            </View>
+            <Text style={[styles.quickActionLabel, { color: colors.text }, fontStyle]} numberOfLines={1}>{t('New project')}</Text>
+          </PressableScaleView>
+          <PressableScaleView style={styles.quickActionItem} onPress={() => onPressCreateSmallTask?.(0)}>
+            <View style={[styles.quickActionCircle, { backgroundColor: 'rgba(255,149,0,0.18)' }]}>
+              <Ionicons name="flash" size={24} color="#FF9500" />
+            </View>
+            <Text style={[styles.quickActionLabel, { color: colors.text }, fontStyle]} numberOfLines={1}>{t('Small task')}</Text>
+          </PressableScaleView>
+          <PressableScaleView style={styles.quickActionItem} onPress={() => { onPressAppointments ? onPressAppointments() : onPressProjectStatus?.('running'); }}>
+            <View style={[styles.quickActionCircle, { backgroundColor: 'rgba(52,199,89,0.18)' }]}>
+              <Ionicons name="calendar" size={24} color="#34C759" />
+            </View>
+            <Text style={[styles.quickActionLabel, { color: colors.text }, fontStyle]} numberOfLines={1}>{t('Appointments')}</Text>
+          </PressableScaleView>
+          <PressableScaleView style={styles.quickActionItem} onPress={() => onPressOpenServices?.()}>
+            <View style={[styles.quickActionCircle, { backgroundColor: 'rgba(175,82,222,0.18)' }]}>
+              <Feather name="grid" size={24} color="#AF52DE" />
+            </View>
+            <Text style={[styles.quickActionLabel, { color: colors.text }, fontStyle]} numberOfLines={1}>{t('Services')}</Text>
+          </PressableScaleView>
+        </View>
+      </StaggeredAppearView>
+
+      {/* 4. Service Categories – web-style: horizontal scroll, square cards, image area + title + chevron when selected */}
+      <StaggeredAppearView index={3} style={{ marginTop: SECTION_SPACING }}>
+        <View style={[styles.sectionHeader, isRTL && styles.sectionHeaderRTL]}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.sectionTitle, { color: colors.text }, { fontSize: scaledSize(18) }, boldStyle]}>{t('Service Categories')}</Text>
+            <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }, fontStyle]}>{t('Browse services by category')}</Text>
+          </View>
+        </View>
+        {loadingCategories ? (
+          <View style={[styles.categoriesLoadingWrap, { backgroundColor: colors.cardBackground }]}>
+            <ActivityIndicator size="small" color={primaryColor} />
+            <Text style={[styles.categoriesLoadingText, { color: colors.textSecondary }, fontStyle]}>{t('Loading categories...')}</Text>
+          </View>
+        ) : categories.length === 0 ? (
+          <View style={[styles.categoriesEmptyWrap, { backgroundColor: colors.cardBackground }]}>
+            <Ionicons name="grid-outline" size={32} color={colors.textSecondary} />
+            <Text style={[styles.categoriesEmptyText, { color: colors.textSecondary }, fontStyle]}>{t('No categories available')}</Text>
+          </View>
+        ) : (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={[styles.categoriesRowContent, isRTL && styles.hScrollRTL]}
+          >
+            {categories.map((cat) => {
+              const name = isRTL && cat.nameAr ? cat.nameAr : cat.nameEn;
+              const imgSrc = resolveServiceImage(cat);
+              const isSelected = selectedCategoryForModal?.id === cat.id;
+              return (
+                <PressableScaleView
+                  key={cat.id}
+                  style={[
+                    styles.categoryCardWeb,
+                    { backgroundColor: colors.cardBackground, borderColor: isSelected ? primaryColor : colors.border, borderWidth: isSelected ? 2 : 1 },
+                  ]}
+                  onPress={() => handleCategoryPress(cat)}
+                >
+                  <View style={[styles.categoryCardWebImageWrap, { backgroundColor: iconBg }]}>
+                    {imgSrc ? (
+                      <Image source={imgSrc} style={styles.categoryCardImage} resizeMode="contain" />
+                    ) : (
+                      <Ionicons name={getCategoryIconName(cat.nameEn)} size={36} color={iconFg} />
+                    )}
+                  </View>
+                  <View style={[styles.categoryCardWebContent, isRTL && styles.categoryCardWebContentRTL]}>
+                    <Text style={[styles.categoryCardTitleWeb, { color: colors.text }, fontStyle]} numberOfLines={2}>{name}</Text>
+                    <View style={[styles.categoryCardChevronWrap, isSelected && { backgroundColor: primaryColor }]}>
+                      <Ionicons name="chevron-up" size={18} color={isSelected ? '#FFF' : primaryColor} />
                     </View>
-                    <Text style={[s.searchRowText, fs, { color: dc.text }]} numberOfLines={1}>
-                      {name(item.nameEn, item.nameAr)}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+                  </View>
+                </PressableScaleView>
+              );
+            })}
+          </ScrollView>
+        )}
+      </StaggeredAppearView>
+
+      {/* Inline subcategories – same as web: slide in from side, "Subcategories – [Name]", gradient line, horizontal cards with stagger */}
+      {selectedCategoryForModal && (
+        <Animated.View
+          style={[
+            styles.inlineSubcategoriesWrap,
+            {
+              opacity: inlineSubcatOpacity,
+              transform: [{ translateX: inlineSubcatTranslateX }],
+            },
+          ]}
+        >
+          <View style={[styles.inlineSubcatLineWrap, isRTL && styles.inlineSubcatLineWrapRTL]}>
+            <LinearGradient
+              colors={[primaryColor, 'transparent']}
+              start={isRTL ? { x: 1, y: 0 } : { x: 0, y: 0 }}
+              end={isRTL ? { x: 0, y: 0 } : { x: 1, y: 0 }}
+              style={styles.inlineSubcatLine}
+            />
+          </View>
+          <View style={[styles.inlineSubcatHeader, isRTL && styles.inlineSubcatHeaderRTL]}>
+            <Text style={[styles.inlineSubcatTitle, { color: colors.text }, boldStyle]}>
+              {t('Subcategories')}
+              <Text style={[styles.inlineSubcatTitleDash, { color: colors.text }]}>
+                {isRTL && selectedCategoryForModal.nameAr ? ` – ${selectedCategoryForModal.nameAr}` : ` – ${selectedCategoryForModal.nameEn}`}
+              </Text>
+            </Text>
+            {onPressCategoryForManual && (
+              <TouchableOpacity
+                onPress={() => onPressCategoryForManual(selectedCategoryForModal)}
+                style={[styles.inlineSubcatCreateBtn, { backgroundColor: primaryColor }]}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.inlineSubcatCreateBtnText, fontStyle]}>{t('Create project')}</Text>
+              </TouchableOpacity>
             )}
-          </View>
-        </LinearGradient>
-
-        {/* ════ BANNER CAROUSEL ════ */}
-        <View style={[s.section, { paddingHorizontal: H_PAD }]}>
-          <ScrollView
-            ref={bannerRef}
-            horizontal
-            pagingEnabled
-            snapToInterval={BANNER_W}
-            decelerationRate="fast"
-            showsHorizontalScrollIndicator={false}
-            onMomentumScrollEnd={e => {
-              const idx = Math.round(e.nativeEvent.contentOffset.x / BANNER_W);
-              bannerIdxRef.current = idx;
-              setActiveBanner(idx);
-            }}
-          >
-            {BANNERS.map(b => (
-              <TouchableOpacity key={b.key} activeOpacity={0.95} style={{ width: BANNER_W }}>
-                <LinearGradient colors={b.gradient} style={s.bannerCard}>
-                  <View style={[s.bannerRow, isRTL && s.rowRev]}>
-                    <LinearGradient colors={b.iconGrad} style={s.bannerIcon}>
-                      <MaterialCommunityIcons name={b.iconName} size={28} color="#fff" />
-                    </LinearGradient>
-                    <View style={[s.bannerTexts, isRTL && { alignItems: 'flex-end' }]}>
-                      <Text style={[s.bannerTitle, fsB, { color: b.titleColor }]}>{t(b.titleKey)}</Text>
-                      <Text style={[s.bannerSub, fs, { color: b.subtitleColor }]}>{t(b.subtitleKey)}</Text>
-                    </View>
-                  </View>
-                </LinearGradient>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-
-          {/* Pagination dots */}
-          <View style={s.dots}>
-            {BANNERS.map((_, i) => (
-              <TouchableOpacity key={i} onPress={() => {
-                bannerIdxRef.current = i;
-                setActiveBanner(i);
-                bannerRef.current?.scrollTo({ x: i * BANNER_W, animated: true });
-              }}>
-                <View style={[
-                  s.dot,
-                  i === activeBanner
-                    ? [s.dotActive, { backgroundColor: dc.primary }]
-                    : s.dotInactive,
-                ]} />
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* ════ QUICK CREATE ════ */}
-        <View style={s.section}>
-          <View style={[s.secHead, isRTL && s.rowRev]}>
-            <View style={[s.secTitleRow, isRTL && s.rowRev]}>
-              <View style={[s.secIcon, { backgroundColor: dc.primary + '18' }]}>
-                <MaterialCommunityIcons name="lightning-bolt-outline" size={20} color={dc.primary} />
-              </View>
-              <Text style={[s.secHeading, fsB, { color: dc.text }]}>{t('Quick Create')}</Text>
-            </View>
-          </View>
-
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={[s.qScroll, isRTL && { flexDirection: 'row-reverse' }]}
-          >
-            {quickItems.map(item => {
-              const isTask = item.itype === 'task';
-              const label = name(item.nameEn, item.nameAr);
-              const iconName = isTask ? getTaskIcon(item.nameEn, item.nameAr) : getServiceIcon(item.nameEn);
-              const svgUrl = resolveSvgUrl(item);
-              const iconColor = isTask ? dc.amber : dc.primary;
-
-              return (
-                <TouchableOpacity
-                  key={`${isTask ? 't' : 'c'}-${item.id}`}
-                  style={s.qItem}
-                  activeOpacity={0.8}
-                  onPress={() => isTask ? onPressCreateSmallTask?.(item.id) : onPressCreateProject?.(item.id)}
-                >
-                  <View style={[s.qCircle, { backgroundColor: dc.white }]}>
-                    {svgUrl
-                      ? <SvgUri width={28} height={28} uri={svgUrl} fill={iconColor} />
-                      : <MaterialCommunityIcons name={iconName} size={24} color={iconColor} />
-                    }
-                  </View>
-                  <Text style={[s.qLabel, fs, { color: dc.text }]} numberOfLines={2}>{label}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        </View>
-
-        {/* ════ SERVICE CATEGORIES (horizontal scroll → modal) ════ */}
-        <View style={s.section}>
-          <View style={[s.secHead, isRTL && s.rowRev]}>
-            <View style={[s.secTitleRow, isRTL && s.rowRev]}>
-              <View style={[s.secIcon, { backgroundColor: dc.purple + '18' }]}>
-                <MaterialCommunityIcons name="view-grid-outline" size={20} color={dc.purple} />
-              </View>
-              <Text style={[s.secHeading, fsB, { color: dc.text }]}>{t('Service Categories')}</Text>
-            </View>
-            <TouchableOpacity
-              style={[s.viewAll, { backgroundColor: dc.purple + '12' }]}
-              onPress={onPressOpenServices}
-              activeOpacity={0.8}
-            >
-              <Text style={[s.viewAllTxt, fs, { color: dc.purple }]}>
-                {isRTL ? `❯ ${t('View All')}` : `${t('View All')} ❯`}
-              </Text>
+            <TouchableOpacity onPress={closeSubcategoriesModal} hitSlop={12} style={[styles.inlineSubcatCloseBtn, { backgroundColor: colors.cardBackground }]}>
+              <Ionicons name="close" size={22} color={colors.text} />
             </TouchableOpacity>
           </View>
-
-          {catsLoading ? (
-            <ActivityIndicator size="small" color={dc.primary} style={{ marginTop: 16, alignSelf: 'center' }} />
+          <View style={styles.inlineSubcatSpacer} />
+          {loadingSubcategories ? (
+            <View style={[styles.subcategoryLoadingWrap, { backgroundColor: colors.cardBackground }]}>
+              <ActivityIndicator size="small" color={primaryColor} />
+              <Text style={[styles.modalLoadingText, { color: colors.textSecondary }, fontStyle]}>{t('Loading...')}</Text>
+            </View>
+          ) : subcategoriesForModal.length === 0 ? (
+            <View style={[styles.subcategoryEmptyWrap, { backgroundColor: colors.cardBackground }]}>
+              <Ionicons name="grid-outline" size={40} color={colors.textSecondary} />
+              <Text style={[styles.modalEmptyText, { color: colors.textSecondary }, fontStyle]}>{t('No subcategories available')}</Text>
+            </View>
           ) : (
-            <CopilotStep key="availableServices" text={t('coachMark.availableServices')} order={2} name="availableServices">
-              <WalkableView>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={[s.qScroll, isRTL && { flexDirection: 'row-reverse' }]}
-                >
-                  {categories.map(cat => {
-                    const svgUrl = resolveSvgUrl(cat);
-                    const iconName = getServiceIcon(cat.nameEn);
-                    const label = name(cat.nameEn, cat.nameAr);
-                    return (
-                      <TouchableOpacity
-                        key={cat.id}
-                        style={s.qItem}
-                        onPress={() => openCatModal(cat)}
-                        activeOpacity={0.8}
-                      >
-                        <View style={[s.qCircle, { backgroundColor: dc.white }]}>
-                          {svgUrl
-                            ? <SvgUri width={28} height={28} uri={svgUrl} fill={dc.purple} />
-                            : <MaterialCommunityIcons name={iconName} size={24} color={dc.purple} />
-                          }
-                        </View>
-                        <Text style={[s.qLabel, fs, { color: dc.text }]} numberOfLines={2}>{label}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
-              </WalkableView>
-            </CopilotStep>
-          )}
-        </View>
-
-        {/* ════ QUICK SERVICES (small task types) ════ */}
-        <View style={s.section}>
-          <View style={[s.secHead, isRTL && s.rowRev]}>
-            <View style={[s.secTitleRow, isRTL && s.rowRev]}>
-              <View style={[s.secIcon, { backgroundColor: dc.amber + '22' }]}>
-                <Ionicons name="flash-outline" size={20} color={dc.amber} />
-              </View>
-              <Text style={[s.secHeading, fsB, { color: dc.text }]}>{t('Quick Services')}</Text>
-            </View>
-          </View>
-
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={[s.qScroll, isRTL && { flexDirection: 'row-reverse' }]}
-          >
-            {/* Chatbot entry point */}
-            <TouchableOpacity style={s.qItem} onPress={onPressChatbot} activeOpacity={0.8}>
-              <View style={[s.qCircle, { backgroundColor: dc.white }]}>
-                <MaterialCommunityIcons name="robot" size={26} color={dc.primary} />
-              </View>
-              <Text style={[s.qLabel, fs, { color: dc.text }]}>AI</Text>
-            </TouchableOpacity>
-
-            {taskTypes.map(tt => {
-              const label = name(tt.nameEn, tt.nameAr);
-              const iconName = getTaskIcon(tt.nameEn, tt.nameAr);
-              const svgUrl = resolveSvgUrl(tt);
-              return (
-                <TouchableOpacity
-                  key={tt.id}
-                  style={s.qItem}
-                  onPress={() => onPressCreateSmallTask?.(tt.id)}
-                  activeOpacity={0.8}
-                >
-                  <View style={[s.qCircle, { backgroundColor: dc.white }]}>
-                    {svgUrl
-                      ? <SvgUri width={26} height={26} uri={svgUrl} fill={dc.amber} />
-                      : <MaterialCommunityIcons name={iconName} size={24} color={dc.amber} />
-                    }
-                  </View>
-                  <Text style={[s.qLabel, fs, { color: dc.text }]} numberOfLines={2}>{label}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        </View>
-
-        {/* ════ MY PROJECTS ════ */}
-        <View style={s.section}>
-          <View style={[s.secHead, isRTL && s.rowRev]}>
-            <View style={[s.secTitleRow, isRTL && s.rowRev]}>
-              <View style={[s.secIcon, { backgroundColor: dc.purple + '18' }]}>
-                <Feather name="folder" size={20} color={dc.purple} />
-              </View>
-              <Text style={[s.secHeading, fsB, { color: dc.text }]}>{t('My Projects')}</Text>
-            </View>
-            <TouchableOpacity
-              style={[s.viewAll, { backgroundColor: dc.purple + '12' }]}
-              onPress={onPressMyProjects}
-              activeOpacity={0.8}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={[styles.inlineSubcatScrollContent, isRTL && styles.hScrollRTL]}
             >
-              <Text style={[s.viewAllTxt, fs, { color: dc.purple }]}>
-                {isRTL ? `❯ ${t('View All')}` : `${t('View All')} ❯`}
-              </Text>
-            </TouchableOpacity>
-          </View>
+              {subcategoriesForModal.map((sub, idx) => (
+                <StaggeredSubcategoryCard
+                  key={sub.id}
+                  index={idx}
+                  sub={sub}
+                  isRTL={isRTL}
+                  colors={colors}
+                  primaryColor={primaryColor}
+                  iconBg={iconBg}
+                  iconFg={iconFg}
+                  resolveServiceImage={resolveServiceImage}
+                  getSubcategoryIconName={getSubcategoryIconName}
+                  fontStyle={fontStyle}
+                  onPress={() => handleSubcategoryPress(sub)}
+                />
+              ))}
+            </ScrollView>
+          )}
+        </Animated.View>
+      )}
 
-          {projLoading ? (
-            <ActivityIndicator size="small" color={dc.purple} style={{ marginTop: 16, alignSelf: 'center' }} />
+      {/* 5. My Projects section - horizontal strip with real cards (iOS press scale) */}
+      <StaggeredAppearView index={4} style={{ marginTop: SECTION_SPACING }}>
+        <View style={[styles.sectionHeader, isRTL && styles.sectionHeaderRTL]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }, { fontSize: scaledSize(18) }, boldStyle]}>{t('My Projects')}</Text>
+          <TouchableOpacity onPress={onPressMyProjects} activeOpacity={0.8}>
+            <Text style={[styles.viewAll, { color: primaryColor }, fontStyle]}>{t('View All')} →</Text>
+          </TouchableOpacity>
+        </View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.hScroll, isRTL && styles.hScrollRTL]}>
+          {loadingProjects ? (
+            <View style={[styles.homeCard, { backgroundColor: colors.cardBackground, width: CARD_WIDTH, minHeight: 100, justifyContent: 'center', alignItems: 'center' }]}>
+              <ActivityIndicator size="small" color={primaryColor} />
+            </View>
           ) : projects.length === 0 ? (
-            <TouchableOpacity
-              style={[s.emptyCard, { backgroundColor: dc.card, marginHorizontal: H_PAD }]}
-              onPress={onPressFab}
-              activeOpacity={0.85}
-            >
-              <MaterialCommunityIcons name="plus-circle-outline" size={38} color={dc.purple} />
-              <Text style={[s.emptyTitle, fsB, { color: dc.text }]}>{t('Start Your First Project')}</Text>
-              <Text style={[s.emptyBody, fs, { color: dc.textSec }]}>
-                {t('Create a new project and get connected with professional service providers')}
-              </Text>
-            </TouchableOpacity>
+            <PressableScaleView style={[styles.homeCard, { backgroundColor: colors.cardBackground, width: CARD_WIDTH }]} onPress={() => onPressMyProjects?.()}>
+              <Ionicons name="folder-open-outline" size={32} color={primaryColor} />
+              <Text style={[styles.placeholderLabel, { color: colors.textSecondary }, fontStyle]}>{t('View your projects')}</Text>
+            </PressableScaleView>
           ) : (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={[s.scrollCardsContent, isRTL && { flexDirection: 'row-reverse' }]}
-            >
-              {projects.map(proj => {
-                const ss = statusStyle(proj.status);
-                return (
-                  <TouchableOpacity
-                    key={proj.id}
-                    style={[s.scrollCard, { backgroundColor: dc.card }]}
-                    onPress={() => onPressProject?.(proj.id)}
-                    activeOpacity={0.9}
-                  >
-                    <LinearGradient colors={['#FFF7ED', '#FFEDD5']} style={s.gradWrap}>
-                      {/* Top row */}
-                      <View style={[s.cardTop, isRTL && s.rowRev]}>
-                        <Text style={[s.cardNum, fs, { color: dc.gray400 }]}>#{proj.id}</Text>
-                        <View style={[s.pill, { backgroundColor: ss.bg }]}>
-                          <View style={[s.pillDot, { backgroundColor: ss.tc }]} />
-                          <Text style={[s.pillTxt, fs, { color: ss.tc }]}>{ss.label}</Text>
-                        </View>
-                      </View>
-                      {/* Title */}
-                      <Text style={[s.cardTitle, fsB, { color: dc.text }]} numberOfLines={2}>
-                        {proj.description || t('No description')}
-                      </Text>
-                      {/* Budget */}
-                      <View style={[s.cardBudget, isRTL && s.rowRev]}>
-                        <View style={s.riyalCircle}>
-                          <Text style={s.riyalTxt}>﷼</Text>
-                        </View>
-                        <Text style={[s.budgetTxt, fsB]}>
-                          {proj.budgetUnspecified || !proj.budget ? t('Flexible') : proj.budget.toLocaleString()}
-                        </Text>
-                      </View>
-                      {/* Service name */}
-                      {(proj.serviceName || proj.serviceNameAr) && (
-                        <Text style={[s.cardUser, fs, { color: dc.gray500 }]} numberOfLines={1}>
-                          {name(proj.serviceName, proj.serviceNameAr)}
-                        </Text>
-                      )}
-                      {/* Date */}
-                      <View style={[s.cardMeta, isRTL && s.rowRev]}>
-                        <Feather name="calendar" size={11} color={dc.gray400} />
-                        <Text style={[s.cardMetaTxt, fs, { color: dc.gray400 }]}>{fmtDate(proj.createdAt)}</Text>
-                      </View>
-                    </LinearGradient>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
+            projects.map((project) => (
+              <PressableScaleView
+                key={project.id}
+                style={[styles.homeCard, { backgroundColor: colors.cardBackground }]}
+                onPress={() => onPressProject?.(project)}
+              >
+                <View style={[styles.homeCardRow, isRTL && styles.homeCardRowRTL]}>
+                  <View style={[styles.homeCardIconWrap, { backgroundColor: `${primaryColor}18` }]}>
+                    <Ionicons name="folder-open" size={20} color={primaryColor} />
+                  </View>
+                  <Text style={[styles.homeCardTitle, { color: colors.text }, boldStyle]} numberOfLines={1}>#{project.id}</Text>
+                </View>
+                <Text style={[styles.homeCardSub, { color: colors.textSecondary }, fontStyle]} numberOfLines={2}>
+                  {(project.description || project.address || '').trim() || t('Project')}
+                </Text>
+                <Text style={[styles.homeCardStatus, { color: primaryColor }, fontStyle]}>
+                  {project.status ?? '—'}
+                </Text>
+              </PressableScaleView>
+            ))
           )}
-        </View>
+        </ScrollView>
+      </StaggeredAppearView>
 
-        {/* ════ MY SMALL TASKS ════ */}
-        <View style={[s.section, { marginBottom: 80 }]}>
-          <View style={[s.secHead, isRTL && s.rowRev]}>
-            <View style={[s.secTitleRow, isRTL && s.rowRev]}>
-              <View style={[s.secIcon, { backgroundColor: dc.amber + '22' }]}>
-                <Ionicons name="list-outline" size={20} color={dc.amber} />
-              </View>
-              <Text style={[s.secHeading, fsB, { color: dc.text }]}>{t('My Small Tasks')}</Text>
+      {/* 6. My Small Tasks section - horizontal strip with real cards (iOS press scale) */}
+      <StaggeredAppearView index={5} style={{ marginTop: SECTION_SPACING }}>
+        <View style={[styles.sectionHeader, isRTL && styles.sectionHeaderRTL]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }, { fontSize: scaledSize(18) }, boldStyle]}>{t('My Small Tasks')}</Text>
+          <TouchableOpacity onPress={onPressMySmallTasks} activeOpacity={0.8}>
+            <Text style={[styles.viewAll, { color: primaryColor }, fontStyle]}>{t('View All')} →</Text>
+          </TouchableOpacity>
+        </View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.hScroll, isRTL && styles.hScrollRTL]}>
+          {loadingTasks ? (
+            <View style={[styles.homeCard, { backgroundColor: colors.cardBackground, width: CARD_WIDTH, minHeight: 100, justifyContent: 'center', alignItems: 'center' }]}>
+              <ActivityIndicator size="small" color="#FF9500" />
             </View>
-            <TouchableOpacity
-              style={[s.viewAll, { backgroundColor: '#FFF7ED' }]}
-              onPress={onPressMyTasks}
-              activeOpacity={0.8}
-            >
-              <Text style={[s.viewAllTxt, fs, { color: '#EA580C' }]}>
-                {isRTL ? `❯ ${t('View All')}` : `${t('View All')} ❯`}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {tasksLoading ? (
-            <ActivityIndicator size="small" color={dc.amber} style={{ marginTop: 16, alignSelf: 'center' }} />
-          ) : myTasks.length === 0 ? (
-            <TouchableOpacity
-              style={[s.emptyCard, { backgroundColor: dc.card, marginHorizontal: H_PAD }]}
-              onPress={() => onPressCreateSmallTask?.()}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="flash-outline" size={38} color={dc.amber} />
-              <Text style={[s.emptyTitle, fsB, { color: dc.text }]}>
-                {t('No small tasks yet. Create one to get started!')}
-              </Text>
-            </TouchableOpacity>
+          ) : smallTasks.length === 0 ? (
+            <PressableScaleView style={[styles.homeCard, { backgroundColor: colors.cardBackground, width: CARD_WIDTH }]} onPress={() => onPressMySmallTasks?.()}>
+              <Ionicons name="flash-outline" size={32} color="#FF9500" />
+              <Text style={[styles.placeholderLabel, { color: colors.textSecondary }, fontStyle]}>{t('View your small tasks')}</Text>
+            </PressableScaleView>
           ) : (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={[s.scrollCardsContent, isRTL && { flexDirection: 'row-reverse' }]}
-            >
-              {myTasks.map(task => {
-                const ss = statusStyle(task.status);
-                const taskName = name(task.taskTypeNameEn ?? task.description, task.taskTypeNameAr ?? task.description);
-                return (
-                  <TouchableOpacity
-                    key={task.id}
-                    style={[s.scrollCard, { backgroundColor: dc.card }]}
-                    activeOpacity={0.9}
-                  >
-                    <LinearGradient colors={['#FFFBEB', '#FEF3C7']} style={s.gradWrap}>
-                      {/* Top row */}
-                      <View style={[s.cardTop, isRTL && s.rowRev]}>
-                        <View style={[s.cardTop, isRTL && s.rowRev, { gap: 3, flexShrink: 1 }]}>
-                          <Ionicons name="people-outline" size={13} color={dc.gray400} />
-                          <Text style={[s.cardNum, fs, { color: dc.gray400 }]}>{task.bidsCount ?? 0}</Text>
-                        </View>
-                        <View style={[s.pill, { backgroundColor: ss.bg }]}>
-                          <View style={[s.pillDot, { backgroundColor: ss.tc }]} />
-                          <Text style={[s.pillTxt, fs, { color: ss.tc }]}>{ss.label}</Text>
-                        </View>
-                      </View>
-                      {/* Title */}
-                      <Text style={[s.cardTitle, fsB, { color: dc.text }]} numberOfLines={2}>
-                        {taskName || '—'}
-                      </Text>
-                      {/* Username */}
-                      {task.userName && (
-                        <Text style={[s.cardUser, fs, { color: dc.gray500 }]} numberOfLines={1}>
-                          {task.userName}
-                        </Text>
-                      )}
-                      {/* Date */}
-                      <View style={[s.cardMeta, isRTL && s.rowRev]}>
-                        <Feather name="calendar" size={11} color={dc.gray400} />
-                        <Text style={[s.cardMetaTxt, fs, { color: dc.gray400 }]}>{fmtDate(task.createdAt)}</Text>
-                      </View>
-                      {/* Address */}
-                      {!!task.address && (
-                        <View style={[s.cardMeta, isRTL && s.rowRev]}>
-                          <Ionicons name="information-circle" size={11} color={dc.primary} />
-                          <Text style={[s.cardMetaTxt, fs, { color: dc.gray400 }]} numberOfLines={1}>{task.address}</Text>
-                        </View>
-                      )}
-                    </LinearGradient>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
+            smallTasks.map((task) => (
+              <PressableScaleView
+                key={task.id}
+                style={[styles.homeCard, { backgroundColor: colors.cardBackground }]}
+                onPress={() => onPressSmallTask ? onPressSmallTask(task) : onPressMySmallTasks?.()}
+              >
+                <View style={[styles.homeCardRow, isRTL && styles.homeCardRowRTL]}>
+                  <View style={[styles.homeCardIconWrap, { backgroundColor: 'rgba(255,149,0,0.18)' }]}>
+                    <Ionicons name="flash" size={20} color="#FF9500" />
+                  </View>
+                  <Text style={[styles.homeCardTitle, { color: colors.text }, boldStyle]} numberOfLines={1}>
+                    {getTaskTypeName(task) || `#${task.id}`}
+                  </Text>
+                </View>
+                <Text style={[styles.homeCardSub, { color: colors.textSecondary }, fontStyle]} numberOfLines={2}>
+                  {task.description?.trim() || task.address || '—'}
+                </Text>
+                <Text style={[styles.homeCardStatus, { color: '#FF9500' }, fontStyle]}>
+                  {task.status ?? '—'}
+                </Text>
+              </PressableScaleView>
+            ))
           )}
-        </View>
+        </ScrollView>
+      </StaggeredAppearView>
 
       </ScrollView>
-
-      {/* ════ FAB ════ */}
-      <TouchableOpacity
-        style={[s.fab, { [isRTL ? 'left' : 'right']: 20, backgroundColor: dc.primary }]}
-        activeOpacity={0.9}
-        onPress={onPressFab}
-      >
-        <MaterialCommunityIcons name="robot" size={26} color="#fff" />
-      </TouchableOpacity>
-
-      {/* ════ SUBCATEGORY MODAL ════ */}
-      <Modal
-        visible={modalVisible}
-        transparent
-        animationType="none"
-        onRequestClose={closeCatModal}
-        statusBarTranslucent
-      >
-        <Pressable style={s.modalOverlay} onPress={closeCatModal}>
-          <Animated.View
-            style={[
-              s.modalSheet,
-              { backgroundColor: dc.card },
-              {
-                transform: [{
-                  translateY: modalAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [500, 0],
-                  }),
-                }],
-                opacity: modalAnim,
-              },
-            ]}
-          >
-            <Pressable onPress={() => {}}>
-              {/* Handle bar */}
-              <View style={[s.modalHandle, { backgroundColor: dc.border }]} />
-
-              {/* Header */}
-              {selectedCat && (
-                <View style={[s.modalHeader, isRTL && s.rowRev]}>
-                  <View style={[s.modalTitleRow, isRTL && s.rowRev]}>
-                    <View style={[s.modalIconCircle, { backgroundColor: dc.purple + '15' }]}>
-                      {resolveSvgUrl(selectedCat)
-                        ? <SvgUri width={22} height={22} uri={resolveSvgUrl(selectedCat)!} fill={dc.purple} />
-                        : <MaterialCommunityIcons name={getServiceIcon(selectedCat.nameEn)} size={20} color={dc.purple} />
-                      }
-                    </View>
-                    <Text style={[s.modalTitle, fsB, { color: dc.text }]}>
-                      {name(selectedCat.nameEn, selectedCat.nameAr)}
-                    </Text>
-                  </View>
-                  <TouchableOpacity onPress={closeCatModal} style={s.modalCloseBtn} activeOpacity={0.7}>
-                    <Ionicons name="close" size={20} color={dc.gray400} />
-                  </TouchableOpacity>
-                </View>
-              )}
-
-              {/* Subcategory grid */}
-              <ScrollView
-                style={{ maxHeight: 380 }}
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={s.modalGrid}
-              >
-                {selectedCat && loadingSubcat === selectedCat.id ? (
-                  <ActivityIndicator size="large" color={dc.purple} style={{ marginVertical: 40, alignSelf: 'center' }} />
-                ) : selectedCat && (subcatsMap[selectedCat.id] || []).length === 0 ? (
-                  <Text style={[s.subcatEmpty, fs, { color: dc.textSec, textAlign: 'center', marginVertical: 32 }]}>
-                    {t('No subcategories')}
-                  </Text>
-                ) : (
-                  <View style={[s.subcatGrid, isRTL && { flexDirection: 'row-reverse' }]}>
-                    {(selectedCat ? (subcatsMap[selectedCat.id] || []) : []).map(sub => {
-                      const subSvg = resolveSvgUrl(sub);
-                      const subIcon = getServiceIcon(sub.nameEn);
-                      const subLabel = name(sub.nameEn, sub.nameAr);
-                      return (
-                        <TouchableOpacity
-                          key={sub.id}
-                          style={[s.subcatItem, { backgroundColor: isDarkMode ? dc.border : '#F8FAFC' }]}
-                          onPress={() => {
-                            closeCatModal();
-                            setTimeout(() => {
-                              onPressCategory?.({ id: sub.id, nameEn: sub.nameEn, nameAr: sub.nameAr });
-                            }, 250);
-                          }}
-                          activeOpacity={0.8}
-                        >
-                          <View style={[s.subcatCircle, { backgroundColor: dc.white }]}>
-                            {subSvg
-                              ? <SvgUri width={22} height={22} uri={subSvg} fill={dc.primary} />
-                              : <MaterialCommunityIcons name={subIcon} size={20} color={dc.primary} />
-                            }
-                          </View>
-                          <Text style={[s.subcatLabel, fs, { color: dc.text }]} numberOfLines={2}>{subLabel}</Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                )}
-              </ScrollView>
-            </Pressable>
-          </Animated.View>
-        </Pressable>
-      </Modal>
+      {/* iOS-style Chatbot FAB: fixed bottom-left, wave rings + white circle + robot */}
+      {onPressChatbot && (
+        <ChatbotFab onPress={onPressChatbot} primaryColor={primaryColor} primaryDark={isDark ? colors.primary : '#0078E0'} />
+      )}
     </View>
   );
-};
+}
 
-export default UserHomeScreen;
-
-// ─── Styles ───────────────────────────────────────────────────────────────────
-const CARD_R = 16;
-const SUB_COL = (SCREEN_WIDTH - H_PAD * 2 - 44) / 3;
-
-const s = StyleSheet.create({
-  root: { flex: 1 },
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  wrapper: { flex: 1 },
   scroll: { flex: 1 },
-  scrollContent: { paddingBottom: 0 },
-  rowRev: { flexDirection: 'row-reverse' },
-
-  // ── Hero
-  hero: {
-    paddingTop: Platform.OS === 'ios' ? 10 : 14,
-    paddingBottom: 22,
-    paddingHorizontal: H_PAD,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-  },
-  searchWrap: { position: 'relative', zIndex: 1000 },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: Platform.OS === 'ios' ? 12 : 9,
-    gap: 8,
-    ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8 },
-      android: { elevation: 4 },
-    }),
-  },
-  searchInput: { flex: 1, fontSize: 15, fontWeight: '500' },
-  searchDrop: {
-    position: 'absolute',
-    top: 52,
-    left: 0,
-    right: 0,
-    borderRadius: 14,
-    paddingVertical: 4,
-    zIndex: 9999,
-    ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 10 },
-      android: { elevation: 10 },
-    }),
-  },
-  searchEmpty: { padding: 16, textAlign: 'center', fontSize: 14 },
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderBottomWidth: 1,
-    gap: 10,
-  },
-  searchIcon: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  searchRowText: { flex: 1, fontSize: 14, fontWeight: '500' },
-
-  // ── Section shared
-  section: { marginTop: 20 },
-  secHead: {
+  content: { paddingHorizontal: H_PADDING, paddingBottom: 24 },
+  contentScroll: { flexGrow: 1 },
+  iosTopBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: H_PAD,
-    marginBottom: 14,
+    height: 44,
+    paddingHorizontal: H_PADDING,
+    marginBottom: 8,
   },
-  secTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  secIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  iosTopBarRTL: { flexDirection: 'row-reverse' },
+  iosTopBarLogo: {},
+  iosTopBarIcons: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  iosTopBarIconsRTL: { flexDirection: 'row-reverse' },
+  iosTopBarIconBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  iosNotificationBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  searchWrap: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    borderRadius: SEARCH_RADIUS,
+    borderWidth: 1,
+    gap: 12,
   },
-  secHeading: { fontSize: 16, fontWeight: '700' },
-  viewAll: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20 },
-  viewAllTxt: { fontSize: 13, fontWeight: '600' },
-
-  // ── Banner
+  searchShadow: {
+    ...Platform.select({
+      ios: {
+        shadowColor: '#00A5F4',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 10,
+      },
+      android: { elevation: 2 },
+    }),
+  },
+  searchInput: { flex: 1, fontSize: 16, paddingVertical: 0 },
+  bannerScroll: { marginHorizontal: -H_PADDING },
+  bannerContent: {},
+  bannerPage: { paddingHorizontal: H_PADDING, width: SCREEN_WIDTH, height: 160 },
   bannerCard: {
-    borderRadius: 18,
-    padding: 18,
-    minHeight: 90,
-    justifyContent: 'center',
-    ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 8 },
-      android: { elevation: 3 },
-    }),
-  },
-  bannerRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  bannerIcon: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 4 },
-      android: { elevation: 3 },
-    }),
-  },
-  bannerTexts: { flex: 1 },
-  bannerTitle: { fontSize: 16, fontWeight: '800', marginBottom: 4 },
-  bannerSub: { fontSize: 12, fontWeight: '500', lineHeight: 17 },
-  dots: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 10, gap: 6 },
-  dot: { borderRadius: 4, height: 8 },
-  dotActive: { width: 22 },
-  dotInactive: { width: 8, backgroundColor: '#CBD5E1' },
-
-  // ── Quick scroll items
-  qScroll: { paddingHorizontal: H_PAD, paddingRight: H_PAD + 8, gap: 12 },
-  qItem: { width: 72, alignItems: 'center', gap: 6 },
-  qCircle: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 5 },
-      android: { elevation: 2 },
-    }),
-  },
-  qLabel: { fontSize: 11, fontWeight: '600', textAlign: 'center', lineHeight: 14 },
-
-  // ── Subcategory grid (inside modal)
-  subcatEmpty: { textAlign: 'center', padding: 12, fontSize: 13 },
-  subcatGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  subcatItem: {
-    width: SUB_COL,
-    alignItems: 'center',
-    padding: 10,
-    borderRadius: 14,
-    gap: 6,
-    ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4 },
-      android: { elevation: 1 },
-    }),
-  },
-  subcatCircle: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-  subcatLabel: { fontSize: 11, textAlign: 'center', fontWeight: '500', lineHeight: 14 },
-
-  // ── Subcategory modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    justifyContent: 'flex-end',
-  },
-  modalSheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingBottom: Platform.OS === 'ios' ? 32 : 20,
-    ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.12, shadowRadius: 16 },
-      android: { elevation: 20 },
-    }),
-  },
-  modalHandle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginTop: 10,
-    marginBottom: 4,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(0,0,0,0.08)',
-  },
-  modalTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
-  modalIconCircle: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  modalTitle: { fontSize: 16, fontWeight: '700', flex: 1 },
-  modalCloseBtn: {
-    width: 32, height: 32, borderRadius: 16,
-    backgroundColor: 'rgba(0,0,0,0.06)',
-    alignItems: 'center', justifyContent: 'center',
-    marginLeft: 8,
-  },
-  modalGrid: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 },
-
-  // ── Horizontal scroll cards (My Projects / My Small Tasks)
-  scrollCardsContent: {
-    paddingHorizontal: H_PAD,
-    paddingVertical: 4,
-    paddingEnd: H_PAD,
-  },
-  scrollCard: {
-    width: CARD_SCROLL_WIDTH,
-    marginEnd: CARD_GAP,
-    borderRadius: CARD_R,
-    overflow: 'hidden',
-    ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 6 },
-      android: { elevation: 3 },
-    }),
-  },
-
-  // ── Grid cards (legacy / modal)
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  gridCard: {
-    width: CARD_HALF,
-    borderRadius: CARD_R,
-    overflow: 'hidden',
-    ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 6 },
-      android: { elevation: 3 },
-    }),
-  },
-  gradWrap: { padding: 12, minHeight: 148 },
-  cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 4 },
-  cardNum: { fontSize: 12 },
-  pill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 10,
-    gap: 4,
-    flexShrink: 1,
-  },
-  pillDot: { width: 5, height: 5, borderRadius: 3 },
-  pillTxt: { fontSize: 10, fontWeight: '600' },
-  cardTitle: { fontSize: 13, fontWeight: '700', marginBottom: 7, lineHeight: 17, minHeight: 34 },
-  cardBudget: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 4 },
-  riyalCircle: { width: 18, height: 18, borderRadius: 9, backgroundColor: 'rgba(22,163,74,0.15)', alignItems: 'center', justifyContent: 'center' },
-  riyalTxt: { fontSize: 10, fontWeight: '700', color: '#16A34A' },
-  budgetTxt: { fontSize: 13, fontWeight: '700', color: '#16A34A' },
-  cardUser: { fontSize: 11, marginBottom: 3 },
-  cardMeta: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
-  cardMetaTxt: { fontSize: 10, flex: 1 },
-
-  // ── Empty state
-  emptyCard: {
     borderRadius: 16,
-    padding: 24,
-    alignItems: 'center',
-    gap: 10,
-    ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 6 },
-      android: { elevation: 2 },
-    }),
+    padding: 20,
+    minHeight: 140,
+    justifyContent: 'center',
   },
-  emptyTitle: { fontSize: 14, fontWeight: '700', textAlign: 'center' },
-  emptyBody: { fontSize: 12, textAlign: 'center', lineHeight: 18 },
-
-  // ── FAB
-  fab: {
-    position: 'absolute',
-    bottom: 20,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+  bannerRow: { flexDirection: 'row', alignItems: 'center' },
+  bannerRowRTL: { flexDirection: 'row-reverse' },
+  bannerIconCircle: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
+  bannerTextWrap: { flex: 1, marginLeft: 16 },
+  bannerTextWrapRTL: { marginLeft: 0, marginRight: 16 },
+  bannerTitle: { fontSize: 18, fontWeight: '700', marginBottom: 4 },
+  bannerDesc: { fontSize: 13 },
+  dots: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 12, gap: 8 },
+  dotsRTL: { flexDirection: 'row-reverse' },
+  dot: { width: 8, height: 8, borderRadius: 4 },
+  dotActive: { width: 24, height: 8, borderRadius: 4 },
+  quickActions: { flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 },
+  quickActionsRTL: { flexDirection: 'row-reverse' },
+  quickActionItem: { alignItems: 'center', minWidth: 72 },
+  quickActionCircle: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  quickActionLabel: { fontSize: 12, maxWidth: 80, textAlign: 'center' },
+  sectionCard: { borderRadius: CARD_RADIUS, padding: 16, ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8 }, android: { elevation: 2 } }) },
+  sectionCardRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  sectionCardRowRTL: { flexDirection: 'row-reverse' },
+  sectionIconWrap: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  sectionCardTitle: { flex: 1, fontSize: 16 },
+  categoriesLoadingWrap: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24, borderRadius: CARD_RADIUS },
+  categoriesLoadingText: { fontSize: 14 },
+  categoriesEmptyWrap: { alignItems: 'center', justifyContent: 'center', padding: 24, borderRadius: CARD_RADIUS },
+  categoriesEmptyText: { marginTop: 8, fontSize: 14 },
+  categoriesRowContent: { paddingRight: H_PADDING, gap: 12, paddingVertical: 4 },
+  sectionSubtitle: { fontSize: 13, marginTop: 4 },
+  categoryCardWeb: {
+    width: CATEGORY_CARD_SIZE,
+    minHeight: CATEGORY_CARD_SIZE,
+    borderRadius: 16,
+    overflow: 'hidden',
+    ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8 }, android: { elevation: 3 } }),
+  },
+  categoryCardWebImageWrap: { width: '100%', height: CATEGORY_CARD_SIZE * 0.4, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  categoryCardImage: { width: 56, height: 56 },
+  categoryCardWebContent: { flex: 1, padding: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 },
+  categoryCardWebContentRTL: { flexDirection: 'row-reverse' },
+  categoryCardTitleWeb: { flex: 1, fontSize: 14, fontWeight: '600' },
+  categoryCardChevronWrap: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  inlineSubcategoriesWrap: { marginTop: 24, paddingHorizontal: 0, overflow: 'hidden' },
+  inlineSubcatLineWrap: { position: 'absolute', top: -20, left: '10%', width: '80%', height: 2, overflow: 'hidden', borderRadius: 1 },
+  inlineSubcatLineWrapRTL: { left: undefined, right: '10%' },
+  inlineSubcatLine: { flex: 1, width: '100%' },
+  inlineSubcatHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  inlineSubcatHeaderRTL: { flexDirection: 'row-reverse' },
+  inlineSubcatTitle: { fontSize: 20, fontWeight: '700', flex: 1 },
+  inlineSubcatTitleDash: { fontWeight: '700' },
+  inlineSubcatCloseBtn: { width: 36, height: 36, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  inlineSubcatCreateBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, justifyContent: 'center' },
+  inlineSubcatCreateBtnText: { color: '#FFF', fontSize: 13, fontWeight: '600' },
+  inlineSubcatSpacer: { height: 16 },
+  subcategoryLoadingWrap: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24, borderRadius: CARD_RADIUS },
+  subcategoryEmptyWrap: { alignItems: 'center', justifyContent: 'center', padding: 24, borderRadius: CARD_RADIUS },
+  modalLoadingText: { marginTop: 12, fontSize: 14 },
+  modalEmptyText: { marginTop: 12, fontSize: 14 },
+  inlineSubcatScrollContent: { paddingRight: H_PADDING, gap: 12, paddingVertical: 4 },
+  subcategoryCardWeb: {
+    width: SUBCATEGORY_CARD_WIDTH,
+    minHeight: SUBCATEGORY_CARD_HEIGHT,
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8 }, android: { elevation: 3 } }),
+  },
+  subcategoryCardWebIconWrap: { width: '100%', height: SUBCATEGORY_CARD_HEIGHT * 0.4, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', position: 'relative' as const },
+  subcategoryCardWebImage: { width: 48, height: 48 },
+  subcategoryCardWebIconFallback: { alignItems: 'center', justifyContent: 'center' },
+  subcategoryCardTitleWeb: { fontSize: 14, fontWeight: '700', paddingHorizontal: 10, paddingTop: 8 },
+  subcategoryCardDescWeb: { fontSize: 11, paddingHorizontal: 10, paddingTop: 2 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  sectionHeaderRTL: { flexDirection: 'row-reverse' },
+  sectionTitle: { fontWeight: '700' },
+  viewAll: { fontSize: 14, fontWeight: '600' },
+  hScroll: { paddingRight: H_PADDING, gap: 12 },
+  hScrollRTL: { flexDirection: 'row-reverse', paddingRight: 0, paddingLeft: H_PADDING },
+  homeCard: {
+    width: CARD_WIDTH,
+    minHeight: 100,
+    borderRadius: CARD_RADIUS,
+    padding: 12,
+    ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 6 }, android: { elevation: 2 } }),
+  },
+  homeCardRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
+  homeCardRowRTL: { flexDirection: 'row-reverse' },
+  homeCardIconWrap: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  homeCardTitle: { flex: 1, fontSize: 14 },
+  homeCardSub: { fontSize: 12, marginBottom: 4 },
+  homeCardStatus: { fontSize: 11, textTransform: 'capitalize' },
+  placeholderCard: {
+    width: CARD_WIDTH,
+    minHeight: 100,
+    borderRadius: CARD_RADIUS,
     alignItems: 'center',
     justifyContent: 'center',
-    ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8 },
-      android: { elevation: 8 },
-    }),
+    padding: 16,
+    ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 6 }, android: { elevation: 2 } }),
   },
+  placeholderLabel: { fontSize: 13, marginTop: 8, textAlign: 'center' },
 });
