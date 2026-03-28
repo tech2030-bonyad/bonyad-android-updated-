@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  Modal,
   Platform,
   Dimensions,
   Linking,
@@ -22,6 +21,7 @@ import { API_ENDPOINTS, buildApiUrlWithParams } from '../config/api';
 import { storage } from '../utils/storage';
 import { showError, showSuccess } from '../utils/alert';
 import ProjectCreationFlow from '../components/ProjectCreationFlow';
+import AppBottomSheetModal from '../components/AppBottomSheetModal';
 import { createCheckout, getPaymentStatus } from '../services/PaymentService';
 import { getUserProfile } from '../services/ProfileService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -97,7 +97,6 @@ export default function InProgressProjectScreen({
   const { colors } = useTheme();
   const { fontFamily, scaledSize } = useFontFamily();
   const insets = useSafeAreaInsets();
-  const isRTL = i18n.language === 'ar';
   const c = useMemo(() => ({
     ...COLORS,
     bgWhite: colors.cardBackground,
@@ -107,6 +106,7 @@ export default function InProgressProjectScreen({
     textDividers: colors.border,
     primary10: colors.primary + '20',
     primary60: colors.primary,
+    primary70: colors.primary,
     textWhite: colors.white,
     green10: colors.success + '20',
     green60: colors.success,
@@ -117,6 +117,7 @@ export default function InProgressProjectScreen({
     amber50: colors.warning,
     bgGray: colors.gray100,
   }), [colors]);
+  const styles = useMemo(() => makeStyles(c), [c]);
   
   const screenWidth = Dimensions.get('window').width;
   const IS_WEB = Platform.OS === 'web';
@@ -505,44 +506,44 @@ export default function InProgressProjectScreen({
     switch (status) {
       case 'paid':
         return {
-          bgColor: COLORS.green10,
-          borderColor: COLORS.green60,
-          iconBgColor: COLORS.green60,
+          bgColor: c.green10,
+          borderColor: c.green60,
+          iconBgColor: c.green60,
           icon: 'checkmark-circle' as const,
-          iconColor: COLORS.textWhite,
-          textColor: COLORS.green60,
-          amountColor: COLORS.green80,
+          iconColor: c.textWhite,
+          textColor: c.green60,
+          amountColor: c.green80,
         };
       case 'ready_for_payment':
         return {
-          bgColor: COLORS.amber10,
-          borderColor: COLORS.amber60,
-          iconBgColor: COLORS.amber60,
+          bgColor: c.amber10,
+          borderColor: c.amber60,
+          iconBgColor: c.amber60,
           icon: 'card-outline' as const,
-          iconColor: COLORS.textWhite,
-          textColor: COLORS.amber60,
-          amountColor: COLORS.textBody,
+          iconColor: c.textWhite,
+          textColor: c.amber60,
+          amountColor: c.textBody,
         };
       case 'awaiting_approval':
         return {
-          bgColor: COLORS.primary10,
-          borderColor: COLORS.primary60,
-          iconBgColor: COLORS.primary60,
+          bgColor: c.primary10,
+          borderColor: c.primary60,
+          iconBgColor: c.primary60,
           icon: 'time-outline' as const,
-          iconColor: COLORS.textWhite,
-          textColor: COLORS.primary60,
-          amountColor: COLORS.textBody,
+          iconColor: c.textWhite,
+          textColor: c.primary60,
+          amountColor: c.textBody,
         };
       case 'locked':
       default:
         return {
-          bgColor: COLORS.bgWhite,
-          borderColor: COLORS.textDividers,
-          iconBgColor: COLORS.bgGray,
+          bgColor: c.bgWhite,
+          borderColor: c.textDividers,
+          iconBgColor: c.bgGray,
           icon: 'lock-closed' as const,
-          iconColor: '#4A4A4A',
-          textColor: COLORS.textSecondary,
-          amountColor: COLORS.textBody,
+          iconColor: c.textSecondary,
+          textColor: c.textSecondary,
+          amountColor: c.textBody,
         };
     }
   };
@@ -597,7 +598,7 @@ export default function InProgressProjectScreen({
             <View style={[styles.phaseIconContainer, { backgroundColor: config.iconBgColor }]}>
               <Ionicons name={config.icon} size={12} color={config.iconColor} />
             </View>
-            <Text style={[styles.phaseName, { color: COLORS.textBody }]}>
+            <Text style={[styles.phaseName, { color: c.textBody }]}>
               {phase.description}
             </Text>
           </View>
@@ -640,15 +641,15 @@ export default function InProgressProjectScreen({
         {status === 'paid' && (
           <View style={styles.phaseStatusRow}>
             <View style={styles.phaseStatusIndicator}>
-              <Ionicons name="checkmark-circle" size={14} color={COLORS.green70} />
-              <Text style={[styles.phaseStatusLabel, { color: COLORS.green70 }]}>
+              <Ionicons name="checkmark-circle" size={14} color={c.green70} />
+              <Text style={[styles.phaseStatusLabel, { color: c.green70 }]}>
                 {t('Payment Completed')}
               </Text>
             </View>
             <Ionicons
-              name={isRTL ? 'chevron-back' : 'chevron-forward'}
+              name="chevron-forward"
               size={20}
-              color={COLORS.textSecondary}
+              color={c.textSecondary}
             />
           </View>
         )}
@@ -661,10 +662,10 @@ export default function InProgressProjectScreen({
             disabled={isPaying}
           >
             {isPaying ? (
-              <ActivityIndicator size="small" color={COLORS.textWhite} />
+              <ActivityIndicator size="small" color={c.textWhite} />
             ) : (
               <>
-                <Ionicons name="card-outline" size={20} color={COLORS.textWhite} />
+                <Ionicons name="card-outline" size={20} color={c.textWhite} />
                 <Text style={styles.payButtonText}>
                   {t('Pay now')} - {formatBudget(phase.moneySpent)} {t('SAR')}
                 </Text>
@@ -676,7 +677,7 @@ export default function InProgressProjectScreen({
         {/* USER: Awaiting Approval State */}
         {!isTechnician && status === 'awaiting_approval' && (
           <View style={styles.awaitingButton}>
-            <Ionicons name="time-outline" size={20} color={COLORS.primary60} />
+            <Ionicons name="time-outline" size={20} color={c.primary60} />
             <Text style={styles.awaitingButtonText}>
               {t('Awaiting Approval')}
             </Text>
@@ -695,12 +696,12 @@ export default function InProgressProjectScreen({
         {/* TECHNICIAN: Complete Phase Button */}
         {isTechnician && status === 'paid' && !phase.completed && (
           <TouchableOpacity
-            style={[styles.completeButton, { backgroundColor: COLORS.green70 }]}
+            style={[styles.completeButton, { backgroundColor: c.green70 }]}
             onPress={() => handleCompletePhase(phase)}
             disabled={isCompleting}
           >
             {isCompleting ? (
-              <ActivityIndicator size="small" color={COLORS.textWhite} />
+              <ActivityIndicator size="small" color={c.textWhite} />
             ) : (
               <Text style={styles.completeButtonText}>
                 {t('Complete Phase')}
@@ -711,7 +712,7 @@ export default function InProgressProjectScreen({
 
         {/* TECHNICIAN: Awaiting Payment - Disabled Complete */}
         {isTechnician && status === 'ready_for_payment' && (
-          <View style={[styles.completeButton, { backgroundColor: COLORS.amber50 }]}>
+          <View style={[styles.completeButton, { backgroundColor: c.amber50 }]}>
             <Text style={styles.completeButtonText}>
               {t('Awaiting Payment')}
             </Text>
@@ -720,7 +721,7 @@ export default function InProgressProjectScreen({
 
         {/* TECHNICIAN: Awaiting Approval - Show status */}
         {isTechnician && status === 'awaiting_approval' && (
-          <View style={[styles.completeButton, { backgroundColor: COLORS.primary60 }]}>
+          <View style={[styles.completeButton, { backgroundColor: c.primary60 }]}>
             <Text style={styles.completeButtonText}>
               {t('Phase Pending Approval')}
             </Text>
@@ -737,7 +738,7 @@ export default function InProgressProjectScreen({
         <View style={styles.titleSection}>
           <TouchableOpacity onPress={onBack} style={styles.backButton}>
             <Ionicons
-              name={isRTL ? 'chevron-forward' : 'chevron-back'}
+              name="chevron-back"
               size={24}
               color={c.textBody}
             />
@@ -774,16 +775,16 @@ export default function InProgressProjectScreen({
           <View style={styles.titleSectionLargeWeb}>
             <TouchableOpacity onPress={onBack} style={styles.titleBackButton}>
             <Ionicons
-              name={isRTL ? 'chevron-forward' : 'chevron-back'}
+              name="chevron-back"
               size={24}
-                color={COLORS.textHeader}
+                color={c.textHeader}
             />
           </TouchableOpacity>
           <View style={styles.titleContainer}>
-              <Text style={[styles.titleMainText, isRTL && { textAlign: 'right' }, { fontSize: scaledSize(42) }]}>
+              <Text style={[styles.titleMainText, { fontSize: scaledSize(42) }]}>
                 {getServiceName()}
               </Text>
-              <Text style={[styles.titleSubtext, isRTL && { textAlign: 'right' }, { fontSize: scaledSize(20) }]}>
+              <Text style={[styles.titleSubtext, { fontSize: scaledSize(20) }]}>
                 {t('In Progress')}
               </Text>
           </View>
@@ -860,7 +861,7 @@ export default function InProgressProjectScreen({
               <Ionicons 
                 name={allPhasesCompleted ? 'checkmark-circle' : 'time-outline'} 
                 size={24} 
-                color={allPhasesCompleted ? COLORS.green60 : COLORS.amber60} 
+                color={allPhasesCompleted ? c.green60 : c.amber60} 
               />
               <Text style={styles.waitingSectionTitle}>
                 {allPhasesCompleted 
@@ -875,14 +876,14 @@ export default function InProgressProjectScreen({
             </Text>
             <View style={styles.waitingProgressInfo}>
               <View style={styles.waitingProgressItem}>
-                <Ionicons name="checkmark-circle" size={18} color={COLORS.green60} />
+                <Ionicons name="checkmark-circle" size={18} color={c.green60} />
                 <Text style={styles.waitingProgressText}>
                   {t('All phases paid')}
                 </Text>
               </View>
               {allPhasesCompleted && (
                 <View style={styles.waitingProgressItem}>
-                  <Ionicons name="checkmark-circle" size={18} color={COLORS.green60} />
+                  <Ionicons name="checkmark-circle" size={18} color={c.green60} />
                   <Text style={styles.waitingProgressText}>
                     {t('All phases completed')}
                   </Text>
@@ -890,7 +891,7 @@ export default function InProgressProjectScreen({
               )}
               {!allPhasesCompleted && (
                 <View style={styles.waitingProgressItem}>
-                  <Ionicons name="time-outline" size={18} color={COLORS.amber60} />
+                  <Ionicons name="time-outline" size={18} color={c.amber60} />
                   <Text style={styles.waitingProgressText}>
                     {t('{{completed}}/{{total}} phases completed by technician', {
                       completed: completedPhasesCount,
@@ -911,7 +912,7 @@ export default function InProgressProjectScreen({
                 <Ionicons 
                   name={canCompleteProject ? 'checkmark-circle' : 'information-circle-outline'} 
                   size={24} 
-                  color={canCompleteProject ? COLORS.green60 : COLORS.primary60} 
+                  color={canCompleteProject ? c.green60 : c.primary60} 
                 />
                 <Text style={styles.completeProjectTitle}>
                   {canCompleteProject ? t('Ready to Complete') : t('Project Completion')}
@@ -936,13 +937,13 @@ export default function InProgressProjectScreen({
               disabled={!canCompleteProject || completingProject}
             >
               {completingProject ? (
-                <ActivityIndicator size="small" color={COLORS.textWhite} />
+                <ActivityIndicator size="small" color={c.textWhite} />
               ) : (
                 <>
                   <Ionicons 
                     name="flag" 
                     size={20} 
-                    color={canCompleteProject ? COLORS.textWhite : COLORS.textSecondary} 
+                    color={canCompleteProject ? c.textWhite : c.textSecondary} 
                   />
                   <Text 
                     style={[
@@ -962,49 +963,45 @@ export default function InProgressProjectScreen({
         <View style={{ height: 100 }} />
       </ScrollView>
 
-      {/* Confirmation Modal */}
-      <Modal
+      {/* Confirmation Modal - unified bottom sheet design */}
+      <AppBottomSheetModal
         visible={showConfirmModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowConfirmModal(false)}
+        onClose={() => setShowConfirmModal(false)}
+        title={confirmTitle}
+        heightFraction={0.45}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>{confirmTitle}</Text>
-            <Text style={styles.modalMessage}>{confirmMessage}</Text>
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalCancelButton]}
-                onPress={() => setShowConfirmModal(false)}
-              >
-                <Text style={styles.modalCancelButtonText}>{t('Cancel')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalConfirmButton]}
-                onPress={() => {
-                  if (confirmOnConfirm) {
-                    confirmOnConfirm();
-                  }
-                }}
-              >
-                <Text style={styles.modalConfirmButtonText}>{confirmButtonText}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+        <Text style={styles.modalMessage}>{confirmMessage}</Text>
+        <View style={styles.modalButtons}>
+          <TouchableOpacity
+            style={[styles.modalButton, styles.modalCancelButton]}
+            onPress={() => setShowConfirmModal(false)}
+          >
+            <Text style={styles.modalCancelButtonText}>{t('Cancel')}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.modalButton, styles.modalConfirmButton]}
+            onPress={() => {
+              if (confirmOnConfirm) {
+                confirmOnConfirm();
+              }
+            }}
+          >
+            <Text style={styles.modalConfirmButtonText}>{confirmButtonText}</Text>
+          </TouchableOpacity>
         </View>
-      </Modal>
+      </AppBottomSheetModal>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(c: typeof COLORS) {
+  return StyleSheet.create({
   container: {
     flex: 1,
   },
   // Header
   header: {
-    backgroundColor: COLORS.primary70,
+    backgroundColor: c.primary70,
     paddingHorizontal: 16,
     paddingBottom: 16,
     flexDirection: 'row',
@@ -1012,6 +1009,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderBottomLeftRadius: 6,
     borderBottomRightRadius: 6,
+  },
+  headerLTR: {
+    direction: 'ltr',
   },
   headerLargeWeb: {
     paddingHorizontal: 48,
@@ -1034,11 +1034,11 @@ const styles = StyleSheet.create({
   logoTextEn: {
     fontSize: 20,
     fontWeight: '800',
-    color: COLORS.primary10,
+    color: c.primary10,
   },
   logoTextAr: {
     fontSize: 16,
-    color: COLORS.primary10,
+    color: c.primary10,
     fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
   },
   headerIcons: {
@@ -1089,7 +1089,7 @@ const styles = StyleSheet.create({
   titleText: {
     fontSize: 20,
     fontWeight: '700',
-    color: COLORS.textHeader,
+    color: c.textHeader,
   },
   titleTextLargeWeb: {
     fontSize: 34,
@@ -1098,7 +1098,7 @@ const styles = StyleSheet.create({
   subtitleText: {
     fontSize: 14,
     fontWeight: '300',
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
   },
   subtitleTextLargeWeb: {
     fontSize: 16,
@@ -1116,7 +1116,7 @@ const styles = StyleSheet.create({
   // Divider
   divider: {
     height: 1,
-    backgroundColor: COLORS.textDividers,
+    backgroundColor: c.textDividers,
     marginHorizontal: 0,
   },
   dividerLargeWeb: {
@@ -1144,18 +1144,18 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: '400',
-    color: COLORS.textHeader,
+    color: c.textHeader,
     marginBottom: 8,
   },
   sectionSubtitle: {
     fontSize: 14,
     fontWeight: '300',
-    color: COLORS.textBody,
+    color: c.textBody,
     lineHeight: 20,
   },
   // Summary Card
   summaryCard: {
-    backgroundColor: COLORS.primary60,
+    backgroundColor: c.primary60,
     borderRadius: 8,
     padding: 16,
     marginBottom: 16,
@@ -1163,7 +1163,7 @@ const styles = StyleSheet.create({
   summaryTitle: {
     fontSize: 16,
     fontWeight: '400',
-    color: COLORS.primary10,
+    color: c.primary10,
     marginBottom: 16,
   },
   summaryRow: {
@@ -1177,13 +1177,13 @@ const styles = StyleSheet.create({
   summaryLabel: {
     fontSize: 10,
     fontWeight: '300',
-    color: COLORS.primary10,
+    color: c.primary10,
     marginBottom: 2,
   },
   summaryValue: {
     fontSize: 12,
     fontWeight: '700',
-    color: COLORS.textWhite,
+    color: c.textWhite,
   },
   progressBarContainer: {
     height: 8,
@@ -1193,7 +1193,7 @@ const styles = StyleSheet.create({
   },
   progressBarFill: {
     height: '100%',
-    backgroundColor: COLORS.textWhite,
+    backgroundColor: c.textWhite,
     borderRadius: 64,
   },
   // Loading
@@ -1205,7 +1205,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 14,
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
   },
   // Empty
   emptyContainer: {
@@ -1216,7 +1216,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 16,
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
   },
   // Phases Container
   phasesContainer: {
@@ -1263,7 +1263,7 @@ const styles = StyleSheet.create({
   },
   phaseDivider: {
     height: 1,
-    backgroundColor: COLORS.textDividers,
+    backgroundColor: c.textDividers,
     opacity: 0.3,
   },
   phaseStatusRow: {
@@ -1282,7 +1282,7 @@ const styles = StyleSheet.create({
   },
   // Pay Button
   payButton: {
-    backgroundColor: COLORS.amber60,
+    backgroundColor: c.amber60,
     borderRadius: 8,
     padding: 16,
     flexDirection: 'row',
@@ -1293,12 +1293,12 @@ const styles = StyleSheet.create({
   payButtonText: {
     fontSize: 16,
     fontWeight: '400',
-    color: COLORS.textWhite,
+    color: c.textWhite,
   },
   // Locked Button
   lockedButton: {
-    backgroundColor: COLORS.bgWhite,
-    borderColor: COLORS.textSecondary,
+    backgroundColor: c.bgWhite,
+    borderColor: c.textSecondary,
     borderWidth: 0.5,
     borderRadius: 8,
     padding: 16,
@@ -1308,12 +1308,12 @@ const styles = StyleSheet.create({
   lockedButtonText: {
     fontSize: 12,
     fontWeight: '600',
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
   },
   // Awaiting Button
   awaitingButton: {
-    backgroundColor: COLORS.primary10,
-    borderColor: COLORS.primary60,
+    backgroundColor: c.primary10,
+    borderColor: c.primary60,
     borderWidth: 0.5,
     borderRadius: 8,
     padding: 16,
@@ -1325,7 +1325,7 @@ const styles = StyleSheet.create({
   awaitingButtonText: {
     fontSize: 14,
     fontWeight: '500',
-    color: COLORS.primary60,
+    color: c.primary60,
   },
   // Complete Button (Technician)
   completeButton: {
@@ -1337,16 +1337,16 @@ const styles = StyleSheet.create({
   completeButtonText: {
     fontSize: 12,
     fontWeight: '400',
-    color: COLORS.textWhite,
+    color: c.textWhite,
   },
   // Waiting Section (User)
   waitingSection: {
     marginTop: 24,
-    backgroundColor: COLORS.amber10,
+    backgroundColor: c.amber10,
     borderRadius: 12,
     padding: 20,
     borderWidth: 1,
-    borderColor: COLORS.amber60,
+    borderColor: c.amber60,
     gap: 16,
   },
   waitingHeader: {
@@ -1357,12 +1357,12 @@ const styles = StyleSheet.create({
   waitingSectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: COLORS.textHeader,
+    color: c.textHeader,
   },
   waitingSectionSubtitle: {
     fontSize: 14,
     fontWeight: '400',
-    color: COLORS.textBody,
+    color: c.textBody,
     lineHeight: 20,
   },
   waitingProgressInfo: {
@@ -1377,16 +1377,16 @@ const styles = StyleSheet.create({
   waitingProgressText: {
     fontSize: 14,
     fontWeight: '400',
-    color: COLORS.textBody,
+    color: c.textBody,
   },
   // Complete Project Section (Technician)
   completeProjectSection: {
     marginTop: 24,
-    backgroundColor: COLORS.primary10,
+    backgroundColor: c.primary10,
     borderRadius: 12,
     padding: 20,
     borderWidth: 1,
-    borderColor: COLORS.primary60,
+    borderColor: c.primary60,
     gap: 16,
   },
   completeProjectInfo: {
@@ -1400,16 +1400,16 @@ const styles = StyleSheet.create({
   completeProjectTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: COLORS.textHeader,
+    color: c.textHeader,
   },
   completeProjectSubtitle: {
     fontSize: 14,
     fontWeight: '400',
-    color: COLORS.textBody,
+    color: c.textBody,
     lineHeight: 20,
   },
   completeProjectButton: {
-    backgroundColor: COLORS.green60,
+    backgroundColor: c.green60,
     borderRadius: 8,
     padding: 16,
     flexDirection: 'row',
@@ -1418,15 +1418,15 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   completeProjectButtonDisabled: {
-    backgroundColor: COLORS.bgGray,
+    backgroundColor: c.bgGray,
   },
   completeProjectButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: COLORS.textWhite,
+    color: c.textWhite,
   },
   completeProjectButtonTextDisabled: {
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
   },
   // Modal
   modalOverlay: {
@@ -1437,7 +1437,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   modalContent: {
-    backgroundColor: COLORS.bgWhite,
+    backgroundColor: c.bgWhite,
     borderRadius: 12,
     padding: 24,
     width: '100%',
@@ -1454,13 +1454,13 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: COLORS.textHeader,
+    color: c.textHeader,
     marginBottom: 12,
   },
   modalMessage: {
     fontSize: 14,
     lineHeight: 21,
-    color: COLORS.textBody,
+    color: c.textBody,
     marginBottom: 24,
   },
   modalButtons: {
@@ -1476,32 +1476,32 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   modalCancelButton: {
-    backgroundColor: COLORS.primary10,
+    backgroundColor: c.primary10,
   },
   modalCancelButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: COLORS.textBody,
+    color: c.textBody,
   },
   modalConfirmButton: {
-    backgroundColor: COLORS.primary60,
+    backgroundColor: c.primary60,
   },
   modalConfirmButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: COLORS.textWhite,
+    color: c.textWhite,
   },
   // Title Section - Large Web (Figma Design) - Updated styles
   titleMainText: {
     fontSize: 42,
     fontWeight: '700',
-    color: COLORS.textHeader,
+    color: c.textHeader,
     lineHeight: 42,
   },
   titleSubtext: {
     fontSize: 20,
     fontWeight: '300',
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
     lineHeight: 20,
   },
   titleBackButton: {
@@ -1509,6 +1509,7 @@ const styles = StyleSheet.create({
     height: 24,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-});
+  }
+  });
+}
 

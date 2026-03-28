@@ -32,7 +32,7 @@ import type { CategoryInfo } from '../CategorySubcategoryScreen';
 export type { CategoryInfo };
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const H_PADDING = 16;
+const H_PADDING = 20;
 const SECTION_SPACING = 20;
 const SEARCH_RADIUS = 14;
 const CARD_RADIUS = 12;
@@ -49,7 +49,7 @@ const INLINE_SLIDE_DURATION = 220;
 function StaggeredSubcategoryCard({
   index,
   sub,
-  isRTL,
+  isArabic,
   colors,
   primaryColor,
   iconBg,
@@ -61,7 +61,7 @@ function StaggeredSubcategoryCard({
 }: {
   index: number;
   sub: ServiceSubcategory;
-  isRTL: boolean;
+  isArabic: boolean;
   colors: { cardBackground: string; text: string; textSecondary: string; border: string };
   primaryColor: string;
   iconBg: string;
@@ -72,7 +72,7 @@ function StaggeredSubcategoryCard({
   onPress: () => void;
 }) {
   const opacity = useRef(new Animated.Value(0)).current;
-  const translateX = useRef(new Animated.Value(isRTL ? 24 : -24)).current;
+  const translateX = useRef(new Animated.Value(-24)).current;
   useEffect(() => {
     const t = setTimeout(() => {
       Animated.parallel([
@@ -81,9 +81,9 @@ function StaggeredSubcategoryCard({
       ]).start();
     }, index * SUBCATEGORY_STAGGER_MS);
     return () => clearTimeout(t);
-  }, [index, opacity, translateX, isRTL]);
-  const subName = isRTL && sub.nameAr ? sub.nameAr : sub.nameEn;
-  const subDesc = isRTL && sub.descriptionAr ? sub.descriptionAr : (sub.descriptionEn || sub.description || '');
+  }, [index, opacity, translateX]);
+  const subName = isArabic && sub.nameAr ? sub.nameAr : sub.nameEn;
+  const subDesc = isArabic && sub.descriptionAr ? sub.descriptionAr : (sub.descriptionEn || sub.description || '');
   const subImg = resolveServiceImage(sub);
   const iconName = getSubcategoryIconName(sub.nameEn);
   return (
@@ -190,7 +190,7 @@ export default function UserHomeScreenContent({
   const insets = useSafeAreaInsets();
   const { colors, theme } = useTheme();
   const { fontFamily, boldFontFamily, scaledSize } = useFontFamily();
-  const isRTL = i18n.language === 'ar';
+  const isArabic = i18n.language === 'ar';
   const isDark = theme === 'dark';
 
   const [searchText, setSearchText] = useState('');
@@ -282,7 +282,7 @@ export default function UserHomeScreenContent({
   }, [loadCategories]);
 
   const inlineSubcatOpacity = useRef(new Animated.Value(0)).current;
-  const inlineSubcatTranslateX = useRef(new Animated.Value(isRTL ? 80 : -80)).current;
+  const inlineSubcatTranslateX = useRef(new Animated.Value(-80)).current;
 
   const handleCategoryPress = useCallback(async (category: ServiceCategory) => {
     if (onPressCategoryForManual) {
@@ -297,14 +297,14 @@ export default function UserHomeScreenContent({
           useNativeDriver: true,
         }),
         Animated.timing(inlineSubcatTranslateX, {
-          toValue: isRTL ? 80 : -80,
+          toValue: -80,
           duration: INLINE_SLIDE_DURATION,
           useNativeDriver: true,
         }),
       ]).start(() => {
         setSelectedCategoryForModal(null);
         setSubcategoriesForModal([]);
-        inlineSubcatTranslateX.setValue(isRTL ? 80 : -80);
+        inlineSubcatTranslateX.setValue(-80);
       });
       return;
     }
@@ -312,7 +312,7 @@ export default function UserHomeScreenContent({
     setLoadingSubcategories(true);
     setSubcategoriesForModal([]);
     inlineSubcatOpacity.setValue(0);
-    inlineSubcatTranslateX.setValue(isRTL ? 80 : -80);
+    inlineSubcatTranslateX.setValue(-80);
     try {
       const subs = await getSubcategories(category.id);
       setSubcategoriesForModal(subs);
@@ -333,7 +333,7 @@ export default function UserHomeScreenContent({
         }),
       ]).start();
     }
-  }, [onPressCategoryForManual, selectedCategoryForModal?.id, isRTL, inlineSubcatOpacity, inlineSubcatTranslateX]);
+  }, [onPressCategoryForManual, selectedCategoryForModal?.id, inlineSubcatOpacity, inlineSubcatTranslateX]);
 
   const closeSubcategoriesModal = useCallback(() => {
     if (!selectedCategoryForModal) return;
@@ -343,17 +343,17 @@ export default function UserHomeScreenContent({
         duration: INLINE_SLIDE_DURATION,
         useNativeDriver: true,
       }),
-      Animated.timing(inlineSubcatTranslateX, {
-        toValue: isRTL ? 80 : -80,
-        duration: INLINE_SLIDE_DURATION,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setSelectedCategoryForModal(null);
-      setSubcategoriesForModal([]);
-      inlineSubcatTranslateX.setValue(isRTL ? 80 : -80);
-    });
-  }, [selectedCategoryForModal, isRTL, inlineSubcatOpacity, inlineSubcatTranslateX]);
+        Animated.timing(inlineSubcatTranslateX, {
+          toValue: -80,
+          duration: INLINE_SLIDE_DURATION,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        setSelectedCategoryForModal(null);
+        setSubcategoriesForModal([]);
+        inlineSubcatTranslateX.setValue(-80);
+      });
+  }, [selectedCategoryForModal, inlineSubcatOpacity, inlineSubcatTranslateX]);
 
   const handleSubcategoryPress = useCallback(
     (sub: ServiceSubcategory) => {
@@ -400,7 +400,8 @@ export default function UserHomeScreenContent({
   const iconFg = isDark ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.85)';
 
   const getTaskTypeName = (task: SmallTaskRequest) =>
-    isRTL ? (task.taskTypeNameAr ?? task.taskType?.nameAr ?? task.taskTypeNameEn) : (task.taskTypeNameEn ?? task.taskType?.nameEn ?? task.taskTypeNameAr);
+    isArabic ? (task.taskTypeNameAr ?? task.taskType?.nameAr ?? task.taskTypeNameEn) : (task.taskTypeNameEn ?? task.taskType?.nameEn ?? task.taskTypeNameAr);
+  const topSpacing = Platform.OS === 'android' ? Math.max(insets.top, 50) : Math.max(insets.top, 12);
 
   const handleSearchChange = (text: string) => {
     setSearchText(text);
@@ -423,7 +424,7 @@ export default function UserHomeScreenContent({
         contentContainerStyle={[
           styles.content,
           styles.contentScroll,
-          { paddingTop: Math.max(insets.top, 12), paddingBottom: Math.max(insets.bottom, 24) + 120 },
+          { paddingTop: topSpacing, paddingBottom: Math.max(insets.bottom, 24) + 120 },
         ]}
         showsVerticalScrollIndicator={false}
         bounces={true}
@@ -431,11 +432,11 @@ export default function UserHomeScreenContent({
         directionalLockEnabled={true}
       >
       {/* Top bar — same button order & icons as the non-home top bar: Chat | Info | Notifications */}
-      <View style={[styles.iosTopBar, isRTL && styles.iosTopBarRTL]}>
+      <View style={styles.iosTopBar}>
         <View style={styles.iosTopBarLogo}>
           <BonyadLogo size="small" responsive={false} variant={isDark ? 'light' : 'dark'} />
         </View>
-        <View style={[styles.iosTopBarIcons, isRTL && styles.iosTopBarIconsRTL]}>
+        <View style={styles.iosTopBarIcons}>
           {/* Chat — same as non-home bar setActiveTab('chat') */}
           <TouchableOpacity style={styles.iosTopBarIconBtn} onPress={onPressMessages} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <Ionicons name="chatbubbles-outline" size={24} color={primaryColor} />
@@ -492,11 +493,11 @@ export default function UserHomeScreenContent({
           {FEATURE_BANNERS.map((banner, i) => (
             <View key={i} style={[styles.bannerPage, { width: SCREEN_WIDTH }]}>
               <LinearGradient colors={isDark ? [...banner.colorsDark] : [...banner.colors]} style={styles.bannerCard}>
-                <View style={[styles.bannerRow, isRTL && styles.bannerRowRTL]}>
+                <View style={styles.bannerRow}>
                   <View style={[styles.bannerIconCircle, { backgroundColor: isDark ? `${primaryColor}40` : `${primaryColor}20` }]}>
                     <Ionicons name={banner.icon} size={28} color={primaryColor} />
                   </View>
-                  <View style={[styles.bannerTextWrap, isRTL && styles.bannerTextWrapRTL]}>
+                  <View style={styles.bannerTextWrap}>
                     <Text style={[styles.bannerTitle, { color: colors.text }, boldStyle]}>{t(banner.titleKey)}</Text>
                     <Text style={[styles.bannerDesc, { color: colors.textSecondary }, fontStyle]}>{t(banner.descKey)}</Text>
                   </View>
@@ -505,7 +506,7 @@ export default function UserHomeScreenContent({
             </View>
           ))}
         </ScrollView>
-        <View style={[styles.dots, isRTL && styles.dotsRTL]}>
+        <View style={styles.dots}>
           {FEATURE_BANNERS.map((_, i) => (
             <View
               key={i}
@@ -522,7 +523,7 @@ export default function UserHomeScreenContent({
 
       {/* 3. Quick actions - circular icons (iOS QuickActionsSection) with press scale */}
       <StaggeredAppearView index={2} style={{ marginTop: SECTION_SPACING }}>
-        <View style={[styles.quickActions, isRTL && styles.quickActionsRTL]}>
+        <View style={styles.quickActions}>
           <PressableScaleView style={styles.quickActionItem} onPress={() => onPressCreateProject?.(0)}>
             <View style={[styles.quickActionCircle, { backgroundColor: `${primaryColor}18` }]}>
               <Feather name="folder-plus" size={24} color={primaryColor} />
@@ -552,7 +553,7 @@ export default function UserHomeScreenContent({
 
       {/* 4. Service Categories – web-style: horizontal scroll, square cards, image area + title + chevron when selected */}
       <StaggeredAppearView index={3} style={{ marginTop: SECTION_SPACING }}>
-        <View style={[styles.sectionHeader, isRTL && styles.sectionHeaderRTL]}>
+        <View style={styles.sectionHeader}>
           <View style={{ flex: 1 }}>
             <Text style={[styles.sectionTitle, { color: colors.text }, { fontSize: scaledSize(18) }, boldStyle]}>{t('Service Categories')}</Text>
             <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }, fontStyle]}>{t('Browse services by category')}</Text>
@@ -572,10 +573,10 @@ export default function UserHomeScreenContent({
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={[styles.categoriesRowContent, isRTL && styles.hScrollRTL]}
+            contentContainerStyle={styles.categoriesRowContent}
           >
             {categories.map((cat) => {
-              const name = isRTL && cat.nameAr ? cat.nameAr : cat.nameEn;
+              const name = isArabic && cat.nameAr ? cat.nameAr : cat.nameEn;
               const imgSrc = resolveServiceImage(cat);
               const isSelected = selectedCategoryForModal?.id === cat.id;
               return (
@@ -594,7 +595,7 @@ export default function UserHomeScreenContent({
                       <Ionicons name={getCategoryIconName(cat.nameEn)} size={36} color={iconFg} />
                     )}
                   </View>
-                  <View style={[styles.categoryCardWebContent, isRTL && styles.categoryCardWebContentRTL]}>
+                  <View style={styles.categoryCardWebContent}>
                     <Text style={[styles.categoryCardTitleWeb, { color: colors.text }, fontStyle]} numberOfLines={2}>{name}</Text>
                     <View style={[styles.categoryCardChevronWrap, isSelected && { backgroundColor: primaryColor }]}>
                       <Ionicons name="chevron-up" size={18} color={isSelected ? '#FFF' : primaryColor} />
@@ -618,19 +619,19 @@ export default function UserHomeScreenContent({
             },
           ]}
         >
-          <View style={[styles.inlineSubcatLineWrap, isRTL && styles.inlineSubcatLineWrapRTL]}>
+          <View style={styles.inlineSubcatLineWrap}>
             <LinearGradient
               colors={[primaryColor, 'transparent']}
-              start={isRTL ? { x: 1, y: 0 } : { x: 0, y: 0 }}
-              end={isRTL ? { x: 0, y: 0 } : { x: 1, y: 0 }}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
               style={styles.inlineSubcatLine}
             />
           </View>
-          <View style={[styles.inlineSubcatHeader, isRTL && styles.inlineSubcatHeaderRTL]}>
+          <View style={styles.inlineSubcatHeader}>
             <Text style={[styles.inlineSubcatTitle, { color: colors.text }, boldStyle]}>
               {t('Subcategories')}
               <Text style={[styles.inlineSubcatTitleDash, { color: colors.text }]}>
-                {isRTL && selectedCategoryForModal.nameAr ? ` – ${selectedCategoryForModal.nameAr}` : ` – ${selectedCategoryForModal.nameEn}`}
+                {isArabic && selectedCategoryForModal.nameAr ? ` – ${selectedCategoryForModal.nameAr}` : ` – ${selectedCategoryForModal.nameEn}`}
               </Text>
             </Text>
             {onPressCategoryForManual && (
@@ -661,14 +662,14 @@ export default function UserHomeScreenContent({
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={[styles.inlineSubcatScrollContent, isRTL && styles.hScrollRTL]}
+              contentContainerStyle={styles.inlineSubcatScrollContent}
             >
               {subcategoriesForModal.map((sub, idx) => (
                 <StaggeredSubcategoryCard
                   key={sub.id}
                   index={idx}
                   sub={sub}
-                  isRTL={isRTL}
+                  isArabic={isArabic}
                   colors={colors}
                   primaryColor={primaryColor}
                   iconBg={iconBg}
@@ -686,13 +687,13 @@ export default function UserHomeScreenContent({
 
       {/* 5. My Projects section - horizontal strip with real cards (iOS press scale) */}
       <StaggeredAppearView index={4} style={{ marginTop: SECTION_SPACING }}>
-        <View style={[styles.sectionHeader, isRTL && styles.sectionHeaderRTL]}>
+        <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: colors.text }, { fontSize: scaledSize(18) }, boldStyle]}>{t('My Projects')}</Text>
           <TouchableOpacity onPress={onPressMyProjects} activeOpacity={0.8}>
-            <Text style={[styles.viewAll, { color: primaryColor }, fontStyle]}>{t('View All')} →</Text>
+            <Text style={[styles.viewAll, { color: primaryColor }, fontStyle]}>{t('View All')} ←</Text>
           </TouchableOpacity>
         </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.hScroll, isRTL && styles.hScrollRTL]}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
           {loadingProjects ? (
             <View style={[styles.homeCard, { backgroundColor: colors.cardBackground, width: CARD_WIDTH, minHeight: 100, justifyContent: 'center', alignItems: 'center' }]}>
               <ActivityIndicator size="small" color={primaryColor} />
@@ -709,7 +710,7 @@ export default function UserHomeScreenContent({
                 style={[styles.homeCard, { backgroundColor: colors.cardBackground }]}
                 onPress={() => onPressProject?.(project)}
               >
-                <View style={[styles.homeCardRow, isRTL && styles.homeCardRowRTL]}>
+                <View style={styles.homeCardRow}>
                   <View style={[styles.homeCardIconWrap, { backgroundColor: `${primaryColor}18` }]}>
                     <Ionicons name="folder-open" size={20} color={primaryColor} />
                   </View>
@@ -729,13 +730,13 @@ export default function UserHomeScreenContent({
 
       {/* 6. My Small Tasks section - horizontal strip with real cards (iOS press scale) */}
       <StaggeredAppearView index={5} style={{ marginTop: SECTION_SPACING }}>
-        <View style={[styles.sectionHeader, isRTL && styles.sectionHeaderRTL]}>
+        <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: colors.text }, { fontSize: scaledSize(18) }, boldStyle]}>{t('My Small Tasks')}</Text>
           <TouchableOpacity onPress={onPressMySmallTasks} activeOpacity={0.8}>
-            <Text style={[styles.viewAll, { color: primaryColor }, fontStyle]}>{t('View All')} →</Text>
+            <Text style={[styles.viewAll, { color: primaryColor }, fontStyle]}>{t('View All')} ←</Text>
           </TouchableOpacity>
         </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.hScroll, isRTL && styles.hScrollRTL]}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
           {loadingTasks ? (
             <View style={[styles.homeCard, { backgroundColor: colors.cardBackground, width: CARD_WIDTH, minHeight: 100, justifyContent: 'center', alignItems: 'center' }]}>
               <ActivityIndicator size="small" color="#FF9500" />
@@ -752,7 +753,7 @@ export default function UserHomeScreenContent({
                 style={[styles.homeCard, { backgroundColor: colors.cardBackground }]}
                 onPress={() => onPressSmallTask ? onPressSmallTask(task) : onPressMySmallTasks?.()}
               >
-                <View style={[styles.homeCardRow, isRTL && styles.homeCardRowRTL]}>
+                <View style={styles.homeCardRow}>
                   <View style={[styles.homeCardIconWrap, { backgroundColor: 'rgba(255,149,0,0.18)' }]}>
                     <Ionicons name="flash" size={20} color="#FF9500" />
                   </View>
@@ -795,10 +796,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: H_PADDING,
     marginBottom: 8,
   },
-  iosTopBarRTL: { flexDirection: 'row-reverse' },
   iosTopBarLogo: {},
   iosTopBarIcons: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  iosTopBarIconsRTL: { flexDirection: 'row-reverse' },
   iosTopBarIconBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   iosNotificationBadge: {
     position: 'absolute',
@@ -839,24 +838,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   bannerRow: { flexDirection: 'row', alignItems: 'center' },
-  bannerRowRTL: { flexDirection: 'row-reverse' },
-  bannerIconCircle: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
-  bannerTextWrap: { flex: 1, marginLeft: 16 },
-  bannerTextWrapRTL: { marginLeft: 0, marginRight: 16 },
+  bannerIconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginEnd: 24,
+  },
+  bannerTextWrap: { flex: 1 },
   bannerTitle: { fontSize: 18, fontWeight: '700', marginBottom: 4 },
   bannerDesc: { fontSize: 13 },
   dots: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 12, gap: 8 },
-  dotsRTL: { flexDirection: 'row-reverse' },
   dot: { width: 8, height: 8, borderRadius: 4 },
   dotActive: { width: 24, height: 8, borderRadius: 4 },
   quickActions: { flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 },
-  quickActionsRTL: { flexDirection: 'row-reverse' },
   quickActionItem: { alignItems: 'center', minWidth: 72 },
   quickActionCircle: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
   quickActionLabel: { fontSize: 12, maxWidth: 80, textAlign: 'center' },
   sectionCard: { borderRadius: CARD_RADIUS, padding: 16, ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8 }, android: { elevation: 2 } }) },
   sectionCardRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  sectionCardRowRTL: { flexDirection: 'row-reverse' },
   sectionIconWrap: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   sectionCardTitle: { flex: 1, fontSize: 16 },
   categoriesLoadingWrap: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24, borderRadius: CARD_RADIUS },
@@ -875,15 +876,12 @@ const styles = StyleSheet.create({
   categoryCardWebImageWrap: { width: '100%', height: CATEGORY_CARD_SIZE * 0.4, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   categoryCardImage: { width: 56, height: 56 },
   categoryCardWebContent: { flex: 1, padding: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 },
-  categoryCardWebContentRTL: { flexDirection: 'row-reverse' },
   categoryCardTitleWeb: { flex: 1, fontSize: 14, fontWeight: '600' },
   categoryCardChevronWrap: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   inlineSubcategoriesWrap: { marginTop: 24, paddingHorizontal: 0, overflow: 'hidden' },
   inlineSubcatLineWrap: { position: 'absolute', top: -20, left: '10%', width: '80%', height: 2, overflow: 'hidden', borderRadius: 1 },
-  inlineSubcatLineWrapRTL: { left: undefined, right: '10%' },
   inlineSubcatLine: { flex: 1, width: '100%' },
   inlineSubcatHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  inlineSubcatHeaderRTL: { flexDirection: 'row-reverse' },
   inlineSubcatTitle: { fontSize: 20, fontWeight: '700', flex: 1 },
   inlineSubcatTitleDash: { fontWeight: '700' },
   inlineSubcatCloseBtn: { width: 36, height: 36, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
@@ -909,11 +907,9 @@ const styles = StyleSheet.create({
   subcategoryCardTitleWeb: { fontSize: 14, fontWeight: '700', paddingHorizontal: 10, paddingTop: 8 },
   subcategoryCardDescWeb: { fontSize: 11, paddingHorizontal: 10, paddingTop: 2 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  sectionHeaderRTL: { flexDirection: 'row-reverse' },
   sectionTitle: { fontWeight: '700' },
   viewAll: { fontSize: 14, fontWeight: '600' },
   hScroll: { paddingRight: H_PADDING, gap: 12 },
-  hScrollRTL: { flexDirection: 'row-reverse', paddingRight: 0, paddingLeft: H_PADDING },
   homeCard: {
     width: CARD_WIDTH,
     minHeight: 100,
@@ -922,7 +918,6 @@ const styles = StyleSheet.create({
     ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 6 }, android: { elevation: 2 } }),
   },
   homeCardRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
-  homeCardRowRTL: { flexDirection: 'row-reverse' },
   homeCardIconWrap: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   homeCardTitle: { flex: 1, fontSize: 14 },
   homeCardSub: { fontSize: 12, marginBottom: 4 },

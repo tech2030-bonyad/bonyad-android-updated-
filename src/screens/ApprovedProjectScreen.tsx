@@ -14,8 +14,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Modal,
-  Pressable,
   TextInput,
   ActivityIndicator,
   Alert,
@@ -30,7 +28,8 @@ import { API_ENDPOINTS, buildApiUrl, buildApiUrlWithParams } from '../config/api
 import { storage } from '../utils/storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ProjectCreationFlow from '../components/ProjectCreationFlow';
-import PhaseManagementModal from '../components/PhaseManagementModal';
+import StagesManagementModal from '../components/StagesManagementModal';
+import AppBottomSheetModal from '../components/AppBottomSheetModal';
 import PhaseApprovalModal from './PhaseApprovalModal';
 
 // ===== DESIGN TOKENS FROM FIGMA =====
@@ -136,9 +135,10 @@ const PhaseCard = ({
   isTechnician,
   onRequestModification,
   onEditPhase,
-  isRTL,
   feedbackCount,
   onOpenFeedbacks,
+  palette: c,
+  phaseStyles,
 }: {
   phase: Phase;
   index: number;
@@ -147,9 +147,10 @@ const PhaseCard = ({
   isTechnician: boolean;
   onRequestModification?: () => void;
   onEditPhase?: () => void;
-  isRTL: boolean;
   feedbackCount: number;
   onOpenFeedbacks?: () => void;
+  palette: Record<string, string>;
+  phaseStyles: Record<string, any>;
 }) => {
   const { t } = useTranslation();
   
@@ -158,12 +159,12 @@ const PhaseCard = ({
   const isPending = !isApproved;
   
   // Figma design: green border for approved, light blue border for pending
-  const borderColor = isApproved ? COLORS.green60 : COLORS.primary10;
+  const borderColor = isApproved ? c.green60 : c.primary10;
   const borderWidth = isApproved ? 0.5 : 1;
   
   // Status badge colors from Figma
-  const statusBgColor = isApproved ? COLORS.green10 : COLORS.amber10;
-  const statusTextColor = isApproved ? COLORS.green80 : COLORS.amber60;
+  const statusBgColor = isApproved ? c.green10 : c.amber10;
+  const statusTextColor = isApproved ? c.green80 : c.amber60;
   const statusText = isApproved ? t('Approved') : t('Pending');
   
   return (
@@ -172,12 +173,12 @@ const PhaseCard = ({
       { borderColor, borderWidth }
     ]}>
       {/* Header Row - Phase number, title, and status badge */}
-      <View style={[phaseStyles.headerRow, isRTL && { flexDirection: 'row-reverse' }]}>
-        <View style={[phaseStyles.headerLeft, isRTL && { flexDirection: 'row-reverse' }]}>
+      <View style={[phaseStyles.headerRow]}>
+        <View style={[phaseStyles.headerLeft]}>
           <View style={phaseStyles.numberBadge}>
             <Text style={phaseStyles.numberText}>{phase.phaseNumber || index + 1}</Text>
           </View>
-          <Text style={[phaseStyles.title, isRTL && { textAlign: 'right' }]} numberOfLines={1}>
+          <Text style={[phaseStyles.title]} numberOfLines={1}>
             {phase.title || phase.description.substring(0, 30)}
           </Text>
         </View>
@@ -189,15 +190,15 @@ const PhaseCard = ({
       </View>
       
       {/* Description */}
-      <Text style={[phaseStyles.description, isRTL && { textAlign: 'right' }]} numberOfLines={3}>
+      <Text style={[phaseStyles.description]} numberOfLines={3}>
         {phase.description}
       </Text>
       
       {/* Price and Duration Row */}
-      <View style={[phaseStyles.metaRow, isRTL && { flexDirection: 'row-reverse' }]}>
+      <View style={[phaseStyles.metaRow]}>
         <Text style={phaseStyles.priceText}>{formatBudget(phase.moneySpent)}</Text>
-        <View style={[phaseStyles.durationContainer, isRTL && { flexDirection: 'row-reverse' }]}>
-          <Ionicons name="time-outline" size={12} color={COLORS.textSecondary} />
+        <View style={[phaseStyles.durationContainer]}>
+          <Ionicons name="time-outline" size={12} color={c.textSecondary} />
           <Text style={phaseStyles.durationText}>{formatDuration(phase.timeSpentDays)}</Text>
         </View>
       </View>
@@ -212,7 +213,7 @@ const PhaseCard = ({
           <Ionicons 
             name={"chatbubble-outline"} 
             size={14} 
-            color={COLORS.textWhite} 
+            color={c.textWhite} 
           />
           <Text style={phaseStyles.actionButtonText}>
             {t('Request Modification')}
@@ -225,10 +226,10 @@ const PhaseCard = ({
         <TouchableOpacity
           onPress={onOpenFeedbacks}
           activeOpacity={0.8}
-          style={[phaseStyles.feedbackLinkRow, isRTL && { flexDirection: 'row-reverse' }]}
+          style={[phaseStyles.feedbackLinkRow]}
         >
-          <Ionicons name="chatbubbles-outline" size={14} color={COLORS.primary60} />
-          <Text style={[phaseStyles.feedbackLinkText, isRTL && { textAlign: 'right' }]}>
+          <Ionicons name="chatbubbles-outline" size={14} color={c.primary60} />
+          <Text style={[phaseStyles.feedbackLinkText]}>
             {t('Feedback')} ({feedbackCount})
           </Text>
         </TouchableOpacity>
@@ -237,13 +238,14 @@ const PhaseCard = ({
   );
 };
 
-const phaseStyles = StyleSheet.create({
+function makePhaseStyles(c: typeof COLORS) {
+  return StyleSheet.create({
   card: {
     borderRadius: 8,
     padding: 16,
     marginBottom: 10,
     gap: 16,
-    backgroundColor: COLORS.bgWhite,
+    backgroundColor: c.bgWhite,
   },
   headerRow: {
     flexDirection: 'row',
@@ -261,19 +263,19 @@ const phaseStyles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 6,
-    backgroundColor: COLORS.primary10,
+    backgroundColor: c.primary10,
     justifyContent: 'center',
     alignItems: 'center',
   },
   numberText: {
     fontSize: 12,
     fontWeight: '400',
-    color: COLORS.primary80,
+    color: c.primary80,
   },
   title: {
     fontSize: 12,
     fontWeight: '400',
-    color: COLORS.textBody,
+    color: c.textBody,
     flex: 1,
   },
   statusBadge: {
@@ -290,7 +292,7 @@ const phaseStyles = StyleSheet.create({
   description: {
     fontSize: 12,
     fontWeight: '400',
-    color: COLORS.textBody,
+    color: c.textBody,
     lineHeight: 18,
   },
   metaRow: {
@@ -301,7 +303,7 @@ const phaseStyles = StyleSheet.create({
   priceText: {
     fontSize: 10,
     fontWeight: '600',
-    color: COLORS.green80,
+    color: c.green80,
     minWidth: 49,
   },
   durationContainer: {
@@ -312,10 +314,10 @@ const phaseStyles = StyleSheet.create({
   durationText: {
     fontSize: 12,
     fontWeight: '400',
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
   },
   actionButton: {
-    backgroundColor: COLORS.amber60,
+    backgroundColor: c.amber60,
     borderRadius: 8,
     padding: 16,
     flexDirection: 'row',
@@ -326,7 +328,7 @@ const phaseStyles = StyleSheet.create({
   actionButtonText: {
     fontSize: 12,
     fontWeight: '400',
-    color: COLORS.textWhite,
+    color: c.textWhite,
   },
   feedbackLinkRow: {
     flexDirection: 'row',
@@ -338,134 +340,14 @@ const phaseStyles = StyleSheet.create({
   feedbackLinkText: {
     fontSize: 12,
     fontWeight: '600',
-    color: COLORS.primary60,
+    color: c.primary60,
   },
-});
+  });
+}
 
 // ===== REQUEST MODIFICATION MODAL =====
-const RequestModificationModal = ({
-  visible,
-  phase,
-  onClose,
-  onSubmit,
-  isSubmitting,
-}: {
-  visible: boolean;
-  phase: Phase | null;
-  onClose: () => void;
-  onSubmit: (message: string) => void;
-  isSubmitting: boolean;
-}) => {
-  const { t, i18n } = useTranslation();
-  const [message, setMessage] = useState('');
-  const isRTL = i18n.language === 'ar';
-  
-  const screenWidth = Dimensions.get('window').width;
-  const IS_WEB = Platform.OS === 'web';
-  const IS_LARGE_WEB = IS_WEB && screenWidth >= 1024;
-  
-  const handleSubmit = () => {
-    if (message.trim()) {
-      onSubmit(message);
-    }
-  };
-  
-  // Reset message when modal opens
-  useEffect(() => {
-    if (visible) {
-      setMessage('');
-    }
-  }, [visible]);
-  
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <View style={modificationModalStyles.backdrop}>
-        <Pressable 
-          style={modificationModalStyles.backdropPressable} 
-          onPress={onClose} 
-        />
-        <View style={[
-          modificationModalStyles.card, 
-          IS_LARGE_WEB && modificationModalStyles.cardWeb
-        ]}>
-          {/* Header */}
-          <View style={[modificationModalStyles.headerRow, isRTL && { flexDirection: 'row-reverse' }]}>
-            <Text style={modificationModalStyles.title}>{t('Request Modification')}</Text>
-            <TouchableOpacity 
-              onPress={onClose} 
-              style={modificationModalStyles.closeButton}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Ionicons name="close" size={18} color={COLORS.textBody} />
-            </TouchableOpacity>
-          </View>
-          
-          <View style={modificationModalStyles.divider} />
-          
-          {/* Phase Info */}
-          {phase && (
-            <View style={[modificationModalStyles.phaseInfo, isRTL && { flexDirection: 'row-reverse' }]}>
-              <View style={modificationModalStyles.phaseNumberBadge}>
-                <Text style={modificationModalStyles.phaseNumberText}>
-                  {phase.phaseNumber}
-                </Text>
-              </View>
-              <Text style={[modificationModalStyles.phaseTitle, isRTL && { textAlign: 'right' }]} numberOfLines={1}>
-                {phase.title || phase.description.substring(0, 40)}
-              </Text>
-            </View>
-          )}
-          
-          {/* Message Input */}
-          <View style={modificationModalStyles.inputContainer}>
-            <Text style={[modificationModalStyles.inputLabel, isRTL && { textAlign: 'right' }]}>
-              {t('Modification Details')}
-            </Text>
-            <TextInput
-              style={[
-                modificationModalStyles.textInput,
-                isRTL && { textAlign: 'right' }
-              ]}
-              placeholder={t('Describe the changes you would like...')}
-              placeholderTextColor={COLORS.textSecondary}
-              value={message}
-              onChangeText={setMessage}
-              multiline
-              numberOfLines={4}
-              textAlignVertical="top"
-            />
-          </View>
-          
-          {/* Submit Button */}
-          <TouchableOpacity 
-            style={[
-              modificationModalStyles.submitButton,
-              (!message.trim() || isSubmitting) && modificationModalStyles.submitButtonDisabled
-            ]}
-            onPress={handleSubmit}
-            disabled={!message.trim() || isSubmitting}
-          >
-            {isSubmitting ? (
-              <ActivityIndicator size="small" color={COLORS.textWhite} />
-            ) : (
-              <>
-                <Ionicons name="send-outline" size={16} color={COLORS.textWhite} />
-                <Text style={modificationModalStyles.submitButtonText}>{t('Send Request')}</Text>
-              </>
-            )}
-          </TouchableOpacity>
-        </View>
-      </View>
-    </Modal>
-  );
-};
-
-const modificationModalStyles = StyleSheet.create({
+function makeModificationModalStyles(c: typeof COLORS) {
+  return StyleSheet.create({
   backdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.35)',
@@ -476,11 +358,11 @@ const modificationModalStyles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
   },
   card: {
-    backgroundColor: COLORS.bgWhite,
+    backgroundColor: c.bgWhite,
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
-    borderColor: COLORS.primary10,
+    borderColor: c.primary10,
   },
   cardWeb: {
     maxWidth: 520,
@@ -496,7 +378,7 @@ const modificationModalStyles = StyleSheet.create({
   title: {
     fontSize: 16,
     fontWeight: '700',
-    color: COLORS.textHeader,
+    color: c.textHeader,
   },
   closeButton: {
     width: 28,
@@ -504,11 +386,11 @@ const modificationModalStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 8,
-    backgroundColor: COLORS.primary10,
+    backgroundColor: c.primary10,
   },
   divider: {
     height: 1,
-    backgroundColor: COLORS.textDividers,
+    backgroundColor: c.textDividers,
     marginVertical: 12,
   },
   phaseInfo: {
@@ -516,7 +398,7 @@ const modificationModalStyles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     padding: 12,
-    backgroundColor: COLORS.primary10,
+    backgroundColor: c.primary10,
     borderRadius: 8,
     marginBottom: 16,
   },
@@ -524,20 +406,20 @@ const modificationModalStyles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 6,
-    backgroundColor: COLORS.bgWhite,
+    backgroundColor: c.bgWhite,
     justifyContent: 'center',
     alignItems: 'center',
   },
   phaseNumberText: {
     fontSize: 12,
     fontWeight: '600',
-    color: COLORS.primary80,
+    color: c.primary80,
   },
   phaseTitle: {
     flex: 1,
     fontSize: 14,
     fontWeight: '500',
-    color: COLORS.textBody,
+    color: c.textBody,
   },
   inputContainer: {
     gap: 8,
@@ -546,20 +428,20 @@ const modificationModalStyles = StyleSheet.create({
   inputLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: COLORS.textBody,
+    color: c.textBody,
   },
   textInput: {
     borderWidth: 1,
-    borderColor: COLORS.textDividers,
+    borderColor: c.textDividers,
     borderRadius: 8,
     padding: 12,
     fontSize: 14,
-    color: COLORS.textBody,
+    color: c.textBody,
     minHeight: 100,
-    backgroundColor: COLORS.bgWhite,
+    backgroundColor: c.bgWhite,
   },
   submitButton: {
-    backgroundColor: COLORS.primary60,
+    backgroundColor: c.primary60,
     borderRadius: 10,
     paddingVertical: 14,
     flexDirection: 'row',
@@ -568,16 +450,211 @@ const modificationModalStyles = StyleSheet.create({
     gap: 8,
   },
   submitButtonDisabled: {
-    backgroundColor: COLORS.textSecondary,
+    backgroundColor: c.textSecondary,
   },
   submitButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: COLORS.textWhite,
+    color: c.textWhite,
   },
-});
+  });
+}
+
+const RequestModificationModal = ({
+  visible,
+  phase,
+  onClose,
+  onSubmit,
+  isSubmitting,
+}: {
+  visible: boolean;
+  phase: Phase | null;
+  onClose: () => void;
+  onSubmit: (message: string) => void;
+  isSubmitting: boolean;
+}) => {
+  const { t, i18n } = useTranslation();
+  const { colors } = useTheme();
+  const [message, setMessage] = useState('');
+  const c = useMemo(() => ({
+    ...COLORS,
+    bgWhite: colors.cardBackground,
+    textHeader: colors.text,
+    textBody: colors.text,
+    textSecondary: colors.textSecondary,
+    textDividers: colors.border,
+    primary10: colors.primary + '20',
+    primary60: colors.primary,
+    primary80: colors.primary,
+    textWhite: colors.white,
+  }), [colors]);
+  const modificationModalStyles = useMemo(() => makeModificationModalStyles(c), [c]);
+
+  const handleSubmit = () => {
+    if (message.trim()) {
+      onSubmit(message);
+    }
+  };
+
+  useEffect(() => {
+    if (visible) setMessage('');
+  }, [visible]);
+
+  return (
+    <AppBottomSheetModal
+      visible={visible}
+      onClose={onClose}
+      title={t('Request Modification')}
+      heightFraction={0.5}
+    >
+      {phase && (
+        <View style={modificationModalStyles.phaseInfo}>
+          <View style={modificationModalStyles.phaseNumberBadge}>
+            <Text style={modificationModalStyles.phaseNumberText}>{phase.phaseNumber}</Text>
+          </View>
+          <Text style={modificationModalStyles.phaseTitle} numberOfLines={1}>
+            {phase.title || phase.description.substring(0, 40)}
+          </Text>
+        </View>
+      )}
+      <View style={modificationModalStyles.inputContainer}>
+        <Text style={modificationModalStyles.inputLabel}>{t('Modification Details')}</Text>
+        <TextInput
+          style={modificationModalStyles.textInput}
+          placeholder={t('Describe the changes you would like...')}
+          placeholderTextColor={c.textSecondary}
+          value={message}
+          onChangeText={setMessage}
+          multiline
+          numberOfLines={4}
+          textAlignVertical="top"
+        />
+      </View>
+      <TouchableOpacity
+        style={[
+          modificationModalStyles.submitButton,
+          (!message.trim() || isSubmitting) && modificationModalStyles.submitButtonDisabled,
+        ]}
+        onPress={handleSubmit}
+        disabled={!message.trim() || isSubmitting}
+      >
+        {isSubmitting ? (
+          <ActivityIndicator size="small" color={c.textWhite} />
+        ) : (
+          <>
+            <Ionicons name="send-outline" size={16} color={c.textWhite} />
+            <Text style={modificationModalStyles.submitButtonText}>{t('Send Request')}</Text>
+          </>
+        )}
+      </TouchableOpacity>
+    </AppBottomSheetModal>
+  );
+};
 
 // ===== PHASE FEEDBACK LIST MODAL =====
+function makeFeedbackModalStyles(c: typeof COLORS) {
+  return StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    justifyContent: 'center',
+    padding: 16,
+  },
+  backdropPressable: { ...StyleSheet.absoluteFillObject },
+  card: {
+    backgroundColor: c.bgWhite,
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: c.primary10,
+  },
+  cardWeb: {
+    maxWidth: 560,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  title: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: c.textHeader,
+    flex: 1,
+  },
+  closeButton: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    backgroundColor: c.primary10,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: c.textDividers,
+    marginVertical: 12,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: c.textSecondary,
+    paddingVertical: 12,
+  },
+  feedbackCard: {
+    borderWidth: 1,
+    borderColor: c.primary10,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 10,
+    backgroundColor: c.bgWhite,
+    gap: 10,
+  },
+  feedbackTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  feedbackDate: {
+    fontSize: 12,
+    color: c.textSecondary,
+  },
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  feedbackBody: {
+    fontSize: 14,
+    color: c.textBody,
+    lineHeight: 20,
+  },
+  resolveButton: {
+    backgroundColor: c.green60,
+    borderRadius: 10,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  resolveButtonText: {
+    color: c.textWhite,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  });
+}
+
 const PhaseFeedbacksModal = ({
   visible,
   phaseNumber,
@@ -596,195 +673,86 @@ const PhaseFeedbacksModal = ({
   isResolvingId?: number | null;
 }) => {
   const { t, i18n } = useTranslation();
-  const isRTL = i18n.language === 'ar';
+  const { colors } = useTheme();
+  const c = useMemo(() => ({
+    ...COLORS,
+    bgWhite: colors.cardBackground,
+    textHeader: colors.text,
+    textBody: colors.text,
+    textSecondary: colors.textSecondary,
+    textDividers: colors.border,
+    primary10: colors.primary + '20',
+    green10: colors.success + '20',
+    amber10: colors.warning + '25',
+    green80: colors.success,
+    amber70: colors.warning,
+    green60: colors.success,
+    textWhite: colors.white,
+  }), [colors]);
+  const feedbackModalStyles = useMemo(() => makeFeedbackModalStyles(c), [c]);
 
   const screenWidth = Dimensions.get('window').width;
   const IS_WEB = Platform.OS === 'web';
   const IS_LARGE_WEB = IS_WEB && screenWidth >= 1024;
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={feedbackModalStyles.backdrop}>
-        <Pressable style={feedbackModalStyles.backdropPressable} onPress={onClose} />
-        <View style={[feedbackModalStyles.card, IS_LARGE_WEB && feedbackModalStyles.cardWeb]}>
-          <View style={[feedbackModalStyles.headerRow, isRTL && { flexDirection: 'row-reverse' }]}>
-            <Text style={feedbackModalStyles.title}>
-              {phaseNumber ? `${t('Feedback')} - ${t('Phase')} ${phaseNumber}` : t('Feedback')}
-            </Text>
-            <TouchableOpacity onPress={onClose} style={feedbackModalStyles.closeButton}>
-              <Ionicons name="close" size={18} color={COLORS.textBody} />
-            </TouchableOpacity>
-          </View>
-
-          <View style={feedbackModalStyles.divider} />
-
-          <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
-            {feedbacks.length === 0 ? (
-              <Text style={[feedbackModalStyles.emptyText, isRTL && { textAlign: 'right' }]}>
-                {t('No feedback available yet')}
-              </Text>
-            ) : (
-              feedbacks.map((fb, idx) => {
-                const isResolved = (fb.status || '').toLowerCase() === 'resolved';
-                const body = stripFeedbackPhaseTag(fb.comment || '');
-                return (
-                  <View key={(fb.id ?? idx).toString()} style={feedbackModalStyles.feedbackCard}>
-                    <View style={[feedbackModalStyles.feedbackTopRow, isRTL && { flexDirection: 'row-reverse' }]}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[feedbackModalStyles.feedbackDate, isRTL && { textAlign: 'right' }]}>
-                          {fb.createdAt ? new Date(fb.createdAt).toLocaleDateString() : ''}
-                        </Text>
-                      </View>
-                      <View style={[
-                        feedbackModalStyles.statusPill,
-                        { backgroundColor: isResolved ? COLORS.green10 : COLORS.amber10 },
-                      ]}>
-                        <Ionicons
-                          name={isResolved ? 'checkmark-circle' : 'time-outline'}
-                          size={14}
-                          color={isResolved ? COLORS.green80 : COLORS.amber70}
-                        />
-                        <Text style={[
-                          feedbackModalStyles.statusText,
-                          { color: isResolved ? COLORS.green80 : COLORS.amber70 },
-                        ]}>
-                          {isResolved ? t('Resolved') : t('Pending')}
-                        </Text>
-                      </View>
-                    </View>
-
-                    <Text style={[feedbackModalStyles.feedbackBody, isRTL && { textAlign: 'right' }]}>
-                      {body}
+    <AppBottomSheetModal
+      visible={visible}
+      onClose={onClose}
+      title={phaseNumber ? `${t('Feedback')} - ${t('Phase')} ${phaseNumber}` : t('Feedback')}
+      heightFraction={0.6}
+    >
+      <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
+        {feedbacks.length === 0 ? (
+          <Text style={[feedbackModalStyles.emptyText]}>{t('No feedback available yet')}</Text>
+        ) : (
+          feedbacks.map((fb, idx) => {
+            const isResolved = (fb.status || '').toLowerCase() === 'resolved';
+            const body = stripFeedbackPhaseTag(fb.comment || '');
+            return (
+              <View key={(fb.id ?? idx).toString()} style={feedbackModalStyles.feedbackCard}>
+                <View style={feedbackModalStyles.feedbackTopRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={feedbackModalStyles.feedbackDate}>
+                      {fb.createdAt ? new Date(fb.createdAt).toLocaleDateString() : ''}
                     </Text>
-
-                    {isTechnician && !isResolved && typeof fb.id === 'number' && onResolve && (
-                      <TouchableOpacity
-                        style={feedbackModalStyles.resolveButton}
-                        onPress={() => onResolve(fb.id as number)}
-                        disabled={isResolvingId === fb.id}
-                      >
-                        {isResolvingId === fb.id ? (
-                          <ActivityIndicator size="small" color={COLORS.textWhite} />
-                        ) : (
-                          <>
-                            <Ionicons name="checkmark-done-outline" size={16} color={COLORS.textWhite} />
-                            <Text style={feedbackModalStyles.resolveButtonText}>{t('Resolve Feedback')}</Text>
-                          </>
-                        )}
-                      </TouchableOpacity>
-                    )}
                   </View>
-                );
-              })
-            )}
-          </ScrollView>
-        </View>
-      </View>
-    </Modal>
+                  <View style={[feedbackModalStyles.statusPill, { backgroundColor: isResolved ? c.green10 : c.amber10 }]}>
+                    <Ionicons
+                      name={isResolved ? 'checkmark-circle' : 'time-outline'}
+                      size={14}
+                      color={isResolved ? c.green80 : c.amber70}
+                    />
+                    <Text style={[feedbackModalStyles.statusText, { color: isResolved ? c.green80 : c.amber70 }]}>
+                      {isResolved ? t('Resolved') : t('Pending')}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={feedbackModalStyles.feedbackBody}>{body}</Text>
+                {isTechnician && !isResolved && typeof fb.id === 'number' && onResolve && (
+                  <TouchableOpacity
+                    style={feedbackModalStyles.resolveButton}
+                    onPress={() => onResolve(fb.id as number)}
+                    disabled={isResolvingId === fb.id}
+                  >
+                    {isResolvingId === fb.id ? (
+                      <ActivityIndicator size="small" color={c.textWhite} />
+                    ) : (
+                      <>
+                        <Ionicons name="checkmark-done-outline" size={16} color={c.textWhite} />
+                        <Text style={feedbackModalStyles.resolveButtonText}>{t('Resolve Feedback')}</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                )}
+              </View>
+            );
+          })
+        )}
+      </ScrollView>
+    </AppBottomSheetModal>
   );
 };
-
-const feedbackModalStyles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    justifyContent: 'center',
-    padding: 16,
-  },
-  backdropPressable: { ...StyleSheet.absoluteFillObject },
-  card: {
-    backgroundColor: COLORS.bgWhite,
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: COLORS.primary10,
-  },
-  cardWeb: {
-    maxWidth: 560,
-    width: '100%',
-    alignSelf: 'center',
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  title: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.textHeader,
-    flex: 1,
-  },
-  closeButton: {
-    width: 28,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 8,
-    backgroundColor: COLORS.primary10,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: COLORS.textDividers,
-    marginVertical: 12,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    paddingVertical: 12,
-  },
-  feedbackCard: {
-    borderWidth: 1,
-    borderColor: COLORS.primary10,
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 10,
-    backgroundColor: COLORS.bgWhite,
-    gap: 10,
-  },
-  feedbackTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  feedbackDate: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-  },
-  statusPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  feedbackBody: {
-    fontSize: 14,
-    color: COLORS.textBody,
-    lineHeight: 20,
-  },
-  resolveButton: {
-    backgroundColor: COLORS.green60,
-    borderRadius: 10,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  resolveButtonText: {
-    color: COLORS.textWhite,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-});
-
 
 // ===== MAIN COMPONENT =====
 export default function ApprovedProjectScreen({
@@ -812,6 +780,7 @@ export default function ApprovedProjectScreen({
     primary10: colors.primary + '20',
     primary60: colors.primary,
     primary70: colors.primary,
+    primary80: colors.primary,
     textWhite: colors.white,
     green10: colors.success + '20',
     green60: colors.success,
@@ -821,6 +790,8 @@ export default function ApprovedProjectScreen({
     amber10: colors.warning + '25',
     amber60: colors.warning,
   }), [colors]);
+  const styles = useMemo(() => makeStyles(c), [c]);
+  const phaseStyles = useMemo(() => makePhaseStyles(c), [c]);
   const [phases, setPhases] = useState<Phase[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isTechnician, setIsTechnician] = useState(propIsTechnician ?? false);
@@ -839,7 +810,6 @@ export default function ApprovedProjectScreen({
   const screenWidth = Dimensions.get('window').width;
   const IS_WEB = Platform.OS === 'web';
   const IS_LARGE_WEB = IS_WEB && screenWidth >= 1024;
-  const isRTL = i18n.language === 'ar';
   
   const serviceName = i18n.language === 'ar' ? project?.serviceNameAr : project?.serviceNameEn;
   
@@ -1126,19 +1096,19 @@ export default function ApprovedProjectScreen({
     <View style={[styles.container, { backgroundColor: c.bgWhite, paddingTop: IS_LARGE_WEB ? 0 : insets.top }]}>
       {/* Header - Hidden on large web */}
       {!IS_LARGE_WEB && (
-      <View style={[styles.header, isRTL && { flexDirection: 'row-reverse' }]}>
+      <View style={[styles.header, styles.headerLTR]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <Ionicons 
-            name={isRTL ? "chevron-forward" : "chevron-back"} 
+            name="chevron-back" 
             size={24} 
             color={c.textHeader} 
           />
         </TouchableOpacity>
-        <View style={[styles.headerTitleContainer, isRTL && { alignItems: 'flex-end' }]}>
-          <Text style={[styles.headerTitle, isRTL && { textAlign: 'right' }, { fontSize: scaledSize(16) }]}>
+        <View style={[styles.headerTitleContainer]}>
+          <Text style={[styles.headerTitle, { fontSize: scaledSize(16) }]}>
             {serviceName || t('Project')}
           </Text>
-          <Text style={[styles.headerSubtitle, isRTL && { textAlign: 'right' }, { fontSize: scaledSize(10) }]}>
+          <Text style={[styles.headerSubtitle, { fontSize: scaledSize(10) }]}>
               {t('Approved Project')}
           </Text>
         </View>
@@ -1165,16 +1135,16 @@ export default function ApprovedProjectScreen({
           <View style={styles.titleSectionLargeWeb}>
             <TouchableOpacity onPress={onBack} style={styles.titleBackButton}>
               <Ionicons 
-                name={isRTL ? "chevron-forward" : "chevron-back"} 
+                name="chevron-back" 
                 size={24} 
-                color={COLORS.textHeader} 
+                color={c.textHeader} 
               />
             </TouchableOpacity>
             <View style={styles.titleContainer}>
-              <Text style={[styles.titleMainText, isRTL && { textAlign: 'right' }, { fontSize: scaledSize(42) }]}>
+              <Text style={[styles.titleMainText, { fontSize: scaledSize(42) }]}>
                 {serviceName || t('Project')}
               </Text>
-              <Text style={[styles.titleSubtext, isRTL && { textAlign: 'right' }, { fontSize: scaledSize(20) }]}>
+              <Text style={[styles.titleSubtext, { fontSize: scaledSize(20) }]}>
                 {t('Approved Project')}
               </Text>
             </View>
@@ -1191,26 +1161,26 @@ export default function ApprovedProjectScreen({
         
         {/* Project Summary Section */}
         <View style={styles.section}>
-          <Text style={[styles.sectionHeaderTitle, isRTL && { textAlign: 'right' }, { fontSize: scaledSize(16) }]}>
+          <Text style={[styles.sectionHeaderTitle, { fontSize: scaledSize(16) }]}>
             {t('Project Summary')}
           </Text>
-          <View style={[styles.requestIdCreatedRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-            <Text style={[styles.requestIdText, { color: COLORS.textSecondary }]}>#{project.id}</Text>
+          <View style={[styles.requestIdCreatedRow, { flexDirection: 'row' }]}>
+            <Text style={[styles.requestIdText, { color: c.textSecondary }]}>#{project.id}</Text>
             {project.createdAt ? (
-              <Text style={[styles.createdText, { color: COLORS.textSecondary }]}>
+              <Text style={[styles.createdText, { color: c.textSecondary }]}>
                 {t('Created')}: {new Date(project.createdAt).toLocaleDateString(i18n.language === 'ar' ? 'ar-SA' : 'en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
               </Text>
             ) : null}
           </View>
-          <Text style={[styles.sectionDescription, isRTL && { textAlign: 'right' }, { fontSize: scaledSize(14) }]}>
+          <Text style={[styles.sectionDescription, { fontSize: scaledSize(14) }]}>
             {t('Review and modify project phases before proceeding to contract signing.')}
           </Text>
           
           {/* Summary Stats Card - Figma Design */}
           <View style={[styles.summaryCard, IS_LARGE_WEB && styles.summaryCardLargeWeb]}>
             {/* Top Row */}
-            <View style={[styles.summaryRow, isRTL && { flexDirection: 'row-reverse' }, IS_LARGE_WEB && styles.summaryRowLargeWeb]}>
-              <View style={[styles.summaryItem, isRTL && { alignItems: 'flex-end' }, IS_LARGE_WEB && styles.summaryItemLargeWeb]}>
+            <View style={[styles.summaryRow, IS_LARGE_WEB && styles.summaryRowLargeWeb]}>
+              <View style={[styles.summaryItem, IS_LARGE_WEB && styles.summaryItemLargeWeb]}>
                 <Text style={[styles.summaryLabel, IS_LARGE_WEB && styles.summaryLabelLargeWeb]}>
                   {t('Total Phases')}
                 </Text>
@@ -1218,19 +1188,19 @@ export default function ApprovedProjectScreen({
                   {totalPhases}
                 </Text>
               </View>
-              <View style={[styles.summaryItem, { alignItems: isRTL ? 'flex-start' : 'flex-end' }, IS_LARGE_WEB && styles.summaryItemLargeWeb]}>
+              <View style={[styles.summaryItem, { alignItems: 'flex-end' }, IS_LARGE_WEB && styles.summaryItemLargeWeb]}>
                 <Text style={[styles.summaryLabel, IS_LARGE_WEB && styles.summaryLabelLargeWeb]}>
                   {t('Total Cost')}
                 </Text>
-                <Text style={[styles.summaryValueGreen, { textAlign: isRTL ? 'left' : 'right' }, IS_LARGE_WEB && styles.summaryValueLargeWeb]}>
+                <Text style={[styles.summaryValueGreen, { textAlign: 'right' }, IS_LARGE_WEB && styles.summaryValueLargeWeb]}>
                   {formatBudget(totalCost || project.budget)}
                 </Text>
               </View>
             </View>
             
             {/* Bottom Row */}
-            <View style={[styles.summaryRow, isRTL && { flexDirection: 'row-reverse' }, IS_LARGE_WEB && styles.summaryRowLargeWeb]}>
-              <View style={[styles.summaryItem, isRTL && { alignItems: 'flex-end' }, IS_LARGE_WEB && styles.summaryItemLargeWeb]}>
+            <View style={[styles.summaryRow, IS_LARGE_WEB && styles.summaryRowLargeWeb]}>
+              <View style={[styles.summaryItem, IS_LARGE_WEB && styles.summaryItemLargeWeb]}>
                 <Text style={[styles.summaryLabel, IS_LARGE_WEB && styles.summaryLabelLargeWeb]}>
                   {t('Total Duration')}
                 </Text>
@@ -1238,11 +1208,11 @@ export default function ApprovedProjectScreen({
                   {formatTotalDuration()}
                 </Text>
               </View>
-              <View style={[styles.summaryItem, { alignItems: isRTL ? 'flex-start' : 'flex-end' }, IS_LARGE_WEB && styles.summaryItemLargeWeb]}>
+              <View style={[styles.summaryItem, { alignItems: 'flex-end' }, IS_LARGE_WEB && styles.summaryItemLargeWeb]}>
                 <Text style={[styles.summaryLabel, IS_LARGE_WEB && styles.summaryLabelLargeWeb]}>
                   {t('Approved Phases')}
                 </Text>
-                <Text style={[styles.summaryValuePurple, { textAlign: isRTL ? 'left' : 'right' }, IS_LARGE_WEB && styles.summaryValueLargeWeb]}>
+                <Text style={[styles.summaryValuePurple, { textAlign: 'right' }, IS_LARGE_WEB && styles.summaryValueLargeWeb]}>
                   {approvedPhases}/{totalPhases}
                 </Text>
               </View>
@@ -1256,7 +1226,7 @@ export default function ApprovedProjectScreen({
             style={[styles.managePhasesButton, IS_LARGE_WEB && styles.managePhasesButtonLargeWeb]}
             onPress={() => setShowPhaseManagement(true)}
           >
-            <Ionicons name="settings-outline" size={IS_LARGE_WEB ? 20 : 18} color={COLORS.textWhite} />
+            <Ionicons name="settings-outline" size={IS_LARGE_WEB ? 20 : 18} color={c.textWhite} />
             <Text style={[styles.managePhasesButtonText, IS_LARGE_WEB && styles.managePhasesButtonTextLargeWeb]}>
               {t('Manage Phases')}
             </Text>
@@ -1269,7 +1239,7 @@ export default function ApprovedProjectScreen({
             style={[styles.reviewApproveButton, IS_LARGE_WEB && styles.reviewApproveButtonLargeWeb]}
             onPress={() => setShowPhaseApproval(true)}
           >
-            <Ionicons name="checkmark-circle-outline" size={IS_LARGE_WEB ? 20 : 18} color={COLORS.textWhite} />
+            <Ionicons name="checkmark-circle-outline" size={IS_LARGE_WEB ? 20 : 18} color={c.textWhite} />
             <Text style={[styles.reviewApproveButtonText, IS_LARGE_WEB && styles.reviewApproveButtonTextLargeWeb]}>
               {t('Review & Approve Phases')}
             </Text>
@@ -1278,8 +1248,8 @@ export default function ApprovedProjectScreen({
         
         {/* Work Phases Section */}
         <View style={styles.section}>
-          <View style={[styles.sectionHeader, isRTL && { flexDirection: 'row-reverse' }, IS_LARGE_WEB && styles.sectionHeaderLargeWeb]}>
-            <Ionicons name="document-text-outline" size={IS_LARGE_WEB ? 28 : 12} color={COLORS.primary80} />
+          <View style={[styles.sectionHeader, IS_LARGE_WEB && styles.sectionHeaderLargeWeb]}>
+            <Ionicons name="document-text-outline" size={IS_LARGE_WEB ? 28 : 12} color={c.primary80} />
             <Text style={[styles.sectionLabel, IS_LARGE_WEB && styles.sectionLabelLargeWeb]}>
               {t('Work Phases')}
             </Text>
@@ -1287,7 +1257,7 @@ export default function ApprovedProjectScreen({
           
           {phases.length === 0 ? (
             <View style={styles.emptyContainer}>
-              <Ionicons name="layers-outline" size={48} color={COLORS.textDividers} />
+              <Ionicons name="layers-outline" size={48} color={c.textDividers} />
               <Text style={styles.emptyText}>{t('No phases yet')}</Text>
               <Text style={styles.emptySubtext}>
                 {t('Phases will appear here once created')}
@@ -1304,12 +1274,13 @@ export default function ApprovedProjectScreen({
                 isTechnician={isTechnician}
                 onRequestModification={() => handleRequestModification(phase)}
                 onEditPhase={() => handleEditPhase(phase)}
-                isRTL={isRTL}
                 feedbackCount={(feedbacksByPhaseNumber[phase.phaseNumber || index + 1] || []).length}
                 onOpenFeedbacks={() => {
                   setSelectedFeedbackPhaseNumber(phase.phaseNumber || index + 1);
                   setShowFeedbacksModal(true);
                 }}
+                palette={c}
+                phaseStyles={phaseStyles}
               />
             ))
           )}
@@ -1321,7 +1292,7 @@ export default function ApprovedProjectScreen({
             style={styles.proceedButton}
             onPress={handleProceedToContract}
           >
-            <Ionicons name="document-text-outline" size={16} color={COLORS.textWhite} />
+            <Ionicons name="document-text-outline" size={16} color={c.textWhite} />
             <Text style={styles.proceedButtonText}>{t('Proceed to Contract Signing')}</Text>
           </TouchableOpacity>
         )}
@@ -1350,10 +1321,11 @@ export default function ApprovedProjectScreen({
         isResolvingId={isResolvingFeedbackId}
       />
       
-      {/* Phase Management Modal (Technician View) */}
-      <PhaseManagementModal
+      {/* Stages Management Modal (Technician View) — RTL, slide animation, riyal logo */}
+      <StagesManagementModal
         visible={showPhaseManagement}
         projectId={project.id}
+        projectName={i18n.language === 'ar' ? (project?.serviceNameAr || project?.serviceNameEn) : (project?.serviceNameEn || project?.serviceNameAr)}
         onClose={() => setShowPhaseManagement(false)}
         onSuccess={handlePhaseManagementSuccess}
       />
@@ -1378,7 +1350,8 @@ export default function ApprovedProjectScreen({
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(c: typeof COLORS) {
+  return StyleSheet.create({
   container: {
     flex: 1,
   },
@@ -1388,6 +1361,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 16,
     gap: 24,
+  },
+  headerLTR: {
+    direction: 'ltr',
   },
   headerLargeWeb: {
     paddingHorizontal: 48,
@@ -1409,7 +1385,7 @@ const styles = StyleSheet.create({
   },
   changeRequestsLinkText: {
     fontSize: 14,
-    color: COLORS.primary60,
+    color: c.primary60,
     fontWeight: '500',
   },
   backButtonLargeWeb: {
@@ -1426,7 +1402,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: COLORS.textHeader,
+    color: c.textHeader,
   },
   headerTitleLargeWeb: {
     fontSize: 34,
@@ -1435,7 +1411,7 @@ const styles = StyleSheet.create({
   headerSubtitle: {
     fontSize: 10,
     fontWeight: '300',
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
   },
   headerSubtitleLargeWeb: {
     fontSize: 16,
@@ -1450,7 +1426,7 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: COLORS.textDividers,
+    backgroundColor: c.textDividers,
     marginHorizontal: 16,
     marginTop: 8,
   },
@@ -1483,7 +1459,7 @@ const styles = StyleSheet.create({
   sectionHeaderTitle: {
     fontSize: 16,
     fontWeight: '400',
-    color: COLORS.textHeader,
+    color: c.textHeader,
     marginBottom: 12,
   },
   requestIdCreatedRow: {
@@ -1503,7 +1479,7 @@ const styles = StyleSheet.create({
   sectionDescription: {
     fontSize: 14,
     fontWeight: '300',
-    color: COLORS.textBody,
+    color: c.textBody,
     lineHeight: 21,
     marginBottom: 16,
   },
@@ -1520,16 +1496,16 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 12,
     fontWeight: '400',
-    color: COLORS.primary80,
+    color: c.primary80,
   },
   sectionLabelLargeWeb: {
     fontSize: 16,
   },
   // Summary Card - Figma Design
   summaryCard: {
-    backgroundColor: COLORS.primary10,
+    backgroundColor: c.primary10,
     borderWidth: 0.5,
-    borderColor: COLORS.primary80,
+    borderColor: c.primary80,
     borderRadius: 6,
     paddingVertical: 16,
   },
@@ -1559,7 +1535,7 @@ const styles = StyleSheet.create({
   summaryLabel: {
     fontSize: 12,
     fontWeight: '400',
-    color: COLORS.textBody,
+    color: c.textBody,
   },
   summaryLabelLargeWeb: {
     fontSize: 12,
@@ -1567,22 +1543,22 @@ const styles = StyleSheet.create({
   summaryValuePrimary: {
     fontSize: 12,
     fontWeight: '600',
-    color: COLORS.textHeader,
+    color: c.textHeader,
   },
   summaryValueGreen: {
     fontSize: 12,
     fontWeight: '600',
-    color: COLORS.green60,
+    color: c.green60,
   },
   summaryValueAmber: {
     fontSize: 12,
     fontWeight: '600',
-    color: COLORS.amber70,
+    color: c.amber70,
   },
   summaryValuePurple: {
     fontSize: 12,
     fontWeight: '600',
-    color: COLORS.purple70,
+    color: c.purple70,
   },
   summaryValueLargeWeb: {
     fontSize: 14,
@@ -1597,7 +1573,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 14,
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
   },
   // Empty State
   emptyContainer: {
@@ -1608,16 +1584,16 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     fontWeight: '600',
-    color: COLORS.textBody,
+    color: c.textBody,
   },
   emptySubtext: {
     fontSize: 14,
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
     textAlign: 'center',
   },
   // Technician Manage Phases Button
   managePhasesButton: {
-    backgroundColor: COLORS.primary60,
+    backgroundColor: c.primary60,
     borderRadius: 12,
     padding: 16,
     flexDirection: 'row',
@@ -1643,7 +1619,7 @@ const styles = StyleSheet.create({
   managePhasesButtonText: {
     fontSize: 15,
     fontWeight: '600',
-    color: COLORS.textWhite,
+    color: c.textWhite,
   },
   managePhasesButtonTextLargeWeb: {
     fontSize: 16,
@@ -1651,7 +1627,7 @@ const styles = StyleSheet.create({
   },
   // User Review & Approve Button
   reviewApproveButton: {
-    backgroundColor: COLORS.green60,
+    backgroundColor: c.green60,
     borderRadius: 12,
     padding: 16,
     flexDirection: 'row',
@@ -1677,7 +1653,7 @@ const styles = StyleSheet.create({
   reviewApproveButtonText: {
     fontSize: 15,
     fontWeight: '600',
-    color: COLORS.textWhite,
+    color: c.textWhite,
   },
   reviewApproveButtonTextLargeWeb: {
     fontSize: 16,
@@ -1685,7 +1661,7 @@ const styles = StyleSheet.create({
   },
   // Proceed to Contract Button
   proceedButton: {
-    backgroundColor: COLORS.green60,
+    backgroundColor: c.green60,
     borderRadius: 8,
     padding: 16,
     flexDirection: 'row',
@@ -1697,7 +1673,7 @@ const styles = StyleSheet.create({
   proceedButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: COLORS.textWhite,
+    color: c.textWhite,
   },
   // Title Section - Large Web (Figma Design)
   titleSectionLargeWeb: {
@@ -1721,13 +1697,14 @@ const styles = StyleSheet.create({
   titleMainText: {
     fontSize: 42,
     fontWeight: '700',
-    color: COLORS.textHeader,
+    color: c.textHeader,
     lineHeight: 42,
   },
   titleSubtext: {
     fontSize: 20,
     fontWeight: '300',
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
     lineHeight: 20,
-  },
-});
+  }
+  });
+}

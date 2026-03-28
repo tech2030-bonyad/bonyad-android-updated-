@@ -880,7 +880,7 @@ export default function ProjectDetailScreen({
     <View style={[styles.container, { backgroundColor: COLORS.bgWhite, paddingTop: IS_LARGE_WEB ? 0 : insets.top }]}>
       {/* Header - Hidden on large web */}
       {!IS_LARGE_WEB && (
-      <View style={styles.header}>
+      <View style={[styles.header, styles.headerLTR]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <Ionicons name="chevron-back" size={24} color={COLORS.textBody} />
         </TouchableOpacity>
@@ -971,6 +971,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 16,
     gap: 24,
+  },
+  headerLTR: {
+    direction: 'ltr',
   },
   headerLargeWeb: {
     paddingHorizontal: 48,

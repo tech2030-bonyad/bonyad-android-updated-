@@ -305,7 +305,7 @@ export default function ContractViewerModal({
                   </Text>
                 </View>
                 <TouchableOpacity onPress={viewPdfContract} style={styles.serviceAgreementChevron}>
-                  <Ionicons name={i18n.language === 'ar' ? 'chevron-back' : 'chevron-forward'} size={24} color={colors.textSecondary} />
+                  <Ionicons name="chevron-back" size={24} color={colors.textSecondary} />
                 </TouchableOpacity>
               </View>
 

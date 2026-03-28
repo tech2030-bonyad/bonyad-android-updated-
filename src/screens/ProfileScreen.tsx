@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   Image,
   ActivityIndicator,
   Platform,
+  Linking,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
+import { useRTL } from '../hooks/useRTL';
 import { getUserProfile, uploadProfileImage, deleteAccount } from '../services/ProfileService';
 import { storage } from '../utils/storage';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
@@ -67,6 +69,8 @@ interface UserDetails {
   hasPortfolio?: boolean;
   certificates?: Array<any>;
   description?: string;
+  bio?: string;
+  address?: string;
   services?: Array<any>;
   averageRating?: number;
   subscriptionCategory?: {
@@ -105,7 +109,10 @@ export default function ProfileScreen({
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [language, setLanguage] = useState(i18n.language);
   const isDarkMode = theme === 'dark';
-  const isRTL = i18n.language === 'ar';
+  const isArabic = i18n.language === 'ar';
+  const { isRTL } = useRTL();
+  // In AR, menu arrows point left (chevron-back); in LTR they point right (chevron-forward)
+  const menuChevron = isRTL ? 'chevron-back' : 'chevron-forward';
   
   const { alertState, showError, showSuccess, hideAlert } = useAlertPopup();
   const { confirmState, showLogoutConfirmation, showConfirmation, hideConfirmation } = useConfirmationPopup();
@@ -189,28 +196,22 @@ export default function ProfileScreen({
 
   const handleLogout = () => {
     showLogoutConfirmation(
-      t('Logout'),
+      t('profile.logout'),
       t('profile.confirmLogout'),
       onLogout
     );
   };
 
-  const toggleLanguage = () => {
+  const toggleLanguage = async () => {
     const currentLang = i18n.language;
     const newLang = currentLang === 'en' ? 'ar' : 'en';
-    
-    i18n.changeLanguage(newLang).then(() => {
-      console.log('Language changed to:', newLang);
+    await storage.saveLanguage(newLang);
+    try {
+      await i18n.changeLanguage(newLang);
       setLanguage(newLang);
-      
-      // Force document direction change on web for RTL support
-      if (Platform.OS === 'web' && typeof document !== 'undefined') {
-        document.documentElement.setAttribute('dir', newLang === 'ar' ? 'rtl' : 'ltr');
-        document.documentElement.setAttribute('lang', newLang);
-      }
-    }).catch((error) => {
+    } catch (error) {
       console.error('Error changing language:', error);
-    });
+    }
   };
 
   const cycleFontSize = () => {
@@ -222,10 +223,10 @@ export default function ProfileScreen({
 
   const getFontSizeLabel = () => {
     switch (fontSizeScale) {
-      case 'small': return isRTL ? 'صغير' : 'S';
-      case 'medium': return isRTL ? 'متوسط' : 'M';
-      case 'large': return isRTL ? 'كبير' : 'L';
-      default: return 'M';
+      case 'small': return t('profile.fontSizeS');
+      case 'medium': return t('profile.fontSizeM');
+      case 'large': return t('profile.fontSizeL');
+      default: return t('profile.fontSizeM');
     }
   };
 
@@ -248,6 +249,12 @@ export default function ProfileScreen({
   const successBgColor = isDarkMode ? 'rgba(26, 159, 120, 0.15)' : FIGMA_COLORS.greenLight;
   const avatarBgColor = isDarkMode ? colors.surface : FIGMA_COLORS.primaryLight;
 
+  const technicianCertificateUrls = useMemo(() => {
+    const c = userDetails?.certificates;
+    if (!Array.isArray(c)) return [];
+    return c.filter((x): x is string => typeof x === 'string' && x.trim().length > 0);
+  }, [userDetails?.certificates]);
+
   if (isLoading) {
     return (
       <View style={[styles.loadingContainer, { paddingTop: insets.top, backgroundColor: bgColor }]}>
@@ -259,6 +266,9 @@ export default function ProfileScreen({
   const user = userDetails;
   const isTechnician = user?.role?.toUpperCase() === 'TECHNICIAN';
   const isVerified = user?.status === 'APPROVED' || user?.status === 'VERIFIED';
+
+  const technicianBioText = ((user?.description || user?.bio) ?? '').trim();
+  const technicianAddressText = (user?.address ?? '').trim();
 
   return (
     <View style={[styles.container, { backgroundColor: bgColor }]}>
@@ -277,7 +287,7 @@ export default function ProfileScreen({
         <View style={[styles.mainCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}>
           {/* User Welcome Section - Clickable to open settings */}
           <TouchableOpacity 
-            style={[styles.userWelcomeSection, isRTL && styles.rowRTL]} 
+            style={styles.userWelcomeSection} 
             onPress={() => {
               if (isTechnician) {
                 onNavigateToEditProfile?.();
@@ -299,16 +309,16 @@ export default function ProfileScreen({
                 <Ionicons name="person" size={24} color={primaryColor} />
               )}
             </TouchableOpacity>
-            <View style={[styles.userWelcomeText, isRTL && styles.textContainerRTL]}>
-              <Text style={[styles.welcomeLabel, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }, isRTL && styles.textRTL]}>
-                {t('Welcome')}
+            <View style={styles.userWelcomeText}>
+              <Text style={[styles.welcomeLabel, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }]}>
+                {t('profile.welcome')}
               </Text>
-              <Text style={[styles.userName, { color: headerTextColor, fontFamily, fontSize: scaledSize(16) }, isRTL && styles.textRTL]}>
+              <Text style={[styles.userName, { color: headerTextColor, fontFamily, fontSize: scaledSize(16) }]}>
                 {user?.name || t('profile.usernamePlaceholder')}
               </Text>
             </View>
             <Ionicons 
-              name={isRTL ? 'chevron-back' : 'chevron-forward'} 
+              name={menuChevron} 
               size={24} 
               color={primaryColor} 
             />
@@ -319,13 +329,13 @@ export default function ProfileScreen({
 
           {/* My Info Section */}
           <View style={styles.myInfoSection}>
-            <View style={[styles.myInfoHeader, isRTL && styles.rowRTL]}>
-              <View style={isRTL && styles.textContainerRTL}>
-                <Text style={[styles.myInfoTitle, { color: textColor, fontFamily, fontSize: scaledSize(16) }, isRTL && styles.textRTL]}>
+            <View style={styles.myInfoHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.myInfoTitle, { color: textColor, fontFamily, fontSize: scaledSize(16) }]}>
                   {t('profile.myInfo')}
                 </Text>
-                <Text style={[styles.myInfoSubtitle, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }, isRTL && styles.textRTL]}>
-                  {t('profile.userAccount')}
+                <Text style={[styles.myInfoSubtitle, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }]}>
+                  {isTechnician ? t('profile.technicianAccount') : t('profile.userAccount')}
                 </Text>
             </View>
           </View>
@@ -333,8 +343,8 @@ export default function ProfileScreen({
             {/* Info Rows */}
             <View style={styles.infoRows}>
               {/* Account Status */}
-              <View style={[styles.infoRow, isRTL && styles.rowRTL]}>
-                <Text style={[styles.infoLabel, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }, isRTL && styles.textRTL]}>
+              <View style={styles.infoRow}>
+                <Text style={[styles.infoLabel, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }]}>
                   {t('profile.accountStatus')}
                 </Text>
                 <View style={[styles.verifiedBadge, { backgroundColor: successBgColor, borderColor: successColor }]}>
@@ -346,42 +356,110 @@ export default function ProfileScreen({
               </View>
 
               {/* Email */}
-              <View style={[styles.infoRow, isRTL && styles.rowRTL]}>
-                <Text style={[styles.infoLabel, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }, isRTL && styles.textRTL]}>
+              <View style={styles.infoRow}>
+                <Text style={[styles.infoLabel, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }]}>
                   {t('profile.email')}
                 </Text>
-                <Text style={[styles.infoValue, { color: textColor, fontFamily, fontSize: scaledSize(14) }, isRTL && styles.textRTL]}>
+                <Text style={[styles.infoValue, { color: textColor, fontFamily, fontSize: scaledSize(14) }]}>
                   {user?.email || '-'}
                 </Text>
               </View>
 
               {/* Phone Number */}
-              <View style={[styles.infoRow, isRTL && styles.rowRTL]}>
-                <Text style={[styles.infoLabel, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }, isRTL && styles.textRTL]}>
+              <View style={styles.infoRow}>
+                <Text style={[styles.infoLabel, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }]}>
                   {t('profile.phoneNumber')}
                 </Text>
-                <Text style={[styles.infoValue, { color: textColor, fontFamily, fontSize: scaledSize(14) }, isRTL && styles.textRTL]}>
+                <Text style={[styles.infoValue, { color: textColor, fontFamily, fontSize: scaledSize(14) }]}>
                   {user?.phone || user?.phoneNumber || '-'}
                 </Text>
               </View>
+
+              {isTechnician && !!technicianBioText && (
+                <View style={[styles.infoRow, styles.infoRowMultiline]}>
+                  <Text style={[styles.infoLabel, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }]}>
+                    {t('Bio / Description')}
+                  </Text>
+                  <Text style={[styles.infoValue, styles.infoValueMultiline, { color: textColor, fontFamily, fontSize: scaledSize(14), textAlign: isRTL ? 'left' : 'right' }]}>
+                    {technicianBioText}
+                  </Text>
+                </View>
+              )}
+              {isTechnician && !!technicianAddressText && (
+                <View style={[styles.infoRow, styles.infoRowMultiline]}>
+                  <Text style={[styles.infoLabel, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }]}>
+                    {t('Address')}
+                  </Text>
+                  <Text style={[styles.infoValue, styles.infoValueMultiline, { color: textColor, fontFamily, fontSize: scaledSize(14), textAlign: isRTL ? 'left' : 'right' }]}>
+                    {technicianAddressText}
+                  </Text>
+                </View>
+              )}
+              {isTechnician && user?.yearsOfExperience != null && user.yearsOfExperience >= 0 && (
+                <View style={styles.infoRow}>
+                  <Text style={[styles.infoLabel, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }]}>
+                    {t('Years of Experience')}
+                  </Text>
+                  <Text style={[styles.infoValue, { color: textColor, fontFamily, fontSize: scaledSize(14) }]}>
+                    {String(user.yearsOfExperience)}
+                  </Text>
+                </View>
+              )}
+              {isTechnician && technicianCertificateUrls.length > 0 && (
+                <View style={styles.certificatesPreviewBlock}>
+                  <View style={styles.infoRow}>
+                    <Text style={[styles.infoLabel, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }]}>
+                      {t('profile.certificatesUploaded')}
+                    </Text>
+                    <Text style={[styles.infoValue, { color: textColor, fontFamily, fontSize: scaledSize(14) }]}>
+                      {String(technicianCertificateUrls.length)}
+                    </Text>
+                  </View>
+                  <ScrollView
+                    horizontal
+                    nestedScrollEnabled
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.certificatesPreviewScroll}
+                  >
+                    {technicianCertificateUrls.map((uri, i) => (
+                      <TouchableOpacity
+                        key={`${i}-${uri.slice(-48)}`}
+                        activeOpacity={0.85}
+                        onPress={() => Linking.openURL(uri)}
+                      >
+                        <Image
+                          source={{ uri }}
+                          style={[
+                            styles.certificateThumb,
+                            { borderColor: dividerColor, backgroundColor: isDarkMode ? colors.surface : FIGMA_COLORS.iconBg },
+                          ]}
+                          resizeMode="cover"
+                        />
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
                 </View>
                 </View>
 
-          {/* Stats Cards */}
-          <View style={[styles.statsContainer, isRTL && styles.rowRTL]}>
+          {/* Stats — property/user metrics; less relevant on technician home profile */}
+          {!isTechnician && (
+          <View style={styles.statsContainer}>
             <View style={[styles.statCard, { backgroundColor: statBgColor, borderColor: statBorderColor }]}>
-              <Text style={[styles.statNumber, { color: textColor, fontFamily, fontSize: scaledSize(14) }]}>{user?.propertiesCount || 0}</Text>
+              <Text style={[styles.statNumber, { color: textColor, fontFamily, fontSize: scaledSize(14) }]}>{user?.propertiesCount ?? 0}</Text>
               <Text style={[styles.statLabel, { color: textColor, fontFamily, fontSize: scaledSize(14) }]}>{t('profile.properties')}</Text>
             </View>
             <View style={[styles.statCard, { backgroundColor: statBgColor, borderColor: statBorderColor }]}>
-              <Text style={[styles.statNumber, { color: textColor, fontFamily, fontSize: scaledSize(14) }]}>{user?.appointmentsCount || 0}</Text>
+              <Text style={[styles.statNumber, { color: textColor, fontFamily, fontSize: scaledSize(14) }]}>{user?.appointmentsCount ?? 0}</Text>
               <Text style={[styles.statLabel, { color: textColor, fontFamily, fontSize: scaledSize(14) }]}>{t('profile.appointments')}</Text>
                   </View>
             <View style={[styles.statCard, { backgroundColor: statBgColor, borderColor: statBorderColor }]}>
-              <Text style={[styles.statNumber, { color: textColor, fontFamily, fontSize: scaledSize(14) }]}>{user?.ticketsCount || 0}</Text>
+              <Text style={[styles.statNumber, { color: textColor, fontFamily, fontSize: scaledSize(14) }]}>{user?.ticketsCount ?? 0}</Text>
               <Text style={[styles.statLabel, { color: textColor, fontFamily, fontSize: scaledSize(14) }]}>{t('profile.ticket')}</Text>
                     </View>
                   </View>
+          )}
                   </View>
 
         {/* Settings Section Card */}
@@ -392,95 +470,95 @@ export default function ProfileScreen({
             {/* My Portfolio */}
             <View style={[styles.technicianCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}>
               <TouchableOpacity
-                style={[styles.menuItem, isRTL && styles.rowRTL]}
+                style={styles.menuItem}
                 onPress={() => onNavigateToPortfolio?.()}
                 activeOpacity={0.7}
               >
                 <View style={[styles.settingIconContainer, { backgroundColor: iconBgColor }]}>
                   <Ionicons name="briefcase-outline" size={24} color={isDarkMode ? colors.textSecondary : '#666666'} />
                 </View>
-                <View style={[styles.settingTextContainer, isRTL && styles.textContainerRTL]}>
-                  <Text style={[styles.settingTitle, { color: textColor, fontFamily, fontSize: scaledSize(16) }, isRTL && styles.textRTL]}>
-                    {t('My Portfolio')}
+                <View style={styles.settingTextContainer}>
+                  <Text style={[styles.settingTitle, { color: textColor, fontFamily, fontSize: scaledSize(16) }]}>
+                    {t('profile.myPortfolio')}
                   </Text>
-                  <Text style={[styles.settingSubtitle, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }, isRTL && styles.textRTL]}>
-                    {t('Add your works here')}
+                  <Text style={[styles.settingSubtitle, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }]}>
+                    {t('profile.addYourWorksHere')}
                   </Text>
                 </View>
-                <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={24} color={primaryColor} />
+                <Ionicons name={menuChevron} size={24} color={primaryColor} />
               </TouchableOpacity>
             </View>
 
             {/* My Subscription */}
             <View style={[styles.technicianCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}>
               <TouchableOpacity
-                style={[styles.menuItem, isRTL && styles.rowRTL]}
+                style={styles.menuItem}
                 onPress={() => onNavigateToSubscription?.()}
                 activeOpacity={0.7}
               >
                 <View style={[styles.settingIconContainer, { backgroundColor: iconBgColor }]}>
                   <Ionicons name="card-outline" size={24} color={isDarkMode ? colors.textSecondary : '#666666'} />
                 </View>
-                <View style={[styles.settingTextContainer, isRTL && styles.textContainerRTL]}>
-                  <Text style={[styles.settingTitle, { color: textColor, fontFamily, fontSize: scaledSize(16) }, isRTL && styles.textRTL]}>
-                    {t('My Subscription')}
+                <View style={styles.settingTextContainer}>
+                  <Text style={[styles.settingTitle, { color: textColor, fontFamily, fontSize: scaledSize(16) }]}>
+                    {t('profile.mySubscription')}
                   </Text>
-                  <Text style={[styles.settingSubtitle, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }, isRTL && styles.textRTL]}>
-                    {t('Manage your subscriptions')}
+                  <Text style={[styles.settingSubtitle, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }]}>
+                    {t('profile.manageYourSubscriptions')}
                   </Text>
                 </View>
-                <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={24} color={primaryColor} />
+                <Ionicons name={menuChevron} size={24} color={primaryColor} />
               </TouchableOpacity>
             </View>
 
             {/* Availability */}
             <View style={[styles.technicianCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}>
               <TouchableOpacity
-                style={[styles.menuItem, isRTL && styles.rowRTL]}
+                style={styles.menuItem}
                 onPress={() => onNavigateToAvailability?.()}
                 activeOpacity={0.7}
               >
                 <View style={[styles.settingIconContainer, { backgroundColor: iconBgColor }]}>
                   <Ionicons name="calendar-outline" size={24} color={isDarkMode ? colors.textSecondary : '#666666'} />
                 </View>
-                <View style={[styles.settingTextContainer, isRTL && styles.textContainerRTL]}>
-                  <Text style={[styles.settingTitle, { color: textColor, fontFamily, fontSize: scaledSize(16) }, isRTL && styles.textRTL]}>
-                    {t('Availability')}
+                <View style={styles.settingTextContainer}>
+                  <Text style={[styles.settingTitle, { color: textColor, fontFamily, fontSize: scaledSize(16) }]}>
+                    {t('profile.availability')}
                   </Text>
-                  <Text style={[styles.settingSubtitle, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }, isRTL && styles.textRTL]}>
-                    {t('Set when you are available')}
+                  <Text style={[styles.settingSubtitle, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }]}>
+                    {t('profile.setWhenAvailable')}
                   </Text>
                 </View>
-                <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={24} color={primaryColor} />
+                <Ionicons name={menuChevron} size={24} color={primaryColor} />
               </TouchableOpacity>
             </View>
 
             {/* Services */}
             <View style={[styles.technicianCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}>
               <TouchableOpacity
-                style={[styles.menuItem, isRTL && styles.rowRTL]}
+                style={styles.menuItem}
                 onPress={() => onNavigateToServices?.()}
                 activeOpacity={0.7}
               >
                 <View style={[styles.settingIconContainer, { backgroundColor: iconBgColor }]}>
                   <Ionicons name="construct-outline" size={24} color={isDarkMode ? colors.textSecondary : '#666666'} />
                 </View>
-                <View style={[styles.settingTextContainer, isRTL && styles.textContainerRTL]}>
-                  <Text style={[styles.settingTitle, { color: textColor, fontFamily, fontSize: scaledSize(16) }, isRTL && styles.textRTL]}>
-                    {t('Services')}
+                <View style={styles.settingTextContainer}>
+                  <Text style={[styles.settingTitle, { color: textColor, fontFamily, fontSize: scaledSize(16) }]}>
+                    {t('profile.services')}
                   </Text>
-                  <Text style={[styles.settingSubtitle, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }, isRTL && styles.textRTL]}>
-                    {t('Manage your services')}
+                  <Text style={[styles.settingSubtitle, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }]}>
+                    {t('profile.manageYourServices')}
                   </Text>
                 </View>
-                <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={24} color={primaryColor} />
+                <Ionicons name={menuChevron} size={24} color={primaryColor} />
               </TouchableOpacity>
             </View>
 
             {/* Small Task Types – ensure clickable with explicit handler and hitSlop */}
             <View style={[styles.technicianCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}>
               <TouchableOpacity
-                style={[styles.menuItem, isRTL && styles.rowRTL]}
+                style={styles.menuItem}
                 onPress={() => {
                   if (onNavigateToSmallTaskTypes) onNavigateToSmallTaskTypes();
                 }}
@@ -490,22 +568,22 @@ export default function ProfileScreen({
                 <View style={[styles.settingIconContainer, { backgroundColor: iconBgColor }]}>
                   <Ionicons name="list-outline" size={24} color={isDarkMode ? colors.textSecondary : '#666666'} />
                 </View>
-                <View style={[styles.settingTextContainer, isRTL && styles.textContainerRTL]}>
-                  <Text style={[styles.settingTitle, { color: textColor, fontFamily, fontSize: scaledSize(16) }, isRTL && styles.textRTL]}>
-                    {t('Small Task Types')}
+                <View style={styles.settingTextContainer}>
+                  <Text style={[styles.settingTitle, { color: textColor, fontFamily, fontSize: scaledSize(16) }]}>
+                    {t('profile.smallTaskTypes')}
                   </Text>
-                  <Text style={[styles.settingSubtitle, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }, isRTL && styles.textRTL]}>
-                    {t('Manage subscribed task types')}
+                  <Text style={[styles.settingSubtitle, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }]}>
+                    {t('profile.manageSubscribedTaskTypes')}
                   </Text>
                 </View>
-                <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={24} color={primaryColor} />
+                <Ionicons name={menuChevron} size={24} color={primaryColor} />
               </TouchableOpacity>
             </View>
 
             {/* Working Areas – ensure clickable with hitSlop and explicit handler */}
             <View style={[styles.technicianCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}>
               <TouchableOpacity
-                style={[styles.menuItem, isRTL && styles.rowRTL]}
+                style={styles.menuItem}
                 onPress={() => {
                   if (onNavigateToRegions) onNavigateToRegions();
                 }}
@@ -515,16 +593,16 @@ export default function ProfileScreen({
                 <View style={[styles.settingIconContainer, { backgroundColor: iconBgColor }]}>
                   <Ionicons name="location-outline" size={24} color={isDarkMode ? colors.textSecondary : '#666666'} />
                 </View>
-                <View style={[styles.settingTextContainer, isRTL && styles.textContainerRTL]}>
-                  <Text style={[styles.settingTitle, { color: textColor, fontFamily, fontSize: scaledSize(16) }, isRTL && styles.textRTL]}>
+                <View style={styles.settingTextContainer}>
+                  <Text style={[styles.settingTitle, { color: textColor, fontFamily, fontSize: scaledSize(16) }]}>
                     {t('Working Areas')}
                   </Text>
-                  <Text style={[styles.settingSubtitle, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }, isRTL && styles.textRTL]}>
-                    {t('Add regions where you offer services')}
+                  <Text style={[styles.settingSubtitle, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }]}>
+                    {t('profile.addRegionsWhereYouOfferServices')}
                   </Text>
                 </View>
                 <Ionicons
-                  name={isRTL ? 'chevron-back' : 'chevron-forward'}
+                  name={menuChevron}
                   size={24}
                   color={primaryColor}
                 />
@@ -537,17 +615,17 @@ export default function ProfileScreen({
         {!isTechnician && (
           <View style={[styles.userMenuCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}>
             <TouchableOpacity 
-              style={[styles.menuItem, isRTL && styles.rowRTL]}
+              style={styles.menuItem}
               onPress={() => onNavigateToEditProfile?.()}
             >
               <View style={[styles.settingIconContainer, { backgroundColor: iconBgColor }]}>
                 <Ionicons name="person-outline" size={24} color={isDarkMode ? colors.textSecondary : '#666666'} />
               </View>
-              <View style={[styles.settingTextContainer, isRTL && styles.textContainerRTL]}>
-                <Text style={[styles.settingTitle, { color: textColor, fontFamily, fontSize: scaledSize(16) }, isRTL && styles.textRTL]}>
-                  {t('My Data')}
+              <View style={styles.settingTextContainer}>
+                <Text style={[styles.settingTitle, { color: textColor, fontFamily, fontSize: scaledSize(16) }]}>
+                  {t('profile.myData')}
                 </Text>
-                <Text style={[styles.settingSubtitle, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }, isRTL && styles.textRTL]}>
+                <Text style={[styles.settingSubtitle, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }]}>
                   {t('profile.editPersonalInfo')}
                 </Text>
               </View>
@@ -558,7 +636,7 @@ export default function ProfileScreen({
         {/* Support Center Card */}
         <View style={[styles.userMenuCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}>
           <TouchableOpacity 
-            style={[styles.menuItem, isRTL && styles.rowRTL]}
+            style={styles.menuItem}
             onPress={() => {
               console.log('🎧 Support Center pressed, handler:', typeof onNavigateToSupportTickets);
               if (onNavigateToSupportTickets) {
@@ -573,16 +651,16 @@ export default function ProfileScreen({
             <View style={[styles.settingIconContainer, { backgroundColor: iconBgColor }]}>
               <Ionicons name="headset-outline" size={24} color={isDarkMode ? colors.textSecondary : '#666666'} />
             </View>
-            <View style={[styles.settingTextContainer, isRTL && styles.textContainerRTL]}>
-              <Text style={[styles.settingTitle, { color: textColor, fontFamily, fontSize: scaledSize(16) }, isRTL && styles.textRTL]}>
-                {t('Support Center')}
+            <View style={styles.settingTextContainer}>
+              <Text style={[styles.settingTitle, { color: textColor, fontFamily, fontSize: scaledSize(16) }]}>
+                {t('profile.supportCenter')}
               </Text>
-              <Text style={[styles.settingSubtitle, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }, isRTL && styles.textRTL]}>
-                {t('Raise tickets, track progress, and review closed requests')}
+              <Text style={[styles.settingSubtitle, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }]}>
+                {t('profile.supportCenterDesc')}
               </Text>
             </View>
             <Ionicons 
-              name={isRTL ? 'chevron-back' : 'chevron-forward'} 
+              name={menuChevron} 
               size={24} 
               color={primaryColor} 
             />
@@ -592,23 +670,23 @@ export default function ProfileScreen({
         {/* Transactions (Payment History) – same as web label */}
         <View style={[styles.userMenuCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}>
           <TouchableOpacity 
-            style={[styles.menuItem, isRTL && styles.rowRTL]}
+            style={styles.menuItem}
             onPress={() => onNavigateToPaymentHistory?.()}
             activeOpacity={0.7}
           >
             <View style={[styles.settingIconContainer, { backgroundColor: iconBgColor }]}>
               <Ionicons name="receipt-outline" size={24} color={isDarkMode ? colors.textSecondary : '#666666'} />
             </View>
-            <View style={[styles.settingTextContainer, isRTL && styles.textContainerRTL]}>
-              <Text style={[styles.settingTitle, { color: textColor, fontFamily, fontSize: scaledSize(16) }, isRTL && styles.textRTL]}>
-                {t('Transactions')}
+            <View style={styles.settingTextContainer}>
+              <Text style={[styles.settingTitle, { color: textColor, fontFamily, fontSize: scaledSize(16) }]}>
+                {t('profile.transactions')}
               </Text>
-              <Text style={[styles.settingSubtitle, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }, isRTL && styles.textRTL]}>
-                {t('View your transactions and refund requests')}
+              <Text style={[styles.settingSubtitle, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }]}>
+                {t('profile.viewTransactionsAndRefunds')}
               </Text>
             </View>
             <Ionicons 
-              name={isRTL ? 'chevron-back' : 'chevron-forward'} 
+              name={menuChevron} 
               size={24} 
               color={primaryColor} 
             />
@@ -618,44 +696,44 @@ export default function ProfileScreen({
          <View style={[styles.settingsCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}>
           {/* Language */}
           <TouchableOpacity 
-            style={[styles.settingItem, isRTL && styles.rowRTL]}
+            style={styles.settingItem}
             onPress={toggleLanguage}
           >
             <View style={[styles.settingIconContainer, { backgroundColor: iconBgColor }]}>
               <Ionicons name="globe-outline" size={24} color={isDarkMode ? colors.textSecondary : '#666666'} />
             </View>
-            <View style={[styles.settingTextContainer, isRTL && styles.textContainerRTL]}>
-              <Text style={[styles.settingTitle, { color: textColor, fontFamily, fontSize: scaledSize(16) }, isRTL && styles.textRTL]}>
+            <View style={styles.settingTextContainer}>
+              <Text style={[styles.settingTitle, { color: textColor, fontFamily, fontSize: scaledSize(16) }]}>
                 {t('profile.language')}
               </Text>
-              <Text style={[styles.settingSubtitle, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }, isRTL && styles.textRTL]}>
+              <Text style={[styles.settingSubtitle, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }]}>
                 {t('profile.appLanguage')}
               </Text>
             </View>
             <View style={[styles.languageBadge, { backgroundColor: iconBgColor }]}>
               <Text style={[styles.languageBadgeText, { color: isDarkMode ? colors.text : '#666666', fontFamily, fontSize: scaledSize(14) }]}>
-              {language === 'en' ? 'EN' : 'AR'}
+              {language === 'en' ? t('profile.langEn') : t('profile.langAr')}
             </Text>
             </View>
           </TouchableOpacity>
 
           {/* Font Size */}
           <TouchableOpacity 
-            style={[styles.settingItem, isRTL && styles.rowRTL]}
+            style={styles.settingItem}
             onPress={cycleFontSize}
           >
             <View style={[styles.settingIconContainer, { backgroundColor: iconBgColor }]}>
               <Ionicons name="text-outline" size={24} color={isDarkMode ? colors.textSecondary : '#666666'} />
             </View>
-            <View style={[styles.settingTextContainer, isRTL && styles.textContainerRTL]}>
-              <Text style={[styles.settingTitle, { color: textColor, fontFamily, fontSize: scaledSize(16) }, isRTL && styles.textRTL]}>
+            <View style={styles.settingTextContainer}>
+              <Text style={[styles.settingTitle, { color: textColor, fontFamily, fontSize: scaledSize(16) }]}>
                 {t('profile.fontSize')}
               </Text>
-              <Text style={[styles.settingSubtitle, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }, isRTL && styles.textRTL]}>
+              <Text style={[styles.settingSubtitle, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }]}>
                 {t('profile.textSize')}
               </Text>
             </View>
-            <View style={[styles.fontSizeSelector, isRTL && styles.rowRTL]}>
+            <View style={styles.fontSizeSelector}>
               <TouchableOpacity 
                 style={[
                   styles.fontSizeOption, 
@@ -671,7 +749,7 @@ export default function ProfileScreen({
                     fontSize: 12,
                   }
                 ]}>
-                  {isRTL ? 'ص' : 'S'}
+                  {t('profile.fontSizeS')}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity 
@@ -689,7 +767,7 @@ export default function ProfileScreen({
                     fontSize: 14,
                   }
                 ]}>
-                  {isRTL ? 'م' : 'M'}
+                  {t('profile.fontSizeM')}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity 
@@ -707,65 +785,53 @@ export default function ProfileScreen({
                     fontSize: 16,
                   }
                 ]}>
-                  {isRTL ? 'ك' : 'L'}
+                  {t('profile.fontSizeL')}
                 </Text>
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
 
           {/* Dark Mode */}
-          <View style={[styles.settingItem, isRTL && styles.rowRTL]}>
+          <View style={styles.settingItem}>
             <View style={[styles.settingIconContainer, { backgroundColor: iconBgColor }]}>
               <Ionicons name="moon-outline" size={24} color={isDarkMode ? colors.textSecondary : '#666666'} />
             </View>
-            <View style={[styles.settingTextContainer, isRTL && styles.textContainerRTL]}>
-              <Text style={[styles.settingTitle, { color: textColor, fontFamily, fontSize: scaledSize(16) }, isRTL && styles.textRTL]}>
-                {t('Dark Mode')}
+            <View style={styles.settingTextContainer}>
+              <Text style={[styles.settingTitle, { color: textColor, fontFamily, fontSize: scaledSize(16) }]}>
+                {t('profile.darkMode')}
               </Text>
-              <Text style={[styles.settingSubtitle, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }, isRTL && styles.textRTL]}>
-                {isDarkMode ? t('On') : t('Off')}
+              <Text style={[styles.settingSubtitle, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }]}>
+                {isDarkMode ? t('profile.on') : t('profile.off')}
               </Text>
             </View>
             <TouchableOpacity onPress={handleToggleDarkMode} activeOpacity={0.7}>
-              <View style={[styles.toggleSwitch, { backgroundColor: isDarkMode ? primaryColor : 'rgba(153, 153, 153, 0.5)' }]}>
-                <View style={[styles.toggleThumb, isDarkMode && styles.toggleThumbActive]} />
+              <View style={[
+                styles.toggleSwitch,
+                { backgroundColor: isDarkMode ? primaryColor : 'rgba(153, 153, 153, 0.5)' },
+              ]}>
+                <View style={[
+                  styles.toggleThumb,
+                  isRTL
+                    ? (isDarkMode ? styles.toggleThumbLeft : styles.toggleThumbRight)
+                    : (isDarkMode ? styles.toggleThumbRight : styles.toggleThumbLeft),
+                ]} />
               </View>
             </TouchableOpacity>
           </View>
-
-          {/* User Mode Toggle (for regular users) */}
-          {!isTechnician && (
-            <View style={[styles.settingItem, isRTL && styles.rowRTL]}>
-              <View style={[styles.settingIconContainer, { backgroundColor: iconBgColor }]}>
-                <Ionicons name="person-outline" size={24} color={isDarkMode ? colors.textSecondary : '#666666'} />
-              </View>
-              <View style={[styles.settingTextContainer, isRTL && styles.textContainerRTL]}>
-                <Text style={[styles.settingTitle, { color: textColor, fontFamily, fontSize: scaledSize(16) }, isRTL && styles.textRTL]}>
-                  {t('User Mode')}
-                </Text>
-                <Text style={[styles.settingSubtitle, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }, isRTL && styles.textRTL]}>
-                  {t('Advanced')}
-                </Text>
-              </View>
-              <View style={[styles.toggleSwitch, { backgroundColor: 'rgba(153, 153, 153, 0.5)' }]}>
-                <View style={styles.toggleThumb} />
-              </View>
-            </View>
-          )}
 
         </View>
 
         {/* Delete Account Card */}
         <View style={[styles.userMenuCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}>
           <TouchableOpacity 
-            style={[styles.deleteAccountItem, isRTL && styles.rowRTL]}
+            style={styles.deleteAccountItem}
             onPress={handleDeleteAccount}
           >
             <View style={[styles.settingIconContainer, { backgroundColor: 'rgba(212, 24, 61, 0.15)' }]}>
               <Ionicons name="trash-outline" size={24} color="#D4183D" />
             </View>
-            <Text style={[styles.deleteAccountText, { fontFamily, fontSize: scaledSize(16) }, isRTL && styles.textRTL]}>
-              {t('Delete Account')}
+            <Text style={[styles.deleteAccountText, { fontFamily, fontSize: scaledSize(16) }]}>
+              {t('profile.deleteAccount')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -773,13 +839,13 @@ export default function ProfileScreen({
         {/* Logout Card */}
         <View style={[styles.logoutCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}>
         <TouchableOpacity 
-          style={[styles.logoutItem, isRTL && styles.rowRTL]}
+          style={styles.logoutItem}
           onPress={handleLogout}
         >
           <View style={styles.logoutIconContainer}>
               <Ionicons name="log-out-outline" size={24} color={FIGMA_COLORS.purple} />
           </View>
-            <Text style={[styles.logoutText, { fontFamily, fontSize: scaledSize(16) }, isRTL && styles.textRTL]}>{t('Logout')}</Text>
+            <Text style={[styles.logoutText, { fontFamily, fontSize: scaledSize(16) }]}>{t('profile.logout')}</Text>
         </TouchableOpacity>
         </View>
       </ScrollView>
@@ -908,6 +974,28 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  infoRowMultiline: {
+    alignItems: 'flex-start',
+  },
+  infoValueMultiline: {
+    flex: 1,
+    marginStart: 12,
+  },
+  certificatesPreviewBlock: {
+    gap: 8,
+  },
+  certificatesPreviewScroll: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingVertical: 4,
+    alignItems: 'center',
+  },
+  certificateThumb: {
+    width: 72,
+    height: 72,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
   infoLabel: {
     fontSize: 14,
     fontWeight: '600',
@@ -1016,12 +1104,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  // Toggle Switch
+  // Toggle Switch (alignSelf for thumb so RTL/AR works without scaleX)
   toggleSwitch: {
     width: 48,
     height: 24,
     borderRadius: 9999,
-    justifyContent: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
     padding: 2,
   },
   toggleThumb: {
@@ -1030,8 +1119,11 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: FIGMA_COLORS.white,
   },
-  toggleThumbActive: {
-    transform: [{ translateX: 24 }],
+  toggleThumbLeft: {
+    alignSelf: 'flex-start',
+  },
+  toggleThumbRight: {
+    alignSelf: 'flex-end',
   },
 
   // Technician Card
@@ -1105,14 +1197,4 @@ const styles = StyleSheet.create({
     color: '#D4183D',
   },
 
-  // RTL Support
-  rowRTL: {
-    flexDirection: 'row-reverse',
-  },
-  textRTL: {
-    textAlign: 'right',
-  },
-  textContainerRTL: {
-    alignItems: 'flex-end',
-  },
 });

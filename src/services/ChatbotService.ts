@@ -26,7 +26,7 @@ class ChatbotService {
     try {
       const headers = await this.getAuthHeaders();
       const response = await fetch(
-        `${CHATBOT_BASE_URL}/chat`,
+        `${CHATBOT_BASE_URL}/api/chat`,
         {
           method: 'POST',
           headers: {
@@ -72,7 +72,7 @@ class ChatbotService {
     try {
       const headers = await this.getAuthHeaders();
       const response = await fetch(
-        `${CHATBOT_BASE_URL}/chat/history?conversationId=${conversationId}`,
+        `${CHATBOT_BASE_URL}/api/chat/history/${conversationId}`,
         {
           method: 'GET',
           headers,

@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { buildApiUrl, API_ENDPOINTS } from '../config/api';
 import { storage } from '../utils/storage';
+import { getTopPadding } from '../utils/statusBarHelper';
 
 interface ProjectData {
   id: string;
@@ -31,13 +32,10 @@ export default function ProjectsMapScreen({ onBack }: ProjectsMapScreenProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [aiSummary, setAiSummary] = useState('');
 
-  // Use different map library based on platform
-  const MapView = Platform.OS === 'web' 
-    ? null // Will use placeholder for web
-    : require('react-native-maps').default;
-  const Marker = Platform.OS === 'web' 
-    ? null 
-    : require('react-native-maps').Marker;
+  // Keep Android aligned with web placeholder to avoid runtime crash when Google Maps API key is not configured.
+  const shouldUseNativeMap = Platform.OS === 'ios';
+  const MapView = shouldUseNativeMap ? require('react-native-maps').default : null;
+  const Marker = shouldUseNativeMap ? require('react-native-maps').Marker : null;
 
   const loadMapData = async () => {
     setIsLoading(true);
@@ -118,11 +116,11 @@ export default function ProjectsMapScreen({ onBack }: ProjectsMapScreenProps) {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
+    <View style={[styles.container, { paddingTop: getTopPadding(insets), backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={[styles.header, { backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Ionicons name={i18n.language === 'ar' ? 'arrow-forward' : 'arrow-back'} size={24} color={colors.text} />
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>
           {i18n.language === 'en' ? 'Projects Map' : 'خريطة المشاريع'}
@@ -146,11 +144,11 @@ export default function ProjectsMapScreen({ onBack }: ProjectsMapScreenProps) {
 
           {/* Map */}
           <View style={styles.mapContainer}>
-            {Platform.OS === 'web' ? (
+            {!shouldUseNativeMap ? (
               <View style={[styles.map, { justifyContent: 'center', alignItems: 'center' }]}>
                 <Ionicons name="map" size={80} color={colors.primary} />
                 <Text style={[styles.mapPlaceholderText, { color: colors.textSecondary }]}>
-                  {i18n.language === 'en' ? 'Map coming soon on web' : 'الخريطة قريباً على الويب'}
+                  {i18n.language === 'en' ? 'Map preview mode' : 'وضع معاينة الخريطة'}
                 </Text>
               </View>
             ) : MapView ? (

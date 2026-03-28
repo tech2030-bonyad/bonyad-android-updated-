@@ -16,6 +16,7 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
+import { useRTL } from '../hooks/useRTL';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -58,6 +59,7 @@ export default function PortfolioManagement({
 }: PortfolioManagementProps) {
   const { t } = useTranslation();
   const { colors, theme } = useTheme();
+  const { backIcon } = useRTL();
   const insets = useSafeAreaInsets();
   const riyalLogo = theme === 'dark'
     ? require('../../assets/saudi_riyal_logo_dark.svg')
@@ -564,7 +566,7 @@ export default function PortfolioManagement({
         <View style={styles.headerContainer}>
           {onBack && (
             <TouchableOpacity onPress={onBack} style={styles.figmaBackButton}>
-              <Ionicons name="chevron-back" size={24} color="#003867" />
+              <Ionicons name={backIcon} size={24} color="#003867" />
             </TouchableOpacity>
           )}
           <Text style={styles.figmaHeaderTitle}>{t('My Portfolio')}</Text>
@@ -1614,7 +1616,7 @@ export default function PortfolioManagement({
                 disabled={currentPhotoIndex === 0}
               >
                 <Ionicons
-                  name="chevron-back"
+                  name={backIcon}
                   size={32}
                   color={currentPhotoIndex === 0 ? 'rgba(255, 255, 255, 0.3)' : '#fff'}
                 />

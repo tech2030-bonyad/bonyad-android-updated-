@@ -4,12 +4,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import { useTranslation } from 'react-i18next';
+import { useRTL } from '../hooks/useRTL';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { storage } from '../utils/storage';
 import { API_ENDPOINTS, buildApiUrl, buildApiUrlWithParams } from '../config/api';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
 import ConfirmationPopup, { useConfirmationPopup } from '../components/ConfirmationPopup';
 import AppointmentCard from '../components/AppointmentCard';
+import { getTopPadding } from '../utils/statusBarHelper';
 
 export interface Appointment {
   id: number;
@@ -74,6 +76,7 @@ export default function AppointmentsScreen({ onBack }: AppointmentsScreenProps) 
   const { colors, theme } = useTheme();
   const { fontFamily, scaledSize } = useFontFamily();
   const { t } = useTranslation();
+  const { backIcon, arrowBackIcon } = useRTL();
   const insets = useSafeAreaInsets();
   const isDarkMode = theme === 'dark';
   
@@ -568,7 +571,17 @@ export default function AppointmentsScreen({ onBack }: AppointmentsScreenProps) 
 
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
+    <View style={[styles.container, { paddingTop: getTopPadding(insets), backgroundColor: colors.background }]}>
+      {/* Header with Back Button */}
+      {onBack && (
+        <View style={[styles.header, { borderBottomColor: colors.border }]}>
+          <TouchableOpacity onPress={onBack} style={styles.backButton} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+            <Ionicons name={arrowBackIcon} size={24} color={colors.text} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(18) }]}>{t('My appointments')}</Text>
+          <View style={styles.backButton} />
+        </View>
+      )}
       <ScrollView 
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
@@ -585,7 +598,7 @@ export default function AppointmentsScreen({ onBack }: AppointmentsScreenProps) 
           {/* Month Navigation */}
           <View style={styles.monthNavigation}>
             <TouchableOpacity onPress={() => navigateMonth('prev')} style={styles.navArrow}>
-              <Ionicons name="chevron-back" size={24} color={colors.text} />
+              <Ionicons name={backIcon} size={24} color={colors.text} />
             </TouchableOpacity>
             <View style={styles.monthTitleContainer}>
               <Text style={[styles.monthTitle, { color: colors.text }]}>
@@ -700,6 +713,23 @@ export default function AppointmentsScreen({ onBack }: AppointmentsScreenProps) 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontWeight: '600',
   },
   scrollView: {
     flex: 1,

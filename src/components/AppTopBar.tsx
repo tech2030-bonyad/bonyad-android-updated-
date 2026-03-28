@@ -68,30 +68,35 @@ export default function AppTopBar({
     </>
   );
 
-  const topInset = insets.top > 0 ? insets.top : (Platform.OS === 'android' ? (StatusBar.currentHeight ?? 28) : 10);
+  // Push the bar below the system status area (clock, Wi‑Fi, battery). On Android,
+  // safe inset can be 0 with edge‑to‑edge; combine with StatusBar.currentHeight + extra gap.
+  const statusBarHeight = StatusBar.currentHeight ?? 0;
+  const topInset =
+    Platform.OS === 'android'
+      ? Math.max(insets.top, statusBarHeight, 28) + 14
+      : Math.max(insets.top, 10);
+
   return (
-    <View
-      style={[
-        styles.bar,
-        isRTL && styles.barRTL,
-        { paddingTop: topInset },
-        backgroundColor != null && { backgroundColor },
-      ]}
-    >
-      <View style={styles.logoWrap}>
-        <BonyadLogo size="small" responsive={false} variant={isDark ? 'light' : 'dark'} />
+    <View style={[styles.safeWrap, backgroundColor != null && { backgroundColor }, { paddingTop: topInset }]}>
+      <View style={[styles.bar, isRTL && styles.barRTL]}>
+        <View style={styles.logoWrap}>
+          <BonyadLogo size="small" responsive={false} variant={isDark ? 'light' : 'dark'} />
+        </View>
+        <View style={[styles.icons, isRTL && styles.iconsRTL]}>{icons}</View>
       </View>
-      <View style={[styles.icons, isRTL && styles.iconsRTL]}>{icons}</View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  safeWrap: {
+    width: '100%',
+  },
   bar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    height: 44,
+    minHeight: 48,
     paddingHorizontal: H_PADDING,
     paddingBottom: 12,
     marginBottom: 16,

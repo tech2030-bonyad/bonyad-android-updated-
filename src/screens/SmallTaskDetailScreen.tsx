@@ -40,7 +40,6 @@ export default function SmallTaskDetailScreen({
   const { colors, theme } = useTheme();
   const { fontFamily, fonts } = useFontFamily();
   const insets = useSafeAreaInsets();
-  const isRTL = i18n.language === 'ar';
   const isDarkMode = theme === 'dark';
   
   const [taskDetails, setTaskDetails] = useState<SmallTaskRequest | null>(task);
@@ -115,7 +114,7 @@ export default function SmallTaskDetailScreen({
     try {
       const token = await storage.getAuthToken();
       if (!token) {
-        showError(t('Please login again'), t('Error'));
+        showError(t('smallTasks.pleaseLoginAgain'), t('smallTasks.error'));
         setIsLoading(false);
         return;
       }
@@ -171,15 +170,15 @@ export default function SmallTaskDetailScreen({
     if (!task?.id) return;
 
     showConfirm(
-      t('Update Status'),
-      t('Are you sure you want to mark this task as {{status}}?', { 
-        status: newStatus === 'IN_PROGRESS' ? t('In Progress') : t('Completed') 
+t('smallTasks.updateStatus'),
+      t('smallTasks.markTaskStatusConfirm', {
+        status: newStatus === 'IN_PROGRESS' ? t('smallTasks.statusInProgress') : t('smallTasks.statusCompleted')
       }),
       async () => {
         setIsUpdatingStatus(true);
         try {
           await updateRequestStatus(task.id, newStatus);
-          showSuccess(t('Status updated successfully'), t('Success'));
+          showSuccess(t('smallTasks.statusUpdatedSuccess'), t('smallTasks.success'));
           setCurrentStatus(newStatus);
           setTimeout(() => {
             hideAlert();
@@ -187,7 +186,7 @@ export default function SmallTaskDetailScreen({
           }, 1500);
         } catch (error) {
           console.error('❌ Error updating status:', error);
-          showError(t('Error updating status'), t('Error'));
+          showError(t('smallTasks.errorUpdatingStatus'), t('smallTasks.error'));
         } finally {
           setIsUpdatingStatus(false);
         }
@@ -197,12 +196,12 @@ export default function SmallTaskDetailScreen({
 
   const handleAcceptBid = async (bidId: number) => {
     showConfirm(
-      t('Accept Bid'),
-      t('Are you sure you want to accept this bid? Other bids will be rejected.'),
+      t('smallTasks.acceptBid'),
+      t('smallTasks.acceptBidConfirm'),
       async () => {
         try {
           await acceptBid(task.id, bidId);
-          showSuccess(t('Bid accepted successfully'), t('Success'));
+          showSuccess(t('smallTasks.bidAcceptedSuccess'), t('smallTasks.success'));
           setTimeout(() => {
             hideAlert();
             loadTaskDetails();
@@ -210,7 +209,7 @@ export default function SmallTaskDetailScreen({
           }, 1500);
         } catch (error) {
           console.error('❌ Error accepting bid:', error);
-          showError(t('Error accepting bid'), t('Error'));
+          showError(t('smallTasks.errorAcceptingBid'), t('smallTasks.error'));
         }
       }
     );
@@ -218,19 +217,19 @@ export default function SmallTaskDetailScreen({
 
   const handleRejectBid = async (bidId: number) => {
     showConfirm(
-      t('Reject Bid'),
-      t('Are you sure you want to reject this bid?'),
+      t('smallTasks.rejectBid'),
+      t('smallTasks.rejectBidConfirm'),
       async () => {
         try {
           await rejectBid(bidId);
-          showSuccess(t('Bid rejected'), t('Success'));
+          showSuccess(t('smallTasks.bidRejected'), t('smallTasks.success'));
           setTimeout(() => {
             hideAlert();
             loadTaskDetails();
           }, 1500);
         } catch (error) {
           console.error('❌ Error rejecting bid:', error);
-          showError(t('Error rejecting bid'), t('Error'));
+          showError(t('smallTasks.errorRejectingBid'), t('smallTasks.error'));
         }
       }
     );
@@ -238,9 +237,9 @@ export default function SmallTaskDetailScreen({
 
   const taskName = taskDetails?.taskType
     ? i18n.language === 'ar'
-      ? taskDetails.taskType?.nameAr || t('Task')
-      : taskDetails.taskType?.nameEn || t('Task')
-    : t('Task');
+      ? taskDetails.taskType?.nameAr || t('smallTasks.task')
+      : taskDetails.taskType?.nameEn || t('smallTasks.task')
+    : t('smallTasks.task');
 
   if (isLoading) {
     return (
@@ -255,33 +254,13 @@ export default function SmallTaskDetailScreen({
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={[
-        styles.header,
-        {
-          paddingTop: Math.max(insets.top, 20),
-          borderBottomColor: colors.border,
-          flexDirection: isRTL ? 'row-reverse' : 'row',
-        }
-      ]}>
-        <TouchableOpacity 
-          onPress={onBack} 
-          style={[
-            styles.backButton,
-            {
-              left: isRTL ? undefined : 20,
-              right: isRTL ? 20 : undefined,
-            }
-          ]}
-        >
-          <Ionicons 
-            name={isRTL ? "arrow-forward" : "arrow-back"} 
-            size={24} 
-            color={colors.text} 
-          />
+      <View style={[styles.header, styles.headerLTR, { paddingTop: Math.max(insets.top, 20), borderBottomColor: colors.border }]}>
+        <TouchableOpacity onPress={onBack} style={styles.backButton}>
+          <Ionicons name="chevron-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <View style={styles.headerTitleContainer}>
           <Text style={[styles.headerTitle, { color: colors.text }]}>
-            {t('Task Details')}
+            {t('smallTasks.taskDetails')}
           </Text>
         </View>
         <View style={{ width: 40 }} />
@@ -325,27 +304,31 @@ export default function SmallTaskDetailScreen({
 
           {/* Description Section */}
           <View style={[styles.section, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
-            <View style={[styles.sectionHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+            <View style={styles.sectionHeader}>
               <Ionicons name="document-text-outline" size={18} color={colors.primary} />
               <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                {t('Description')}
+                {t('smallTasks.description')}
               </Text>
             </View>
-            <Text style={[styles.descriptionText, { color: colors.textSecondary, textAlign: isRTL ? 'right' : 'left' }]}>
-              {taskDetails?.description || t('No description provided')}
+            <Text style={[styles.descriptionText, { color: colors.textSecondary }]}>
+              {(() => {
+                const s = taskDetails?.description?.trim();
+                if (!s || s === 'Not specified' || /<script/i.test(s)) return t('smallTasks.noDescriptionProvided');
+                return s;
+              })()}
             </Text>
           </View>
 
           {/* Budget and Duration */}
           {(taskDetails?.budget || taskDetails?.amount) && (
             <View style={[styles.section, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
-              <View style={[styles.sectionHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+              <View style={styles.sectionHeader}>
                 <Ionicons name="cash-outline" size={18} color={colors.primary} />
                 <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                  {t('Budget')}
+                  {t('smallTasks.budget')}
                 </Text>
               </View>
-              <View style={[styles.budgetContainer, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+              <View style={styles.budgetContainer}>
                 <ExpoImage
                   source={riyalLogo}
                   style={styles.riyalLogo}
@@ -360,33 +343,33 @@ export default function SmallTaskDetailScreen({
 
           {/* Address Section */}
           <View style={[styles.section, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
-            <View style={[styles.sectionHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+            <View style={styles.sectionHeader}>
               <Ionicons name="location-outline" size={18} color={colors.primary} />
               <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                {t('Address')}
+                {t('smallTasks.address')}
               </Text>
             </View>
-            <Text style={[styles.addressText, { color: colors.textSecondary, textAlign: isRTL ? 'right' : 'left' }]}>
-              {taskDetails?.address || t('No address provided')}
+            <Text style={[styles.addressText, { color: colors.textSecondary }]}>
+              {taskDetails?.address || t('smallTasks.noAddressProvided')}
             </Text>
           </View>
 
           {/* Bids Section */}
           {bids.length > 0 && (
             <View style={[styles.section, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
-              <View style={[styles.sectionHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+              <View style={styles.sectionHeader}>
                 <Ionicons name="people-outline" size={18} color={colors.primary} />
                 <Text style={[styles.sectionTitle, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>
-                  {t('Bids')} ({bids.length})
+                  {t('smallTasks.bids')} ({bids.length})
                 </Text>
               </View>
               {bids.map((bid) => (
                 <View key={bid.id} style={[styles.bidCard, { borderColor: colors.border }]}>
-                  <View style={[styles.bidHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+                  <View style={styles.bidHeader}>
                     <Text style={[styles.bidTechnicianName, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>
                       {bid.technicianName}
                     </Text>
-                    <View style={[styles.bidAmountContainer, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+                    <View style={styles.bidAmountContainer}>
                       <ExpoImage
                         source={riyalLogo}
                         style={styles.riyalLogoSmall}
@@ -398,24 +381,23 @@ export default function SmallTaskDetailScreen({
                     </View>
                   </View>
                   {(bid.notes ?? bid.description) && (
-                    <Text style={[styles.bidMessage, { color: colors.textSecondary, textAlign: isRTL ? 'right' : 'left', fontFamily: fonts?.body || fontFamily }]}>
+                    <Text style={[styles.bidMessage, { color: colors.textSecondary, fontFamily: fonts?.body || fontFamily }]}>
                       {bid.notes ?? bid.description}
                     </Text>
                   )}
-                  <View style={[styles.bidFooterRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-                    <Text style={[styles.bidDate, { color: colors.textSecondary, textAlign: isRTL ? 'right' : 'left', fontFamily: fonts?.body || fontFamily }]}>
+                  <View style={styles.bidFooterRow}>
+                    <Text style={[styles.bidDate, { color: colors.textSecondary, fontFamily: fonts?.body || fontFamily }]}>
                       {formatDate(bid.createdAt)}
                     </Text>
-                    {/* User can accept/reject bids */}
                     {userRole === 'user' && currentStatus === 'PENDING' && (
-                      <View style={[styles.bidActions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+                      <View style={styles.bidActions}>
                         <TouchableOpacity
                           style={[styles.bidActionButton, styles.rejectButton, { borderColor: colors.border }]}
                           onPress={() => handleRejectBid(bid.id)}
                         >
                           <Ionicons name="close" size={16} color="#F44336" />
                           <Text style={[styles.bidActionText, { color: '#F44336', fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>
-                            {t('Reject')}
+                            {t('smallTasks.reject')}
                           </Text>
                         </TouchableOpacity>
                         <TouchableOpacity
@@ -424,7 +406,7 @@ export default function SmallTaskDetailScreen({
                         >
                           <Ionicons name="checkmark" size={16} color="#fff" />
                           <Text style={[styles.bidActionText, { color: '#fff', fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>
-                            {t('Accept')}
+                            {t('smallTasks.accept')}
                           </Text>
                         </TouchableOpacity>
                       </View>
@@ -438,13 +420,13 @@ export default function SmallTaskDetailScreen({
           {/* Created Date */}
           {taskDetails?.createdAt && (
             <View style={[styles.section, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
-              <View style={[styles.sectionHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+              <View style={styles.sectionHeader}>
                 <Ionicons name="calendar-outline" size={18} color={colors.primary} />
                 <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                  {t('Created')}
+                  {t('smallTasks.created')}
                 </Text>
               </View>
-              <Text style={[styles.dateText, { color: colors.textSecondary, textAlign: isRTL ? 'right' : 'left' }]}>
+              <Text style={[styles.dateText, { color: colors.textSecondary }]}>
                 {formatDate(taskDetails.createdAt)}
               </Text>
             </View>
@@ -477,7 +459,7 @@ export default function SmallTaskDetailScreen({
           >
             <Ionicons name="pricetag" size={20} color="#fff" />
             <Text style={[styles.floatingButtonText, { fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>
-              {t('Submit Bid')}
+              {t('smallTasks.submitBid')}
             </Text>
           </TouchableOpacity>
         </Animated.View>
@@ -513,7 +495,7 @@ export default function SmallTaskDetailScreen({
                 <>
                   <Ionicons name="play-circle" size={20} color="#fff" />
                   <Text style={[styles.floatingButtonText, { fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>
-                    {t('Start Work')}
+                    {t('smallTasks.startWork')}
                   </Text>
                 </>
               )}
@@ -531,7 +513,7 @@ export default function SmallTaskDetailScreen({
                 <>
                   <Ionicons name="checkmark-circle" size={20} color="#fff" />
                   <Text style={[styles.floatingButtonText, { fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>
-                    {t('Mark Complete')}
+                    {t('smallTasks.markComplete')}
                   </Text>
                 </>
               )}
@@ -585,12 +567,12 @@ export default function SmallTaskDetailScreen({
 
   function getStatusLabel(status: string): string {
     const statusMap: { [key: string]: string } = {
-      'PENDING': t('Pending'),
-      'ACCEPTED': t('Accepted'),
-      'ASSIGNED': t('Assigned'),
-      'IN_PROGRESS': t('In Progress'),
-      'COMPLETED': t('Completed'),
-      'CANCELLED': t('Cancelled'),
+      'PENDING': t('smallTasks.statusPending'),
+      'ACCEPTED': t('smallTasks.statusAccepted'),
+      'ASSIGNED': t('smallTasks.statusAssigned'),
+      'IN_PROGRESS': t('smallTasks.statusInProgress'),
+      'COMPLETED': t('smallTasks.statusCompleted'),
+      'CANCELLED': t('smallTasks.statusCancelled'),
     };
     return statusMap[status.toUpperCase()] || status;
   }
@@ -606,6 +588,9 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     borderBottomWidth: 1,
     position: 'relative',
+  },
+  headerLTR: {
+    direction: 'ltr',
   },
   backButton: {
     padding: 8,

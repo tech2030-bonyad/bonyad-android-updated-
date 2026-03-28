@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -38,6 +38,8 @@ interface ChatDetailScreenProps {
   receiverName: string;
   onBack?: () => void;
   projectId?: number | null;
+  /** Set when chat sits above the absolute GlassTabBar — avoids double bottom inset / huge gap */
+  hasBottomTabBar?: boolean;
 }
 
 export default function ChatDetailScreen({
@@ -46,10 +48,12 @@ export default function ChatDetailScreen({
   receiverName,
   projectId,
   onBack,
+  hasBottomTabBar = false,
 }: ChatDetailScreenProps) {
   const { t, i18n } = useTranslation();
   const { colors } = useTheme();
   const { fontFamily, scaledSize } = useFontFamily();
+  const headerDirectionStyle = { direction: 'ltr' as const };
   const insets = useSafeAreaInsets();
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -95,6 +99,30 @@ export default function ChatDetailScreen({
   const IS_LARGE_WEB = IS_WEB && screenWidth >= 1024;
   // On large web screens, don't show back button when embedded in tabs
   const shouldShowBackButton = !!onBack && !IS_LARGE_WEB;
+
+  const tabBarChrome = hasBottomTabBar && !IS_LARGE_WEB;
+  const bottomLayout = useMemo(() => {
+    if (IS_LARGE_WEB) {
+      return { kavPad: 0, listPad: 0, inputPad: 0, loadingPad: 0 };
+    }
+    const inset = Math.max(insets.bottom, 0);
+    if (tabBarChrome) {
+      // GlassTabBar (~74px row + outer padding) + home indicator; tighter than standalone chat (no double inset)
+      const aboveTabBar = 72 + Math.max(inset, 10);
+      return {
+        kavPad: aboveTabBar,
+        listPad: 10 + Math.max(inset, 6),
+        inputPad: 6,
+        loadingPad: aboveTabBar,
+      };
+    }
+    return {
+      kavPad: Math.max(inset + 28, 52),
+      listPad: Math.max(inset + 72, 96),
+      inputPad: Math.max(inset, 12),
+      loadingPad: Math.max(inset + 48, 72),
+    };
+  }, [IS_LARGE_WEB, tabBarChrome, insets.bottom]);
 
   useEffect(() => {
     return () => {
@@ -683,19 +711,19 @@ export default function ChatDetailScreen({
           styles.container,
           {
             backgroundColor: colors.background,
-            paddingBottom: IS_LARGE_WEB ? 0 : Math.max(insets.bottom + 96, 140),
+            paddingBottom: bottomLayout.loadingPad,
           },
         ]}
       >
-        <View style={[styles.header, { paddingTop: Math.max(insets.top, 50), borderBottomColor: colors.border }]}>
+        <View style={[styles.header, { borderBottomColor: colors.border }, headerDirectionStyle]}>
           {shouldShowBackButton ? (
-            <TouchableOpacity onPress={onBack}>
+            <TouchableOpacity onPress={onBack} accessibilityRole="button">
               <Ionicons name="arrow-back" size={24} color={colors.text} />
             </TouchableOpacity>
           ) : (
             <View style={{ width: 24 }} />
           )}
-          <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(18) }]}>
+          <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(17) }]}>
             {receiverName}
           </Text>
           <View style={{ width: 24 }} />
@@ -716,22 +744,22 @@ export default function ChatDetailScreen({
         styles.container,
         {
           backgroundColor: colors.background,
-          paddingBottom: IS_LARGE_WEB ? 0 : Math.max(insets.bottom + 80, 120),
+          paddingBottom: bottomLayout.kavPad,
         },
       ]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={90}
     >
       {/* Header */}
-      <View style={[styles.header, { paddingTop: Math.max(insets.top, 50), borderBottomColor: colors.border }]}>
+      <View style={[styles.header, { borderBottomColor: colors.border }, headerDirectionStyle]}>
         {shouldShowBackButton ? (
-          <TouchableOpacity onPress={onBack}>
+          <TouchableOpacity onPress={onBack} accessibilityRole="button">
             <Ionicons name="arrow-back" size={24} color={colors.text} />
           </TouchableOpacity>
         ) : (
           <View style={{ width: 24 }} />
         )}
-        <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(18) }]}>
+        <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(17) }]}>
           {receiverName}
         </Text>
         <View style={{ width: 24 }} />
@@ -746,7 +774,7 @@ export default function ChatDetailScreen({
         contentContainerStyle={[
           styles.messagesList,
           {
-            paddingBottom: IS_LARGE_WEB ? 0 : Math.max(insets.bottom + 120, 160),
+            paddingBottom: bottomLayout.listPad,
           },
         ]}
         onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
@@ -794,7 +822,7 @@ export default function ChatDetailScreen({
           {
             backgroundColor: colors.cardBackground,
             borderTopColor: colors.border,
-            paddingBottom: IS_LARGE_WEB ? 0 : Math.max(insets.bottom - 8, 10),
+            paddingBottom: IS_LARGE_WEB ? 0 : bottomLayout.inputPad,
           },
         ]}
       >
@@ -876,12 +904,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
+    paddingTop: 0,
+    paddingBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 17,
+    fontWeight: '700',
     flex: 1,
     textAlign: 'center',
   },

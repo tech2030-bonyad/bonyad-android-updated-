@@ -17,8 +17,10 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRTL } from '../hooks/useRTL';
 import { requestChanges, PhaseChangeRequest } from '../services/ChangeRequestService';
 import { showError, showSuccess } from '../utils/alert';
+import { getTopPadding } from '../utils/statusBarHelper';
 
 interface RequestModificationScreenProps {
   projectId: number;
@@ -33,6 +35,7 @@ export default function RequestModificationScreen({
 }: RequestModificationScreenProps) {
   const { t } = useTranslation();
   const { colors } = useTheme();
+  const { arrowBackIcon } = useRTL();
   const insets = useSafeAreaInsets();
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -58,9 +61,9 @@ export default function RequestModificationScreen({
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { paddingTop: insets.top + 8, borderBottomColor: colors.border }]}>
+      <View style={[styles.header, { paddingTop: getTopPadding(insets, 8), borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={onBack}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+          <Ionicons name={arrowBackIcon} size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={[styles.title, { color: colors.text }]}>{t('Request modification')}</Text>
         <View style={{ width: 24 }} />

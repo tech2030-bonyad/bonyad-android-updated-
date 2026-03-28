@@ -58,7 +58,6 @@ export default function CompletedSmallTaskScreen({
   const { colors, theme } = useTheme();
   const { fontFamily, fonts, scaledSize } = useFontFamily();
   const insets = useSafeAreaInsets();
-  const isRTL = i18n.language === 'ar';
   const isDarkMode = theme === 'dark';
   const screenWidth = Dimensions.get('window').width;
   const screenHeight = Dimensions.get('window').height;
@@ -85,6 +84,7 @@ export default function CompletedSmallTaskScreen({
 
   const primaryColor = isDarkMode ? COLORS.primaryDark : COLORS.primaryLight;
   const borderColor = isDarkMode ? COLORS.borderDark : COLORS.borderLight;
+  const topSpacing = Platform.OS === 'android' ? 0 : insets.top;
 
   const riyalLogo = isDarkMode
     ? require('../../assets/saudi_riyal_logo_dark.svg')
@@ -141,7 +141,7 @@ export default function CompletedSmallTaskScreen({
       await checkReviewStatus();
     } catch (err) {
       console.error('Error loading data:', err);
-      setError(t('Failed to load data. Please try again.'));
+      setError(t('smallTasks.failedToLoadData'));
       setHasError(true);
     } finally {
       setIsLoading(false);
@@ -203,7 +203,7 @@ export default function CompletedSmallTaskScreen({
         : taskDetails.assignedTechnicianId || 0;
 
       if (!otherUserId) {
-        showError(t('Unable to start chat'), t('Error'));
+        showError(t('smallTasks.unableToStartChat'), t('smallTasks.error'));
         return;
       }
 
@@ -215,14 +215,14 @@ export default function CompletedSmallTaskScreen({
       onOpenChat(roomId, otherUserId, receiverName);
     } catch (error) {
       console.error('Error opening chat:', error);
-      showError(t('Error opening chat'), t('Error'));
+      showError(t('smallTasks.errorOpeningChat'), t('smallTasks.error'));
     }
   };
 
   const handleReviewSuccess = () => {
     setShowReviewForm(false);
     setHasReview(true);
-    showSuccess(t('Review submitted successfully'), t('Success'));
+    showSuccess(t('smallTasks.reviewSubmittedSuccess'), t('smallTasks.success'));
     onSuccess?.();
   };
 
@@ -251,16 +251,16 @@ export default function CompletedSmallTaskScreen({
 
   const taskName = taskDetails?.taskType
     ? i18n.language === 'ar'
-      ? taskDetails.taskType?.nameAr || t('Task')
-      : taskDetails.taskType?.nameEn || t('Task')
-    : t('Task');
+      ? taskDetails.taskType?.nameAr || t('smallTasks.task')
+      : taskDetails.taskType?.nameEn || t('smallTasks.task')
+    : t('smallTasks.task');
 
   if (isLoading && !hasError) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+      <View style={[styles.container, { backgroundColor: colors.background, paddingTop: topSpacing }]}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={primaryColor} />
-          <Text style={[styles.loadingText, { color: colors.text }]}>{t('Loading...')}</Text>
+          <Text style={[styles.loadingText, { color: colors.text }]}>{t('smallTasks.loading')}</Text>
         </View>
       </View>
     );
@@ -268,14 +268,14 @@ export default function CompletedSmallTaskScreen({
 
   if (hasError) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+      <View style={[styles.container, { backgroundColor: colors.background, paddingTop: topSpacing }]}>
         <View style={styles.errorContainer}>
           <Ionicons name="alert-circle-outline" size={64} color={colors.error} />
           <Text style={[styles.errorTitle, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '700' }]}>
-            {t('Error')}
+            {t('smallTasks.error')}
           </Text>
           <Text style={[styles.errorMessage, { color: colors.textSecondary }]}>
-            {error || t('Something went wrong. Please try again.')}
+            {error || t('smallTasks.somethingWentWrong')}
           </Text>
           <TouchableOpacity
             style={[styles.retryButton, { backgroundColor: primaryColor }]}
@@ -294,11 +294,11 @@ export default function CompletedSmallTaskScreen({
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header - iOS style */}
-      <View style={[styles.header, { paddingTop: insets.top, borderBottomColor: colors.border }, isRTL && { flexDirection: 'row-reverse' }]}>
+      <View style={[styles.header, styles.headerLTR, { paddingTop: topSpacing, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.headerBackButton}>
-          <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={24} color={primaryColor} />
+          <Ionicons name="chevron-back" size={24} color={primaryColor} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: primaryColor }]}>{t('task_request_details')}</Text>
+        <Text style={[styles.headerTitle, { color: primaryColor }]}>{t('smallTasks.taskRequestDetails')}</Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -339,48 +339,52 @@ export default function CompletedSmallTaskScreen({
               <Ionicons name="checkmark-done-circle" size={64} color={COLORS.statusCompleted} />
             </Animated.View>
             <Text style={[styles.successTitle, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '700' }]}>
-              {t('Task Completed!')}
+              {t('smallTasks.taskCompleted')}
             </Text>
             <Text style={[styles.successSubtitle, { color: colors.textSecondary }]}>
-              {t('Great work! The task has been successfully completed.')}
+              {t('smallTasks.taskCompletedSubtitle')}
             </Text>
           </Animated.View>
 
           {/* Status Card - iOS style */}
           <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: COLORS.statusCompleted + '30' }]}>
-            <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('status')}</Text>
-            <View style={[styles.statusRow, isRTL && { flexDirection: 'row-reverse' }]}>
+            <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('smallTasks.status')}</Text>
+            <View style={styles.statusRow}>
               <View style={[styles.statusDot, { backgroundColor: COLORS.statusCompleted }]} />
-              <Text style={[styles.statusValue, { color: COLORS.statusCompleted }]}>{t('completed')}</Text>
+              <Text style={[styles.statusValue, { color: COLORS.statusCompleted }]}>{t('smallTasks.statusCompleted')}</Text>
             </View>
           </View>
 
           {/* Task Type Card */}
           <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: borderColor }]}>
-            <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('task_type')}</Text>
+            <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('smallTasks.taskType')}</Text>
             <Text style={[styles.cardValue, { color: colors.text }]}>{taskName}</Text>
           </View>
 
           {/* Description Card */}
-          {taskDetails.description ? (
-            <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: borderColor }]}>
-              <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('description')}</Text>
-              <Text style={[styles.cardValue, { color: colors.text, textAlign: isRTL ? 'right' : 'left' }]}>{taskDetails.description}</Text>
+          <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: borderColor }]}>
+              <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('smallTasks.description')}</Text>
+              <Text style={[styles.cardValue, { color: colors.text }]}>
+                {(() => {
+                  const s = taskDetails.description?.trim();
+                  if (!s || s === 'Not specified' || /<script/i.test(s)) return t('smallTasks.noDescriptionProvided');
+                  return s;
+                })()}
+              </Text>
             </View>
-          ) : null}
 
           {/* Address Card */}
           {taskDetails.address ? (
             <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: borderColor }]}>
-              <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('address')}</Text>
-              <Text style={[styles.cardValue, { color: colors.text, textAlign: isRTL ? 'right' : 'left' }]}>{taskDetails.address}</Text>
+              <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('smallTasks.address')}</Text>
+              <Text style={[styles.cardValue, { color: colors.text }]}>{taskDetails.address}</Text>
             </View>
           ) : null}
 
           {/* Created At Card */}
           {taskDetails.createdAt ? (
             <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: borderColor }]}>
-              <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('created_at')}</Text>
+              <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('smallTasks.createdAt')}</Text>
               <Text style={[styles.cardValue, { color: colors.text }]}>{formatDate(taskDetails.createdAt)}</Text>
             </View>
           ) : null}
@@ -388,7 +392,7 @@ export default function CompletedSmallTaskScreen({
           {/* Completed Date Card */}
           {completedAt ? (
             <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: borderColor }]}>
-              <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('Completed Date')}</Text>
+              <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('smallTasks.completedDate')}</Text>
               <Text style={[styles.cardValue, { color: colors.text }]}>{formatDate(completedAt)}</Text>
             </View>
           ) : null}
@@ -396,8 +400,8 @@ export default function CompletedSmallTaskScreen({
           {/* Final Amount Card */}
           {(taskDetails.budget || taskDetails.amount) ? (
             <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: borderColor }]}>
-              <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('Final Amount')}</Text>
-              <View style={[styles.budgetAmountRow, isRTL && { flexDirection: 'row-reverse' }]}>
+              <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('smallTasks.finalAmount')}</Text>
+              <View style={styles.budgetAmountRow}>
                 <ExpoImage source={riyalLogo} style={styles.riyalLogo} contentFit="contain" />
                 <Text style={[styles.budgetAmount, { color: primaryColor, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '700' }]}>
                   {formatBudget(taskDetails.budget || taskDetails.amount || 0)}
@@ -409,9 +413,9 @@ export default function CompletedSmallTaskScreen({
           {/* Technician/User */}
           <View style={styles.contactSection}>
             <Text style={[styles.sectionTitle, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '700' }]}>
-              {isTechnician ? t('Client') : t('Technician')}
+              {isTechnician ? t('smallTasks.client') : t('smallTasks.technician')}
             </Text>
-            <View style={[styles.contactInfoRow, isRTL && { flexDirection: 'row-reverse' }]}>
+            <View style={styles.contactInfoRow}>
               <View style={[styles.contactIconContainer, { backgroundColor: primaryColor + '15' }]}>
                 <Ionicons
                   name={isTechnician ? 'person-outline' : 'construct-outline'}
@@ -422,8 +426,8 @@ export default function CompletedSmallTaskScreen({
               <View style={styles.contactDetails}>
                 <Text style={[styles.contactName, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>
                   {isTechnician
-                    ? taskDetails.userName || t('User')
-                    : taskDetails.assignedTechnicianName || t('Technician')}
+                    ? taskDetails.userName || t('smallTasks.user')
+                    : taskDetails.assignedTechnicianName || t('smallTasks.technician')}
                 </Text>
               </View>
               {onViewTechnician && !isTechnician && (
@@ -433,7 +437,7 @@ export default function CompletedSmallTaskScreen({
                 >
                   <Ionicons name="person-outline" size={16} color={primaryColor} />
                   <Text style={[styles.viewProfileText, { color: primaryColor, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>
-                    {t('View Profile')}
+                    {t('smallTasks.viewProfile')}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -443,7 +447,7 @@ export default function CompletedSmallTaskScreen({
                   onPress={handleOpenChat}
                 >
                   <Ionicons name="chatbubble-outline" size={18} color={COLORS.textWhite} />
-                  <Text style={[styles.chatButtonText, { fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>{t('Chat')}</Text>
+                  <Text style={[styles.chatButtonText, { fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>{t('smallTasks.chat')}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -453,13 +457,13 @@ export default function CompletedSmallTaskScreen({
           {!isTechnician && (
             <View style={styles.reviewSection}>
               <Text style={[styles.sectionTitle, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '700' }]}>
-                {t('Rate Your Experience')}
+                {t('smallTasks.rateYourExperience')}
               </Text>
               {hasReview ? (
                 <View style={[styles.reviewSubmitted, { backgroundColor: COLORS.green10 }]}>
                   <Ionicons name="checkmark-circle" size={24} color={COLORS.statusCompleted} />
                   <Text style={[styles.reviewSubmittedText, { color: COLORS.statusCompleted, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>
-                    {t('Review submitted')}
+                    {t('smallTasks.reviewSubmitted')}
                   </Text>
                 </View>
               ) : (
@@ -469,7 +473,7 @@ export default function CompletedSmallTaskScreen({
                 >
                   <Ionicons name="star" size={20} color={COLORS.textWhite} />
                   <Text style={[styles.reviewButtonText, { fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>
-                    {t('Write a Review')}
+                    {t('smallTasks.writeReview')}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -485,7 +489,7 @@ export default function CompletedSmallTaskScreen({
               >
                 <Ionicons name="list-outline" size={20} color={COLORS.textWhite} />
                 <Text style={[styles.actionButtonText, { fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>
-                  {t('View All Tasks')}
+                  {t('smallTasks.viewAllTasks')}
                 </Text>
               </TouchableOpacity>
             )}
@@ -537,6 +541,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 12,
     borderBottomWidth: 1,
+  },
+  headerLTR: {
+    direction: 'ltr',
   },
   headerBackButton: {
     width: 40,

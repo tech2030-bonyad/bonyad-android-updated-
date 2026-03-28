@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,8 +9,8 @@ import {
   ActivityIndicator,
   Modal,
   Platform,
+  Animated,
   Dimensions,
-  useWindowDimensions,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
@@ -34,15 +34,7 @@ interface Service {
   imageUrl?: string;
 }
 
-// Calculate responsive grid columns based on screen width
-const getGridConfig = (width: number) => {
-  if (width >= 1200) return { columns: 4, cardSize: (width - 80) / 4 };
-  if (width >= 900) return { columns: 3, cardSize: (width - 70) / 3 };
-  if (width >= 600) return { columns: 2, cardSize: (width - 60) / 2 };
-  return { columns: 1, cardSize: width - 40 };
-};
-
-// Professional Service Card Component
+// One-row Service Card (compact list row)
 const ServiceCard: React.FC<{
   service: Service;
   isSelected?: boolean;
@@ -52,89 +44,69 @@ const ServiceCard: React.FC<{
   colors: any;
   scaledSize: (size: number) => number;
   language: string;
-}> = ({ 
-  service, 
-  isSelected, 
-  onPress, 
+}> = ({
+  service,
+  isSelected,
+  onPress,
   onRemove,
   showCheckbox = false,
   colors,
   scaledSize,
-  language
+  language,
 }) => {
-  const imageUrl = service.imageUrl 
-    ? (service.imageUrl.startsWith('http') 
-        ? service.imageUrl 
+  const imageUrl = service.imageUrl
+    ? (service.imageUrl.startsWith('http')
+        ? service.imageUrl
         : `${API_BASE_URL.replace('/api', '')}${service.imageUrl}`)
     : null;
-
   const serviceName = language === 'ar' ? service.nameAr : service.nameEn;
 
   return (
     <TouchableOpacity
       style={[
-        styles.card,
-        { 
+        styles.cardRow,
+        {
           backgroundColor: colors.cardBackground,
           borderColor: isSelected ? colors.primary : colors.border || 'rgba(0,0,0,0.08)',
           borderWidth: isSelected ? 2 : 1,
-        }
+        },
       ]}
       onPress={onPress}
-      activeOpacity={0.8}
+      activeOpacity={0.85}
     >
-      {/* Image Container */}
-      <View style={styles.cardImageContainer}>
+      <View style={[styles.cardRowThumb, { backgroundColor: colors.primary + '15' }]}>
         {imageUrl ? (
-          <Image
-            source={{ uri: imageUrl }}
-            style={styles.cardImage}
-            resizeMode="cover"
-          />
+          <Image source={{ uri: imageUrl }} style={styles.cardRowThumbImage} resizeMode="cover" />
         ) : (
-          <View style={[styles.placeholderImage, { backgroundColor: colors.primary + '15' }]}>
-            <Ionicons name="construct" size={32} color={colors.primary} />
-          </View>
+          <Ionicons name="construct" size={24} color={colors.primary} />
         )}
-        
-        {/* Selection Checkmark */}
         {showCheckbox && isSelected && (
-          <View style={[styles.checkmarkOverlay, { backgroundColor: colors.primary }]}>
-            <Ionicons name="checkmark" size={20} color="#fff" />
+          <View style={[styles.cardRowCheck, { backgroundColor: colors.primary }]}>
+            <Ionicons name="checkmark" size={14} color="#fff" />
           </View>
-        )}
-        
-        {/* Remove Button for My Services */}
-        {!showCheckbox && onRemove && (
-          <TouchableOpacity
-            style={[styles.removeBtn, { backgroundColor: colors.error }]}
-            onPress={(e) => {
-              e.stopPropagation();
-              onRemove();
-            }}
-          >
-            <Ionicons name="trash-outline" size={16} color="#fff" />
-          </TouchableOpacity>
         )}
       </View>
-
-      {/* Content */}
-      <View style={styles.cardContent}>
-        <Text 
-          style={[styles.cardTitle, { color: colors.text, fontSize: scaledSize(15) }]} 
-          numberOfLines={1}
-        >
+      <View style={styles.cardRowContent}>
+        <Text style={[styles.cardRowTitle, { color: colors.text, fontSize: scaledSize(15) }]} numberOfLines={1}>
           {serviceName}
         </Text>
-        {service.description && (
-          <Text 
-            style={[styles.cardDescription, { color: colors.textSecondary, fontSize: scaledSize(12) }]} 
-            numberOfLines={2}
-          >
+        {service.description ? (
+          <Text style={[styles.cardRowDesc, { color: colors.textSecondary, fontSize: scaledSize(12) }]} numberOfLines={1}>
             {service.description}
           </Text>
-        )}
+        ) : null}
       </View>
+      {!showCheckbox && onRemove && (
+        <TouchableOpacity
+          style={[styles.removeBtnRow, { backgroundColor: colors.error }]}
+          onPress={(e) => {
+            e.stopPropagation();
+            onRemove();
+          }}
+        >
+          <Ionicons name="trash-outline" size={18} color="#fff" />
+        </TouchableOpacity>
+      )}
     </TouchableOpacity>
   );
 };
@@ -143,25 +115,66 @@ export default function ServiceManagementScreen({ onBack }: ServiceManagementScr
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
-  const { fontFamily, scaledSize } = useFontFamily();
-  const { width: windowWidth } = useWindowDimensions();
-  
+  const { scaledSize } = useFontFamily();
+
   const [myServices, setMyServices] = useState<Service[]>([]);
   const [allServices, setAllServices] = useState<Service[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedServices, setSelectedServices] = useState<number[]>([]);
-  
+
   const { alertState, showSuccess, showError, hideAlert } = useAlertPopup();
   const { confirmState, showDeleteConfirmation, hideConfirmation } = useConfirmationPopup();
+  const removeInProgressRef = useRef(false);
 
   const language = i18n.language === 'ar' ? 'ar' : 'en';
-  const { columns, cardSize } = getGridConfig(windowWidth);
+  const screenWidth = Dimensions.get('window').width;
+
+  const screenSlideX = useRef(new Animated.Value(0)).current;
+  const screenOpacity = useRef(new Animated.Value(0)).current;
+  const modalFade = useRef(new Animated.Value(0)).current;
+  const modalSlideX = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     fetchServices();
   }, []);
+
+  useEffect(() => {
+    screenSlideX.setValue(-screenWidth);
+    screenOpacity.setValue(0);
+    Animated.parallel([
+      Animated.timing(screenOpacity, { toValue: 1, duration: 220, useNativeDriver: true }),
+      Animated.spring(screenSlideX, { toValue: 0, tension: 65, friction: 11, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
+  const handleBackScreen = () => {
+    Animated.parallel([
+      Animated.timing(screenOpacity, { toValue: 0, duration: 180, useNativeDriver: true }),
+      Animated.timing(screenSlideX, { toValue: screenWidth, duration: 220, useNativeDriver: true }),
+    ]).start(() => onBack());
+  };
+
+  const closeAddModal = () => {
+    Animated.parallel([
+      Animated.timing(modalFade, { toValue: 0, duration: 180, useNativeDriver: true }),
+      Animated.timing(modalSlideX, { toValue: screenWidth, duration: 220, useNativeDriver: true }),
+    ]).start(() => setShowAddModal(false));
+  };
+
+  useEffect(() => {
+    if (showAddModal) {
+      modalSlideX.setValue(-screenWidth);
+      modalFade.setValue(0);
+      Animated.parallel([
+        Animated.timing(modalFade, { toValue: 1, duration: 220, useNativeDriver: true }),
+        Animated.spring(modalSlideX, { toValue: 0, tension: 65, friction: 11, useNativeDriver: true }),
+      ]).start();
+    } else {
+      modalSlideX.setValue(-screenWidth);
+    }
+  }, [showAddModal]);
 
   const fetchServices = async () => {
     setIsLoading(true);
@@ -188,7 +201,7 @@ export default function ServiceManagementScreen({ onBack }: ServiceManagementScr
       }
     } catch (error) {
       console.error('Error fetching services:', error);
-      showError(t('Failed to load services'), t('Error'));
+      showError(t('services.failedLoad'), t('Error'));
     } finally {
       setIsLoading(false);
     }
@@ -211,8 +224,8 @@ export default function ServiceManagementScreen({ onBack }: ServiceManagementScr
       );
 
       if (response.ok) {
-        showSuccess(t('Services added successfully'), t('Success'));
-        setShowAddModal(false);
+        showSuccess(t('services.addedSuccess'), t('Success'));
+        closeAddModal();
         setSelectedServices([]);
         fetchServices();
       } else {
@@ -221,7 +234,7 @@ export default function ServiceManagementScreen({ onBack }: ServiceManagementScr
       }
     } catch (error) {
       console.error('Error adding services:', error);
-      showError((error as Error)?.message || t('Failed to add services'), t('Error'));
+      showError((error as Error)?.message || t('services.failedAdd'), t('Error'));
     } finally {
       setIsSaving(false);
     }
@@ -229,11 +242,13 @@ export default function ServiceManagementScreen({ onBack }: ServiceManagementScr
 
   const handleRemoveService = (serviceId: number) => {
     const confirmRemove = async () => {
+      if (removeInProgressRef.current) return;
+      removeInProgressRef.current = true;
+      hideConfirmation();
       try {
         const token = await storage.getAuthToken();
-        const url = buildApiUrlWithParams(API_ENDPOINTS.TECHNICIANS.REMOVE_SERVICE, { id: serviceId });
-        
-        const response = await fetch(`${API_BASE_URL}${url}`, {
+        const url = buildApiUrlWithParams(API_ENDPOINTS.TECHNICIANS.REMOVE_SERVICE, { serviceId });
+        const response = await fetch(url, {
           method: 'DELETE',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -241,23 +256,25 @@ export default function ServiceManagementScreen({ onBack }: ServiceManagementScr
         });
 
         if (response.ok) {
-          showSuccess(t('Service removed successfully'), t('Success'));
-          fetchServices();
+          showSuccess(t('services.removedSuccess'), t('Success'));
+          fetchServices().catch(() => {});
         } else {
           const errorText = await response.text();
-          throw new Error(errorText || 'Failed to remove service');
+          throw new Error(errorText || t('services.failedRemove'));
         }
       } catch (error) {
         console.error('Error removing service:', error);
-        showError((error as Error)?.message || t('Failed to remove service'), t('Error'));
+        showError((error as Error)?.message || t('services.failedRemove'), t('Error'));
+      } finally {
+        removeInProgressRef.current = false;
       }
     };
 
     showDeleteConfirmation(
-      t('Remove Service'),
-      t('Are you sure you want to remove this service?'),
+      t('services.removeService'),
+      t('services.removeServiceConfirm'),
       confirmRemove,
-      t('Remove')
+      t('services.remove')
     );
   };
 
@@ -271,7 +288,7 @@ export default function ServiceManagementScreen({ onBack }: ServiceManagementScr
 
   const handleSaveSelection = () => {
     if (selectedServices.length === 0) {
-      showError(t('Please select at least one service'), t('Error'));
+      showError(t('services.selectAtLeastOne'), t('Error'));
       return;
     }
     handleAddServices(selectedServices);
@@ -283,23 +300,23 @@ export default function ServiceManagementScreen({ onBack }: ServiceManagementScr
 
   if (isLoading) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
+      <Animated.View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background, opacity: screenOpacity, transform: [{ translateX: screenSlideX }] }]}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
-      </View>
+      </Animated.View>
     );
   }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
+    <Animated.View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background, opacity: screenOpacity, transform: [{ translateX: screenSlideX }] }]}>
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
+      <View style={[styles.header, { backgroundColor: colors.cardBackground, borderBottomColor: colors.border, direction: 'ltr', flexDirection: 'row' }]}>
+        <TouchableOpacity onPress={handleBackScreen} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>
-          {t('Service Management')}
+          {t('services.title')}
         </Text>
         {availableServices.length > 0 && (
           <TouchableOpacity
@@ -311,30 +328,28 @@ export default function ServiceManagementScreen({ onBack }: ServiceManagementScr
         )}
       </View>
 
-      <ScrollView 
-        showsVerticalScrollIndicator={false} 
+      <ScrollView
+        showsVerticalScrollIndicator={false}
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Stats Bar */}
         <View style={[styles.statsBar, { backgroundColor: colors.primary + '10' }]}>
-          <View style={styles.statItem}>
+          <View style={[styles.statItem, { flexDirection: 'row' }]}>
             <Ionicons name="briefcase" size={20} color={colors.primary} />
             <Text style={[styles.statText, { color: colors.text }]}>
-              {myServices.length} {t('Active Services')}
+              {myServices.length} {t('services.activeServices')}
             </Text>
           </View>
-          <View style={styles.statItem}>
+          <View style={[styles.statItem, { flexDirection: 'row' }]}>
             <Ionicons name="add-circle" size={20} color={colors.success} />
             <Text style={[styles.statText, { color: colors.text }]}>
-              {availableServices.length} {t('Available')}
+              {availableServices.length} {t('services.available')}
             </Text>
           </View>
         </View>
 
-        {/* Section Title */}
         <Text style={[styles.sectionTitle, { color: colors.text }]}>
-          {t('My Services')}
+          {t('services.myServices')}
         </Text>
 
         {myServices.length === 0 ? (
@@ -343,118 +358,93 @@ export default function ServiceManagementScreen({ onBack }: ServiceManagementScr
               <Ionicons name="construct-outline" size={48} color={colors.primary} />
             </View>
             <Text style={[styles.emptyTitle, { color: colors.text }]}>
-              {t('No services added yet')}
+              {t('services.noServicesYet')}
             </Text>
             <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-              {t('Add services to show what you can do')}
+              {t('services.addServicesHint')}
             </Text>
             <TouchableOpacity
               style={[styles.emptyAddButton, { backgroundColor: colors.primary }]}
               onPress={() => setShowAddModal(true)}
             >
               <Ionicons name="add" size={20} color="#fff" />
-              <Text style={styles.emptyAddButtonText}>{t('Add Services')}</Text>
+              <Text style={styles.emptyAddButtonText}>{t('services.addServices')}</Text>
             </TouchableOpacity>
           </View>
         ) : (
-          <View style={[styles.gridContainer, { gap: 16 }]}>
+          <View style={styles.listContainer}>
             {myServices.map((service) => (
-              <View 
-                key={service.id} 
-                style={[
-                  styles.gridItem,
-                  { width: cardSize }
-                ]}
-              >
-                <ServiceCard
-                  service={service}
-                  onRemove={() => handleRemoveService(service.id)}
-                  colors={colors}
-                  scaledSize={scaledSize}
-                  language={language}
-                />
-              </View>
+              <ServiceCard
+                key={service.id}
+                service={service}
+                onRemove={() => handleRemoveService(service.id)}
+                colors={colors}
+                scaledSize={scaledSize}
+                language={language}
+              />
             ))}
           </View>
         )}
       </ScrollView>
 
-      {/* Add Services Modal */}
-      <Modal 
-        visible={showAddModal} 
-        animationType="slide" 
-        transparent
-        onRequestClose={() => setShowAddModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
-            {/* Modal Header */}
+      {/* Add Services Modal - Animated */}
+      <Modal visible={showAddModal} animationType="none" transparent onRequestClose={closeAddModal}>
+        <Animated.View style={[styles.modalOverlay, { opacity: modalFade }]}>
+          <Animated.View
+            style={[
+              styles.modalContent,
+              { backgroundColor: colors.cardBackground, transform: [{ translateX: modalSlideX }] },
+            ]}
+          >
             <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
               <View>
                 <Text style={[styles.modalTitle, { color: colors.text }]}>
-                  {t('Add Services')}
+                  {t('services.addServicesModalTitle')}
                 </Text>
                 <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
-                  {selectedServices.length} {t('selected')}
+                  {selectedServices.length} {t('services.selected')}
                 </Text>
               </View>
-              <TouchableOpacity 
-                onPress={() => setShowAddModal(false)}
-                style={styles.closeButton}
-              >
+              <TouchableOpacity onPress={closeAddModal} style={styles.closeButton}>
                 <Ionicons name="close" size={24} color={colors.text} />
               </TouchableOpacity>
             </View>
 
-            {/* Available Services Grid */}
-            <ScrollView 
-              style={styles.modalScrollView}
-              contentContainerStyle={styles.modalScrollContent}
-            >
+            <ScrollView style={styles.modalScrollView} contentContainerStyle={styles.modalScrollContent}>
               {availableServices.length === 0 ? (
                 <View style={styles.modalEmptyState}>
                   <Ionicons name="checkmark-circle" size={64} color={colors.success} />
                   <Text style={[styles.modalEmptyTitle, { color: colors.text }]}>
-                    {t('All services added!')}
+                    {t('services.allAdded')}
                   </Text>
                   <Text style={[styles.modalEmptySubtitle, { color: colors.textSecondary }]}>
-                    {t('You have added all available services')}
+                    {t('services.allAddedHint')}
                   </Text>
                 </View>
               ) : (
-                <View style={[styles.gridContainer, { gap: 12 }]}>
+                <View style={styles.listContainer}>
                   {availableServices.map((service) => (
-                    <View 
-                      key={service.id} 
-                      style={[
-                        styles.gridItem,
-                        { width: cardSize }
-                      ]}
-                    >
-                      <ServiceCard
-                        service={service}
-                        isSelected={selectedServices.includes(service.id)}
-                        onPress={() => toggleServiceSelection(service.id)}
-                        showCheckbox={true}
-                        colors={colors}
-                        scaledSize={scaledSize}
-                        language={language}
-                      />
-                    </View>
+                    <ServiceCard
+                      key={service.id}
+                      service={service}
+                      isSelected={selectedServices.includes(service.id)}
+                      onPress={() => toggleServiceSelection(service.id)}
+                      showCheckbox={true}
+                      colors={colors}
+                      scaledSize={scaledSize}
+                      language={language}
+                    />
                   ))}
                 </View>
               )}
             </ScrollView>
 
-            {/* Modal Footer with Save Button */}
             {availableServices.length > 0 && (
               <View style={[styles.modalFooter, { borderTopColor: colors.border }]}>
                 <TouchableOpacity
                   style={[
-                    styles.saveButton, 
-                    { 
-                      backgroundColor: selectedServices.length > 0 ? colors.primary : colors.border,
-                    }
+                    styles.saveButton,
+                    { backgroundColor: selectedServices.length > 0 ? colors.primary : colors.border },
                   ]}
                   onPress={handleSaveSelection}
                   disabled={isSaving || selectedServices.length === 0}
@@ -472,8 +462,8 @@ export default function ServiceManagementScreen({ onBack }: ServiceManagementScr
                 </TouchableOpacity>
               </View>
             )}
-          </View>
-        </View>
+          </Animated.View>
+        </Animated.View>
       </Modal>
       
       {/* Alert Popup */}
@@ -499,7 +489,7 @@ export default function ServiceManagementScreen({ onBack }: ServiceManagementScr
         onConfirm={confirmState.onConfirm}
         onCancel={hideConfirmation}
       />
-    </View>
+    </Animated.View>
   );
 }
 
@@ -519,6 +509,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
+    direction: 'ltr',
   },
   backButton: {
     width: 40,
@@ -566,97 +557,70 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: 16,
   },
-  // Grid Layout
-  gridContainer: {
+  listContainer: {
+    gap: 10,
+  },
+  cardRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'flex-start',
-  },
-  gridItem: {
-    marginBottom: 8,
-  },
-  // Professional Card Styles
-  card: {
-    borderRadius: 16,
+    alignItems: 'center',
+    borderRadius: 12,
     overflow: 'hidden',
+    paddingRight: 12,
+    paddingVertical: 10,
+    marginBottom: 10,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.06,
+        shadowRadius: 4,
       },
       android: {
-        elevation: 3,
+        elevation: 2,
       },
     }),
   },
-  cardImageContainer: {
+  cardRowThumb: {
     position: 'relative',
-    width: '100%',
-    aspectRatio: 16 / 10,
+    width: 56,
+    height: 56,
+    borderRadius: 10,
+    marginRight: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
   },
-  cardImage: {
+  cardRowThumbImage: {
     width: '100%',
     height: '100%',
   },
-  placeholderImage: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
+  cardRowContent: {
+    flex: 1,
+    minWidth: 0,
   },
-  checkmarkOverlay: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 4,
-      },
-    }),
-  },
-  removeBtn: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 4,
-      },
-    }),
-  },
-  cardContent: {
-    padding: 12,
-  },
-  cardTitle: {
+  cardRowTitle: {
     fontWeight: '600',
-    marginBottom: 4,
+    marginBottom: 2,
   },
-  cardDescription: {
+  cardRowDesc: {
     lineHeight: 18,
+  },
+  cardRowCheck: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  removeBtnRow: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   // Empty State
   emptyState: {

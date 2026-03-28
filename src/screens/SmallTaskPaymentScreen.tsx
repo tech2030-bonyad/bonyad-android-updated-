@@ -46,7 +46,6 @@ export default function SmallTaskPaymentScreen({
   const { colors } = useTheme();
   const { fontFamily, fonts } = useFontFamily();
   const insets = useSafeAreaInsets();
-  const isRTL = i18n.language === 'ar';
 
   const [step, setStep] = useState<'form' | 'webview' | 'verifying' | 'done'>('form');
   const [checkoutData, setCheckoutData] = useState<CreateCheckoutResponse | null>(null);
@@ -114,7 +113,7 @@ export default function SmallTaskPaymentScreen({
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={[styles.header, { paddingTop: insets.top, backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={onBack} style={styles.backBtn}>
-            <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={24} color={colors.text} />
+            <Ionicons name="arrow-back" size={24} color={colors.text} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily }]}>
             {t('Pay for Task')}
@@ -151,7 +150,7 @@ export default function SmallTaskPaymentScreen({
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={[styles.header, { paddingTop: insets.top, backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={onBack} style={styles.backBtn}>
-            <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={24} color={colors.text} />
+            <Ionicons name="arrow-back" size={24} color={colors.text} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: colors.text }]}>{t('Payment')}</Text>
         </View>

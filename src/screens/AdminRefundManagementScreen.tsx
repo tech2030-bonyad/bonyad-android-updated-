@@ -552,7 +552,7 @@ export default function AdminRefundManagementScreen({
         ]}
       >
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={24} color={colors.text} />
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(20) }]}>
           {t('Refund Management')}

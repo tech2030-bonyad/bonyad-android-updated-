@@ -7,7 +7,7 @@
  */
 
 import React, { useState } from 'react';
-import { View, Text, TextInput as RNTextInput, TouchableOpacity, StyleSheet, Platform, ActivityIndicator, Dimensions, I18nManager } from 'react-native';
+import { View, Text, TextInput as RNTextInput, TouchableOpacity, StyleSheet, Platform, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
@@ -77,9 +77,7 @@ export const CustomTextInput: React.FC<CustomInputProps> = ({
   const { fontFamily } = useFontFamily();
   const isDarkMode = theme === 'dark';
   const [isFocused, setIsFocused] = useState(false);
-
-  // Check if current language is Arabic (RTL)
-  const isRTL = i18n.language === 'ar';
+  const isArabic = i18n.language?.startsWith('ar');
 
   // Use Figma colors for light mode, theme colors for dark mode
   // Applied to both web and mobile for consistency
@@ -105,7 +103,7 @@ export const CustomTextInput: React.FC<CustomInputProps> = ({
           styles.inputLabel,
           {
             color: labelColor,
-            textAlign: isRTL ? 'right' : 'left',
+            textAlign: 'left',
           }
         ]}>
           {label}
@@ -118,7 +116,7 @@ export const CustomTextInput: React.FC<CustomInputProps> = ({
             backgroundColor: inputBgColor,
             borderColor: inputBorderColor,
             borderWidth: 0.5, // Figma: border-[0.5px]
-            flexDirection: isRTL ? 'row-reverse' : 'row', // Flip icons for RTL
+            flexDirection: 'row',
             // Allow wrapper to expand for multiline
             ...(multiline && {
               height: 'auto',
@@ -135,7 +133,7 @@ export const CustomTextInput: React.FC<CustomInputProps> = ({
             name={leftIcon}
             size={20}
             color={iconColor}
-            style={isRTL ? styles.rightIconStatic : styles.leftIcon}
+            style={styles.leftIcon}
           />
         )}
         <RNTextInput
@@ -156,12 +154,10 @@ export const CustomTextInput: React.FC<CustomInputProps> = ({
             styles.input,
             {
               color: inputTextColor,
-              textAlign: isRTL ? 'right' : 'left',
-              writingDirection: isRTL ? 'rtl' : 'ltr',
+              textAlign: isArabic ? 'right' : 'left',
             },
             multiline && styles.textArea,
             Platform.OS === 'web' && {
-              direction: isRTL ? 'rtl' : 'ltr',
               outlineStyle: 'none', // Remove web outline
             } as any,
           ]}
@@ -291,10 +287,8 @@ export const CustomPicker: React.FC<CustomPickerProps> = ({
   style,
 }) => {
   const { colors, theme } = useTheme();
-  const { i18n } = useTranslation();
   const isDarkMode = theme === 'dark';
   const [isFocused, setIsFocused] = useState(false);
-  const isRTL = i18n.language === 'ar';
 
   // Use Figma colors for light mode
   const useFigmaStyle = !isDarkMode;
@@ -316,7 +310,7 @@ export const CustomPicker: React.FC<CustomPickerProps> = ({
           styles.inputLabel,
           {
             color: labelColor,
-            textAlign: isRTL ? 'right' : 'left',
+            textAlign: 'left',
           }
         ]}>
           {label}
@@ -333,7 +327,7 @@ export const CustomPicker: React.FC<CustomPickerProps> = ({
             backgroundColor: inputBgColor,
             borderColor: inputBorderColor,
             borderWidth: 0.5, // Figma: border-[0.5px]
-            flexDirection: isRTL ? 'row-reverse' : 'row',
+            flexDirection: 'row',
           },
           disabled && styles.inputDisabled,
         ]}
@@ -345,7 +339,7 @@ export const CustomPicker: React.FC<CustomPickerProps> = ({
             {
               color: value ? textColor : placeholderTextColor,
               flex: 1,
-              textAlign: isRTL ? 'right' : 'left',
+              textAlign: 'left',
             },
           ]}
         >
@@ -393,10 +387,8 @@ export const UploadButton: React.FC<UploadButtonProps> = ({
   style,
 }) => {
   const { colors, theme } = useTheme();
-  const { i18n } = useTranslation();
   const isDarkMode = theme === 'dark';
   const [isFocused, setIsFocused] = useState(false);
-  const isRTL = i18n.language === 'ar';
 
   // Use Figma colors for light mode
   const useFigmaStyle = !isDarkMode;
@@ -417,7 +409,7 @@ export const UploadButton: React.FC<UploadButtonProps> = ({
           styles.inputLabel,
           {
             color: labelColor,
-            textAlign: isRTL ? 'right' : 'left',
+            textAlign: 'left',
           }
         ]}>
           {label}
@@ -575,13 +567,11 @@ export const CustomCheckbox: React.FC<CustomCheckboxProps> = ({
   style,
 }) => {
   const { colors } = useTheme();
-  const { i18n } = useTranslation();
-  const isRTL = i18n.language === 'ar';
 
   return (
     <View style={[
       styles.checkboxContainer,
-      { flexDirection: isRTL ? 'row-reverse' : 'row' },
+      { flexDirection: 'row' },
       style
     ]}>
       <TouchableOpacity
@@ -593,8 +583,8 @@ export const CustomCheckbox: React.FC<CustomCheckboxProps> = ({
           {
             borderColor: error ? colors.error : (checked ? colors.primary : colors.border),
             backgroundColor: checked ? colors.primary : 'transparent',
-            marginRight: isRTL ? 0 : 12,
-            marginLeft: isRTL ? 12 : 0,
+            marginRight: 12,
+            marginLeft: 0,
           },
         ]}
       >
@@ -613,7 +603,7 @@ export const CustomCheckbox: React.FC<CustomCheckboxProps> = ({
             styles.checkboxText,
             {
               color: colors.textSecondary,
-              textAlign: isRTL ? 'right' : 'left',
+              textAlign: 'left',
             }
           ]}>
             <Text onPress={onPress}>{label}{' '}</Text>
@@ -634,7 +624,7 @@ export const CustomCheckbox: React.FC<CustomCheckboxProps> = ({
           {
             color: colors.error,
             marginTop: 4,
-            textAlign: isRTL ? 'right' : 'left',
+            textAlign: 'left',
           }
         ]}>
           {error}
@@ -673,6 +663,7 @@ const styles = StyleSheet.create({
     fontWeight: '400', // Regular weight for input text
     paddingVertical: 0, // Remove vertical padding for compact height
     paddingHorizontal: 0, // Remove horizontal padding since wrapper has it
+    textAlign: 'left',
     textAlignVertical: 'center', // Center text vertically
     fontFamily: FontFamily.input,
   },
@@ -681,6 +672,7 @@ const styles = StyleSheet.create({
     height: 'auto' as any,
     paddingTop: 8,
     paddingBottom: 8,
+    textAlign: 'left',
     textAlignVertical: 'top',
   },
   inputDisabled: {

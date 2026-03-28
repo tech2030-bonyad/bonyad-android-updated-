@@ -25,6 +25,7 @@ import EmptyBidsState from '../components/EmptyStates/EmptyBidsState';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
 import ConfirmationPopup, { useConfirmationPopup } from '../components/ConfirmationPopup';
 import { SmallTaskRequest, SmallTaskBid } from '../types/smallTasks';
+import { getTopPadding } from '../utils/statusBarHelper';
 
 // iOS-matching design colors
 const COLORS = {
@@ -58,7 +59,6 @@ export default function PendingSmallTaskScreen({
   const { t, i18n } = useTranslation();
   const { colors, theme } = useTheme();
   const insets = useSafeAreaInsets();
-  const isRTL = i18n.language === 'ar';
   const isDarkMode = theme === 'dark';
 
   const [taskDetails, setTaskDetails] = useState<SmallTaskRequest>(task);
@@ -82,6 +82,7 @@ export default function PendingSmallTaskScreen({
 
   const primaryColor = isDarkMode ? COLORS.primaryDark : COLORS.primaryLight;
   const borderColor = isDarkMode ? COLORS.borderDark : COLORS.borderLight;
+  const topSpacing = Platform.OS === 'android' ? 0 : insets.top;
 
   useEffect(() => {
     Animated.parallel([
@@ -119,8 +120,12 @@ export default function PendingSmallTaskScreen({
     setIsLoading(true);
     setError(null);
     try {
+      // Resolve role from storage; isTechnician prop may be stale on first mount (userRole not yet loaded in parent)
+      const role = await storage.getUserRole();
+      const isRequester = role?.toUpperCase() !== 'TECHNICIAN';
+
       await loadTaskDetails();
-      if (!isTechnician) {
+      if (isRequester) {
         await loadBids();
       } else {
         setBids([]);
@@ -234,27 +239,27 @@ export default function PendingSmallTaskScreen({
 
   const getStatusLabel = (status: string): string => {
     const statusMap: { [key: string]: string } = {
-      'PENDING': t('pending'),
-      'ACCEPTED': t('accepted'),
-      'IN_PROGRESS': t('in_progress'),
-      'COMPLETED': t('completed'),
-      'CANCELLED': t('cancelled'),
+      'PENDING': t('smallTasks.statusPending'),
+      'ACCEPTED': t('smallTasks.statusAccepted'),
+      'IN_PROGRESS': t('smallTasks.statusInProgress'),
+      'COMPLETED': t('smallTasks.statusCompleted'),
+      'CANCELLED': t('smallTasks.statusCancelled'),
     };
     return statusMap[status?.toUpperCase()] || status;
   };
 
   const taskName = taskDetails?.taskType
     ? i18n.language === 'ar'
-      ? taskDetails.taskType?.nameAr || t('task')
-      : taskDetails.taskType?.nameEn || t('task')
-    : t('task');
+      ? taskDetails.taskType?.nameAr || t('smallTasks.task')
+      : taskDetails.taskType?.nameEn || t('smallTasks.task')
+    : t('smallTasks.task');
 
   const statusColor = getStatusColor(taskDetails.status);
   const canCancel = taskDetails.status === 'PENDING' || taskDetails.status === 'ACCEPTED';
 
   if (isLoading) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+      <View style={[styles.container, { backgroundColor: colors.background, paddingTop: topSpacing }]}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={primaryColor} />
           <Text style={[styles.loadingText, { color: colors.text }]}>{t('loading')}</Text>
@@ -265,7 +270,7 @@ export default function PendingSmallTaskScreen({
 
   if (error) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+      <View style={[styles.container, { backgroundColor: colors.background, paddingTop: topSpacing }]}>
         <View style={styles.errorContainer}>
           <Ionicons name="alert-circle-outline" size={64} color={COLORS.error} />
           <Text style={[styles.errorTitle, { color: colors.text }]}>{t('error')}</Text>
@@ -275,7 +280,7 @@ export default function PendingSmallTaskScreen({
             onPress={loadData}
           >
             <Ionicons name="refresh" size={20} color="#FFFFFF" />
-            <Text style={styles.retryButtonText}>{t('retry')}</Text>
+            <Text style={styles.retryButtonText}>{t('smallTasks.retry')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -285,20 +290,16 @@ export default function PendingSmallTaskScreen({
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={[
-        styles.header,
-        { paddingTop: insets.top, borderBottomColor: colors.border },
-        { flexDirection: isRTL ? 'row-reverse' : 'row' },
-      ]}>
+      <View style={[styles.header, styles.headerLTR, { paddingTop: topSpacing, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={24} color={primaryColor} />
+          <Ionicons name="chevron-back" size={24} color={primaryColor} />
         </TouchableOpacity>
         
         <Text style={[styles.headerTitle, { color: primaryColor }]}>
-          {t('task_request_details')}
+          {t('smallTasks.taskRequestDetails')}
         </Text>
 
-        <View style={[styles.headerActions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+        <View style={styles.headerActions}>
           {userRole === 'user' && canCancel && (
             <>
               <TouchableOpacity onPress={() => setShowEditModal(true)} style={styles.actionButton}>
@@ -328,8 +329,8 @@ export default function PendingSmallTaskScreen({
         >
           {/* Status Card - iOS style (no phase bar, just status card with colored border) */}
           <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: statusColor + '30' }]}>
-            <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('status')}</Text>
-            <View style={[styles.statusRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+            <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('smallTasks.status')}</Text>
+            <View style={styles.statusRow}>
               <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
               <Text style={[styles.statusValue, { color: statusColor }]}>
                 {getStatusLabel(taskDetails.status)}
@@ -339,45 +340,46 @@ export default function PendingSmallTaskScreen({
 
           {/* Task Type Card */}
           <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: borderColor }]}>
-            <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('task_type')}</Text>
+            <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('smallTasks.taskType')}</Text>
             <Text style={[styles.cardValue, { color: colors.text }]}>{taskName}</Text>
           </View>
 
-          {/* Description Card */}
-          {taskDetails.description && (
-            <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: borderColor }]}>
-              <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('description')}</Text>
-              <Text style={[styles.cardValue, { color: colors.text, textAlign: isRTL ? 'right' : 'left' }]}>
-                {taskDetails.description}
-              </Text>
-            </View>
-          )}
+          {/* Description Card - always show; use placeholder for empty/script/invalid */}
+          <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: borderColor }]}>
+            <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('smallTasks.description')}</Text>
+            <Text style={[styles.cardValue, { color: colors.text }]}>
+              {(() => {
+                const s = taskDetails.description?.trim();
+                if (!s || s === 'Not specified' || /<script/i.test(s)) return t('smallTasks.noDescriptionProvided');
+                return s;
+              })()}
+            </Text>
+          </View>
 
           {/* Address Card */}
           {taskDetails.address && (
             <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: borderColor }]}>
-              <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('address')}</Text>
-              <Text style={[styles.cardValue, { color: colors.text, textAlign: isRTL ? 'right' : 'left' }]}>{taskDetails.address}</Text>
+              <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('smallTasks.address')}</Text>
+              <Text style={[styles.cardValue, { color: colors.text }]}>{taskDetails.address}</Text>
             </View>
           )}
 
           {/* Bids Card - iOS style with hand.raised.fill icon and View Bids button */}
           <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: borderColor }]}>
-            <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('bids')}</Text>
-            <View style={[styles.bidsRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-              <View style={[styles.bidsInfo, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+            <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('smallTasks.bids')}</Text>
+            <View style={styles.bidsRow}>
+              <View style={styles.bidsInfo}>
                 <Text style={[styles.bidsCountText, { color: colors.text }]}>
-                  {bids.length} {bids.length === 1 ? t('bid') : t('bids')}
+                  {bids.length} {bids.length === 1 ? t('smallTasks.bid') : t('smallTasks.bids')}
                 </Text>
               </View>
-              {/* View Bids button - iOS style */}
               {bids.length > 0 && userRole === 'user' && (
                 <TouchableOpacity
                   style={[styles.viewBidsButton, { backgroundColor: primaryColor }]}
-                  onPress={() => {/* Scroll to bids section */}}
+                  onPress={() => {}}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.viewBidsButtonText}>{t('view_bids')}</Text>
+                  <Text style={styles.viewBidsButtonText}>{t('smallTasks.viewBids')}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -386,7 +388,7 @@ export default function PendingSmallTaskScreen({
           {/* Created Date Card */}
           {taskDetails.createdAt && (
             <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: borderColor }]}>
-              <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('created_at')}</Text>
+              <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('smallTasks.createdAt')}</Text>
               <Text style={[styles.cardValue, { color: colors.text }]}>
                 {formatDate(taskDetails.createdAt)}
               </Text>
@@ -396,9 +398,9 @@ export default function PendingSmallTaskScreen({
           {/* Bids Section - For Users */}
           {userRole === 'user' && (
             <View style={styles.bidsSection}>
-              <View style={[styles.sectionHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+              <View style={styles.sectionHeader}>
                 <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                  {t('bids_received')} ({bids.length})
+                  {t('smallTasks.bidsReceived')} ({bids.length})
                 </Text>
                 {bids.length > 0 && (
                   <TouchableOpacity
@@ -449,7 +451,7 @@ export default function PendingSmallTaskScreen({
             <View style={[styles.myBidSection, { backgroundColor: COLORS.statusCompleted + '15' }]}>
               <Ionicons name="checkmark-circle" size={24} color={COLORS.statusCompleted} />
               <Text style={[styles.myBidText, { color: COLORS.statusCompleted }]}>
-                {t('you_have_already_submitted_a_bid')}
+                {t('smallTasks.youHaveAlreadySubmittedBid')}
               </Text>
             </View>
           )}
@@ -486,7 +488,7 @@ export default function PendingSmallTaskScreen({
             onPress={() => setShowBidModal(true)}
             activeOpacity={0.8}
           >
-            <Text style={styles.floatingButtonText}>{t('submit_bid')}</Text>
+            <Text style={styles.floatingButtonText}>{t('smallTasks.submitBid')}</Text>
           </TouchableOpacity>
         </Animated.View>
       )}
@@ -596,6 +598,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 12,
     borderBottomWidth: 1,
+  },
+  headerLTR: {
+    direction: 'ltr',
   },
   backButton: {
     width: 40,

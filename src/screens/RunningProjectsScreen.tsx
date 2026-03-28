@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
+import { useRTL } from '../hooks/useRTL';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { API_ENDPOINTS, buildApiUrl, API_BASE_URL } from '../config/api';
 import { storage } from '../utils/storage';
@@ -67,6 +68,7 @@ export default function RunningProjectsScreen({
   const { t, i18n } = useTranslation();
   const { colors, theme } = useTheme();
   const { fontFamily, scaledSize } = useFontFamily();
+  const { arrowBackIcon } = useRTL();
   const insets = useSafeAreaInsets();
   const [projects, setProjects] = useState<RunningProject[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -358,7 +360,7 @@ export default function RunningProjectsScreen({
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={[styles.header, { paddingTop: Math.max(insets.top, 50), borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={onBack}>
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
+            <Ionicons name={arrowBackIcon} size={24} color={colors.text} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: colors.text }]}>
             {isTechnician ? t('My Assigned Projects') : t('Running Projects')}
@@ -380,7 +382,7 @@ export default function RunningProjectsScreen({
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={[styles.header, { paddingTop: Math.max(insets.top, 50), borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={onBack}>
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
+            <Ionicons name={arrowBackIcon} size={24} color={colors.text} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: colors.text }]}>
             {isTechnician ? t('My Assigned Projects') : t('Running Projects')}
@@ -405,7 +407,7 @@ export default function RunningProjectsScreen({
       {/* Header */}
       <View style={[styles.header, { paddingTop: Math.max(insets.top, 50), borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={onBack}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+          <Ionicons name={arrowBackIcon} size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>
           {isTechnician ? t('My Assigned Projects') : t('Running Projects')}

@@ -297,7 +297,12 @@ export default function LoginScreen({
               </View>
 
               {/* Welcome Section - Figma Style */}
-              <View style={styles.mobileWelcomeSection}>
+              <View
+                style={[
+                  styles.mobileWelcomeSection,
+                  i18n.language?.startsWith('ar') ? styles.mobileWelcomeSectionArabicSpacing : null,
+                ]}
+              >
                 <Text style={[styles.mobileWelcomeTitle, { color: isDarkMode ? colors.text : figmaMobileColors.titleBlue, fontSize: scaledSize(UIFontSizes.welcomeTitle) }]}>
                   {t('Welcome back')}
                 </Text>
@@ -357,10 +362,7 @@ export default function LoginScreen({
                 </TouchableOpacity>
 
                 {/* Create Account Link - Figma Style */}
-                <View style={[
-                  styles.mobileCreateAccountContainer,
-                  { flexDirection: i18n.language === 'ar' ? 'row-reverse' : 'row' }
-                ]}>
+                <View style={styles.mobileCreateAccountContainer}>
                   <Text style={[styles.mobileCreateAccountText, { color: isDarkMode ? colors.textSecondary : figmaMobileColors.linkNavy, fontSize: scaledSize(14) }]}>
                     {t("Don't have an account?")}
                   </Text>
@@ -586,7 +588,6 @@ export default function LoginScreen({
                 styles.desktopSignupLink, 
                 { 
                   marginTop: 8,
-                  flexDirection: i18n.language === 'ar' ? 'row-reverse' : 'row',
                   gap: 8, // Add gap between text and link
                 }
               ]}>
@@ -955,6 +956,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 24,
     gap: 8,
+  },
+  mobileWelcomeSectionArabicSpacing: {
+    marginTop: 12,
   },
   mobileWelcomeTitle: {
     fontSize: UIFontSizes.welcomeTitle, // Centralized: 32px

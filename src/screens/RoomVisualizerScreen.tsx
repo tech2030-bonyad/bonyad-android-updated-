@@ -176,7 +176,7 @@ export default function RoomVisualizerScreen({ onBack }: RoomVisualizerScreenPro
       {/* Header */}
       <View style={[styles.header, { backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Ionicons name={i18n.language === 'ar' ? 'arrow-forward' : 'arrow-back'} size={24} color={colors.text} />
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>
           {i18n.language === 'en' ? 'AI Room Visualizer' : 'مصور الغرفة الذكي'}

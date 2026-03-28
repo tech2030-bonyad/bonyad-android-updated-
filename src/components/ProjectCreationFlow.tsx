@@ -1,6 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, Platform, StyleProp, ViewStyle, Dimensions, ScrollView } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Svg, { Circle, Path, Polyline } from 'react-native-svg';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import { useTranslation } from 'react-i18next';
@@ -26,21 +26,75 @@ interface ProjectCreationFlowProps {
 interface StepConfig {
   key: ProjectCreationStepKey;
   labelKey: string;
-  icon: keyof typeof Ionicons.glyphMap;
+  icon: 'tendering' | 'bidReceived' | 'approved' | 'contractSigning' | 'inProgress' | 'completed';
 }
 
 const PRIMARY_FIGMA_BLUE = '#005DAC';
 const TEXT_BODY = '#383838';
 const TEXT_SECONDARY = '#A3A3A3';
 
+function StepSvgIcon({
+  icon,
+  color,
+  size,
+}: {
+  icon: StepConfig['icon'];
+  color: string;
+  size: number;
+}) {
+  const svgSize = Math.max(16, Math.round(size * 0.72));
+  const strokeWidth = 1.8;
+  switch (icon) {
+    case 'tendering':
+      return (
+        <Svg width={svgSize} height={svgSize} viewBox="0 0 24 24" fill="none">
+          <Circle cx="12" cy="12" r="10" stroke={color} strokeWidth={strokeWidth} />
+          <Path d="M12 2v10l4 2" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+      );
+    case 'bidReceived':
+      return (
+        <Svg width={svgSize} height={svgSize} viewBox="0 0 24 24" fill="none">
+          <Circle cx="12" cy="12" r="10" stroke={color} strokeWidth={strokeWidth} />
+          <Path d="M12 6v6l4 2" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+      );
+    case 'approved':
+      return (
+        <Svg width={svgSize} height={svgSize} viewBox="0 0 24 24" fill="none">
+          <Polyline points="20 6 9 17 4 12" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+      );
+    case 'contractSigning':
+      return (
+        <Svg width={svgSize} height={svgSize} viewBox="0 0 24 24" fill="none">
+          <Path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+      );
+    case 'inProgress':
+      return (
+        <Svg width={svgSize} height={svgSize} viewBox="0 0 24 24" fill="none">
+          <Circle cx="12" cy="12" r="10" stroke={color} strokeWidth={strokeWidth} />
+          <Polyline points="12 6 12 12 16 14" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+      );
+    default:
+      return (
+        <Svg width={svgSize} height={svgSize} viewBox="0 0 24 24" fill="none">
+          <Polyline points="4 12 9 17 20 6" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+      );
+  }
+}
+
 const STEPS: StepConfig[] = [
-  { key: 'CREATING', labelKey: 'projectFlow.creating', icon: 'add-circle-outline' },
-  { key: 'PENDING', labelKey: 'projectFlow.pending', icon: 'time-outline' },
-  { key: 'BID_RECEIVED', labelKey: 'projectFlow.bidReceived', icon: 'cash-outline' },
-  { key: 'APPROVED', labelKey: 'projectFlow.approved', icon: 'checkmark-circle-outline' },
-  { key: 'CONTRACT_SIGNING', labelKey: 'projectFlow.contractSigning', icon: 'document-text-outline' },
-  { key: 'IN_PROGRESS', labelKey: 'projectFlow.inProgress', icon: 'time-outline' },
-  { key: 'COMPLETED', labelKey: 'projectFlow.completed', icon: 'checkmark-done-outline' },
+  { key: 'CREATING', labelKey: 'projectFlow.creating', icon: 'tendering' },
+  { key: 'PENDING', labelKey: 'projectFlow.pending', icon: 'tendering' },
+  { key: 'BID_RECEIVED', labelKey: 'projectFlow.bidReceived', icon: 'bidReceived' },
+  { key: 'APPROVED', labelKey: 'projectFlow.approved', icon: 'approved' },
+  { key: 'CONTRACT_SIGNING', labelKey: 'projectFlow.contractSigning', icon: 'contractSigning' },
+  { key: 'IN_PROGRESS', labelKey: 'projectFlow.inProgress', icon: 'inProgress' },
+  { key: 'COMPLETED', labelKey: 'projectFlow.completed', icon: 'completed' },
 ];
 
 // Step width constants for scrolling calculation (Android/small web)
@@ -69,6 +123,18 @@ export default function ProjectCreationFlow({
   const primaryColor = (colors?.primary as string) || PRIMARY_FIGMA_BLUE;
   const inactiveColor = colors?.textSecondary || TEXT_SECONDARY;
   const completedColor = primaryColor;
+  const activeStep = STEPS[activeIndex] || STEPS[0];
+
+  // Android requirement: show only current status icon
+  if (Platform.OS === 'android') {
+    return (
+      <View style={[styles.singleStatusContainer, containerStyle]}>
+        <View style={[styles.singleStatusIconCircle, { borderColor: primaryColor, backgroundColor: `${primaryColor}14` }]}>
+          <StepSvgIcon icon={activeStep.icon} size={30} color={primaryColor} />
+        </View>
+      </View>
+    );
+  }
 
   // Auto-scroll to active step when it changes
   useEffect(() => {
@@ -121,7 +187,7 @@ export default function ProjectCreationFlow({
                 styles.iconContainer,
                 isActive && styles.activeIconContainer,
               ]}>
-                <Ionicons name={step.icon} size={iconSize} color={iconColor} />
+                <StepSvgIcon icon={step.icon} size={iconSize} color={iconColor} />
               </View>
               
               {/* Only show label for active step */}
@@ -278,5 +344,19 @@ const styles = StyleSheet.create({
     maxWidth: 60,
     minWidth: 24,
     marginHorizontal: 8,
+  },
+  singleStatusContainer: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+  },
+  singleStatusIconCircle: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

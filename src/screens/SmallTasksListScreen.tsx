@@ -78,7 +78,6 @@ export default function SmallTasksListScreen({
   const { t, i18n } = useTranslation();
   const { colors, theme } = useTheme();
   const insets = useSafeAreaInsets();
-  const isRTL = i18n.language === 'ar';
   const isDarkMode = theme === 'dark';
   
   const [tasks, setTasks] = useState<SmallTaskRequest[]>([]);
@@ -133,13 +132,13 @@ export default function SmallTasksListScreen({
 
   const getStatusLabel = (status: string): string => {
     const statusMap: { [key: string]: string } = {
-      'PENDING': t('pending'),
-      'IN_PROGRESS': t('in_progress'),
-      'COMPLETED': t('completed'),
-      'CANCELLED': t('cancelled'),
-      'ACCEPTED': t('accepted'),
-      'ASSIGNED': t('accepted'),
-      'REJECTED': t('rejected'),
+      'PENDING': t('smallTasks.statusPending'),
+      'IN_PROGRESS': t('smallTasks.statusInProgress'),
+      'COMPLETED': t('smallTasks.statusCompleted'),
+      'CANCELLED': t('smallTasks.statusCancelled'),
+      'ACCEPTED': t('smallTasks.statusAccepted'),
+      'ASSIGNED': t('smallTasks.statusAccepted'),
+      'REJECTED': t('smallTasks.statusRejected'),
     };
     return statusMap[status.toUpperCase()] || status;
   };
@@ -318,12 +317,12 @@ export default function SmallTasksListScreen({
         }
       >
         {/* Header Section - iOS style */}
-        <View style={[styles.headerSection, { alignItems: isRTL ? 'flex-end' : 'flex-start' }]}>
+        <View style={[styles.headerSection, styles.headerSectionLTR]}>
           <Text style={[styles.pageTitle, { color: primaryColor }]}>
-            {t('my_task_requests')}
+            {t('smallTasks.myTaskRequests')}
           </Text>
           <Text style={[styles.countText, { color: colors.textSecondary }]}>
-            {t('total_requests')} {filteredTasks.length}
+            {t('smallTasks.totalRequests')} {filteredTasks.length}
           </Text>
         </View>
 
@@ -333,16 +332,12 @@ export default function SmallTasksListScreen({
           {
             backgroundColor: colors.cardBackground,
             borderColor: borderColor,
-            flexDirection: isRTL ? 'row-reverse' : 'row',
           }
         ]}>
           <Feather name="search" size={20} color={colors.textSecondary} />
           <TextInput
-            style={[
-              styles.searchInput,
-              { color: colors.text, textAlign: isRTL ? 'right' : 'left' }
-            ]}
-            placeholder={t('search_tasks')}
+            style={[styles.searchInput, { color: colors.text }]}
+            placeholder={t('smallTasks.searchTasks')}
             placeholderTextColor={colors.textSecondary}
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -357,14 +352,13 @@ export default function SmallTasksListScreen({
               {
                 backgroundColor: colors.cardBackground,
                 borderColor: borderColor,
-                flexDirection: isRTL ? 'row-reverse' : 'row',
               }
             ]}
             onPress={() => setShowFilterDropdown(!showFilterDropdown)}
             activeOpacity={0.7}
           >
             <Text style={[styles.filterButtonText, { color: colors.text }]}>
-              {selectedCategory === 'All' ? t('all') : getStatusLabel(selectedCategory)}
+              {selectedCategory === 'All' ? t('smallTasks.all') : getStatusLabel(selectedCategory)}
             </Text>
             <Animated.View style={{ transform: [{ rotate: rotateInterpolate }] }}>
               <Feather name="chevron-down" size={20} color={primaryColor} />
@@ -397,7 +391,7 @@ export default function SmallTasksListScreen({
                   styles.filterOptionText,
                   { color: selectedCategory === 'All' ? primaryColor : colors.text }
                 ]}>
-                  {t('all')}
+                  {t('smallTasks.all')}
                 </Text>
                 {selectedCategory === 'All' && (
                   <Feather name="check" size={16} color={primaryColor} />
@@ -436,7 +430,7 @@ export default function SmallTasksListScreen({
           <View style={styles.emptyContainer}>
             <Ionicons name="clipboard-outline" size={50} color={colors.textSecondary} />
             <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-              {t('no_requests_found')}
+              {t('smallTasks.noRequestsFound')}
             </Text>
           </View>
         ) : (
@@ -450,7 +444,6 @@ export default function SmallTasksListScreen({
                 colors={colors}
                 primaryColor={primaryColor}
                 borderColor={borderColor}
-                isRTL={isRTL}
                 formatDate={formatDate}
                 getStatusColor={getStatusColor}
                 getStatusLabel={getStatusLabel}
@@ -473,7 +466,6 @@ const SmallTaskRequestCard = React.memo(({
   colors,
   primaryColor,
   borderColor,
-  isRTL,
   formatDate,
   getStatusColor,
   getStatusLabel,
@@ -486,7 +478,6 @@ const SmallTaskRequestCard = React.memo(({
   colors: any;
   primaryColor: string;
   borderColor: string;
-  isRTL: boolean;
   formatDate: (date: string) => string;
   getStatusColor: (status: string) => string;
   getStatusLabel: (status: string) => string;
@@ -533,8 +524,8 @@ const SmallTaskRequestCard = React.memo(({
         activeOpacity={0.7}
       >
         {/* Header Row: Task Type Name + Status Badge */}
-        <View style={[styles.cardHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-          <View style={[styles.taskTypeInfo, { alignItems: isRTL ? 'flex-end' : 'flex-start' }]}>
+        <View style={styles.cardHeader}>
+          <View style={styles.taskTypeInfo}>
             <Text style={[styles.taskTypeName, { color: colors.text }]} numberOfLines={1}>
               {taskName}
             </Text>
@@ -544,11 +535,7 @@ const SmallTaskRequestCard = React.memo(({
           </View>
 
           {/* Status Badge with dot */}
-          <View style={[
-            styles.statusBadge,
-            { backgroundColor: statusColor + '15' },
-            { flexDirection: isRTL ? 'row-reverse' : 'row' },
-          ]}>
+          <View style={[styles.statusBadge, { backgroundColor: statusColor + '15' }]}>
             <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
             <Text style={[styles.statusText, { color: statusColor }]}>
               {getStatusLabel(task.status)}
@@ -560,19 +547,15 @@ const SmallTaskRequestCard = React.memo(({
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
         {/* Bids Count Row */}
-        <View style={[styles.bidsRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-          <View style={[styles.bidsInfo, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+        <View style={styles.bidsRow}>
+          <View style={styles.bidsInfo}>
             <Text style={[styles.bidsText, { color: colors.textSecondary }]}>
-              {bidsCount} {bidsCount === 1 ? t('bid') : t('bids')}
+              {bidsCount} {bidsCount === 1 ? t('smallTasks.bid') : t('smallTasks.bids')}
             </Text>
           </View>
 
-          {/* Chevron */}
-          <Ionicons 
-            name={isRTL ? "chevron-back" : "chevron-forward"} 
-            size={16} 
-            color={colors.textSecondary} 
-          />
+          {/* Chevron: right in LTR, left in AR */}
+          <Ionicons name={i18n.language === 'ar' ? 'chevron-back' : 'chevron-forward'} size={16} color={colors.textSecondary} />
         </View>
       </TouchableOpacity>
     </Animated.View>
@@ -597,6 +580,9 @@ const styles = StyleSheet.create({
   },
   headerSection: {
     marginBottom: 16,
+  },
+  headerSectionLTR: {
+    alignItems: 'flex-start',
   },
   pageTitle: {
     fontSize: 24,

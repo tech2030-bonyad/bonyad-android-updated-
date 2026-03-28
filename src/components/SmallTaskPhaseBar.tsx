@@ -9,13 +9,13 @@ import {
   Dimensions,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { Ionicons } from '@expo/vector-icons';
+import Svg, { Circle, Path, Polyline } from 'react-native-svg';
 import { useTheme } from '../context/ThemeContext';
 
 interface PhaseBarItem {
   status: string;
   label: string;
-  icon: string;
+  icon: 'tendering' | 'approved' | 'inProgress' | 'completed';
 }
 
 interface SmallTaskPhaseBarProps {
@@ -26,11 +26,43 @@ interface SmallTaskPhaseBarProps {
 
 // Per README: PENDING → ACCEPTED (bid accepted, payment required) → IN_PROGRESS (payment done) → COMPLETED
 const getDefaultStatuses = (t: (key: string) => string): PhaseBarItem[] => [
-  { status: 'PENDING', label: t('Pending'), icon: 'time-outline' },
-  { status: 'ACCEPTED', label: t('Accepted'), icon: 'card-outline' }, // Payment required
-  { status: 'IN_PROGRESS', label: t('In Progress'), icon: 'construct-outline' },
-  { status: 'COMPLETED', label: t('Completed'), icon: 'checkmark-circle-outline' },
+  { status: 'PENDING', label: t('Pending'), icon: 'tendering' },
+  { status: 'ACCEPTED', label: t('Accepted'), icon: 'approved' },
+  { status: 'IN_PROGRESS', label: t('In Progress'), icon: 'inProgress' },
+  { status: 'COMPLETED', label: t('Completed'), icon: 'completed' },
 ];
+
+function StepSvgIcon({ icon, color }: { icon: PhaseBarItem['icon']; color: string }) {
+  const strokeWidth = 1.9;
+  switch (icon) {
+    case 'tendering':
+      return (
+        <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+          <Circle cx="12" cy="12" r="10" stroke={color} strokeWidth={strokeWidth} />
+          <Path d="M12 2v10l4 2" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+      );
+    case 'approved':
+      return (
+        <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+          <Polyline points="20 6 9 17 4 12" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+      );
+    case 'inProgress':
+      return (
+        <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+          <Circle cx="12" cy="12" r="10" stroke={color} strokeWidth={strokeWidth} />
+          <Polyline points="12 6 12 12 16 14" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+      );
+    default:
+      return (
+        <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+          <Polyline points="4 12 9 17 20 6" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+      );
+  }
+}
 
 export default function SmallTaskPhaseBar({
   currentStatus,
@@ -77,6 +109,27 @@ export default function SmallTaskPhaseBar({
   // Normalize status for display (ASSIGNED → ACCEPTED)
   const normalizedCurrentStatus = currentStatus === 'ASSIGNED' ? 'ACCEPTED' : currentStatus;
   const currentIndex = getStatusIndex(normalizedCurrentStatus);
+  const activeItem = resolvedStatuses[currentIndex >= 0 ? currentIndex : 0];
+
+  // Android requirement: show only current status icon
+  if (Platform.OS === 'android') {
+    return (
+      <View style={[styles.singleStatusContainer, { backgroundColor: colors.cardBackground }]}>
+        <View
+          style={[
+            styles.statusCircle,
+            styles.singleStatusCircle,
+            {
+              backgroundColor: colors.primary + '14',
+              borderColor: colors.primary,
+            },
+          ]}
+        >
+          <StepSvgIcon icon={activeItem.icon} color={colors.primary} />
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: colors.cardBackground }]}>
@@ -134,11 +187,7 @@ export default function SmallTaskPhaseBar({
                     },
                   ]}
                 >
-                  <Ionicons
-                    name={item.icon as any}
-                    size={20}
-                    color={isActive || isPast ? '#FFFFFF' : colors.textSecondary}
-                  />
+                  <StepSvgIcon icon={item.icon} color={isActive || isPast ? '#FFFFFF' : colors.textSecondary} />
                 </View>
 
                 {/* Status Label */}
@@ -205,5 +254,18 @@ const styles = StyleSheet.create({
   statusLabel: {
     fontSize: 12,
     textAlign: 'center',
+  },
+  singleStatusContainer: {
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  singleStatusCircle: {
+    marginBottom: 0,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
   },
 });

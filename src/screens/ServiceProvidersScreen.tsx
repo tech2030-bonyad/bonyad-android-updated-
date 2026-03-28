@@ -296,7 +296,7 @@ export default function ServiceProvidersScreen({
       <View style={[styles.header, { paddingTop: insets.top, borderBottomColor: colorsConfig.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <Ionicons
-            name={isRTL ? 'chevron-forward' : 'chevron-back'}
+            name="chevron-back"
             size={24}
             color={colorsConfig.text}
           />

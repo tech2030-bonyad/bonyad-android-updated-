@@ -6,6 +6,7 @@ const STORAGE_KEYS = {
   DEVICE_TOKEN: '@bonyad_device_token',
   USER_ID: '@bonyad_user_id',
   FONT_SIZE: '@bonyad_font_size',
+  LANGUAGE: '@bonyad_language',
   HAS_SEEN_ONBOARDING: '@bonyad_has_seen_onboarding',
   LOGIN_COUNT: '@bonyad_login_count',
 };
@@ -109,6 +110,28 @@ export const storage = {
       console.log('✅ Font size saved:', fontSize);
     } catch (error) {
       console.error('❌ Error saving font size:', error);
+    }
+  },
+
+  // Get saved language ('en' | 'ar' or null)
+  async getLanguage(): Promise<'en' | 'ar' | null> {
+    try {
+      const lang = await AsyncStorage.getItem(STORAGE_KEYS.LANGUAGE);
+      if (lang === 'en' || lang === 'ar') return lang;
+      return null;
+    } catch (error) {
+      console.error('❌ Error getting language:', error);
+      return null;
+    }
+  },
+
+  // Save language preference
+  async saveLanguage(language: 'en' | 'ar') {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.LANGUAGE, language);
+      console.log('✅ Language saved:', language);
+    } catch (error) {
+      console.error('❌ Error saving language:', error);
     }
   },
 

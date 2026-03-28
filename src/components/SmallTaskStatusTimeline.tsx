@@ -1,6 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, Text, StyleSheet, Platform } from 'react-native';
+import Svg, { Circle, Path, Polyline } from 'react-native-svg';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
@@ -28,6 +28,44 @@ export default function SmallTaskStatusTimeline({
   assignedTechnicianName,
   completedAt,
 }: SmallTaskStatusTimelineProps) {
+  const StepSvgIcon = ({
+    icon,
+    color,
+  }: {
+    icon: 'tendering' | 'approved' | 'inProgress' | 'completed';
+    color: string;
+  }) => {
+    const strokeWidth = 1.9;
+    switch (icon) {
+      case 'tendering':
+        return (
+          <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+            <Circle cx="12" cy="12" r="10" stroke={color} strokeWidth={strokeWidth} />
+            <Path d="M12 2v10l4 2" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
+          </Svg>
+        );
+      case 'approved':
+        return (
+          <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+            <Polyline points="20 6 9 17 4 12" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
+          </Svg>
+        );
+      case 'inProgress':
+        return (
+          <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+            <Circle cx="12" cy="12" r="10" stroke={color} strokeWidth={strokeWidth} />
+            <Polyline points="12 6 12 12 16 14" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
+          </Svg>
+        );
+      default:
+        return (
+          <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+            <Polyline points="4 12 9 17 20 6" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
+          </Svg>
+        );
+    }
+  };
+
   const { t } = useTranslation();
   const { colors, theme } = useTheme();
   const { fontFamily, fonts } = useFontFamily();
@@ -47,10 +85,10 @@ export default function SmallTaskStatusTimeline({
   // Per README: PENDING → ACCEPTED (payment required) → IN_PROGRESS (paid) → COMPLETED
   // iOS-matching icons (SF Symbols equivalents)
   const statuses = [
-    { status: 'PENDING', label: t('Pending'), icon: 'time' },
-    { status: 'ACCEPTED', label: t('Accepted'), icon: 'checkmark-circle' }, // iOS: checkmark.circle.fill
-    { status: 'IN_PROGRESS', label: t('In Progress'), icon: 'play-circle' }, // iOS: play.circle.fill
-    { status: 'COMPLETED', label: t('Completed'), icon: 'checkmark-done-circle' }, // iOS: checkmark.circle.fill
+    { status: 'PENDING', label: t('Pending'), icon: 'tendering' as const },
+    { status: 'ACCEPTED', label: t('Accepted'), icon: 'approved' as const },
+    { status: 'IN_PROGRESS', label: t('In Progress'), icon: 'inProgress' as const },
+    { status: 'COMPLETED', label: t('Completed'), icon: 'completed' as const },
   ];
 
   const getStatusIndex = (status: string) => {
@@ -62,6 +100,28 @@ export default function SmallTaskStatusTimeline({
   // Normalize status for display (ASSIGNED → ACCEPTED)
   const normalizedCurrentStatus = currentStatus === 'ASSIGNED' ? 'ACCEPTED' : currentStatus;
   const currentIndex = getStatusIndex(normalizedCurrentStatus);
+  const activeItem = statuses[currentIndex >= 0 ? currentIndex : 0];
+  const activeColor = getStatusColor(activeItem.status);
+
+  // Android requirement: show only current status icon
+  if (Platform.OS === 'android') {
+    return (
+      <View style={[styles.singleStatusContainer, { backgroundColor: colors.cardBackground, borderColor: '#E5E7EB' }]}>
+        <View
+          style={[
+            styles.statusCircle,
+            styles.singleStatusCircle,
+            {
+              backgroundColor: activeColor + '14',
+              borderColor: activeColor,
+            },
+          ]}
+        >
+          <StepSvgIcon icon={activeItem.icon} color={activeColor} />
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: colors.cardBackground }]}>
@@ -100,11 +160,7 @@ export default function SmallTaskStatusTimeline({
                 },
               ]}
             >
-              <Ionicons
-                name={item.icon as any}
-                size={20}
-                color={isActive || isPast ? '#FFFFFF' : colors.textSecondary}
-              />
+              <StepSvgIcon icon={item.icon} color={isActive || isPast ? '#FFFFFF' : colors.textSecondary} />
             </View>
 
             {/* Status Label */}
@@ -181,5 +237,18 @@ const styles = StyleSheet.create({
   additionalInfo: {
     fontSize: 10,
     textAlign: 'center',
+  },
+  singleStatusContainer: {
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  singleStatusCircle: {
+    marginBottom: 0,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
   },
 });

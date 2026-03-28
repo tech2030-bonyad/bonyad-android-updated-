@@ -57,6 +57,8 @@ export default function ChatRoomsListScreen({ onBack, onOpenChat }: ChatRoomsLis
   const IS_LARGE_WEB = IS_WEB && screenWidth >= 1024;
   // On large web screens, don't show back button when embedded in tabs
   const shouldShowBackButton = onBack && !IS_LARGE_WEB;
+  const isArabic = i18n.language?.startsWith('ar');
+  const headerDirectionStyle = { direction: 'ltr' as const };
 
   useEffect(() => {
     // Load chat rooms with error handling
@@ -222,9 +224,6 @@ export default function ChatRoomsListScreen({ onBack, onOpenChat }: ChatRoomsLis
               <Text style={[styles.userName, { color: colors.text, fontSize: scaledSize(16) }]}>
                 {item.otherUserName}
               </Text>
-              <Text style={[styles.timestamp, { color: colors.textSecondary, fontSize: scaledSize(12) }]}>
-                {formatRelativeTime(item.lastMessageAt)}
-              </Text>
             </View>
 
             <View style={styles.messageRow}>
@@ -246,8 +245,18 @@ export default function ChatRoomsListScreen({ onBack, onOpenChat }: ChatRoomsLis
             </View>
           </View>
 
-          {/* Chevron */}
-          <Ionicons name="chevron-forward" size={24} color={colors.textSecondary} />
+          {/* Chevron + time stacked (time under arrow) */}
+          <View style={styles.chevronColumn}>
+            <View style={isArabic ? { transform: [{ scaleX: -1 }] } : undefined}>
+              <Ionicons name="chevron-forward" size={22} color={colors.textSecondary} />
+            </View>
+            <Text
+              style={[styles.timestampUnderChevron, { color: colors.textSecondary, fontSize: scaledSize(11) }]}
+              numberOfLines={1}
+            >
+              {formatRelativeTime(item.lastMessageAt)}
+            </Text>
+          </View>
         </View>
       </TouchableOpacity>
     );
@@ -264,15 +273,15 @@ export default function ChatRoomsListScreen({ onBack, onOpenChat }: ChatRoomsLis
           },
         ]}
       >
-        <View style={[styles.header, { paddingTop: Math.max(insets.top, 50), borderBottomColor: colors.border }]}>
+        <View style={[styles.header, { borderBottomColor: colors.border }, headerDirectionStyle]}>
           {shouldShowBackButton ? (
-            <TouchableOpacity onPress={onBack}>
+            <TouchableOpacity onPress={onBack} accessibilityRole="button">
               <Ionicons name="arrow-back" size={24} color={colors.text} />
             </TouchableOpacity>
           ) : (
             <View style={{ width: 24 }} />
           )}
-          <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(18) }]}>
+          <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(17) }]}>
             {t('Chat')}
           </Text>
           <View style={{ width: 24 }} />
@@ -298,15 +307,15 @@ export default function ChatRoomsListScreen({ onBack, onOpenChat }: ChatRoomsLis
           },
         ]}
       >
-        <View style={[styles.header, { paddingTop: Math.max(insets.top, 50), borderBottomColor: colors.border }]}>
+        <View style={[styles.header, { borderBottomColor: colors.border }, headerDirectionStyle]}>
           {shouldShowBackButton ? (
-            <TouchableOpacity onPress={onBack}>
+            <TouchableOpacity onPress={onBack} accessibilityRole="button">
               <Ionicons name="arrow-back" size={24} color={colors.text} />
             </TouchableOpacity>
           ) : (
             <View style={{ width: 24 }} />
           )}
-          <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(18) }]}>
+          <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(17) }]}>
             {t('Chat')}
           </Text>
           <View style={{ width: 24 }} />
@@ -335,15 +344,15 @@ export default function ChatRoomsListScreen({ onBack, onOpenChat }: ChatRoomsLis
       ]}
     >
       {/* Header */}
-      <View style={[styles.header, { paddingTop: Math.max(insets.top, 50), borderBottomColor: colors.border }]}>
+      <View style={[styles.header, { borderBottomColor: colors.border }, headerDirectionStyle]}>
         {shouldShowBackButton ? (
-          <TouchableOpacity onPress={onBack}>
+          <TouchableOpacity onPress={onBack} accessibilityRole="button">
             <Ionicons name="arrow-back" size={24} color={colors.text} />
           </TouchableOpacity>
         ) : (
           <View style={{ width: 24 }} />
         )}
-        <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(18) }]}>
+        <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(17) }]}>
           {t('Chat')}
         </Text>
         <View style={{ width: 24 }} />
@@ -381,12 +390,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
+    paddingTop: 0,
+    paddingBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 17,
+    fontWeight: '700',
     flex: 1,
     textAlign: 'center',
   },
@@ -439,7 +449,6 @@ const styles = StyleSheet.create({
   },
   headerRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
   },
   userName: {
@@ -447,9 +456,17 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     flex: 1,
   },
-  timestamp: {
-    fontSize: 12,
-    marginLeft: 8,
+  chevronColumn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    minWidth: 52,
+    alignSelf: 'stretch',
+  },
+  timestampUnderChevron: {
+    fontSize: 11,
+    textAlign: 'center',
+    maxWidth: 76,
   },
   messageRow: {
     flexDirection: 'row',

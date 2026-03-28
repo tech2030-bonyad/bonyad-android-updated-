@@ -28,6 +28,12 @@ export default function LocationPicker({
   const insets = useSafeAreaInsets();
   const [location, setLocation] = useState(initialLocation || { latitude: 0, longitude: 0 });
   const [address, setAddress] = useState(initialAddress || '');
+  const [hasPickedLocation, setHasPickedLocation] = useState(
+    !!initialLocation &&
+      Number.isFinite(initialLocation.latitude) &&
+      Number.isFinite(initialLocation.longitude) &&
+      !(Math.abs(initialLocation.latitude) < 0.000001 && Math.abs(initialLocation.longitude) < 0.000001)
+  );
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -105,6 +111,7 @@ export default function LocationPicker({
     } else if (initialLocation && initialLocation.latitude !== 0) {
       console.log('📍 Using initial location:', initialLocation);
       setLocation(initialLocation);
+      setHasPickedLocation(true);
     }
     
     // Hide map briefly then show it to force remount
@@ -180,6 +187,7 @@ export default function LocationPicker({
 
       // Update location state
       setLocation(newLocation);
+      setHasPickedLocation(true);
 
       // Move map to current location
       if (Platform.OS === 'web' && mapRef.current) {
@@ -347,6 +355,7 @@ export default function LocationPicker({
           
           console.log('✅ Android: Got coordinates:', newLocation);
           setLocation(newLocation);
+          setHasPickedLocation(true);
           
           // Set full formatted address from place details
           if (data.result.formatted_address) {
@@ -447,6 +456,16 @@ export default function LocationPicker({
   };
 
   const handleConfirm = () => {
+    const hasValidCoords =
+      Number.isFinite(location.latitude) &&
+      Number.isFinite(location.longitude) &&
+      !(Math.abs(location.latitude) < 0.000001 && Math.abs(location.longitude) < 0.000001);
+
+    if (!hasPickedLocation || !hasValidCoords) {
+      Alert.alert(t('Location Required'), t('Please pick a valid point on the map first.'));
+      return;
+    }
+
     // Extract clean address without coordinates
     const cleanAddress = address ? extractAddressComponents(address) : '';
     
@@ -462,10 +481,11 @@ export default function LocationPicker({
     });
   };
 
-  // Android - use react-native-maps with Modal
+  // Native (iOS/Android)
   if (Platform.OS !== 'web') {
-    const MapView = require('react-native-maps').default;
-    const Marker = require('react-native-maps').Marker;
+    const shouldUseNativeMap = Platform.OS === 'ios';
+    const MapView = shouldUseNativeMap ? require('react-native-maps').default : null;
+    const Marker = shouldUseNativeMap ? require('react-native-maps').Marker : null;
 
     return (
       <Modal
@@ -517,33 +537,56 @@ export default function LocationPicker({
           )}
 
           <View style={styles.mapContainer}>
-            <MapView
-              ref={mapViewRef}
-              style={styles.map}
-              region={{
-                latitude: location.latitude || 24.7136,
-                longitude: location.longitude || 46.6753,
-                latitudeDelta: 0.01,
-                longitudeDelta: 0.01,
-              }}
-              onMapReady={() => {
-                console.log('🗺️ Map ready at:', location);
-              }}
-              onPress={(e: any) => {
-                const { latitude, longitude } = e.nativeEvent.coordinate;
-                setLocation({ latitude, longitude });
-              }}
-              showsUserLocation={true}
-              showsMyLocationButton={false}
-            >
-            <Marker
-              coordinate={location.latitude !== 0 ? location : { latitude: 24.7136, longitude: 46.6753 }}
-              draggable
-              onDragEnd={(e: any) => {
-                setLocation(e.nativeEvent.coordinate);
-              }}
-            />
-          </MapView>
+            {shouldUseNativeMap && MapView && Marker ? (
+              <MapView
+                ref={mapViewRef}
+                style={styles.map}
+                region={{
+                  latitude: location.latitude || 24.7136,
+                  longitude: location.longitude || 46.6753,
+                  latitudeDelta: 0.01,
+                  longitudeDelta: 0.01,
+                }}
+                onMapReady={() => {
+                  console.log('🗺️ Map ready at:', location);
+                }}
+                onPress={(e: any) => {
+                  const { latitude, longitude } = e.nativeEvent.coordinate;
+                  setLocation({ latitude, longitude });
+                  setHasPickedLocation(true);
+                }}
+                showsUserLocation={true}
+                showsMyLocationButton={false}
+              >
+                <Marker
+                  coordinate={location.latitude !== 0 ? location : { latitude: 24.7136, longitude: 46.6753 }}
+                  draggable
+                  onDragEnd={(e: any) => {
+                    setLocation(e.nativeEvent.coordinate);
+                    setHasPickedLocation(true);
+                  }}
+                />
+              </MapView>
+            ) : (
+              <View style={[styles.mapPlaceholder, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+                <Ionicons name="map-outline" size={34} color={colors.primary} />
+                <Text style={[styles.mapPlaceholderTitle, { color: colors.text }]}>
+                  {t('Map preview is unavailable on Android')}
+                </Text>
+                <Text style={[styles.mapPlaceholderText, { color: colors.textSecondary }]}>
+                  {t('Use search or current location, then confirm.')}
+                </Text>
+                <TouchableOpacity
+                  style={[styles.useLocationBtn, { backgroundColor: colors.primary }]}
+                  onPress={getCurrentLocation}
+                  disabled={isGettingLocation}
+                >
+                  <Text style={styles.useLocationBtnText}>
+                    {isGettingLocation ? t('Getting location...') : t('Use current location')}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
 
           <View style={[styles.footer, { backgroundColor: colors.cardBackground, borderTopColor: colors.border }]}>
@@ -831,6 +874,36 @@ const styles = StyleSheet.create({
   mapContainer: {
     flex: 1,
     position: 'relative',
+  },
+  mapPlaceholder: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 12,
+    margin: 16,
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  mapPlaceholderTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  mapPlaceholderText: {
+    fontSize: 13,
+    textAlign: 'center',
+  },
+  useLocationBtn: {
+    marginTop: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  useLocationBtnText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   floatingLocationButton: {
     position: 'absolute',

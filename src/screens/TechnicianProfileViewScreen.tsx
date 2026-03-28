@@ -15,8 +15,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
+import { useRTL } from '../hooks/useRTL';
 import { buildApiUrl, buildApiUrlWithParams, API_ENDPOINTS } from '../config/api';
 import { storage } from '../utils/storage';
+import { getTopPadding } from '../utils/statusBarHelper';
 
 interface TechnicianProfileViewScreenProps {
   technicianId: number;
@@ -74,6 +76,7 @@ export default function TechnicianProfileViewScreen({
   const { t, i18n } = useTranslation();
   const { colors } = useTheme();
   const { fontFamily, scaledSize } = useFontFamily();
+  const { arrowBackIcon } = useRTL();
   const insets = useSafeAreaInsets();
 
   const [profile, setProfile] = useState<TechnicianProfile | null>(null);
@@ -185,7 +188,7 @@ export default function TechnicianProfileViewScreen({
       {/* Header */}
       <View style={[styles.header, { backgroundColor: colors.cardBackground }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+          <Ionicons name={arrowBackIcon} size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>
           {t('Technician Profile')}

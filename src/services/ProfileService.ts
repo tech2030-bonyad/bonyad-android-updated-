@@ -1,5 +1,6 @@
 import { storage } from '../utils/storage';
 import { buildApiUrlWithParams, buildApiUrl, buildAssetUrl, API_ENDPOINTS } from '../config/api';
+import { normalizeCertificateUrlStrings } from '../utils/profileCertificates';
 import { Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 
@@ -237,6 +238,8 @@ export const getUserProfile = async (): Promise<any> => {
     if (profile.avatar) {
       profile.avatar = buildAssetUrl(profile.avatar);
     }
+    const certUrls = normalizeCertificateUrlStrings(profile as Record<string, unknown>, buildAssetUrl);
+    profile.certificates = certUrls;
     return profile;
   } catch (error: any) {
     console.error('❌ [ProfileService] Error fetching profile:', error);

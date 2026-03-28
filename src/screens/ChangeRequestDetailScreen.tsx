@@ -18,6 +18,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import { useRTL } from '../hooks/useRTL';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   getChangeRequestThread,
@@ -27,6 +28,7 @@ import {
   ChangeRequest,
 } from '../services/ChangeRequestService';
 import { showError, showSuccess } from '../utils/alert';
+import { getTopPadding } from '../utils/statusBarHelper';
 
 interface ChangeRequestDetailScreenProps {
   changeRequestId: number;
@@ -43,6 +45,7 @@ export default function ChangeRequestDetailScreen({
 }: ChangeRequestDetailScreenProps) {
   const { t } = useTranslation();
   const { colors } = useTheme();
+  const { arrowBackIcon } = useRTL();
   const insets = useSafeAreaInsets();
   const [thread, setThread] = useState<ChangeRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -134,9 +137,9 @@ export default function ChangeRequestDetailScreen({
   if (loading && thread.length === 0) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={[styles.header, { paddingTop: insets.top + 8, borderBottomColor: colors.border }]}>
+        <View style={[styles.header, { paddingTop: getTopPadding(insets, 8), borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={onBack}>
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
+            <Ionicons name={arrowBackIcon} size={24} color={colors.text} />
           </TouchableOpacity>
           <Text style={[styles.title, { color: colors.text }]}>{t('Change request')}</Text>
           <View style={{ width: 24 }} />
@@ -150,9 +153,9 @@ export default function ChangeRequestDetailScreen({
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { paddingTop: insets.top + 8, borderBottomColor: colors.border }]}>
+      <View style={[styles.header, { paddingTop: getTopPadding(insets, 8), borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={onBack}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+          <Ionicons name={arrowBackIcon} size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={[styles.title, { color: colors.text }]}>{t('Change request')}</Text>
         <View style={{ width: 24 }} />

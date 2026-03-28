@@ -15,8 +15,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Modal,
-  Pressable,
   ActivityIndicator,
   Dimensions,
   Platform,
@@ -32,6 +30,7 @@ import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
 import ConfirmationPopup, { useConfirmationPopup } from '../components/ConfirmationPopup';
 import ProjectCreationFlow from '../components/ProjectCreationFlow';
 import BookAppointmentModal from '../components/BookAppointmentModal';
+import AppBottomSheetModal, { RiyalAmount } from '../components/AppBottomSheetModal';
 
 // ===== DESIGN TOKENS FROM FIGMA =====
 const COLORS = {
@@ -143,6 +142,182 @@ interface BidReceivedProjectScreenProps {
 
 type UserTab = 'bids' | 'visits';
 
+function makeBidStyles(c: typeof COLORS) {
+  return StyleSheet.create({
+  card: {
+    borderWidth: 1,
+    borderColor: c.primary10,
+    borderRadius: 6,
+    padding: 16,
+    marginBottom: 16,
+    backgroundColor: c.bgWhite,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 24,
+  },
+  numberBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 6,
+    backgroundColor: c.primary10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  numberText: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: c.primary80,
+  },
+  headerInfo: {
+    flex: 1,
+    gap: 6,
+  },
+  providerName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: c.textHeader,
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  starIcon: {
+    color: c.amber60,
+    fontSize: 10,
+  },
+  ratingText: {
+    fontSize: 10,
+    fontWeight: '300',
+    color: c.textSecondary,
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginLeft: 6,
+  },
+  distanceText: {
+    fontSize: 10,
+    fontWeight: '300',
+    color: c.textSecondary,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: c.textDividers,
+    marginVertical: 16,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    gap: 16,
+    marginBottom: 16,
+  },
+  statBox: {
+    flex: 1,
+    backgroundColor: c.primary10,
+    borderWidth: 0.5,
+    borderColor: c.primary50,
+    borderRadius: 8,
+    padding: 8,
+    gap: 6,
+  },
+  statValue: {
+    fontSize: 12,
+    fontWeight: '200',
+    color: c.textBody,
+  },
+  statLabel: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: c.textBody,
+  },
+  amountRow: {
+    flexDirection: 'row',
+    backgroundColor: c.green10,
+    borderWidth: 0.5,
+    borderColor: c.green80,
+    borderRadius: 6,
+    padding: 12,
+    marginBottom: 16,
+  },
+  amountLabel: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '400',
+    color: c.green90,
+  },
+  amountValue: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: c.green90,
+    textAlign: 'right',
+  },
+  proposalSection: {
+    paddingVertical: 16,
+    gap: 8,
+  },
+  proposalTitle: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: c.textBody,
+  },
+  proposalText: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: c.textSecondary,
+    lineHeight: 18,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  acceptButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: c.green60,
+    borderRadius: 8,
+    padding: 16,
+    gap: 6,
+  },
+  acceptText: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: c.textWhite,
+  },
+  declineButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: c.purple10,
+    borderWidth: 0.5,
+    borderColor: c.purple70,
+    borderRadius: 8,
+    padding: 16,
+    gap: 6,
+  },
+  declineText: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: c.purple70,
+  },
+  statusBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  });
+}
+
 // ===== BID CARD COMPONENT (USER VIEW) =====
 const BidCard = ({
   bid,
@@ -160,6 +335,27 @@ const BidCard = ({
   formatBudget: (amount: number) => string;
 }) => {
   const { t } = useTranslation();
+  const { colors } = useTheme();
+  const c = useMemo(() => ({
+    ...COLORS,
+    bgWhite: colors.cardBackground,
+    textHeader: colors.text,
+    textBody: colors.text,
+    textSecondary: colors.textSecondary,
+    textDividers: colors.border,
+    primary10: colors.primary + '20',
+    primary50: colors.primary,
+    primary80: colors.primary,
+    textWhite: colors.white,
+    green10: colors.success + '20',
+    green60: colors.success,
+    green80: colors.success,
+    green90: colors.success,
+    purple10: colors.cardBackground,
+    purple70: colors.primary,
+    amber60: colors.warning,
+  }), [colors]);
+  const bidStyles = useMemo(() => makeBidStyles(c), [c]);
   
   return (
     <View style={bidStyles.card}>
@@ -180,7 +376,7 @@ const BidCard = ({
               {bid.technician?.rating || 4.9} ({bid.technician?.reviewCount || 234})
             </Text>
             <View style={bidStyles.locationRow}>
-              <Ionicons name="location" size={12} color={COLORS.textSecondary} />
+              <Ionicons name="location" size={12} color={c.textSecondary} />
               <Text style={bidStyles.distanceText}>{bid.technician?.distance || '0.8 mi'}</Text>
             </View>
           </View>
@@ -224,11 +420,11 @@ const BidCard = ({
       {bid.status === 'PENDING' && (
         <View style={bidStyles.actionRow}>
           <TouchableOpacity style={bidStyles.acceptButton} onPress={onAccept}>
-            <Ionicons name="checkmark-circle" size={12} color={COLORS.textWhite} />
+            <Ionicons name="checkmark-circle" size={12} color={c.textWhite} />
             <Text style={bidStyles.acceptText}>{t('Accept')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={bidStyles.declineButton} onPress={onDecline}>
-            <Ionicons name="close-circle" size={12} color={COLORS.purple70} />
+            <Ionicons name="close-circle" size={12} color={c.purple70} />
             <Text style={bidStyles.declineText}>{t('Decline')}</Text>
           </TouchableOpacity>
         </View>
@@ -238,11 +434,11 @@ const BidCard = ({
       {bid.status !== 'PENDING' && (
         <View style={[
           bidStyles.statusBadge,
-          { backgroundColor: bid.status === 'ACCEPTED' ? COLORS.green10 : '#FEE2E2' }
+          { backgroundColor: bid.status === 'ACCEPTED' ? c.green10 : '#FEE2E2' }
         ]}>
           <Text style={[
             bidStyles.statusText,
-            { color: bid.status === 'ACCEPTED' ? COLORS.green80 : '#EF4444' }
+            { color: bid.status === 'ACCEPTED' ? c.green80 : '#EF4444' }
           ]}>
             {bid.status}
           </Text>
@@ -252,179 +448,81 @@ const BidCard = ({
   );
 };
 
-const bidStyles = StyleSheet.create({
+function makeVisitStyles(c: typeof COLORS) {
+  return StyleSheet.create({
   card: {
     borderWidth: 1,
-    borderColor: COLORS.primary10,
+    borderColor: c.primary10,
     borderRadius: 6,
     padding: 16,
     marginBottom: 16,
-    backgroundColor: COLORS.bgWhite,
+    backgroundColor: c.bgWhite,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 24,
-  },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 24 },
   numberBadge: {
     width: 40,
     height: 40,
     borderRadius: 6,
-    backgroundColor: COLORS.primary10,
+    backgroundColor: c.primary10,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  numberText: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: COLORS.primary80,
-  },
-  headerInfo: {
-    flex: 1,
-    gap: 6,
-  },
-  providerName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.textHeader,
-  },
-  ratingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  starIcon: {
-    color: COLORS.amber60,
-    fontSize: 10,
-  },
-  ratingText: {
-    fontSize: 10,
-    fontWeight: '300',
-    color: COLORS.textSecondary,
-  },
-  locationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginLeft: 6,
-  },
-  distanceText: {
-    fontSize: 10,
-    fontWeight: '300',
-    color: COLORS.textSecondary,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: COLORS.textDividers,
-    marginVertical: 16,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: 16,
-    marginBottom: 16,
-  },
+  numberText: { fontSize: 12, fontWeight: '400', color: c.primary80 },
+  headerInfo: { flex: 1, gap: 6 },
+  providerName: { fontSize: 16, fontWeight: '700', color: c.textHeader },
+  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  starIcon: { color: c.amber60, fontSize: 10 },
+  ratingText: { fontSize: 10, fontWeight: '300', color: c.textSecondary },
+  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginLeft: 6 },
+  distanceText: { fontSize: 10, fontWeight: '300', color: c.textSecondary },
+  divider: { height: 1, backgroundColor: c.textDividers, marginVertical: 16 },
+  statsRow: { flexDirection: 'row', gap: 16, marginBottom: 16 },
   statBox: {
     flex: 1,
-    backgroundColor: COLORS.primary10,
+    backgroundColor: c.primary10,
     borderWidth: 0.5,
-    borderColor: COLORS.primary50,
+    borderColor: c.primary50,
     borderRadius: 8,
     padding: 8,
     gap: 6,
   },
-  statValue: {
-    fontSize: 12,
-    fontWeight: '200',
-    color: COLORS.textBody,
-  },
-  statLabel: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: COLORS.textBody,
-  },
-  amountRow: {
+  statValue: { fontSize: 12, fontWeight: '200', color: c.textBody },
+  statLabel: { fontSize: 12, fontWeight: '400', color: c.textBody },
+  visitBadge: {
     flexDirection: 'row',
-    backgroundColor: COLORS.green10,
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: c.primary10,
     borderWidth: 0.5,
-    borderColor: COLORS.green80,
+    borderColor: c.primary80,
     borderRadius: 6,
     padding: 12,
     marginBottom: 16,
   },
-  amountLabel: {
-    flex: 1,
-    fontSize: 12,
-    fontWeight: '400',
-    color: COLORS.green90,
-  },
-  amountValue: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: COLORS.green90,
-    textAlign: 'right',
-  },
-  proposalSection: {
-    paddingVertical: 16,
-    gap: 16,
-  },
-  proposalTitle: {
-    fontSize: 14,
-    fontWeight: '400',
-    color: COLORS.textBody,
-  },
-  proposalText: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: COLORS.textSecondary,
-    lineHeight: 18,
-  },
-  actionRow: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  acceptButton: {
+  visitBadgeText: { fontSize: 12, fontWeight: '400', color: c.primary80 },
+  notesSection: { paddingVertical: 16, gap: 16 },
+  notesTitle: { fontSize: 14, fontWeight: '400', color: c.textBody },
+  notesText: { fontSize: 12, fontWeight: '400', color: c.textSecondary, lineHeight: 18 },
+  actionRow: { flexDirection: 'row', gap: 8 },
+  actionButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.green60,
     borderRadius: 8,
     padding: 16,
     gap: 6,
   },
-  acceptText: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: COLORS.textWhite,
-  },
-  declineButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.purple10,
-    borderWidth: 0.5,
-    borderColor: COLORS.purple70,
-    borderRadius: 8,
-    padding: 16,
-    gap: 6,
-  },
-  declineText: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: COLORS.purple70,
-  },
-  statusBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-});
+  bookButton: { backgroundColor: c.primary60 },
+  bookText: { fontSize: 12, fontWeight: '400', color: c.textWhite },
+  acceptButton: { backgroundColor: c.green60 },
+  acceptText: { fontSize: 12, fontWeight: '400', color: c.textWhite },
+  declineButton: { backgroundColor: c.purple10, borderWidth: 0.5, borderColor: c.purple70 },
+  declineText: { fontSize: 12, fontWeight: '400', color: c.purple70 },
+  statusBadge: { alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 },
+  statusText: { fontSize: 12, fontWeight: '600' },
+  });
+}
 
 // ===== VISIT REQUEST CARD COMPONENT (USER VIEW) =====
 const VisitRequestCard = ({
@@ -443,6 +541,27 @@ const VisitRequestCard = ({
   onBook?: () => void;
 }) => {
   const { t } = useTranslation();
+  const { colors } = useTheme();
+  const c = useMemo(() => ({
+    ...COLORS,
+    bgWhite: colors.cardBackground,
+    textHeader: colors.text,
+    textBody: colors.text,
+    textSecondary: colors.textSecondary,
+    textDividers: colors.border,
+    primary10: colors.primary + '20',
+    primary50: colors.primary,
+    primary60: colors.primary,
+    primary80: colors.primary,
+    textWhite: colors.white,
+    green10: colors.success + '20',
+    green60: colors.success,
+    green80: colors.success,
+    purple10: colors.cardBackground,
+    purple70: colors.primary,
+    amber60: colors.warning,
+  }), [colors]);
+  const visitStyles = useMemo(() => makeVisitStyles(c), [c]);
   
   const formatDate = (dateString?: string) => {
     if (!dateString) return t('Flexible');
@@ -473,7 +592,7 @@ const VisitRequestCard = ({
               {visitRequest.technician?.rating || 4.9} ({visitRequest.technician?.reviewCount || 234})
             </Text>
             <View style={visitStyles.locationRow}>
-              <Ionicons name="location" size={12} color={COLORS.textSecondary} />
+              <Ionicons name="location" size={12} color={c.textSecondary} />
               <Text style={visitStyles.distanceText}>{visitRequest.technician?.distance || '0.8 mi'}</Text>
             </View>
           </View>
@@ -501,7 +620,7 @@ const VisitRequestCard = ({
       
       {/* Visit Request Badge */}
       <View style={visitStyles.visitBadge}>
-        <Ionicons name="calendar-outline" size={14} color={COLORS.primary80} />
+        <Ionicons name="calendar-outline" size={14} color={c.primary80} />
         <Text style={visitStyles.visitBadgeText}>{t('Visit Request')}</Text>
       </View>
       
@@ -520,15 +639,15 @@ const VisitRequestCard = ({
             style={[visitStyles.actionButton, visitStyles.bookButton]} 
             onPress={onBook}
           >
-            <Ionicons name="calendar-outline" size={14} color={COLORS.textWhite} />
+            <Ionicons name="calendar-outline" size={14} color={c.textWhite} />
             <Text style={visitStyles.bookText}>{t('Book')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[visitStyles.actionButton, visitStyles.acceptButton]} onPress={onAccept}>
-            <Ionicons name="checkmark-circle" size={12} color={COLORS.textWhite} />
+            <Ionicons name="checkmark-circle" size={12} color={c.textWhite} />
             <Text style={visitStyles.acceptText}>{t('Accept')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[visitStyles.actionButton, visitStyles.declineButton]} onPress={onDecline}>
-            <Ionicons name="close-circle" size={12} color={COLORS.purple70} />
+            <Ionicons name="close-circle" size={12} color={c.purple70} />
             <Text style={visitStyles.declineText}>{t('Decline')}</Text>
           </TouchableOpacity>
         </View>
@@ -538,11 +657,11 @@ const VisitRequestCard = ({
       {visitRequest.status !== 'PENDING' && (
         <View style={[
           visitStyles.statusBadge,
-          { backgroundColor: visitRequest.status === 'ACCEPTED' ? COLORS.green10 : '#FEE2E2' }
+          { backgroundColor: visitRequest.status === 'ACCEPTED' ? c.green10 : (colors.error + '20') }
         ]}>
           <Text style={[
             visitStyles.statusText,
-            { color: visitRequest.status === 'ACCEPTED' ? COLORS.green80 : '#EF4444' }
+            { color: visitRequest.status === 'ACCEPTED' ? c.green80 : colors.error }
           ]}>
             {visitRequest.status}
           </Text>
@@ -552,177 +671,45 @@ const VisitRequestCard = ({
   );
 };
 
-const visitStyles = StyleSheet.create({
+function makePhaseStyles(c: typeof COLORS) {
+  return StyleSheet.create({
   card: {
     borderWidth: 1,
-    borderColor: COLORS.primary10,
-    borderRadius: 6,
+    borderColor: c.primary10,
+    borderRadius: 8,
     padding: 16,
-    marginBottom: 16,
-    backgroundColor: COLORS.bgWhite,
+    marginBottom: 10,
+    gap: 16,
+    backgroundColor: c.bgWhite,
   },
   header: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 6,
+  },
+  headerLeft: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 24,
+    gap: 6,
   },
   numberBadge: {
-    width: 40,
-    height: 40,
+    width: 24,
+    height: 24,
     borderRadius: 6,
-    backgroundColor: COLORS.primary10,
+    backgroundColor: c.primary10,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  numberText: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: COLORS.primary80,
-  },
-  headerInfo: {
-    flex: 1,
-    gap: 6,
-  },
-  providerName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.textHeader,
-  },
-  ratingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  starIcon: {
-    color: COLORS.amber60,
-    fontSize: 10,
-  },
-  ratingText: {
-    fontSize: 10,
-    fontWeight: '300',
-    color: COLORS.textSecondary,
-  },
-  locationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginLeft: 6,
-  },
-  distanceText: {
-    fontSize: 10,
-    fontWeight: '300',
-    color: COLORS.textSecondary,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: COLORS.textDividers,
-    marginVertical: 16,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: 16,
-    marginBottom: 16,
-  },
-  statBox: {
-    flex: 1,
-    backgroundColor: COLORS.primary10,
-    borderWidth: 0.5,
-    borderColor: COLORS.primary50,
-    borderRadius: 8,
-    padding: 8,
-    gap: 6,
-  },
-  statValue: {
-    fontSize: 12,
-    fontWeight: '200',
-    color: COLORS.textBody,
-  },
-  statLabel: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: COLORS.textBody,
-  },
-  visitBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: COLORS.primary10,
-    borderWidth: 0.5,
-    borderColor: COLORS.primary80,
-    borderRadius: 6,
-    padding: 12,
-    marginBottom: 16,
-  },
-  visitBadgeText: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: COLORS.primary80,
-  },
-  notesSection: {
-    paddingVertical: 16,
-    gap: 16,
-  },
-  notesTitle: {
-    fontSize: 14,
-    fontWeight: '400',
-    color: COLORS.textBody,
-  },
-  notesText: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: COLORS.textSecondary,
-    lineHeight: 18,
-  },
-  actionRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  actionButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 8,
-    padding: 16,
-    gap: 6,
-  },
-  bookButton: {
-    backgroundColor: COLORS.primary60,
-  },
-  bookText: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: COLORS.textWhite,
-  },
-  acceptButton: {
-    backgroundColor: COLORS.green60,
-  },
-  acceptText: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: COLORS.textWhite,
-  },
-  declineButton: {
-    backgroundColor: COLORS.purple10,
-    borderWidth: 0.5,
-    borderColor: COLORS.purple70,
-  },
-  declineText: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: COLORS.purple70,
-  },
-  statusBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-});
+  numberText: { fontSize: 12, fontWeight: '400', color: c.primary80 },
+  title: { fontSize: 12, fontWeight: '400', color: c.textBody, flex: 1 },
+  price: { fontSize: 10, fontWeight: '600', color: c.green80 },
+  description: { fontSize: 12, fontWeight: '400', color: c.textBody, lineHeight: 18 },
+  durationRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  durationText: { fontSize: 12, fontWeight: '400', color: c.textSecondary },
+  });
+}
 
 // ===== PHASE CARD COMPONENT (TECHNICIAN VIEW) =====
 const PhaseCard = ({
@@ -733,6 +720,17 @@ const PhaseCard = ({
   formatBudget: (amount: number) => string;
 }) => {
   const { t } = useTranslation();
+  const { colors } = useTheme();
+  const c = useMemo(() => ({
+    ...COLORS,
+    bgWhite: colors.cardBackground,
+    textBody: colors.text,
+    textSecondary: colors.textSecondary,
+    primary10: colors.primary + '20',
+    primary80: colors.primary,
+    green80: colors.success,
+  }), [colors]);
+  const phaseStyles = useMemo(() => makePhaseStyles(c), [c]);
   
   return (
     <View style={phaseStyles.card}>
@@ -751,7 +749,7 @@ const PhaseCard = ({
       </Text>
       
       <View style={phaseStyles.durationRow}>
-        <Ionicons name="time-outline" size={12} color={COLORS.textSecondary} />
+        <Ionicons name="time-outline" size={12} color={c.textSecondary} />
         <Text style={phaseStyles.durationText}>
           {phase.timeSpentDays >= 7 
             ? `${Math.ceil(phase.timeSpentDays / 7)} ${t('Week')}`
@@ -763,69 +761,57 @@ const PhaseCard = ({
   );
 };
 
-const phaseStyles = StyleSheet.create({
+function makeMyBidStyles(c: typeof COLORS) {
+  return StyleSheet.create({
   card: {
-    borderWidth: 1,
-    borderColor: COLORS.primary10,
+    backgroundColor: c.green10,
+    borderWidth: 0.5,
+    borderColor: c.green60,
     borderRadius: 8,
     padding: 16,
-    marginBottom: 10,
     gap: 16,
-    backgroundColor: COLORS.bgWhite,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: 6,
-  },
-  headerLeft: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  numberBadge: {
-    width: 24,
-    height: 24,
+  header: { flexDirection: 'row', alignItems: 'center' },
+  headerLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 16 },
+  iconBadge: {
+    width: 40,
+    height: 40,
     borderRadius: 6,
-    backgroundColor: COLORS.primary10,
+    backgroundColor: c.green60,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  numberText: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: COLORS.primary80,
-  },
-  title: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: COLORS.textBody,
-    flex: 1,
-  },
-  price: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: COLORS.green80,
-  },
-  description: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: COLORS.textBody,
-    lineHeight: 18,
-  },
-  durationRow: {
-    flexDirection: 'row',
+  title: { fontSize: 14, fontWeight: '600', color: c.textBody },
+  detailsRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  detailColumn: { gap: 4 },
+  detailLabel: { fontSize: 12, fontWeight: '500', color: c.textSecondary },
+  detailValue: { fontSize: 12, fontWeight: '600', color: c.green60 },
+  descriptionSection: { gap: 4 },
+  descriptionLabel: { fontSize: 12, fontWeight: '600', color: c.textBody },
+  descriptionText: { fontSize: 12, fontWeight: '400', color: c.textBody, lineHeight: 18 },
+  divider: { height: 1, backgroundColor: c.green80, opacity: 0.3 },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  statusText: { fontSize: 12, fontWeight: '600', color: c.amber70 },
+  viewButton: {
+    backgroundColor: c.green80,
+    borderRadius: 8,
+    padding: 16,
     alignItems: 'center',
-    gap: 6,
+    justifyContent: 'center',
   },
-  durationText: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: COLORS.textSecondary,
+  viewButtonText: { fontSize: 16, fontWeight: '400', color: c.textWhite, textAlign: 'center' },
+  withdrawButton: {
+    backgroundColor: c.purple10,
+    borderWidth: 1,
+    borderColor: c.purple60,
+    borderRadius: 8,
+    padding: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-});
+  withdrawButtonText: { fontSize: 16, fontWeight: '400', color: c.purple70, textAlign: 'center' },
+  });
+}
 
 // ===== MY BID CARD COMPONENT (TECHNICIAN VIEW) =====
 const MyBidCard = ({
@@ -840,6 +826,21 @@ const MyBidCard = ({
   onWithdrawBid: () => void;
 }) => {
   const { t } = useTranslation();
+  const { colors } = useTheme();
+  const c = useMemo(() => ({
+    ...COLORS,
+    textBody: colors.text,
+    textSecondary: colors.textSecondary,
+    textWhite: colors.white,
+    green10: colors.success + '20',
+    green60: colors.success,
+    green80: colors.success,
+    purple10: colors.cardBackground,
+    purple60: colors.primary,
+    purple70: colors.primary,
+    amber70: colors.warning,
+  }), [colors]);
+  const myBidStyles = useMemo(() => makeMyBidStyles(c), [c]);
   
   return (
     <View style={myBidStyles.card}>
@@ -847,7 +848,7 @@ const MyBidCard = ({
       <View style={myBidStyles.header}>
         <View style={myBidStyles.headerLeft}>
           <View style={myBidStyles.iconBadge}>
-            <Ionicons name="checkmark-circle" size={12} color={COLORS.textWhite} />
+            <Ionicons name="checkmark-circle" size={12} color={c.textWhite} />
           </View>
           <Text style={myBidStyles.title}>{t('My Bid')}</Text>
         </View>
@@ -861,7 +862,7 @@ const MyBidCard = ({
         </View>
         <View style={[myBidStyles.detailColumn, { alignItems: 'flex-end' }]}>
           <Text style={myBidStyles.detailLabel}>{t('Price')}</Text>
-          <Text style={[myBidStyles.detailValue, { color: COLORS.green60 }]}>
+          <Text style={[myBidStyles.detailValue, { color: c.green60 }]}>
             {formatBudget(bid.proposedBudget)}
           </Text>
         </View>
@@ -880,7 +881,7 @@ const MyBidCard = ({
       
       {/* Status */}
       <View style={myBidStyles.statusRow}>
-        <Ionicons name="time-outline" size={12} color={COLORS.amber70} />
+        <Ionicons name="time-outline" size={12} color={c.amber70} />
         <Text style={myBidStyles.statusText}>{t('Pending approval')}</Text>
       </View>
       
@@ -900,114 +901,6 @@ const MyBidCard = ({
     </View>
   );
 };
-
-const myBidStyles = StyleSheet.create({
-  card: {
-    backgroundColor: COLORS.green10,
-    borderWidth: 0.5,
-    borderColor: COLORS.green60,
-    borderRadius: 8,
-    padding: 16,
-    gap: 16,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  headerLeft: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  iconBadge: {
-    width: 40,
-    height: 40,
-    borderRadius: 6,
-    backgroundColor: COLORS.green60,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  title: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.textBody,
-  },
-  detailsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  detailColumn: {
-    gap: 4,
-  },
-  detailLabel: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: COLORS.textSecondary,
-  },
-  detailValue: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.green60,
-  },
-  descriptionSection: {
-    gap: 4,
-  },
-  descriptionLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.textBody,
-  },
-  descriptionText: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: COLORS.textBody,
-    lineHeight: 18,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: COLORS.green80,
-    opacity: 0.3,
-  },
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.amber70,
-  },
-  viewButton: {
-    backgroundColor: COLORS.green80,
-    borderRadius: 8,
-    padding: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  viewButtonText: {
-    fontSize: 16,
-    fontWeight: '400',
-    color: COLORS.textWhite,
-    textAlign: 'center',
-  },
-  withdrawButton: {
-    backgroundColor: COLORS.purple10,
-    borderWidth: 1,
-    borderColor: COLORS.purple60,
-    borderRadius: 8,
-    padding: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  withdrawButtonText: {
-    fontSize: 16,
-    fontWeight: '400',
-    color: COLORS.purple70,
-    textAlign: 'center',
-  },
-});
 
 // ===== MAIN COMPONENT =====
 export default function BidReceivedProjectScreen({
@@ -1050,6 +943,8 @@ export default function BidReceivedProjectScreen({
   }), [colors]);
   const [bids, setBids] = useState<Bid[]>([]);
   const [visitRequests, setVisitRequests] = useState<VisitRequest[]>([]);
+  const styles = useMemo(() => makeMainStyles(c), [c]);
+  const modalStyles = useMemo(() => makeModalStyles(c), [c]);
   // Use theme-aware palette in JSX: use c. instead of COLORS. for container and inline colors
   const [phases, setPhases] = useState<Phase[]>([]);
   const [myBid, setMyBid] = useState<Bid | null>(null);
@@ -1390,9 +1285,9 @@ export default function BidReceivedProjectScreen({
       <View style={styles.section}>
         <Text style={[styles.sectionHeaderTitle, { fontSize: scaledSize(16) }]}>{t('Project Overview')}</Text>
         <View style={[styles.requestIdCreatedRow, { flexDirection: i18n.language === 'ar' ? 'row-reverse' : 'row' }]}>
-          <Text style={[styles.requestIdText, { color: COLORS.textSecondary }]}>#{project.id}</Text>
+          <Text style={[styles.requestIdText, { color: c.textSecondary }]}>#{project.id}</Text>
           {project.createdAt ? (
-            <Text style={[styles.createdText, { color: COLORS.textSecondary }]}>
+            <Text style={[styles.createdText, { color: c.textSecondary }]}>
               {t('Created')}: {formatDate(project.createdAt)}
             </Text>
           ) : null}
@@ -1405,7 +1300,7 @@ export default function BidReceivedProjectScreen({
         <View style={[styles.statsRow, IS_LARGE_WEB && styles.statsRowLargeWeb]}>
           <View style={[styles.statCard, styles.budgetCard, IS_LARGE_WEB && styles.statCardLargeWeb]}>
             <View style={[styles.statHeader, IS_LARGE_WEB && styles.statHeaderLargeWeb]}>
-              <Ionicons name="cash-outline" size={IS_LARGE_WEB ? 20 : 12} color={COLORS.primary80} />
+              <Ionicons name="cash-outline" size={IS_LARGE_WEB ? 20 : 12} color={c.primary80} />
               <Text style={[styles.statTitle, IS_LARGE_WEB && styles.statTitleLargeWeb]}>
                 {t('Total Budget')}
               </Text>
@@ -1416,8 +1311,8 @@ export default function BidReceivedProjectScreen({
           </View>
           <View style={[styles.statCard, styles.durationCard, IS_LARGE_WEB && styles.statCardLargeWeb]}>
             <View style={[styles.statHeader, IS_LARGE_WEB && styles.statHeaderLargeWeb]}>
-              <Ionicons name="time-outline" size={IS_LARGE_WEB ? 20 : 12} color={COLORS.green90} />
-              <Text style={[styles.statTitle, { color: COLORS.green90 }, IS_LARGE_WEB && styles.statTitleLargeWeb]}>
+              <Ionicons name="time-outline" size={IS_LARGE_WEB ? 20 : 12} color={c.green90} />
+              <Text style={[styles.statTitle, { color: c.green90 }, IS_LARGE_WEB && styles.statTitleLargeWeb]}>
                 {t('Duration')}
               </Text>
             </View>
@@ -1431,7 +1326,7 @@ export default function BidReceivedProjectScreen({
       {/* Description Section */}
       <View style={styles.section}>
         <View style={[styles.sectionHeader, IS_LARGE_WEB && styles.sectionHeaderLargeWeb]}>
-          <Ionicons name="document-text-outline" size={IS_LARGE_WEB ? 24 : 12} color={COLORS.primary80} />
+          <Ionicons name="document-text-outline" size={IS_LARGE_WEB ? 24 : 12} color={c.primary80} />
           <Text style={[styles.sectionLabel, IS_LARGE_WEB && styles.sectionLabelLargeWeb]}>
             {t('Description')}
           </Text>
@@ -1446,7 +1341,7 @@ export default function BidReceivedProjectScreen({
       {/* Address Section */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Ionicons name="location-outline" size={12} color={COLORS.primary80} />
+          <Ionicons name="location-outline" size={12} color={c.primary80} />
           <Text style={styles.sectionLabel}>{t('Project Address')}</Text>
         </View>
         <View style={styles.descriptionBox}>
@@ -1460,7 +1355,7 @@ export default function BidReceivedProjectScreen({
       {project.requirements && project.requirements.length > 0 && (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="document-text-outline" size={12} color={COLORS.primary80} />
+            <Ionicons name="document-text-outline" size={12} color={c.primary80} />
             <Text style={styles.sectionLabel}>{t('Requirements')}</Text>
           </View>
           <View style={styles.descriptionBox}>
@@ -1478,7 +1373,7 @@ export default function BidReceivedProjectScreen({
       {phases.length > 0 && (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="document-text-outline" size={12} color={COLORS.primary80} />
+            <Ionicons name="document-text-outline" size={12} color={c.primary80} />
             <Text style={styles.sectionLabel}>{t('Work Phases')}</Text>
           </View>
           {phases.map((phase) => (
@@ -1521,7 +1416,7 @@ export default function BidReceivedProjectScreen({
           <Ionicons 
             name="cash-outline" 
             size={16} 
-            color={selectedTab === 'bids' ? COLORS.primary60 : COLORS.textSecondary} 
+            color={selectedTab === 'bids' ? c.primary60 : c.textSecondary} 
           />
           <Text style={[
             styles.tabText,
@@ -1540,7 +1435,7 @@ export default function BidReceivedProjectScreen({
           <Ionicons 
             name="calendar-outline" 
             size={16} 
-            color={selectedTab === 'visits' ? COLORS.primary60 : COLORS.textSecondary} 
+            color={selectedTab === 'visits' ? c.primary60 : c.textSecondary} 
           />
           <Text style={[
             styles.tabText,
@@ -1570,7 +1465,7 @@ export default function BidReceivedProjectScreen({
           {/* Bids List */}
           {bids.length === 0 ? (
             <View style={styles.emptyContainer}>
-              <Ionicons name="cash-outline" size={48} color={COLORS.textDividers} />
+              <Ionicons name="cash-outline" size={48} color={c.textDividers} />
               <Text style={styles.emptyText}>{t('No bids yet')}</Text>
               <Text style={styles.emptySubtext}>
                 {t('Service providers will start sending bids soon')}
@@ -1595,7 +1490,7 @@ export default function BidReceivedProjectScreen({
           {/* Visit Requests List */}
           {visitRequests.length === 0 ? (
             <View style={styles.emptyContainer}>
-              <Ionicons name="calendar-outline" size={48} color={COLORS.textDividers} />
+              <Ionicons name="calendar-outline" size={48} color={c.textDividers} />
               <Text style={styles.emptyText}>{t('No visit requests yet')}</Text>
               <Text style={styles.emptySubtext}>
                 {t('Technicians can request to visit your property before submitting a bid')}
@@ -1629,9 +1524,9 @@ export default function BidReceivedProjectScreen({
       <View style={styles.section}>
         <Text style={[styles.sectionHeaderTitle, { fontSize: scaledSize(16) }]}>{t('Project Overview')}</Text>
         <View style={[styles.requestIdCreatedRow, { flexDirection: i18n.language === 'ar' ? 'row-reverse' : 'row' }]}>
-          <Text style={[styles.requestIdText, { color: COLORS.textSecondary }]}>#{project.id}</Text>
+          <Text style={[styles.requestIdText, { color: c.textSecondary }]}>#{project.id}</Text>
           {project.createdAt ? (
-            <Text style={[styles.createdText, { color: COLORS.textSecondary }]}>
+            <Text style={[styles.createdText, { color: c.textSecondary }]}>
               {t('Created')}: {formatDate(project.createdAt)}
             </Text>
           ) : null}
@@ -1644,7 +1539,7 @@ export default function BidReceivedProjectScreen({
         <View style={[styles.statsRow, IS_LARGE_WEB && styles.statsRowLargeWeb]}>
           <View style={[styles.statCard, styles.budgetCard, IS_LARGE_WEB && styles.statCardLargeWeb]}>
             <View style={[styles.statHeader, IS_LARGE_WEB && styles.statHeaderLargeWeb]}>
-              <Ionicons name="cash-outline" size={IS_LARGE_WEB ? 20 : 12} color={COLORS.primary80} />
+              <Ionicons name="cash-outline" size={IS_LARGE_WEB ? 20 : 12} color={c.primary80} />
               <Text style={[styles.statTitle, IS_LARGE_WEB && styles.statTitleLargeWeb]}>
                 {t('Total Budget')}
               </Text>
@@ -1655,8 +1550,8 @@ export default function BidReceivedProjectScreen({
           </View>
           <View style={[styles.statCard, styles.durationCard, IS_LARGE_WEB && styles.statCardLargeWeb]}>
             <View style={[styles.statHeader, IS_LARGE_WEB && styles.statHeaderLargeWeb]}>
-              <Ionicons name="time-outline" size={IS_LARGE_WEB ? 20 : 12} color={COLORS.green90} />
-              <Text style={[styles.statTitle, { color: COLORS.green90 }, IS_LARGE_WEB && styles.statTitleLargeWeb]}>
+              <Ionicons name="time-outline" size={IS_LARGE_WEB ? 20 : 12} color={c.green90} />
+              <Text style={[styles.statTitle, { color: c.green90 }, IS_LARGE_WEB && styles.statTitleLargeWeb]}>
                 {t('Duration')}
               </Text>
             </View>
@@ -1670,7 +1565,7 @@ export default function BidReceivedProjectScreen({
       {/* Description Section */}
       <View style={styles.section}>
         <View style={[styles.sectionHeader, IS_LARGE_WEB && styles.sectionHeaderLargeWeb]}>
-          <Ionicons name="document-text-outline" size={IS_LARGE_WEB ? 24 : 12} color={COLORS.primary80} />
+          <Ionicons name="document-text-outline" size={IS_LARGE_WEB ? 24 : 12} color={c.primary80} />
           <Text style={[styles.sectionLabel, IS_LARGE_WEB && styles.sectionLabelLargeWeb]}>
             {t('Description')}
           </Text>
@@ -1686,7 +1581,7 @@ export default function BidReceivedProjectScreen({
       {project.requirements && project.requirements.length > 0 && (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="document-text-outline" size={12} color={COLORS.primary80} />
+            <Ionicons name="document-text-outline" size={12} color={c.primary80} />
             <Text style={styles.sectionLabel}>{t('Requirements')}</Text>
           </View>
           <View style={styles.descriptionBox}>
@@ -1704,7 +1599,7 @@ export default function BidReceivedProjectScreen({
       {phases.length > 0 && (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="document-text-outline" size={12} color={COLORS.primary80} />
+            <Ionicons name="document-text-outline" size={12} color={c.primary80} />
             <Text style={styles.sectionLabel}>{t('Work Phases')}</Text>
           </View>
           {phases.map((phase) => (
@@ -1730,7 +1625,7 @@ export default function BidReceivedProjectScreen({
         />
       ) : (
         <View style={styles.noBidContainer}>
-          <Ionicons name="hand-left-outline" size={48} color={COLORS.textDividers} />
+          <Ionicons name="hand-left-outline" size={48} color={c.textDividers} />
           <Text style={styles.noBidText}>{t('You have not placed a bid yet')}</Text>
           <Text style={styles.noBidSubtext}>
             {t('Submit a bid to start working on this project')}
@@ -1755,7 +1650,7 @@ export default function BidReceivedProjectScreen({
     <View style={[styles.container, { backgroundColor: c.bgWhite, paddingTop: IS_LARGE_WEB ? 0 : insets.top }]}>
       {/* Header - Hidden on large web */}
       {!IS_LARGE_WEB && (
-      <View style={styles.header}>
+      <View style={[styles.header, styles.headerLTR]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <Ionicons name="chevron-back" size={24} color={c.textHeader} />
         </TouchableOpacity>
@@ -1809,81 +1704,62 @@ export default function BidReceivedProjectScreen({
         <View style={{ height: insets.bottom + 20 }} />
       </ScrollView>
 
-      {/* View My Bid Modal (Technician) */}
-      <Modal
+      {/* View My Bid Modal (Technician) - unified bottom sheet */}
+      <AppBottomSheetModal
         visible={isMyBidModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={closeMyBidModal}
+        onClose={closeMyBidModal}
+        title={t('My Bid')}
       >
-        <View style={modalStyles.backdrop}>
-          <Pressable style={modalStyles.backdropPressable} onPress={closeMyBidModal} />
-          <View style={[modalStyles.card, IS_LARGE_WEB && modalStyles.cardWeb]}>
-            <View style={modalStyles.headerRow}>
-              <Text style={modalStyles.title}>{t('My Bid')}</Text>
-              <TouchableOpacity onPress={closeMyBidModal} style={modalStyles.closeButton} hitSlop={10}>
-                <Ionicons name="close" size={18} color={COLORS.textBody} />
-              </TouchableOpacity>
+        <View style={modalStyles.row}>
+          <Text style={modalStyles.label}>{t('Bid')} #</Text>
+          <Text style={modalStyles.value}>{myBid?.id ?? '-'}</Text>
         </View>
-        
-            <View style={modalStyles.divider} />
-
-            <View style={modalStyles.row}>
-              <Text style={modalStyles.label}>{t('Bid')} #</Text>
-              <Text style={modalStyles.value}>{myBid?.id ?? '-'}</Text>
-            </View>
-
-            <View style={modalStyles.row}>
-              <Text style={modalStyles.label}>{t('Bid Amount')}</Text>
-              <Text style={modalStyles.value}>{myBid ? formatBudget(myBid.proposedBudget) : '-'}</Text>
-            </View>
-
-            <View style={modalStyles.row}>
-              <Text style={modalStyles.label}>{t('Status')}</Text>
-              <View
-                style={[
-                  modalStyles.statusPill,
-                  {
-                    backgroundColor:
-                      myBid?.status === 'PENDING'
-                        ? 'rgba(218, 156, 2, 0.12)'
-                        : myBid?.status === 'ACCEPTED'
-                          ? 'rgba(0, 172, 79, 0.12)'
-                          : 'rgba(239, 68, 68, 0.12)',
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    modalStyles.statusText,
-                    {
-                      color:
-                        myBid?.status === 'PENDING'
-                          ? COLORS.amber70
-                          : myBid?.status === 'ACCEPTED'
-                            ? COLORS.green80
-                            : '#EF4444',
-                    },
-                  ]}
-                >
-                  {myBid?.status === 'PENDING' ? t('Pending approval') : (myBid?.status || '-')}
-          </Text>
-              </View>
+        <View style={modalStyles.row}>
+          <Text style={modalStyles.label}>{t('Bid Amount')}</Text>
+          {myBid ? <RiyalAmount amount={myBid.proposedBudget} locale={i18n.language === 'ar' ? 'ar-SA' : 'en-US'} /> : <Text style={modalStyles.value}>-</Text>}
         </View>
-        
-            <View style={modalStyles.section}>
-              <Text style={modalStyles.sectionTitle}>{t('Description')}</Text>
-              <Text style={modalStyles.sectionBody}>
-                {myBid?.comment || t('No description provided')}
+        <View style={modalStyles.row}>
+          <Text style={modalStyles.label}>{t('Status')}</Text>
+          <View
+            style={[
+              modalStyles.statusPill,
+              {
+                backgroundColor:
+                  myBid?.status === 'PENDING'
+                    ? 'rgba(218, 156, 2, 0.12)'
+                    : myBid?.status === 'ACCEPTED'
+                      ? 'rgba(0, 172, 79, 0.12)'
+                      : 'rgba(239, 68, 68, 0.12)',
+              },
+            ]}
+          >
+            <Text
+              style={[
+                modalStyles.statusText,
+                {
+                  color:
+                    myBid?.status === 'PENDING'
+                      ? c.amber70
+                      : myBid?.status === 'ACCEPTED'
+                        ? c.green80
+                        : '#EF4444',
+                },
+              ]}
+            >
+              {myBid?.status === 'PENDING' ? t('Pending approval') : (myBid?.status || '-')}
             </Text>
           </View>
-
-            <TouchableOpacity style={modalStyles.primaryButton} onPress={closeMyBidModal}>
-              <Text style={modalStyles.primaryButtonText}>{t('OK')}</Text>
-            </TouchableOpacity>
-          </View>
         </View>
-      </Modal>
+        <View style={modalStyles.section}>
+          <Text style={modalStyles.sectionTitle}>{t('Description')}</Text>
+          <Text style={modalStyles.sectionBody}>
+            {myBid?.comment || t('No description provided')}
+          </Text>
+        </View>
+        <TouchableOpacity style={modalStyles.primaryButton} onPress={closeMyBidModal}>
+          <Text style={modalStyles.primaryButtonText}>{t('OK')}</Text>
+        </TouchableOpacity>
+      </AppBottomSheetModal>
       
       {/* Book Appointment Modal */}
       {selectedVisitRequest && (
@@ -1930,477 +1806,483 @@ export default function BidReceivedProjectScreen({
   );
 }
 
-const modalStyles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    justifyContent: 'center',
-    padding: 16,
-  },
-  backdropPressable: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  card: {
-    backgroundColor: COLORS.bgWhite,
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: COLORS.primary10,
-  },
-  cardWeb: {
-    maxWidth: 520,
-    width: '100%',
-    alignSelf: 'center',
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  title: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.textHeader,
-  },
-  closeButton: {
-    width: 28,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 8,
-    backgroundColor: COLORS.primary10,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: COLORS.textDividers,
-    marginVertical: 12,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-    gap: 12,
-  },
-  label: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: COLORS.textSecondary,
-  },
-  value: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.textBody,
-  },
-  statusPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.06)',
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  section: {
-    marginTop: 6,
-    marginBottom: 16,
-    gap: 6,
-  },
-  sectionTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.textBody,
-  },
-  sectionBody: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: COLORS.textBody,
-    lineHeight: 18,
-  },
-  primaryButton: {
-    backgroundColor: COLORS.primary60,
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primaryButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.textWhite,
-  },
-});
+function makeModalStyles(c: typeof COLORS) {
+  return StyleSheet.create({
+    backdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.35)',
+      justifyContent: 'center',
+      padding: 16,
+    },
+    backdropPressable: {
+      ...StyleSheet.absoluteFillObject,
+    },
+    card: {
+      backgroundColor: c.bgWhite,
+      borderRadius: 12,
+      padding: 16,
+      borderWidth: 1,
+      borderColor: c.primary10,
+    },
+    cardWeb: {
+      maxWidth: 520,
+      width: '100%',
+      alignSelf: 'center',
+    },
+    headerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    title: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: c.textHeader,
+    },
+    closeButton: {
+      width: 28,
+      height: 28,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: 8,
+      backgroundColor: c.primary10,
+    },
+    divider: {
+      height: 1,
+      backgroundColor: c.textDividers,
+      marginVertical: 12,
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 10,
+      gap: 12,
+    },
+    label: {
+      fontSize: 12,
+      fontWeight: '400',
+      color: c.textSecondary,
+    },
+    value: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: c.textBody,
+    },
+    statusPill: {
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: 'rgba(0,0,0,0.06)',
+    },
+    statusText: {
+      fontSize: 12,
+      fontWeight: '600',
+    },
+    section: {
+      marginTop: 6,
+      marginBottom: 16,
+      gap: 6,
+    },
+    sectionTitle: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: c.textBody,
+    },
+    sectionBody: {
+      fontSize: 12,
+      fontWeight: '400',
+      color: c.textBody,
+      lineHeight: 18,
+    },
+    primaryButton: {
+      backgroundColor: c.primary60,
+      borderRadius: 10,
+      paddingVertical: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    primaryButtonText: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: c.textWhite,
+    },
+  });
+}
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    gap: 24,
-  },
-  headerLargeWeb: {
-    paddingHorizontal: 48,
-    paddingVertical: 32,
-    gap: 56,
-  },
-  backButton: {
-    width: 24,
-    height: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  backButtonLargeWeb: {
-    width: 40,
-    height: 40,
-  },
-  headerTitleContainer: {
-    flex: 1,
-    gap: 6,
-  },
-  headerTitleContainerLargeWeb: {
-    gap: 8,
-  },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.textHeader,
-  },
-  headerTitleLargeWeb: {
-    fontSize: 34,
-    fontWeight: '400',
-  },
-  headerSubtitle: {
-    fontSize: 10,
-    fontWeight: '300',
-    color: COLORS.textSecondary,
-  },
-  headerSubtitleLargeWeb: {
-    fontSize: 16,
-  },
-  stepperContainer: {
-    paddingHorizontal: 16,
-  },
-  stepperContainerLargeWeb: {
-    paddingHorizontal: 48,
-    paddingTop: 8,
-    paddingBottom: 16,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: COLORS.textDividers,
-    marginHorizontal: 16,
-    marginTop: 8,
-  },
-  dividerLargeWeb: {
-    marginHorizontal: 0,
-    marginTop: 0,
-    marginBottom: 24,
-  },
-  content: {
-    flex: 1,
-  },
-  contentContainer: {
-    padding: 16,
-  },
-  webContent: {
-    maxWidth: 1344,
-    alignSelf: 'center',
-    width: '100%',
-    paddingHorizontal: 48,
-    paddingVertical: 16,
-  },
-  webContentFullWidth: {
-    width: '100%',
-    paddingHorizontal: 48,
-    paddingVertical: 16,
-  },
-  section: {
-    marginBottom: 16,
-  },
-  sectionHeaderTitle: {
-    fontSize: 16,
-    fontWeight: '400',
-    color: COLORS.textHeader,
-    marginBottom: 12,
-  },
-  requestIdCreatedRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 8,
-  },
-  requestIdText: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  createdText: {
-    fontSize: 12,
-    fontWeight: '400',
-  },
-  sectionDescription: {
-    fontSize: 14,
-    fontWeight: '300',
-    color: COLORS.textBody,
-    lineHeight: 21,
-    marginBottom: 16,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 10,
-  },
-  sectionLabel: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: COLORS.primary80,
-  },
-  sectionDivider: {
-    height: 1,
-    backgroundColor: COLORS.textDividers,
-    marginVertical: 16,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  statsRowLargeWeb: {
-    gap: 32,
-  },
-  statCard: {
-    flex: 1,
-    borderWidth: 0.5,
-    borderRadius: 8,
-    padding: 16,
-    gap: 6,
-  },
-  statCardLargeWeb: {
-    padding: 32,
-    gap: 8,
-    minHeight: 79,
-  },
-  budgetCard: {
-    backgroundColor: COLORS.primary10,
-    borderColor: COLORS.textHeader,
-  },
-  durationCard: {
-    backgroundColor: COLORS.green10,
-    borderColor: COLORS.green80,
-  },
-  statHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  statHeaderLargeWeb: {
-    gap: 6,
-    marginBottom: 8,
-  },
-  statTitle: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: COLORS.primary80,
-  },
-  statTitleLargeWeb: {
-    fontSize: 16,
-  },
-  statValueText: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: COLORS.textSecondary,
-  },
-  statValueTextLargeWeb: {
-    fontSize: 14,
-  },
-  descriptionBox: {
-    borderWidth: 0.5,
-    borderColor: COLORS.textDividers,
-    borderRadius: 6,
-    padding: 16,
-  },
-  descriptionBoxLargeWeb: {
-    padding: 32,
-    minHeight: 98,
-  },
-  sectionHeaderLargeWeb: {
-    gap: 16,
-    marginBottom: 32,
-  },
-  sectionLabelLargeWeb: {
-    fontSize: 16,
-  },
-  descriptionTextLargeWeb: {
-    fontSize: 14,
-    lineHeight: 21,
-  },
-  descriptionText: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: COLORS.textBody,
-    lineHeight: 18,
-  },
-  requirementItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    marginBottom: 4,
-  },
-  bulletPoint: {
-    fontSize: 12,
-    color: COLORS.textBody,
-  },
-  requirementText: {
-    flex: 1,
-    fontSize: 12,
-    fontWeight: '400',
-    color: COLORS.textBody,
-    lineHeight: 18,
-  },
-  badgesRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 16,
-  },
-  bidsCountBadge: {
-    backgroundColor: COLORS.green10,
-    borderWidth: 0.5,
-    borderColor: COLORS.green80,
-    borderRadius: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-  },
-  bidsCountText: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: COLORS.green90,
-  },
-  visitsCountBadge: {
-    backgroundColor: COLORS.primary10,
-    borderWidth: 0.5,
-    borderColor: COLORS.primary60,
-    borderRadius: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-  },
-  visitsCountText: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: COLORS.primary80,
-  },
-  tabContainer: {
-    flexDirection: 'row',
-    backgroundColor: COLORS.primary10,
-    borderRadius: 12,
-    padding: 4,
-    marginBottom: 16,
-  },
-  tab: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-  },
-  tabActive: {
-    backgroundColor: COLORS.bgWhite,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  tabText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: COLORS.textSecondary,
-  },
-  tabTextActive: {
-    color: COLORS.primary60,
-    fontWeight: '600',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 40,
-    gap: 12,
-  },
-  loadingText: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    paddingVertical: 40,
-    gap: 12,
-  },
-  emptyText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.textBody,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-  },
-  noBidContainer: {
-    alignItems: 'center',
-    padding: 32,
-    gap: 12,
-    backgroundColor: COLORS.primary10,
-    borderRadius: 8,
-  },
-  noBidText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.textBody,
-  },
-  noBidSubtext: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-  },
-  // Title Section - Large Web (Figma Design)
-  titleSectionLargeWeb: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-    paddingHorizontal: 48,
-    paddingTop: 24,
-    paddingBottom: 0,
-  },
-  titleBackButton: {
-    width: 24,
-    height: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  titleContainer: {
-    flex: 1,
-    gap: 8,
-  },
-  titleMainText: {
-    fontSize: 42,
-    fontWeight: '700',
-    color: COLORS.textHeader,
-    lineHeight: 42,
-  },
-  titleSubtext: {
-    fontSize: 20,
-    fontWeight: '300',
-    color: COLORS.textSecondary,
-    lineHeight: 20,
-  },
-});
+function makeMainStyles(c: typeof COLORS) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 16,
+      paddingVertical: 16,
+      gap: 24,
+    },
+    headerLTR: {
+      direction: 'ltr',
+    },
+    headerLargeWeb: {
+      paddingHorizontal: 48,
+      paddingVertical: 32,
+      gap: 56,
+    },
+    backButton: {
+      width: 24,
+      height: 24,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    backButtonLargeWeb: {
+      width: 40,
+      height: 40,
+    },
+    headerTitleContainer: {
+      flex: 1,
+      gap: 6,
+    },
+    headerTitleContainerLargeWeb: {
+      gap: 8,
+    },
+    headerTitle: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: c.textHeader,
+    },
+    headerTitleLargeWeb: {
+      fontSize: 34,
+      fontWeight: '400',
+    },
+    headerSubtitle: {
+      fontSize: 10,
+      fontWeight: '300',
+      color: c.textSecondary,
+    },
+    headerSubtitleLargeWeb: {
+      fontSize: 16,
+    },
+    stepperContainer: {
+      paddingHorizontal: 16,
+    },
+    stepperContainerLargeWeb: {
+      paddingHorizontal: 48,
+      paddingTop: 8,
+      paddingBottom: 16,
+    },
+    divider: {
+      height: 1,
+      backgroundColor: c.textDividers,
+      marginHorizontal: 16,
+      marginTop: 8,
+    },
+    dividerLargeWeb: {
+      marginHorizontal: 0,
+      marginTop: 0,
+      marginBottom: 24,
+    },
+    content: {
+      flex: 1,
+    },
+    contentContainer: {
+      padding: 16,
+    },
+    webContent: {
+      maxWidth: 1344,
+      alignSelf: 'center',
+      width: '100%',
+      paddingHorizontal: 48,
+      paddingVertical: 16,
+    },
+    webContentFullWidth: {
+      width: '100%',
+      paddingHorizontal: 48,
+      paddingVertical: 16,
+    },
+    section: {
+      marginBottom: 16,
+    },
+    sectionHeaderTitle: {
+      fontSize: 16,
+      fontWeight: '400',
+      color: c.textHeader,
+      marginBottom: 12,
+    },
+    requestIdCreatedRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      marginBottom: 8,
+    },
+    requestIdText: {
+      fontSize: 12,
+      fontWeight: '500',
+    },
+    createdText: {
+      fontSize: 12,
+      fontWeight: '400',
+    },
+    sectionDescription: {
+      fontSize: 14,
+      fontWeight: '300',
+      color: c.textBody,
+      lineHeight: 21,
+      marginBottom: 16,
+    },
+    sectionHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginBottom: 10,
+    },
+    sectionLabel: {
+      fontSize: 12,
+      fontWeight: '400',
+      color: c.primary80,
+    },
+    sectionDivider: {
+      height: 1,
+      backgroundColor: c.textDividers,
+      marginVertical: 16,
+    },
+    statsRow: {
+      flexDirection: 'row',
+      gap: 16,
+    },
+    statsRowLargeWeb: {
+      gap: 32,
+    },
+    statCard: {
+      flex: 1,
+      borderWidth: 0.5,
+      borderRadius: 8,
+      padding: 16,
+      gap: 6,
+    },
+    statCardLargeWeb: {
+      padding: 32,
+      gap: 8,
+      minHeight: 79,
+    },
+    budgetCard: {
+      backgroundColor: c.primary10,
+      borderColor: c.textHeader,
+    },
+    durationCard: {
+      backgroundColor: c.green10,
+      borderColor: c.green80,
+    },
+    statHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    statHeaderLargeWeb: {
+      gap: 6,
+      marginBottom: 8,
+    },
+    statTitle: {
+      fontSize: 12,
+      fontWeight: '400',
+      color: c.primary80,
+    },
+    statTitleLargeWeb: {
+      fontSize: 16,
+    },
+    statValueText: {
+      fontSize: 12,
+      fontWeight: '400',
+      color: c.textSecondary,
+    },
+    statValueTextLargeWeb: {
+      fontSize: 14,
+    },
+    descriptionBox: {
+      borderWidth: 0.5,
+      borderColor: c.textDividers,
+      borderRadius: 6,
+      padding: 16,
+    },
+    descriptionBoxLargeWeb: {
+      padding: 32,
+      minHeight: 98,
+    },
+    sectionHeaderLargeWeb: {
+      gap: 16,
+      marginBottom: 32,
+    },
+    sectionLabelLargeWeb: {
+      fontSize: 16,
+    },
+    descriptionTextLargeWeb: {
+      fontSize: 14,
+      lineHeight: 21,
+    },
+    descriptionText: {
+      fontSize: 12,
+      fontWeight: '400',
+      color: c.textBody,
+      lineHeight: 18,
+    },
+    requirementItem: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 8,
+      marginBottom: 4,
+    },
+    bulletPoint: {
+      fontSize: 12,
+      color: c.textBody,
+    },
+    requirementText: {
+      flex: 1,
+      fontSize: 12,
+      fontWeight: '400',
+      color: c.textBody,
+      lineHeight: 18,
+    },
+    badgesRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 12,
+      marginBottom: 16,
+    },
+    bidsCountBadge: {
+      backgroundColor: c.green10,
+      borderWidth: 0.5,
+      borderColor: c.green80,
+      borderRadius: 16,
+      paddingVertical: 12,
+      paddingHorizontal: 12,
+    },
+    bidsCountText: {
+      fontSize: 12,
+      fontWeight: '400',
+      color: c.green90,
+    },
+    visitsCountBadge: {
+      backgroundColor: c.primary10,
+      borderWidth: 0.5,
+      borderColor: c.primary60,
+      borderRadius: 16,
+      paddingVertical: 12,
+      paddingHorizontal: 12,
+    },
+    visitsCountText: {
+      fontSize: 12,
+      fontWeight: '400',
+      color: c.primary80,
+    },
+    tabContainer: {
+      flexDirection: 'row',
+      backgroundColor: c.primary10,
+      borderRadius: 12,
+      padding: 4,
+      marginBottom: 16,
+    },
+    tab: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      borderRadius: 10,
+    },
+    tabActive: {
+      backgroundColor: c.bgWhite,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.1,
+      shadowRadius: 2,
+      elevation: 2,
+    },
+    tabText: {
+      fontSize: 12,
+      fontWeight: '500',
+      color: c.textSecondary,
+    },
+    tabTextActive: {
+      color: c.primary60,
+      fontWeight: '600',
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingVertical: 40,
+      gap: 12,
+    },
+    loadingText: {
+      fontSize: 14,
+      color: c.textSecondary,
+    },
+    emptyContainer: {
+      alignItems: 'center',
+      paddingVertical: 40,
+      gap: 12,
+    },
+    emptyText: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: c.textBody,
+    },
+    emptySubtext: {
+      fontSize: 14,
+      color: c.textSecondary,
+      textAlign: 'center',
+    },
+    noBidContainer: {
+      alignItems: 'center',
+      padding: 32,
+      gap: 12,
+      backgroundColor: c.primary10,
+      borderRadius: 8,
+    },
+    noBidText: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: c.textBody,
+    },
+    noBidSubtext: {
+      fontSize: 14,
+      color: c.textSecondary,
+      textAlign: 'center',
+    },
+    titleSectionLargeWeb: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 16,
+      paddingHorizontal: 48,
+      paddingTop: 24,
+      paddingBottom: 0,
+    },
+    titleBackButton: {
+      width: 24,
+      height: 24,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    titleContainer: {
+      flex: 1,
+      gap: 8,
+    },
+    titleMainText: {
+      fontSize: 42,
+      fontWeight: '700',
+      color: c.textHeader,
+      lineHeight: 42,
+    },
+    titleSubtext: {
+      fontSize: 20,
+      fontWeight: '300',
+      color: c.textSecondary,
+      lineHeight: 20,
+    },
+  });
+}

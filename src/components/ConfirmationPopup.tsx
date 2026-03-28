@@ -269,6 +269,7 @@ export interface ConfirmationState {
 }
 
 export const useConfirmationPopup = () => {
+  const { t } = useTranslation();
   const [confirmState, setConfirmState] = React.useState<ConfirmationState>({
     visible: false,
     title: '',
@@ -335,13 +336,13 @@ export const useConfirmationPopup = () => {
       title,
       message,
       type: 'warning',
-      confirmText: 'Logout',
+      confirmText: t('profile.logout'),
       cancelText: undefined,
       confirmStyle: 'destructive',
       icon: 'log-out-outline',
       onConfirm,
     });
-  }, []);
+  }, [t]);
 
   const hideConfirmation = useCallback(() => {
     setConfirmState(prev => ({ ...prev, visible: false }));

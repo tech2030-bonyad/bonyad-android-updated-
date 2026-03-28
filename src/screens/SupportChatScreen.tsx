@@ -598,7 +598,7 @@ const SupportChatScreen: React.FC<SupportChatScreenProps> = ({
       <View style={[styles.header, { backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <Ionicons
-            name={isRTL ? 'chevron-forward' : 'chevron-back'}
+            name="chevron-back"
             size={24}
             color={colors.text}
           />

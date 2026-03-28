@@ -1,13 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  Modal,
   TextInput,
   TouchableOpacity,
-  TouchableWithoutFeedback,
-  Animated,
   Platform,
   ScrollView,
   KeyboardAvoidingView,
@@ -19,11 +16,12 @@ import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import { SmallTaskRequest } from '../types/smallTasks';
 import AlertPopup, { useAlertPopup } from './AlertPopup';
-import { 
-  getRatingCategories, 
+import AppBottomSheetModal from './AppBottomSheetModal';
+import {
+  getRatingCategories,
   createReviewWithCategories,
   RatingCategory,
-  CategoryRating 
+  CategoryRating,
 } from '../services/RatingService';
 import CategoryRatingComponent from './CategoryRatingComponent';
 
@@ -62,38 +60,12 @@ export default function SmallTaskReviewForm({
   const [categories, setCategories] = useState<RatingCategory[]>([]);
   const [categoryRatings, setCategoryRatings] = useState<Record<number, number>>({});
 
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.9)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
-
   const { alertState, showError, showSuccess, hideAlert } = useAlertPopup();
 
   useEffect(() => {
     if (visible) {
       loadCategories();
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.spring(scaleAnim, {
-          toValue: 1,
-          tension: 50,
-          friction: 7,
-          useNativeDriver: true,
-        }),
-        Animated.spring(slideAnim, {
-          toValue: 0,
-          tension: 50,
-          friction: 7,
-          useNativeDriver: true,
-        }),
-      ]).start();
     } else {
-      fadeAnim.setValue(0);
-      scaleAnim.setValue(0.9);
-      slideAnim.setValue(50);
       setOverallRating(0);
       setComment('');
       setCategoryRatings({});
@@ -222,71 +194,20 @@ export default function SmallTaskReviewForm({
   };
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="none"
-      onRequestClose={onClose}
-      statusBarTranslucent
-    >
-      <TouchableWithoutFeedback onPress={onClose}>
-        <Animated.View
-          style={[
-            styles.backdrop,
-            {
-              opacity: fadeAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0, isDarkMode ? 0.8 : 0.6],
-              }),
-            },
-          ]}
-        >
-          {/* Blur effect handled via backdrop opacity */}
-        </Animated.View>
-      </TouchableWithoutFeedback>
-
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.container}
+    <>
+      <AppBottomSheetModal
+        visible={visible}
+        onClose={onClose}
+        title={t('Rate Your Experience')}
+        subtitle={t('How was your experience with this task?')}
       >
-        <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
-          <Animated.View
-            style={[
-              styles.modalContent,
-              {
-                backgroundColor: isDarkMode ? colors.cardBackground : 'rgba(255, 255, 255, 0.95)',
-                borderColor: colors.border,
-                opacity: fadeAnim,
-                transform: [{ scale: scaleAnim }, { translateY: slideAnim }],
-                ...(Platform.OS === 'web' && {
-                  backdropFilter: 'blur(20px)',
-                  WebkitBackdropFilter: 'blur(20px)',
-                }),
-              },
-            ]}
-          >
-            {/* Close Button */}
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <Ionicons name="close" size={24} color={colors.textSecondary} />
-            </TouchableOpacity>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardView}>
+          <ScrollView showsVerticalScrollIndicator={false}>
+            <View style={[styles.iconContainer, { backgroundColor: COLORS.amber10 }]}>
+              <Ionicons name="star" size={48} color={COLORS.amber60} />
+            </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {/* Icon */}
-              <View style={[styles.iconContainer, { backgroundColor: COLORS.amber10 }]}>
-                <Ionicons name="star" size={48} color={COLORS.amber60} />
-              </View>
-
-              {/* Title */}
-              <Text style={[styles.title, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '700' }]}>
-                {t('Rate Your Experience')}
-              </Text>
-
-              {/* Subtitle */}
-              <Text style={[styles.subtitle, { color: colors.textSecondary, fontFamily: fonts?.body || fontFamily }]}>
-                {t('How was your experience with this task?')}
-              </Text>
-
-              {/* Overall Rating Stars */}
+            {/* Overall Rating Stars */}
               <Text style={[styles.sectionTitle, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600', marginBottom: 12 }]}>
                 {t('Overall Rating')}
               </Text>
@@ -404,12 +325,10 @@ export default function SmallTaskReviewForm({
                   )}
                 </TouchableOpacity>
               </View>
-            </ScrollView>
-          </Animated.View>
-        </TouchableWithoutFeedback>
-      </KeyboardAvoidingView>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </AppBottomSheetModal>
 
-      {/* Alert Popup */}
       <AlertPopup
         visible={alertState.visible}
         title={alertState.title}
@@ -418,43 +337,13 @@ export default function SmallTaskReviewForm({
         buttons={alertState.buttons}
         onClose={hideAlert}
       />
-    </Modal>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#000',
-  },
-  modalContent: {
+  keyboardView: {
     width: '100%',
-    maxWidth: 500,
-    maxHeight: '90%',
-    borderRadius: 20,
-    padding: 24,
-    borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 10,
-  },
-  closeButton: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-    width: 32,
-    height: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 1,
   },
   iconContainer: {
     width: 80,

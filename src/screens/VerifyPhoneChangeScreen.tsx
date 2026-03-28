@@ -16,6 +16,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Card } from 'react-native-paper';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
+import { useRTL } from '../hooks/useRTL';
+import { getTopPadding } from '../utils/statusBarHelper';
 import { verifyPhoneChange, resendPhoneChangeOTP } from '../services/ProfileService';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
 
@@ -30,7 +32,8 @@ export default function VerifyPhoneChangeScreen({ newPhoneNumber, onBack, onVeri
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { fontFamily, scaledSize } = useFontFamily();
-  
+  const { arrowBackIcon } = useRTL();
+
   // Custom alert hook
   const { alertState, showError, showAlert, hideAlert } = useAlertPopup();
   
@@ -209,11 +212,11 @@ export default function VerifyPhoneChangeScreen({ newPhoneNumber, onBack, onVeri
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
+    <View style={[styles.container, { paddingTop: getTopPadding(insets), backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={[styles.header, { backgroundColor: colors.cardBackground }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+          <Ionicons name={arrowBackIcon} size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(18) }]}>{t('Verify Phone Number')}</Text>
         <View style={{ width: 40 }} />

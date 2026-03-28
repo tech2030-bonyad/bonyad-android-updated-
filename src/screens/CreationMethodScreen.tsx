@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   Platform,
   useWindowDimensions,
+  ScrollView,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -58,12 +59,12 @@ export default function CreationMethodScreen({
   const subcategoryName = isRTL && subcategory.nameAr ? subcategory.nameAr : subcategory.nameEn;
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <TouchableOpacity
           onPress={onBack}
-          style={[styles.backBtn, isRTL && { transform: [{ scaleX: -1 }] }]}
+          style={styles.backBtn}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
           <Ionicons name="chevron-back" size={28} color={colors.text} />
@@ -79,7 +80,11 @@ export default function CreationMethodScreen({
         <View style={styles.headerRight} />
       </View>
 
-      <View style={[styles.content, { backgroundColor: colors.background }]}>
+      <ScrollView
+        style={[styles.content, { backgroundColor: colors.background }]}
+        contentContainerStyle={[styles.contentScroll, { paddingBottom: Math.max(insets.bottom, 20) + 24 }]}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Info Section */}
         <View style={styles.infoSection}>
           <View style={[styles.categoryBadge, { backgroundColor: colors.primary + '15' }]}>
@@ -165,7 +170,7 @@ export default function CreationMethodScreen({
             </LinearGradient>
           </TouchableOpacity>
         </View>
-      </View>
+      </ScrollView>
     </View>
   );
 }
@@ -179,7 +184,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 10,
     borderBottomWidth: 1,
   },
   backBtn: {
@@ -205,17 +210,20 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    padding: 20,
+  },
+  contentScroll: {
+    paddingHorizontal: 16,
+    paddingTop: 10,
   },
   infoSection: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: 18,
   },
   categoryBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 7,
     borderRadius: 20,
     gap: 8,
     marginBottom: 16,
@@ -225,12 +233,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   instruction: {
-    fontSize: 20,
+    fontSize: 17,
     fontWeight: '700',
     textAlign: 'center',
   },
   cardsContainer: {
-    gap: 16,
+    gap: 12,
   },
   cardsContainerRow: {
     flexDirection: 'row',
@@ -238,7 +246,7 @@ const styles = StyleSheet.create({
     gap: 20,
   },
   methodCard: {
-    borderRadius: 20,
+    borderRadius: 16,
     overflow: 'hidden',
     ...Platform.select({
       ios: {
@@ -257,16 +265,16 @@ const styles = StyleSheet.create({
     maxWidth: 400,
   },
   cardGradient: {
-    padding: 24,
+    padding: 16,
     alignItems: 'center',
   },
   iconContainer: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 12,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
@@ -280,15 +288,15 @@ const styles = StyleSheet.create({
     }),
   },
   cardTitle: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: '700',
-    marginBottom: 12,
+    marginBottom: 8,
   },
   cardDescription: {
-    fontSize: 15,
+    fontSize: 13,
     textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 20,
+    lineHeight: 19,
+    marginBottom: 12,
   },
   benefitBadge: {
     flexDirection: 'row',

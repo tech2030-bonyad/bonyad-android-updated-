@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getTopPadding } from '../utils/statusBarHelper';
 import { API_ENDPOINTS, buildApiUrlWithParams } from '../config/api';
 import { storage } from '../utils/storage';
 import ProjectCreationFlow from '../components/ProjectCreationFlow';
@@ -86,7 +87,6 @@ export default function CompletedProjectScreen({
   const { colors } = useTheme();
   const { fontFamily, scaledSize } = useFontFamily();
   const insets = useSafeAreaInsets();
-  const isRTL = i18n.language === 'ar';
   const c = useMemo(() => ({
     ...COLORS,
     bgWhite: colors.cardBackground,
@@ -104,7 +104,10 @@ export default function CompletedProjectScreen({
     green70: colors.success,
     green80: colors.success,
     green90: colors.success,
+    amber60: colors.warning,
+    error: colors.error,
   }), [colors]);
+  const styles = useMemo(() => makeStyles(c), [c]);
   
   const screenWidth = Dimensions.get('window').width;
   const IS_WEB = Platform.OS === 'web';
@@ -647,7 +650,7 @@ export default function CompletedProjectScreen({
             <Ionicons
               name={star <= currentRating ? 'star' : 'star-outline'}
               size={size}
-              color={star <= currentRating ? COLORS.amber60 : COLORS.textSecondary}
+              color={star <= currentRating ? c.amber60 : c.textSecondary}
             />
           </TouchableOpacity>
         ))}
@@ -660,23 +663,23 @@ export default function CompletedProjectScreen({
 
   return (
     <>
-      <View style={[styles.container, { backgroundColor: c.bgWhite, paddingTop: IS_LARGE_WEB ? 0 : Math.max(insets.top, 16) }]}>
+      <View style={[styles.container, { backgroundColor: c.bgWhite, paddingTop: IS_LARGE_WEB ? 0 : getTopPadding(insets) }]}>
         {/* Header - Hidden on large web */}
         {!IS_LARGE_WEB && (
-        <View style={[styles.header, { paddingTop: Math.max(insets.top, 16) }]}>
-          <View style={[styles.headerContent, isRTL && styles.headerContentRTL]}>
+        <View style={[styles.header, styles.headerLTR, { paddingTop: getTopPadding(insets) }]}>
+          <View style={[styles.headerContent]}>
             <TouchableOpacity onPress={onBack} style={styles.backButton}>
               <Ionicons 
-                name={isRTL ? "chevron-forward" : "chevron-back"} 
+                name="chevron-back" 
                 size={28} 
                 color={c.primary100} 
               />
             </TouchableOpacity>
-            <View style={[styles.headerTextContainer, isRTL && styles.headerTextContainerRTL]}>
-              <Text style={[styles.headerTitle, isRTL && styles.textRTL, { fontSize: scaledSize(20) }]}>
+            <View style={[styles.headerTextContainer]}>
+              <Text style={[styles.headerTitle,  { fontSize: scaledSize(20) }]}>
                 {serviceName || project.description || t('Contracting Services')}
               </Text>
-              <Text style={[styles.headerSubtitle, isRTL && styles.textRTL, { fontSize: scaledSize(14) }]}>
+              <Text style={[styles.headerSubtitle,  { fontSize: scaledSize(14) }]}>
                   {t('Completed Project')}
               </Text>
             </View>
@@ -704,16 +707,16 @@ export default function CompletedProjectScreen({
               <View style={styles.titleSectionLargeWeb}>
                 <TouchableOpacity onPress={onBack} style={styles.titleBackButton}>
                   <Ionicons 
-                    name={isRTL ? "chevron-forward" : "chevron-back"} 
+                    name="chevron-back" 
                     size={24} 
                     color={c.primary100} 
                   />
                 </TouchableOpacity>
                 <View style={styles.titleContainer}>
-                  <Text style={[styles.titleMainText, isRTL && { textAlign: 'right' }, { fontSize: scaledSize(42) }]}>
+                  <Text style={[styles.titleMainText, { fontSize: scaledSize(42) }]}>
                     {serviceName || project.description || t('Contracting Services')}
                   </Text>
-                  <Text style={[styles.titleSubtext, isRTL && { textAlign: 'right' }, { fontSize: scaledSize(20) }]}>
+                  <Text style={[styles.titleSubtext, { fontSize: scaledSize(20) }]}>
                     {t('Completed Project')}
                   </Text>
                 </View>
@@ -791,7 +794,7 @@ export default function CompletedProjectScreen({
                     <Ionicons 
                       name="checkmark-circle-outline" 
                       size={16} 
-                      color={COLORS.green60} 
+                      color={c.green60} 
                     />
                     <Text style={styles.phaseDescription}>{phase.description}</Text>
                     <View style={styles.phaseDateContainer}>
@@ -801,7 +804,7 @@ export default function CompletedProjectScreen({
                       <Ionicons 
                         name="calendar-outline" 
                         size={14} 
-                        color={COLORS.textSecondary} 
+                        color={c.textSecondary} 
                       />
                     </View>
                   </View>
@@ -822,7 +825,7 @@ export default function CompletedProjectScreen({
                 
                 {isReviewLoading ? (
                   <View style={styles.reviewLoading}>
-                    <ActivityIndicator color={COLORS.primary60} />
+                    <ActivityIndicator color={c.primary60} />
                   </View>
                 ) : reviewStatus.hasReview && reviewStatus.review && !isEditingReview ? (
                   <View style={styles.existingReviewContainer}>
@@ -837,7 +840,7 @@ export default function CompletedProjectScreen({
                         style={styles.reviewActionButton}
                         onPress={handleEditReview}
                       >
-                        <Ionicons name="create-outline" size={18} color={COLORS.primary70} />
+                        <Ionicons name="create-outline" size={18} color={c.primary70} />
                         <Text style={styles.reviewActionText}>{t('Edit Review')}</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
@@ -846,9 +849,9 @@ export default function CompletedProjectScreen({
                         disabled={isDeletingReview}
                       >
                         {isDeletingReview ? (
-                          <ActivityIndicator size="small" color="#DC2626" />
+                          <ActivityIndicator size="small" color={c.error} />
                         ) : (
-                          <Ionicons name="trash-outline" size={18} color="#DC2626" />
+                          <Ionicons name="trash-outline" size={18} color={c.error} />
                         )}
                         <Text style={[styles.reviewActionText, styles.deleteText]}>
                           {t('Delete Review')}
@@ -862,7 +865,7 @@ export default function CompletedProjectScreen({
                     <TextInput
                       style={styles.reviewInput}
                       placeholder={t('Share your feedback (Optional)')}
-                      placeholderTextColor={COLORS.primary100}
+                      placeholderTextColor={c.primary100}
                       value={inlineComment}
                       onChangeText={setInlineComment}
                       multiline
@@ -885,7 +888,7 @@ export default function CompletedProjectScreen({
                         disabled={inlineRating === 0 || isSubmittingReview}
                       >
                         {isSubmittingReview ? (
-                          <ActivityIndicator size="small" color={COLORS.textWhite} />
+                          <ActivityIndicator size="small" color={c.textWhite} />
                         ) : (
                           <Text style={styles.submitReviewText}>{t('Update Review')}</Text>
                         )}
@@ -898,7 +901,7 @@ export default function CompletedProjectScreen({
                     <TextInput
                       style={styles.reviewInput}
                       placeholder={t('Share your feedback (Optional)')}
-                      placeholderTextColor={COLORS.primary100}
+                      placeholderTextColor={c.primary100}
                       value={inlineComment}
                       onChangeText={setInlineComment}
                       multiline
@@ -913,7 +916,7 @@ export default function CompletedProjectScreen({
                       disabled={inlineRating === 0 || (!technicianId && !userId) || isSubmittingReview}
                     >
                       {isSubmittingReview ? (
-                        <ActivityIndicator size="small" color={COLORS.textWhite} />
+                        <ActivityIndicator size="small" color={c.textWhite} />
                       ) : (
                         <Text style={styles.submitReviewText}>{t('Submit Review')}</Text>
                       )}
@@ -930,7 +933,7 @@ export default function CompletedProjectScreen({
                 style={styles.outlineButton}
                 onPress={handleDownloadInvoice}
               >
-                <Ionicons name="download-outline" size={24} color={COLORS.primary70} />
+                <Ionicons name="download-outline" size={24} color={c.primary70} />
                 <Text style={styles.outlineButtonText}>{t('Download Invoice')}</Text>
               </TouchableOpacity>
 
@@ -939,7 +942,7 @@ export default function CompletedProjectScreen({
                 style={styles.outlineButton}
                 onPress={handleContactPress}
               >
-                <Ionicons name="chatbubble-outline" size={24} color={COLORS.primary70} />
+                <Ionicons name="chatbubble-outline" size={24} color={c.primary70} />
                 <Text style={styles.outlineButtonText}>
                   {isTechnician ? t('Contact User') : t('Contact Provider')}
                 </Text>
@@ -964,14 +967,18 @@ export default function CompletedProjectScreen({
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(c: typeof COLORS & { error: string }) {
+  return StyleSheet.create({
   container: {
     flex: 1,
   },
   header: {
-    backgroundColor: COLORS.bgWhite,
+    backgroundColor: c.bgWhite,
     paddingHorizontal: 16,
     paddingBottom: 12,
+  },
+  headerLTR: {
+    direction: 'ltr',
   },
   headerLargeWeb: {
     paddingHorizontal: 48,
@@ -984,9 +991,6 @@ const styles = StyleSheet.create({
   },
   headerContentLargeWeb: {
     gap: 56,
-  },
-  headerContentRTL: {
-    flexDirection: 'row-reverse',
   },
   backButton: {
     width: 32,
@@ -1005,13 +1009,10 @@ const styles = StyleSheet.create({
   headerTextContainerLargeWeb: {
     gap: 8,
   },
-  headerTextContainerRTL: {
-    alignItems: 'flex-end',
-  },
   headerTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: COLORS.primary100,
+    color: c.primary100,
   },
   headerTitleLargeWeb: {
     fontSize: 34,
@@ -1020,13 +1021,10 @@ const styles = StyleSheet.create({
   headerSubtitle: {
     fontSize: 14,
     fontWeight: '300',
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
   },
   headerSubtitleLargeWeb: {
     fontSize: 16,
-  },
-  textRTL: {
-    textAlign: 'right',
   },
   flowContainer: {
     paddingHorizontal: 16,
@@ -1039,7 +1037,7 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: COLORS.textDividers,
+    backgroundColor: c.textDividers,
     marginHorizontal: 16,
   },
   dividerLargeWeb: {
@@ -1055,7 +1053,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 14,
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
   },
   scrollView: {
     flex: 1,
@@ -1080,35 +1078,35 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 6,
-    backgroundColor: COLORS.green10,
+    backgroundColor: c.green10,
     alignItems: 'center',
     justifyContent: 'center',
   },
   successTitle: {
     fontSize: 20,
     fontWeight: '400',
-    color: COLORS.primary100,
+    color: c.primary100,
   },
   successSubtitle: {
     fontSize: 16,
     fontWeight: '400',
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
     textAlign: 'center',
     paddingHorizontal: 16,
   },
   // Summary Card
   summaryCard: {
-    backgroundColor: COLORS.green60,
+    backgroundColor: c.green60,
     borderRadius: 6,
     borderWidth: 0.5,
-    borderColor: COLORS.textDividers,
+    borderColor: c.textDividers,
     padding: 16,
     gap: 16,
   },
   summaryTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: COLORS.textWhite,
+    color: c.textWhite,
   },
   summaryContent: {
     padding: 16,
@@ -1123,12 +1121,12 @@ const styles = StyleSheet.create({
   summaryLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: COLORS.green10,
+    color: c.green10,
   },
   summaryValue: {
     fontSize: 14,
     fontWeight: '400',
-    color: COLORS.textWhite,
+    color: c.textWhite,
     textAlign: 'right',
   },
   // Phases Section
@@ -1138,14 +1136,14 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: '400',
-    color: COLORS.textBody,
+    color: c.textBody,
   },
   phaseItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.green10,
+    backgroundColor: c.green10,
     borderWidth: 0.5,
-    borderColor: COLORS.green80,
+    borderColor: c.green80,
     borderRadius: 6,
     paddingHorizontal: 14,
     paddingVertical: 14,
@@ -1156,7 +1154,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     fontWeight: '400',
-    color: COLORS.green90,
+    color: c.green90,
   },
   phaseDateContainer: {
     flexDirection: 'row',
@@ -1166,7 +1164,7 @@ const styles = StyleSheet.create({
   phaseDate: {
     fontSize: 14,
     fontWeight: '300',
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
   },
   // Review Section
   reviewSection: {
@@ -1174,7 +1172,7 @@ const styles = StyleSheet.create({
   },
   reviewCard: {
     borderWidth: 0.5,
-    borderColor: COLORS.textDividers,
+    borderColor: c.textDividers,
     borderRadius: 8,
     padding: 16,
     gap: 16,
@@ -1182,12 +1180,12 @@ const styles = StyleSheet.create({
   reviewTitle: {
     fontSize: 16,
     fontWeight: '400',
-    color: COLORS.textBody,
+    color: c.textBody,
   },
   reviewSubtitle: {
     fontSize: 14,
     fontWeight: '400',
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
   },
   reviewLoading: {
     paddingVertical: 24,
@@ -1205,30 +1203,30 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   reviewInput: {
-    backgroundColor: COLORS.primary10,
+    backgroundColor: c.primary10,
     borderWidth: 0.5,
-    borderColor: COLORS.primary100,
+    borderColor: c.primary100,
     borderRadius: 8,
     padding: 8,
     height: 84,
     fontSize: 14,
     fontWeight: '100',
-    color: COLORS.primary100,
+    color: c.primary100,
     textAlignVertical: 'top',
   },
   submitReviewButton: {
-    backgroundColor: COLORS.primary70,
+    backgroundColor: c.primary70,
     borderRadius: 8,
     padding: 16,
     alignItems: 'center',
   },
   submitButtonDisabled: {
-    backgroundColor: COLORS.textDividers,
+    backgroundColor: c.textDividers,
   },
   submitReviewText: {
     fontSize: 16,
     fontWeight: '400',
-    color: COLORS.textWhite,
+    color: c.textWhite,
   },
   editReviewButtons: {
     flexDirection: 'row',
@@ -1237,7 +1235,7 @@ const styles = StyleSheet.create({
   cancelEditButton: {
     flex: 1,
     borderWidth: 1,
-    borderColor: COLORS.textDividers,
+    borderColor: c.textDividers,
     borderRadius: 8,
     padding: 16,
     alignItems: 'center',
@@ -1245,11 +1243,11 @@ const styles = StyleSheet.create({
   cancelEditText: {
     fontSize: 16,
     fontWeight: '400',
-    color: COLORS.textBody,
+    color: c.textBody,
   },
   updateReviewButton: {
     flex: 2,
-    backgroundColor: COLORS.primary70,
+    backgroundColor: c.primary70,
     borderRadius: 8,
     padding: 16,
     alignItems: 'center',
@@ -1261,7 +1259,7 @@ const styles = StyleSheet.create({
   existingReviewComment: {
     fontSize: 14,
     fontWeight: '400',
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
     fontStyle: 'italic',
     textAlign: 'center',
   },
@@ -1279,18 +1277,18 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: COLORS.primary70,
+    borderColor: c.primary70,
   },
   reviewActionText: {
     fontSize: 14,
     fontWeight: '600',
-    color: COLORS.primary70,
+    color: c.primary70,
   },
   deleteButton: {
-    borderColor: '#DC2626',
+    borderColor: c.error,
   },
   deleteText: {
-    color: '#DC2626',
+    color: c.error,
   },
   // Actions Section
   actionsSection: {
@@ -1303,18 +1301,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 12,
     borderWidth: 0.5,
-    borderColor: COLORS.primary70,
+    borderColor: c.primary70,
     borderRadius: 8,
     padding: 16,
   },
   outlineButtonText: {
     fontSize: 16,
     fontWeight: '400',
-    color: COLORS.primary70,
+    color: c.primary70,
     textAlign: 'center',
   },
   primaryButton: {
-    backgroundColor: COLORS.green70,
+    backgroundColor: c.green70,
     borderRadius: 8,
     padding: 16,
     alignItems: 'center',
@@ -1322,7 +1320,7 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     fontSize: 16,
     fontWeight: '400',
-    color: COLORS.textWhite,
+    color: c.textWhite,
   },
   // Title Section - Large Web (Figma Design)
   titleSectionLargeWeb: {
@@ -1346,14 +1344,15 @@ const styles = StyleSheet.create({
   titleMainText: {
     fontSize: 42,
     fontWeight: '700',
-    color: COLORS.primary100,
+    color: c.primary100,
     lineHeight: 42,
   },
   titleSubtext: {
     fontSize: 20,
     fontWeight: '300',
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
     lineHeight: 20,
-  },
-});
+  }
+  });
+}
 

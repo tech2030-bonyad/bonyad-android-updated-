@@ -3,7 +3,7 @@
  * Same backend integration as web: GET /users/profile, GET /regions, PUT /users/profile (regionIds).
  * Android app design (Figma colors, ThemeContext, FontContext).
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,8 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Modal,
+  Animated,
+  Dimensions,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,6 +23,7 @@ import { useFontFamily } from '../context/FontContext';
 import { storage } from '../utils/storage';
 import { API_ENDPOINTS, buildApiUrl } from '../config/api';
 import { updateProfile, getUserProfile } from '../services/ProfileService';
+import { getTopPadding } from '../utils/statusBarHelper';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
 import ConfirmationPopup, { useConfirmationPopup } from '../components/ConfirmationPopup';
 
@@ -56,8 +59,31 @@ export default function RegionsManagementScreen({ onBack }: RegionsManagementScr
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedRegions, setSelectedRegions] = useState<number[]>([]);
 
+  const screenWidth = Dimensions.get('window').width;
+  const screenSlideX = useRef(new Animated.Value(0)).current;
+  const screenOpacity = useRef(new Animated.Value(0)).current;
+  const modalFade = useRef(new Animated.Value(0)).current;
+  const modalSlideX = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    screenSlideX.setValue(-screenWidth);
+    screenOpacity.setValue(0);
+    Animated.parallel([
+      Animated.timing(screenOpacity, { toValue: 1, duration: 220, useNativeDriver: true }),
+      Animated.spring(screenSlideX, { toValue: 0, tension: 65, friction: 11, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
+  const handleBackScreen = () => {
+    Animated.parallel([
+      Animated.timing(screenOpacity, { toValue: 0, duration: 180, useNativeDriver: true }),
+      Animated.timing(screenSlideX, { toValue: screenWidth, duration: 220, useNativeDriver: true }),
+    ]).start(() => onBack());
+  };
+
   const { alertState, showSuccess, showError, hideAlert } = useAlertPopup();
   const { confirmState, showDeleteConfirmation, hideConfirmation } = useConfirmationPopup();
+  const removeInProgressRef = useRef(false);
 
   const bgColor = isDarkMode ? colors.background : FIGMA_COLORS.white;
   const cardBgColor = isDarkMode ? colors.cardBackground : FIGMA_COLORS.white;
@@ -67,6 +93,29 @@ export default function RegionsManagementScreen({ onBack }: RegionsManagementScr
   useEffect(() => {
     fetchData();
   }, []);
+
+  const closeAddModal = () => {
+    Animated.parallel([
+      Animated.timing(modalFade, { toValue: 0, duration: 180, useNativeDriver: true }),
+      Animated.timing(modalSlideX, { toValue: screenWidth, duration: 220, useNativeDriver: true }),
+    ]).start(() => {
+      setShowAddModal(false);
+      setSelectedRegions([]);
+    });
+  };
+
+  useEffect(() => {
+    if (showAddModal) {
+      modalSlideX.setValue(-screenWidth);
+      modalFade.setValue(0);
+      Animated.parallel([
+        Animated.timing(modalFade, { toValue: 1, duration: 220, useNativeDriver: true }),
+        Animated.spring(modalSlideX, { toValue: 0, tension: 65, friction: 11, useNativeDriver: true }),
+      ]).start();
+    } else {
+      modalSlideX.setValue(-screenWidth);
+    }
+  }, [showAddModal]);
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -97,8 +146,7 @@ export default function RegionsManagementScreen({ onBack }: RegionsManagementScr
       const allIds = [...new Set([...existingIds, ...regionIds])];
       await updateProfile({ regionIds: allIds });
       showSuccess(t('Regions added successfully'), t('Success'));
-      setShowAddModal(false);
-      setSelectedRegions([]);
+      closeAddModal();
       fetchData();
     } catch (error: any) {
       showError(error.message || t('Failed to add regions'), t('Error'));
@@ -112,13 +160,18 @@ export default function RegionsManagementScreen({ onBack }: RegionsManagementScr
       t('Remove Region'),
       t('Are you sure you want to remove this working area?'),
       async () => {
+        if (removeInProgressRef.current) return;
+        removeInProgressRef.current = true;
+        hideConfirmation();
         try {
           const updatedIds = myRegions.filter((r) => r.id !== regionId).map((r) => r.id);
           await updateProfile({ regionIds: updatedIds });
           showSuccess(t('Region removed successfully'), t('Success'));
-          fetchData();
+          fetchData().catch(() => {});
         } catch (error: any) {
           showError(error.message || t('Failed to remove region'), t('Error'));
+        } finally {
+          removeInProgressRef.current = false;
         }
       },
       t('Remove')
@@ -146,34 +199,28 @@ export default function RegionsManagementScreen({ onBack }: RegionsManagementScr
 
   if (isLoading) {
     return (
-      <View style={[styles.loadingContainer, { paddingTop: insets.top, backgroundColor: bgColor }]}>
+      <Animated.View style={[styles.loadingContainer, { paddingTop: getTopPadding(insets), backgroundColor: bgColor, opacity: screenOpacity, transform: [{ translateX: screenSlideX }] }]}>
         <ActivityIndicator size="large" color={primaryColor} />
-      </View>
+      </Animated.View>
     );
   }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: bgColor }]}>
+    <Animated.View style={[styles.container, { paddingTop: getTopPadding(insets), backgroundColor: bgColor, opacity: screenOpacity, transform: [{ translateX: screenSlideX }] }]}>
       <View style={[styles.headerRow, isRTL && styles.rowRTL]}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Ionicons name={isRTL ? 'chevron-forward' : 'chevron-back'} size={24} color={textColor} />
+        <TouchableOpacity onPress={handleBackScreen} style={styles.backButton}>
+          <Ionicons name="chevron-back" size={24} color={textColor} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: textColor, fontSize: scaledSize(18) }]}>
           {t('Working Areas')}
         </Text>
-        <View style={styles.placeholder} />
+        <TouchableOpacity
+          style={[styles.addButton, { backgroundColor: primaryColor }]}
+          onPress={() => setShowAddModal(true)}
+        >
+          <Ionicons name="add" size={24} color="#fff" />
+        </TouchableOpacity>
       </View>
-
-      {availableRegions.length > 0 && (
-        <View style={styles.addButtonRow}>
-          <TouchableOpacity
-            style={[styles.addButton, { backgroundColor: primaryColor }]}
-            onPress={() => setShowAddModal(true)}
-          >
-            <Ionicons name="add" size={24} color="#fff" />
-          </TouchableOpacity>
-        </View>
-      )}
 
       <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollView}>
         <View style={styles.content}>
@@ -227,12 +274,17 @@ export default function RegionsManagementScreen({ onBack }: RegionsManagementScr
         </View>
       </ScrollView>
 
-      <Modal visible={showAddModal} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: cardBgColor }]}>
+      <Modal visible={showAddModal} animationType="none" transparent onRequestClose={closeAddModal}>
+        <Animated.View style={[styles.modalOverlay, { opacity: modalFade }]}>
+          <Animated.View style={[styles.modalContent, { backgroundColor: cardBgColor, transform: [{ translateX: modalSlideX }] }]}>
             <View style={[styles.modalHeader, { borderBottomColor: colors.border || FIGMA_COLORS.divider }]}>
-              <Text style={[styles.modalTitle, { color: textColor }]}>{t('Add Working Areas')}</Text>
-              <TouchableOpacity onPress={() => { setShowAddModal(false); setSelectedRegions([]); }}>
+              <View style={styles.modalHeaderTextBlock}>
+                <Text style={[styles.modalTitle, { color: textColor }]}>{t('Add Working Areas')}</Text>
+                <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
+                  {selectedRegions.length} {t('services.selected')}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={closeAddModal} style={styles.modalCloseButton} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
                 <Ionicons name="close" size={24} color={textColor} />
               </TouchableOpacity>
             </View>
@@ -249,6 +301,7 @@ export default function RegionsManagementScreen({ onBack }: RegionsManagementScr
                   {availableRegions.map((region) => (
                     <TouchableOpacity
                       key={region.id}
+                      activeOpacity={0.85}
                       style={[
                         styles.regionOption,
                         { backgroundColor: cardBgColor, borderColor: selectedRegions.includes(region.id) ? primaryColor : (colors.border || FIGMA_COLORS.divider) },
@@ -273,6 +326,7 @@ export default function RegionsManagementScreen({ onBack }: RegionsManagementScr
                     </TouchableOpacity>
                   ))}
                   <TouchableOpacity
+                    activeOpacity={0.9}
                     style={[styles.saveButton, { backgroundColor: primaryColor }, selectedRegions.length === 0 && { opacity: 0.5 }]}
                     onPress={handleSaveSelection}
                     disabled={isSaving || selectedRegions.length === 0}
@@ -286,8 +340,8 @@ export default function RegionsManagementScreen({ onBack }: RegionsManagementScr
                 </>
               )}
             </ScrollView>
-          </View>
-        </View>
+          </Animated.View>
+        </Animated.View>
       </Modal>
 
       <AlertPopup
@@ -310,7 +364,7 @@ export default function RegionsManagementScreen({ onBack }: RegionsManagementScr
         onConfirm={confirmState.onConfirm}
         onCancel={hideConfirmation}
       />
-    </View>
+    </Animated.View>
   );
 }
 
@@ -319,11 +373,11 @@ const styles = StyleSheet.create({
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 },
   rowRTL: { flexDirection: 'row-reverse' },
-  backButton: { width: 40, height: 40, justifyContent: 'center', alignItems: 'flex-start' },
+  backButton: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
   headerTitle: { fontWeight: '600', textAlign: 'center', flex: 1 },
   placeholder: { width: 40 },
   addButtonRow: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16, paddingVertical: 12 },
-  addButton: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
+  addButton: { width: 40, minWidth: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
   scrollView: { flex: 1 },
   content: { padding: 20 },
   sectionTitle: { fontWeight: '600', marginBottom: 16 },
@@ -341,8 +395,11 @@ const styles = StyleSheet.create({
   infoText: { flex: 1, lineHeight: 20 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end' },
   modalContent: { borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '80%' },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1 },
+  modalHeaderTextBlock: { flex: 1, paddingRight: 8 },
   modalTitle: { fontSize: 18, fontWeight: '600' },
+  modalSubtitle: { fontSize: 13, marginTop: 4 },
+  modalCloseButton: { padding: 4 },
   modalScrollView: { padding: 20 },
   noMoreRegions: { alignItems: 'center', paddingVertical: 40, gap: 16 },
   noMoreText: { textAlign: 'center' },

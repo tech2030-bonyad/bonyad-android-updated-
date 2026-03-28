@@ -380,7 +380,7 @@ export default function MySmallTaskBidsScreen({
       >
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <Ionicons
-            name={isRTL ? 'arrow-forward' : 'arrow-back'}
+            name="arrow-back"
             size={24}
             color={colors.text}
           />

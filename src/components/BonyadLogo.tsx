@@ -48,6 +48,7 @@ interface BonyadLogoProps {
   size?: 'small' | 'medium' | 'large' | 'xlarge';
   responsive?: boolean;
   marginLeft?: number;
+  spacing?: number;
   variant?: 'light' | 'dark'; // light for dark backgrounds, dark for light backgrounds
 }
 
@@ -57,23 +58,23 @@ const getScaleFactor = () => {
   
   if (screenWidth < 375) return 0.85;        // Small phones
   if (screenWidth < 768) return 1;           // Regular phones
-  if (screenWidth < 1024) return 1.4;        // Tablets
-  if (screenWidth < 1440) return 1.7;        // Desktop
-  return 2;                                  // Large screens
+  // Keep navbar logo stable on larger screens (no aggressive upscaling)
+  return 1;
 };
 
 // Base sizes for different presets
 const sizePresets = {
-  small: { logoWidth: 40, logoHeight: 48, textWidth: 55, textHeight: 38 },
+  small: { logoWidth: 34, logoHeight: 41, textWidth: 58, textHeight: 40 },
   medium: { logoWidth: 53, logoHeight: 64, textWidth: 73, textHeight: 50 },
   large: { logoWidth: 70, logoHeight: 85, textWidth: 97, textHeight: 67 },
   xlarge: { logoWidth: 90, logoHeight: 109, textWidth: 124, textHeight: 86 },
 };
 
 export default function BonyadLogo({ 
-  size = 'medium',
+  size = 'small',
   responsive = true,
-  marginLeft = 8,
+  marginLeft = 0,
+  spacing = 8,
   variant = 'light',
 }: BonyadLogoProps) {
   const scaleFactor = responsive ? getScaleFactor() : 1;
@@ -95,7 +96,7 @@ export default function BonyadLogo({
       <SvgXml xml={logoSvg} width={logoWidth} height={logoHeight} />
       
       {/* Text (bonyad wordmark) - positioned to align with logo */}
-      <View style={styles.textContainer}>
+      <View style={[styles.textContainer, { marginStart: spacing }]}>
         <SvgXml xml={textSvg} width={textWidth} height={textHeight} />
       </View>
     </View>
@@ -106,8 +107,12 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexShrink: 1,
+    maxWidth: '100%',
+    overflow: 'visible',
   },
   textContainer: {
-    marginLeft: 4, // Small space between logo and text
+    flexShrink: 1,
+    marginLeft: 0,
   },
 });

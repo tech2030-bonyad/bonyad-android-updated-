@@ -5,6 +5,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
+import { useRTL } from '../hooks/useRTL';
 
 interface ContactScreenProps {
   onBack?: () => void;
@@ -17,6 +18,7 @@ export default function ContactScreen({ onBack }: ContactScreenProps) {
   const { t } = useTranslation();
   const { colors } = useTheme();
   const { fontFamily, scaledSize } = useFontFamily();
+  const { arrowBackIcon } = useRTL();
 
   const handleEmailPress = () => {
     Linking.openURL(`mailto:${CONTACT_EMAIL}`).catch(() => {});
@@ -30,7 +32,7 @@ export default function ContactScreen({ onBack }: ContactScreenProps) {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.header}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={22} color={colors.text} />
+          <Ionicons name={arrowBackIcon} size={22} color={colors.text} />
           <Text style={[styles.backText, { color: colors.text, fontSize: scaledSize(16) }]}>{t('Back')}</Text>
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(20) }]}>{t('Contact Us')}</Text>

@@ -12,7 +12,9 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
+import { useRTL } from '../hooks/useRTL';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getTopPadding } from '../utils/statusBarHelper';
 import { API_ENDPOINTS, buildApiUrlWithParams } from '../config/api';
 import { storage } from '../utils/storage';
 import ReviewTechnicianModal from '../components/ReviewTechnicianModal';
@@ -61,6 +63,7 @@ export default function CompletedProjectViewPage({
   const { t } = useTranslation();
   const { colors } = useTheme();
   const { fontFamily, scaledSize } = useFontFamily();
+  const { arrowBackIcon } = useRTL();
   const insets = useSafeAreaInsets();
   const [phases, setPhases] = useState<Phase[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -397,9 +400,9 @@ export default function CompletedProjectViewPage({
     <>
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         {/* Header */}
-        <View style={[styles.header, { paddingTop: Math.max(insets.top, 50), borderBottomColor: colors.border }]}>
+        <View style={[styles.header, { paddingTop: getTopPadding(insets), borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={onBack}>
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
+            <Ionicons name={arrowBackIcon} size={24} color={colors.text} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: colors.text }]}>
             {t('Completed Project')}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -24,7 +24,6 @@ import GlassTabBar, { TECHNICIAN_TABS } from '../components/GlassTabBar';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import ProjectsScreen from './ProjectsScreen';
-import AppointmentsScreen from './AppointmentsScreen';
 import ChatRoomsListScreen from './ChatRoomsListScreen';
 import ChatDetailScreen from './ChatDetailScreen';
 import NotificationsScreen from './NotificationsScreen';
@@ -34,15 +33,14 @@ import EditProfileScreen from './EditProfileScreen';
 import ChangePasswordScreen from './ChangePasswordScreen';
 import ChangePhoneScreen from './ChangePhoneScreen';
 import VerifyPhoneChangeScreen from './VerifyPhoneChangeScreen';
-import PortfolioManagement from '../components/PortfolioManagement';
+import PortfolioScreen from './PortfolioScreen';
 import SubscriptionScreen from './SubscriptionScreen';
 import ServiceManagementScreen from './ServiceManagementScreen';
 import AvailabilityScreen from './AvailabilityScreen';
 import CommissionPaymentScreen from './CommissionPaymentScreen';
 import PaymentCheckoutScreen from './PaymentCheckoutScreen';
-import AvailableSmallTasksScreen from './AvailableSmallTasksScreen';
+import AppointmentsScreen from './AppointmentsScreen';
 import MySmallTaskBidsScreen from './MySmallTaskBidsScreen';
-import SmallTaskDetailScreen from './SmallTaskDetailScreen';
 import ServiceSuggestionFormScreen from './ServiceSuggestionFormScreen';
 import MyServiceSuggestionsScreen from './MyServiceSuggestionsScreen';
 import RegionsManagementScreen from './RegionsManagementScreen';
@@ -58,6 +56,10 @@ import { SmallTaskRequest } from '../types/smallTasks';
 interface TechnicianHomeScreenProps {
   onShowProfile: () => void;
   onLogout: () => void;
+  /** When true, open profile tab on mount so nav bar stays visible */
+  openProfileOnMount?: boolean;
+  /** Called when user switches away from profile tab */
+  onProfileTabClosed?: () => void;
   onShowProjects?: (filter?: 'all' | 'available') => void;
   onShowChat?: () => void;
   onShowRunningProjects?: () => void;
@@ -71,7 +73,6 @@ interface TechnicianHomeScreenProps {
   // Props for embedded screens
   userId?: number;
   authToken?: string;
-  onNavigateToChatDetail?: (roomId: string, receiverId: number, receiverName: string) => void;
   onNavigateToEditProfile?: () => void;
   onNavigateToPortfolio?: () => void;
   onNavigateToSubscription?: () => void;
@@ -83,6 +84,8 @@ interface TechnicianHomeScreenProps {
 export default function TechnicianHomeScreen({
   onLogout,
   onShowProfile,
+  openProfileOnMount = false,
+  onProfileTabClosed,
   onShowProjects,
   onShowChat,
   onShowRunningProjects,
@@ -95,7 +98,6 @@ export default function TechnicianHomeScreen({
   userName,
   userId = 0,
   authToken = '',
-  onNavigateToChatDetail,
   onNavigateToEditProfile,
   onNavigateToPortfolio,
   onNavigateToSubscription,
@@ -109,9 +111,13 @@ export default function TechnicianHomeScreen({
   const isDarkMode = theme === 'dark';
   const [isAvailable, setIsAvailable] = useState(true);
   const [showProjectsDropdown, setShowProjectsDropdown] = useState(false);
-  const [activeTab, setActiveTab] = useState('home');
+  const [activeTab, setActiveTab] = useState(openProfileOnMount ? 'profile' : 'home');
   const [currentProjectsFilter, setCurrentProjectsFilter] = useState<'available' | 'running' | 'completed' | 'bid_received' | 'direct_offers'>(projectsFilter || 'available');
   const [profileSubView, setProfileSubView] = useState<'myData' | 'editProfile' | 'portfolio' | 'subscription' | 'services' | 'availability' | 'regions' | 'smallTaskTypes' | 'paymentHistory' | 'changePassword' | 'changePhone' | 'verifyPhoneChange' | 'serviceSuggestions' | null>(null);
+  /** When portfolio opened from home (Business gallery), back goes to home; from profile, back goes to profile */
+  const [portfolioSource, setPortfolioSource] = useState<'home' | 'profile' | null>(null);
+  /** When true, show AppointmentsScreen within home tab so nav bar stays visible */
+  const [showAppointmentsView, setShowAppointmentsView] = useState(false);
   const [phoneChangeNumber, setPhoneChangeNumber] = useState<string>('');
   const [selectedChat, setSelectedChat] = useState<{ roomId: string; receiverId: number; receiverName: string; projectId?: number | null } | null>(null);
   const [showChatList, setShowChatList] = useState(true);
@@ -122,9 +128,11 @@ export default function TechnicianHomeScreen({
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
 
   // Small Tasks state
-  const [smallTasksView, setSmallTasksView] = useState<'list' | 'myBids' | 'detail' | 'serviceSuggestion' | 'mySuggestions' | null>(null);
+  const [smallTasksView, setSmallTasksView] = useState<'myBids' | 'serviceSuggestion' | 'mySuggestions' | null>(null);
   const [selectedSmallTask, setSelectedSmallTask] = useState<SmallTaskRequest | null>(null);
   const [smallTasksRefreshTrigger, setSmallTasksRefreshTrigger] = useState(0);
+  /** When set, Projects tab opens in small-tasks mode (from Home "Available small tasks") */
+  const [projectsInitialProjectType, setProjectsInitialProjectType] = useState<'large' | 'small' | null>(null);
 
   // Initial project for auto-opening detail when tapping a card from home
   const [initialProjectForDetail, setInitialProjectForDetail] = useState<any>(null);
@@ -245,6 +253,58 @@ export default function TechnicianHomeScreen({
   const IS_MEDIUM_WEB = IS_WEB && screenWidth >= 768 && screenWidth < 1200;
   const IS_SMALL_WEB = IS_WEB && screenWidth < 768;
   const shouldRenderMobile = !IS_WEB || IS_SMALL_WEB;
+
+  const chatEnterOpac = useRef(new Animated.Value(1)).current;
+  const chatEnterTy = useRef(new Animated.Value(0)).current;
+  const chatDetailOpac = useRef(new Animated.Value(0)).current;
+  const chatDetailTy = useRef(new Animated.Value(0)).current;
+
+  const openEmbeddedChatFromProjects = useCallback(
+    (roomId: string, receiverId: number, receiverName: string, projectId?: number | null) => {
+      setActiveTab('chat');
+      setSelectedChat({ roomId, receiverId, receiverName, projectId: projectId ?? undefined });
+      setShowChatList(IS_LARGE_WEB);
+    },
+    [IS_LARGE_WEB],
+  );
+
+  useEffect(() => {
+    if (activeTab !== 'chat') {
+      chatEnterOpac.setValue(1);
+      chatEnterTy.setValue(0);
+      return;
+    }
+    chatEnterOpac.setValue(0);
+    chatEnterTy.setValue(14);
+    Animated.parallel([
+      Animated.timing(chatEnterOpac, { toValue: 1, duration: 300, useNativeDriver: true }),
+      Animated.spring(chatEnterTy, { toValue: 0, tension: 280, friction: 26, useNativeDriver: true }),
+    ]).start();
+  }, [activeTab, chatEnterOpac, chatEnterTy]);
+
+  useEffect(() => {
+    if (activeTab !== 'chat' || IS_LARGE_WEB) {
+      if (selectedChat) {
+        chatDetailOpac.setValue(1);
+        chatDetailTy.setValue(0);
+      } else {
+        chatDetailOpac.setValue(0);
+        chatDetailTy.setValue(0);
+      }
+      return;
+    }
+    if (selectedChat) {
+      chatDetailOpac.setValue(0);
+      chatDetailTy.setValue(16);
+      Animated.parallel([
+        Animated.timing(chatDetailOpac, { toValue: 1, duration: 280, useNativeDriver: true }),
+        Animated.spring(chatDetailTy, { toValue: 0, tension: 300, friction: 26, useNativeDriver: true }),
+      ]).start();
+    } else {
+      chatDetailOpac.setValue(0);
+      chatDetailTy.setValue(0);
+    }
+  }, [activeTab, IS_LARGE_WEB, selectedChat, chatDetailOpac, chatDetailTy]);
 
   // Fetch user profile for navigation bar
   useEffect(() => {
@@ -375,10 +435,17 @@ export default function TechnicianHomeScreen({
     }
   }, [activeTab]);
 
+  // When openProfileOnMount is true (e.g. from profile icon tap), switch to profile tab so nav bar stays visible
+  useEffect(() => {
+    if (openProfileOnMount) {
+      setActiveTab('profile');
+    }
+  }, [openProfileOnMount]);
+
 
   // Render mobile layout — iOS-style: on home tab (content only), hide parent top bar
   if (shouldRenderMobile) {
-    const isHomeTabOnly = activeTab === 'home' && !smallTasksView && !showCommissionPayment && !commissionCheckoutRequest;
+    const isHomeTabOnly = activeTab === 'home' && !smallTasksView && !showCommissionPayment && !commissionCheckoutRequest && !showAppointmentsView;
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         {/* Top bar — same as home screen (logo + Chat | Info | Notifications) */}
@@ -388,7 +455,11 @@ export default function TechnicianHomeScreen({
             isDark={isDarkMode}
             backgroundColor={colors.background}
             unreadNotificationCount={unreadNotificationCount}
-            onPressChat={() => onShowChat?.()}
+            onPressChat={() => {
+              setSelectedChat(null);
+              setShowChatList(true);
+              setActiveTab('chat');
+            }}
             onPressInfo={startCoachTour}
             onPressNotifications={() => onShowNotifications?.()}
           />
@@ -396,18 +467,27 @@ export default function TechnicianHomeScreen({
 
         {/* Render tab content — animated transition */}
         <Animated.View style={{ flex: 1, opacity: tabContentOpacity, transform: [{ translateY: tabContentTranslateY }] }}>
-        {activeTab === 'home' && !smallTasksView && (
+        {/* Home dashboard - always mounted to preserve state when navigating back */}
+        <View style={{ flex: 1, display: (activeTab === 'home' && !smallTasksView && !showCommissionPayment && !commissionCheckoutRequest && !showAppointmentsView) ? 'flex' : 'none', pointerEvents: (activeTab === 'home' && !smallTasksView && !showCommissionPayment && !commissionCheckoutRequest && !showAppointmentsView) ? 'auto' : 'none' }}>
           <TechnicalHomeScreenContent
             userName={userProfile?.name}
             unreadNotificationCount={unreadNotificationCount}
-            onPressChat={onShowChat}
+            onPressChat={() => {
+              setSelectedChat(null);
+              setShowChatList(true);
+              setActiveTab('chat');
+            }}
             onPressNotifications={onShowNotifications}
             onPressInfo={startCoachTour}
             onPressAvailableProject={(status) => {
               if (status === 'small_tasks') {
-                setSmallTasksView('list');
+                setProjectsInitialProjectType('small');
+                setActiveTab('projects');
               } else if (status === 'approved' || status === 'pending') {
                 setCurrentProjectsFilter(status === 'approved' ? 'available' : 'available');
+                setActiveTab('projects');
+              } else if (status === 'in_progress') {
+                setCurrentProjectsFilter('running');
                 setActiveTab('projects');
               } else {
                 setCurrentProjectsFilter('available');
@@ -416,7 +496,8 @@ export default function TechnicianHomeScreen({
             }}
             onPressTaskCategory={(status) => {
               if (status === 'small_tasks') {
-                setSmallTasksView('list');
+                setProjectsInitialProjectType('small');
+                setActiveTab('projects');
               } else if (status === 'approved') {
                 setCurrentProjectsFilter('available');
               } else if (status === 'direct') {
@@ -430,7 +511,7 @@ export default function TechnicianHomeScreen({
             }}
             onPressSmallTask={(task) => {
               setSelectedSmallTask(task);
-              setSmallTasksView('detail');
+              setActiveTab('projects');
             }}
             onPressProject={(project) => {
               setInitialProjectForDetail(project);
@@ -441,16 +522,17 @@ export default function TechnicianHomeScreen({
               setShowCommissionPayment(true);
             }}
             onPressFab={() => {
-              setSmallTasksView('list');
+              setProjectsInitialProjectType('small');
+              setActiveTab('projects');
             }}
             onPressChatbot={onShowChatbot}
             onPressPortfolio={() => {
+              setPortfolioSource('home');
               setProfileSubView('portfolio');
               setActiveTab('profile');
             }}
             onPressSchedule={() => {
-              setProfileSubView('availability');
-              setActiveTab('profile');
+              setShowAppointmentsView(true);
             }}
             onPressAnalytics={() => {
               onShowAppointments?.();
@@ -459,6 +541,15 @@ export default function TechnicianHomeScreen({
               onShowSupportTickets?.();
             }}
           />
+        </View>
+
+        {/* Appointments Screen - shown within home tab so nav bar stays visible */}
+        {activeTab === 'home' && showAppointmentsView && (
+          <View style={{ flex: 1 }}>
+            <AppointmentsScreen
+              onBack={() => setShowAppointmentsView(false)}
+            />
+          </View>
         )}
 
         {/* Commission Payment Screen */}
@@ -486,37 +577,13 @@ export default function TechnicianHomeScreen({
         )}
 
         {/* Small Tasks Screens */}
-        {activeTab === 'home' && smallTasksView === 'list' && (
-          <AvailableSmallTasksScreen
-            onBack={() => setSmallTasksView(null)}
-            onTaskPress={(task) => {
-              setSelectedSmallTask(task);
-              setSmallTasksView('detail');
-            }}
-          />
-        )}
-
-        {activeTab === 'home' && smallTasksView === 'detail' && selectedSmallTask && (
-          <SmallTaskDetailScreen
-            task={selectedSmallTask}
-            onBack={() => {
-              setSmallTasksView('list');
-              setSelectedSmallTask(null);
-            }}
-            onSuccess={() => {
-              setSmallTasksRefreshTrigger(prev => prev + 1);
-            }}
-            isTechnician={true}
-          />
-        )}
-
         {activeTab === 'home' && smallTasksView === 'myBids' && (
           <MySmallTaskBidsScreen
             onBack={() => setSmallTasksView(null)}
             onBidPress={(bid) => {
               if (bid.request) {
                 setSelectedSmallTask(bid.request);
-                setSmallTasksView('detail');
+                setActiveTab('projects');
               }
             }}
           />
@@ -542,31 +609,35 @@ export default function TechnicianHomeScreen({
         {activeTab === 'projects' && (
           <View style={{ flex: 1 }}>
             <ProjectsScreen
+              onBack={() => {
+                setActiveTab('home');
+                setProjectsInitialProjectType(null);
+                setSelectedSmallTask(null);
+              }}
               onRequestVisit={(userId, userName, projectId) => {
                 console.log('🔵 [TechnicianHomeScreen] Request visit for user:', userId, 'project:', projectId);
               }}
               filter={currentProjectsFilter}
               initialProject={initialProjectForDetail}
+              initialSmallTask={selectedSmallTask ?? undefined}
+              initialProjectType={projectsInitialProjectType ?? undefined}
               onFilterChange={(newFilter) => {
                 setCurrentProjectsFilter(newFilter as any);
                 setInitialProjectForDetail(null);
               }}
-              onOpenChat={onNavigateToChatDetail || (() => { })}
+              onOpenChat={openEmbeddedChatFromProjects}
             />
           </View>
         )}
 
-        {activeTab === 'appointments' && (
-          <View style={{ flex: 1 }}>
-            <AppointmentsScreen />
-          </View>
-        )}
 
         {activeTab === 'chat' && (
-          <View
+          <Animated.View
             style={{
               flex: 1,
               flexDirection: IS_LARGE_WEB ? 'row' : 'column',
+              opacity: chatEnterOpac,
+              transform: [{ translateY: chatEnterTy }],
             }}
           >
             {(showChatList || IS_LARGE_WEB) && (
@@ -606,9 +677,9 @@ export default function TechnicianHomeScreen({
             )}
 
             {selectedChat && (
-              <View
+              <Animated.View
                 style={[
-                  { flex: 1 },
+                  { flex: 1, opacity: chatDetailOpac, transform: [{ translateY: chatDetailTy }] },
                   IS_LARGE_WEB && {
                     flex: 0.65,
                     ...Platform.select({
@@ -624,6 +695,7 @@ export default function TechnicianHomeScreen({
                   receiverId={selectedChat.receiverId}
                   receiverName={selectedChat.receiverName}
                   projectId={selectedChat.projectId ?? undefined}
+                  hasBottomTabBar={shouldRenderMobile}
                   onBack={
                     IS_LARGE_WEB
                       ? undefined
@@ -633,9 +705,9 @@ export default function TechnicianHomeScreen({
                       }
                   }
                 />
-              </View>
+              </Animated.View>
             )}
-          </View>
+          </Animated.View>
         )}
 
         {activeTab === 'notifications' && (
@@ -664,7 +736,10 @@ export default function TechnicianHomeScreen({
               <ProfileScreen
                 onLogout={onLogout}
                 onNavigateToEditProfile={() => setProfileSubView('myData')}
-                onNavigateToPortfolio={() => setProfileSubView('portfolio')}
+                onNavigateToPortfolio={() => {
+                  setPortfolioSource('profile');
+                  setProfileSubView('portfolio');
+                }}
                 onNavigateToSubscription={() => setProfileSubView('subscription')}
                 onNavigateToServices={() => setProfileSubView('services')}
                 onNavigateToAvailability={() => setProfileSubView('availability')}
@@ -694,9 +769,14 @@ export default function TechnicianHomeScreen({
                 onSave={() => setProfileSubView('myData')}
               />
             ) : profileSubView === 'portfolio' ? (
-              <PortfolioManagement
-                technicianId={userId}
-                isOwnProfile={true}
+              <PortfolioScreen
+                userId={userId}
+                onBack={() => {
+                  if (portfolioSource === 'home') setActiveTab('home');
+                  setProfileSubView(null);
+                  setPortfolioSource(null);
+                }}
+                onEditProfile={() => setProfileSubView('editProfile')}
               />
             ) : profileSubView === 'subscription' ? (
               <SubscriptionScreen
@@ -753,8 +833,13 @@ export default function TechnicianHomeScreen({
         {/* Glass tab bar — iOS-style with water-drop press */}
         <View style={styles.glassTabBarContainer}>
           <GlassTabBar
-            activeTab={['home', 'projects', 'appointments', 'wallet', 'profile'].includes(activeTab) ? (activeTab === 'projects' ? 'home' : activeTab) : 'home'}
-            onTabPress={(tab) => setActiveTab(tab)}
+            activeTab={['home', 'projects', 'wallet', 'profile'].includes(activeTab) ? activeTab : 'home'}
+            onTabPress={(tab) => {
+              if (activeTab === 'profile' && tab !== 'profile') {
+                onProfileTabClosed?.();
+              }
+              setActiveTab(tab);
+            }}
             tabs={TECHNICIAN_TABS}
             primaryColor={colors.primary}
             primaryColorDark={colors.primaryDark || '#1A6DB4'}
@@ -787,7 +872,10 @@ export default function TechnicianHomeScreen({
               ...styles.desktopNavTabActive,
               borderBottomColor: isDarkMode ? colors.primary : '#FFFFFF'
             }]}
-            onPress={() => setActiveTab('home')}
+            onPress={() => {
+              if (activeTab === 'profile') onProfileTabClosed?.();
+              setActiveTab('home');
+            }}
           >
             <Text style={[styles.desktopNavTabText, activeTab === 'home' && styles.desktopNavTabTextActive, {
               fontSize: scaledSize(16),
@@ -803,7 +891,10 @@ export default function TechnicianHomeScreen({
               ...styles.desktopNavTabActive,
               borderBottomColor: isDarkMode ? colors.primary : '#FFFFFF'
             }]}
-            onPress={() => setActiveTab('projects')}
+            onPress={() => {
+              if (activeTab === 'profile') onProfileTabClosed?.();
+              setActiveTab('projects');
+            }}
           >
             <Text style={[styles.desktopNavTabText, activeTab === 'projects' && styles.desktopNavTabTextActive, {
               fontSize: scaledSize(16),
@@ -812,22 +903,6 @@ export default function TechnicianHomeScreen({
                 : (isDarkMode ? colors.textSecondary : '#B3CEE6')
             }]}>
               {t('Projects')}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.desktopNavTab, activeTab === 'appointments' && {
-              ...styles.desktopNavTabActive,
-              borderBottomColor: isDarkMode ? colors.primary : '#FFFFFF'
-            }]}
-            onPress={() => setActiveTab('appointments')}
-          >
-            <Text style={[styles.desktopNavTabText, activeTab === 'appointments' && styles.desktopNavTabTextActive, {
-              fontSize: scaledSize(16),
-              color: activeTab === 'appointments'
-                ? (isDarkMode ? colors.primary : '#FFFFFF')
-                : (isDarkMode ? colors.textSecondary : '#B3CEE6')
-            }]}>
-              {t('Appointments')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -914,17 +989,35 @@ export default function TechnicianHomeScreen({
 
       {/* Main Content Area */}
       <View style={styles.desktopMainContentWrapper}>
-        {/* Tab Content */}
-        {activeTab === 'home' && (
+        {/* Appointments Screen - shown within home so nav bar stays visible */}
+        {activeTab === 'home' && showAppointmentsView && (
+          <View style={{ flex: 1 }}>
+            <AppointmentsScreen
+              onBack={() => setShowAppointmentsView(false)}
+            />
+          </View>
+        )}
+        {/* Tab Content - Home dashboard always mounted to preserve state when navigating back */}
+        <View style={{ flex: 1, display: (activeTab === 'home' && !showCommissionPayment && !commissionCheckoutRequest && !showAppointmentsView) ? 'flex' : 'none', pointerEvents: (activeTab === 'home' && !showCommissionPayment && !commissionCheckoutRequest && !showAppointmentsView) ? 'auto' : 'none' }}>
           <TechnicalHomeScreenContent
             userName={userProfile?.name}
             unreadNotificationCount={unreadNotificationCount}
-            onPressChat={onShowChat}
+            onPressChat={() => {
+              setSelectedChat(null);
+              setShowChatList(true);
+              setActiveTab('chat');
+            }}
             onPressNotifications={onShowNotifications}
             onPressInfo={startCoachTour}
             onPressAvailableProject={(status) => {
-              if (status === 'approved' || status === 'pending') {
+              if (status === 'small_tasks') {
+                setProjectsInitialProjectType('small');
+                setActiveTab('projects');
+              } else if (status === 'approved' || status === 'pending') {
                 setCurrentProjectsFilter(status === 'approved' ? 'available' : 'available');
+                setActiveTab('projects');
+              } else if (status === 'in_progress') {
+                setCurrentProjectsFilter('running');
                 setActiveTab('projects');
               } else {
                 setCurrentProjectsFilter('available');
@@ -945,7 +1038,7 @@ export default function TechnicianHomeScreen({
             }}
             onPressSmallTask={(task) => {
               setSelectedSmallTask(task);
-              setSmallTasksView('detail');
+              setActiveTab('projects');
             }}
             onPressProject={(project) => {
               setInitialProjectForDetail(project);
@@ -956,16 +1049,17 @@ export default function TechnicianHomeScreen({
               setShowCommissionPayment(true);
             }}
             onPressFab={() => {
-              setSmallTasksView('list');
+              setProjectsInitialProjectType('small');
+              setActiveTab('projects');
             }}
             onPressChatbot={onShowChatbot}
             onPressPortfolio={() => {
+              setPortfolioSource('home');
               setProfileSubView('portfolio');
               setActiveTab('profile');
             }}
             onPressSchedule={() => {
-              setProfileSubView('availability');
-              setActiveTab('profile');
+              setShowAppointmentsView(true);
             }}
             onPressAnalytics={() => {
               onShowAppointments?.();
@@ -974,7 +1068,7 @@ export default function TechnicianHomeScreen({
               onShowSupportTickets?.();
             }}
           />
-        )}
+        </View>
 
         {/* Commission Payment Screen - Desktop */}
         {activeTab === 'home' && showCommissionPayment && !commissionCheckoutRequest && (
@@ -1008,37 +1102,36 @@ export default function TechnicianHomeScreen({
           >
             <View style={styles.mainContentWrapper}>
               <ProjectsScreen
+                onBack={() => {
+                  setActiveTab('home');
+                  setProjectsInitialProjectType(null);
+                  setSelectedSmallTask(null);
+                }}
                 onRequestVisit={(userId, userName, projectId) => {
                   console.log('🔵 [TechnicianHomeScreen] Request visit for user:', userId, 'project:', projectId);
                 }}
                 filter={currentProjectsFilter}
                 initialProject={initialProjectForDetail}
+                initialSmallTask={selectedSmallTask ?? undefined}
+                initialProjectType={projectsInitialProjectType ?? undefined}
                 onFilterChange={(newFilter) => {
                   setCurrentProjectsFilter(newFilter as any);
                   setInitialProjectForDetail(null);
                 }}
-                onOpenChat={onNavigateToChatDetail || (() => { })}
+                onOpenChat={openEmbeddedChatFromProjects}
               />
             </View>
             <Footer />
           </ScrollView>
         )}
 
-        {activeTab === 'appointments' && (
-          <ScrollView
-            style={styles.desktopMainContent}
-            contentContainerStyle={styles.scrollContentWithFooter}
-            showsVerticalScrollIndicator={true}
-          >
-            <View style={styles.mainContentWrapper}>
-              <AppointmentsScreen />
-            </View>
-            <Footer />
-          </ScrollView>
-        )}
-
         {activeTab === 'chat' && (
-          <View style={[styles.desktopMainContent, { flexDirection: selectedChat ? 'row' : 'column' }]}>
+          <Animated.View
+            style={[
+              styles.desktopMainContent,
+              { flexDirection: selectedChat ? 'row' : 'column', opacity: chatEnterOpac, transform: [{ translateY: chatEnterTy }] },
+            ]}
+          >
             {/* Chat List - Always visible on left when chat is selected */}
             <View style={[
               { flex: 1 },
@@ -1064,17 +1157,19 @@ export default function TechnicianHomeScreen({
 
             {/* Chat Detail - Shows on right side when chat is selected */}
             {selectedChat && (
-              <View style={[
-                { flex: 1 },
-                {
-                  flex: 0.65,
-                  ...Platform.select({
-                    web: {
-                      minWidth: 400,
-                    } as any,
-                  }),
-                }
-              ]}>
+              <Animated.View
+                style={[
+                  { flex: 1, opacity: chatDetailOpac, transform: [{ translateY: chatDetailTy }] },
+                  {
+                    flex: 0.65,
+                    ...Platform.select({
+                      web: {
+                        minWidth: 400,
+                      } as any,
+                    }),
+                  },
+                ]}
+              >
                 <ChatDetailScreen
                   roomId={selectedChat.roomId}
                   receiverId={selectedChat.receiverId}
@@ -1089,9 +1184,9 @@ export default function TechnicianHomeScreen({
                       }
                   }
                 />
-              </View>
+              </Animated.View>
             )}
-          </View>
+          </Animated.View>
         )}
 
         {activeTab === 'notifications' && (
@@ -1139,7 +1234,10 @@ export default function TechnicianHomeScreen({
                 <ProfileScreen
                   onLogout={onLogout}
                   onNavigateToEditProfile={() => setProfileSubView('myData')}
-                  onNavigateToPortfolio={() => setProfileSubView('portfolio')}
+                  onNavigateToPortfolio={() => {
+                  setPortfolioSource('profile');
+                  setProfileSubView('portfolio');
+                }}
                   onNavigateToSubscription={() => setProfileSubView('subscription')}
                   onNavigateToServices={() => setProfileSubView('services')}
                   onNavigateToAvailability={() => setProfileSubView('availability')}
@@ -1169,9 +1267,14 @@ export default function TechnicianHomeScreen({
                   onSave={() => setProfileSubView('myData')}
                 />
               ) : profileSubView === 'portfolio' ? (
-                <PortfolioManagement
-                  technicianId={userId}
-                  isOwnProfile={true}
+                <PortfolioScreen
+                  userId={userId}
+                  onBack={() => {
+                    if (portfolioSource === 'home') setActiveTab('home');
+                    setProfileSubView(null);
+                    setPortfolioSource(null);
+                  }}
+                  onEditProfile={() => setProfileSubView('editProfile')}
                 />
               ) : profileSubView === 'subscription' ? (
                 <SubscriptionScreen

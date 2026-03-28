@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,8 @@ import {
   TextInput,
   ActivityIndicator,
   Image,
+  Animated,
+  Dimensions,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
@@ -41,15 +43,34 @@ interface EditProfileScreenProps {
 }
 
 export default function EditProfileScreen({ userDetails, onBack, onSave }: EditProfileScreenProps) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { colors, theme } = useTheme();
   const { fontFamily, scaledSize } = useFontFamily();
   const isDarkMode = theme === 'dark';
-  const isRTL = i18n.language === 'ar';
   
   // Custom alert hook
   const { alertState, showSuccess, showError, showAlert, hideAlert } = useAlertPopup();
+
+  const screenWidth = Dimensions.get('window').width;
+  const screenSlideX = useRef(new Animated.Value(0)).current;
+  const screenOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    screenSlideX.setValue(-screenWidth);
+    screenOpacity.setValue(0);
+    Animated.parallel([
+      Animated.timing(screenOpacity, { toValue: 1, duration: 220, useNativeDriver: true }),
+      Animated.spring(screenSlideX, { toValue: 0, tension: 65, friction: 11, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
+  const handleBackScreen = () => {
+    Animated.parallel([
+      Animated.timing(screenOpacity, { toValue: 0, duration: 180, useNativeDriver: true }),
+      Animated.timing(screenSlideX, { toValue: screenWidth, duration: 220, useNativeDriver: true }),
+    ]).start(() => onBack());
+  };
   
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -87,7 +108,7 @@ export default function EditProfileScreen({ userDetails, onBack, onSave }: EditP
       }
     } catch (error: any) {
       console.error('Error fetching profile:', error);
-      showError(error.message || t('Failed to load profile'), t('Error'));
+      showError(error.message || t('editProfile.loadFailed'), t('editProfile.error'));
     }
   };
 
@@ -96,7 +117,7 @@ export default function EditProfileScreen({ userDetails, onBack, onSave }: EditP
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       
       if (status !== 'granted') {
-        showError(t('Please grant permission to access your photos'), t('Permission Required'));
+        showError(t('editProfile.grantPhotoPermission'), t('editProfile.permissionRequired'));
         return;
       }
 
@@ -114,7 +135,7 @@ export default function EditProfileScreen({ userDetails, onBack, onSave }: EditP
       }
     } catch (error: any) {
       console.error('Error picking image:', error);
-      showError(error.message || t('Failed to select image'), t('Error'));
+      showError(error.message || t('editProfile.selectImageFailed'), t('editProfile.error'));
     }
   };
 
@@ -126,7 +147,7 @@ export default function EditProfileScreen({ userDetails, onBack, onSave }: EditP
       const userId = await storage.getUserId();
 
       if (!token || !userId) {
-        showError(t('No authentication token found'), t('Error'));
+        showError(t('editProfile.noAuthToken'), t('editProfile.error'));
         setIsLoading(false);
         return;
       }
@@ -168,12 +189,12 @@ export default function EditProfileScreen({ userDetails, onBack, onSave }: EditP
         }
       }
       
-      showAlert(t('Success'), t('Profile updated successfully'), 'success', [
-        { text: t('OK'), onPress: onSave },
+      showAlert(t('editProfile.success'), t('editProfile.updatedSuccess'), 'success', [
+        { text: t('editProfile.ok'), onPress: onSave },
       ]);
     } catch (error: any) {
       console.error('Error updating profile:', error);
-      showError(error.message || t('Failed to update profile'), t('Error'));
+      showError(error.message || t('editProfile.updateFailed'), t('editProfile.error'));
     } finally {
       setIsLoading(false);
     }
@@ -193,18 +214,18 @@ export default function EditProfileScreen({ userDetails, onBack, onSave }: EditP
   const avatarBgColor = isDarkMode ? colors.surface : FIGMA_COLORS.primaryLight;
 
   return (
-    <View style={[styles.container, { backgroundColor: bgColor, paddingTop: insets.top }]}>
+    <Animated.View style={[styles.container, { backgroundColor: bgColor, paddingTop: insets.top, opacity: screenOpacity, transform: [{ translateX: screenSlideX }] }]}>
       {/* Header */}
-      <View style={[styles.headerRow, isRTL && styles.rowRTL]}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
+      <View style={[styles.headerRow, styles.headerLTR]}>
+        <TouchableOpacity onPress={handleBackScreen} style={styles.backButton}>
           <Ionicons
-            name={isRTL ? 'chevron-forward' : 'chevron-back'}
+            name="chevron-back"
             size={24}
             color={headerTextColor}
           />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: headerTextColor, fontSize: scaledSize(18) }]}>
-          {t('Edit Profile Information')}
+          {t('editProfile.title')}
         </Text>
         <View style={styles.placeholder} />
       </View>
@@ -239,7 +260,7 @@ export default function EditProfileScreen({ userDetails, onBack, onSave }: EditP
                 </View>
             </TouchableOpacity>
           <Text style={[styles.userName, { color: headerTextColor, fontSize: scaledSize(18) }]}>
-            {`${firstName} ${lastName}`.trim() || t('profile.usernamePlaceholder')}
+            {`${firstName} ${lastName}`.trim() || t('myData.usernamePlaceholder')}
           </Text>
           </View>
 
@@ -250,15 +271,15 @@ export default function EditProfileScreen({ userDetails, onBack, onSave }: EditP
           <View style={styles.formSection}>
           {/* First Name */}
             <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: textColor, fontSize: scaledSize(14) }, isRTL && styles.textRTL]}>
-              {t('First Name')}
+            <Text style={[styles.label, { color: textColor, fontSize: scaledSize(14) }]}>
+              {t('editProfile.firstName')}
             </Text>
             <View style={[styles.inputWrapper, { backgroundColor: inputBgColor, borderColor: inputBorderColor }]}>
                 <TextInput
-                style={[styles.input, { color: inputTextColor }, isRTL && styles.textRTL]}
+                style={[styles.input, { color: inputTextColor }]}
                 value={firstName}
                 onChangeText={setFirstName}
-                placeholder={t('Enter your first name')}
+                placeholder={t('editProfile.enterFirstName')}
                 placeholderTextColor={isDarkMode ? '#888888' : '#999999'}
                   autoCapitalize="words"
                 />
@@ -267,15 +288,15 @@ export default function EditProfileScreen({ userDetails, onBack, onSave }: EditP
 
           {/* Last Name */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: textColor, fontSize: scaledSize(14) }, isRTL && styles.textRTL]}>
-              {t('Last Name')}
+            <Text style={[styles.label, { color: textColor, fontSize: scaledSize(14) }]}>
+              {t('editProfile.lastName')}
             </Text>
             <View style={[styles.inputWrapper, { backgroundColor: inputBgColor, borderColor: inputBorderColor }]}>
               <TextInput
-                style={[styles.input, { color: inputTextColor }, isRTL && styles.textRTL]}
+                style={[styles.input, { color: inputTextColor }]}
                 value={lastName}
                 onChangeText={setLastName}
-                placeholder={t('Enter your last name')}
+                placeholder={t('editProfile.enterLastName')}
                 placeholderTextColor={isDarkMode ? '#888888' : '#999999'}
                 autoCapitalize="words"
               />
@@ -284,15 +305,15 @@ export default function EditProfileScreen({ userDetails, onBack, onSave }: EditP
 
           {/* Email */}
             <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: textColor, fontSize: scaledSize(14) }, isRTL && styles.textRTL]}>
-              {t('Email')}
+            <Text style={[styles.label, { color: textColor, fontSize: scaledSize(14) }]}>
+              {t('editProfile.email')}
             </Text>
             <View style={[styles.inputWrapper, { backgroundColor: inputBgColor, borderColor: inputBorderColor }]}>
                 <TextInput
-                style={[styles.input, { color: inputTextColor }, isRTL && styles.textRTL]}
+                style={[styles.input, { color: inputTextColor }]}
                   value={email}
                   onChangeText={setEmail}
-                  placeholder={t('Enter your email')}
+                  placeholder={t('editProfile.enterEmail')}
                 placeholderTextColor={isDarkMode ? '#888888' : '#999999'}
                   keyboardType="email-address"
                   autoCapitalize="none"
@@ -303,21 +324,20 @@ export default function EditProfileScreen({ userDetails, onBack, onSave }: EditP
 
           {/* Phone Number (Disabled) */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: textColor }, isRTL && styles.textRTL]}>
-              {t('Phone Number')}
+            <Text style={[styles.label, { color: textColor }]}>
+              {t('editProfile.phoneNumber')}
             </Text>
-            <View style={[styles.inputWrapper, styles.disabledInputWrapper, { backgroundColor: disabledInputBgColor, borderColor: inputBorderColor }, isRTL && styles.rowRTL]}>
-              {isRTL && <Ionicons name="lock-closed" size={16} color={disabledTextColor} style={styles.lockIcon} />}
+            <View style={[styles.inputWrapper, styles.disabledInputWrapper, { backgroundColor: disabledInputBgColor, borderColor: inputBorderColor }]}>
               <TextInput
-                style={[styles.input, styles.disabledInput, { color: disabledTextColor }, isRTL && styles.textRTL]}
-                value={phone || t('Not available')}
+                style={[styles.input, styles.disabledInput, { color: disabledTextColor }]}
+                value={phone || t('editProfile.notAvailable')}
                 editable={false}
                 placeholderTextColor={isDarkMode ? '#888888' : '#999999'}
               />
-              {!isRTL && <Ionicons name="lock-closed" size={16} color={disabledTextColor} style={styles.lockIcon} />}
+              <Ionicons name="lock-closed" size={16} color={disabledTextColor} style={styles.lockIcon} />
             </View>
-            <Text style={[styles.helpText, { color: disabledTextColor }, isRTL && styles.textRTL]}>
-              {t('Phone number is verified and cannot be edited. Use "Change Phone Number" option to update it.')}
+            <Text style={[styles.helpText, { color: disabledTextColor }]}>
+              {t('editProfile.phoneVerifiedHint')}
             </Text>
           </View>
             </View>
@@ -350,7 +370,7 @@ export default function EditProfileScreen({ userDetails, onBack, onSave }: EditP
         buttons={alertState.buttons}
         onClose={hideAlert}
       />
-    </View>
+    </Animated.View>
   );
 }
 
@@ -364,6 +384,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
+  },
+  headerLTR: {
+    direction: 'ltr',
   },
   backButton: {
     width: 40,
@@ -458,7 +481,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   lockIcon: {
-    marginHorizontal: 8,
+    marginLeft: 8,
   },
   helpText: {
     fontSize: 12,
@@ -480,11 +503,5 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '400',
-  },
-  rowRTL: {
-    flexDirection: 'row-reverse',
-  },
-  textRTL: {
-    textAlign: 'right',
   },
 });

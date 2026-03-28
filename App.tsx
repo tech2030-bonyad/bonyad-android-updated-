@@ -1,5 +1,5 @@
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View, Platform, TouchableOpacity, ScrollView, AppState, Dimensions, Image } from 'react-native';
+import { StyleSheet, Text, View, Platform, TouchableOpacity, ScrollView, AppState, Dimensions, Image, BackHandler } from 'react-native';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Provider as PaperProvider } from 'react-native-paper';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -8,7 +8,7 @@ import { FontProvider } from './src/context/FontContext';
 // Import API config early to ensure global fetch override is applied
 import './src/config/api';
 import { SplashScreen, WelcomeScreen, OverviewScreen, LoginScreen, SignupScreen, OTPVerificationScreen, ForgotPasswordScreen, ForgotPasswordOTPScreen, ResetPasswordScreen, UserHomeScreen, TechnicianHomeScreen, TechnicianOnboardingScreen, ProfileScreen, EditProfileScreen, MyDataScreen, ChangePhoneScreen, ChangePasswordScreen, PortfolioScreen, ServiceManagementScreen, AvailabilityScreen, SubscriptionScreen, NewProjectView, ManualProjectForm, ConversationalAIForm, ProjectsScreen, ChatRoomsListScreen, ChatDetailScreen, RunningProjectsScreen, NotificationsScreen, AppointmentsScreen, BookingScreen, TechnicianProfileViewScreen, RoomDesignScreen, VoiceAIScreen, CostExplorerScreen, RoomVisualizerScreen, AskBonyadAIScreen, ProjectsMapScreen, AboutScreen, ContactScreen, IntroToAppScreen, OnboardingScreen, TechnicianCompleteProfileScreen, WaitingApprovalScreen, ChatbotScreen, SupportChatScreen, TicketListScreen, CreateTicketScreen, TicketDetailScreen, ServiceProvidersScreen, CommissionPaymentScreen, PaymentCheckoutScreen, CategorySubcategoryScreen, CreationMethodScreen, PendingProjectScreen, BidReceivedProjectScreen, ApprovedProjectScreen, ContractSigningProjectScreen, InProgressProjectScreen, CompletedProjectViewPage, ChangeRequestListScreen, ChangeRequestDetailScreen, RequestModificationScreen } from './src/screens';
-import './src/localization/i18n'; // Initialize i18n
+import i18n from './src/localization/i18n'; // Initialize i18n
 import OnlineStatusService from './src/services/OnlineStatusService';
 import { presenceService } from './src/services/PresenceService';
 import { storage } from './src/utils/storage';
@@ -18,6 +18,18 @@ import { useRouter, type Screen } from './src/utils/useRouter';
 import * as SplashScreenNative from 'expo-splash-screen';
 import * as Font from 'expo-font';
 import { Asset } from 'expo-asset';
+import {
+  Cairo_400Regular,
+  Cairo_500Medium,
+  Cairo_600SemiBold,
+  Cairo_700Bold,
+  Cairo_800ExtraBold,
+} from '@expo-google-fonts/cairo';
+import {
+  Poppins_400Regular,
+  Poppins_600SemiBold,
+  Poppins_700Bold,
+} from '@expo-google-fonts/poppins';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import WebHeader from './src/components/WebHeader';
 import { useAuthGuard } from './src/hooks/useAuthGuard';
@@ -25,7 +37,16 @@ import WebSocketNotificationService from './src/services/WebSocketNotificationSe
 import NotificationPopup from './src/components/NotificationPopup';
 import { getOnboardingStatus } from './src/services/onboardingApi';
 import onboardingStorage from './src/services/onboardingStorage';
-import { getTechnicianStatus } from './src/services/TechnicianStatusService';
+import {
+  getTechnicianStatus,
+  TECHNICIAN_STATUS_REJECTED,
+  TECHNICIAN_STATUS_SUSPENDED_API,
+} from './src/services/TechnicianStatusService';
+
+function isTechnicianWaitingScreenApiError(err: unknown): boolean {
+  const m = (err as Error)?.message;
+  return m === TECHNICIAN_STATUS_REJECTED || m === TECHNICIAN_STATUS_SUSPENDED_API;
+}
 import GlobalAlertProvider from './src/components/GlobalAlertProvider';
 import { globalAlertManager } from './src/utils/globalAlertManager';
 import { CreateCheckoutRequest } from './src/services/PaymentService';
@@ -38,7 +59,11 @@ SplashScreenNative.preventAutoHideAsync();
 export default function App() {
   const initialScreen: Screen = Platform.OS === 'web' ? 'welcome' : 'splash';
   const [currentScreen, setCurrentScreen] = useState<Screen>(initialScreen);
+  /** On Android: stack so back goes to previous screen (e.g. Home → Create project → back → Home). */
+  const [screenStack, setScreenStack] = useState<Screen[]>([initialScreen]);
   const [showProfile, setShowProfile] = useState(false);
+  /** When portfolio is opened from profile, back should return to profile; otherwise to home. */
+  const [portfolioReturnTo, setPortfolioReturnTo] = useState<'home' | 'profile' | null>(null);
   const [userRole, setUserRole] = useState<'user' | 'technician'>('user');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [authToken, setAuthToken] = useState('');
@@ -93,27 +118,24 @@ export default function App() {
 
   // Bundle load error message (when Metro unreachable)
   const [bundleLoadError, setBundleLoadError] = useState<string | null>(null);
+  const [activeLanguage, setActiveLanguage] = useState<string>(i18n.resolvedLanguage || i18n.language || 'en');
+  const isAppRTL = activeLanguage.toLowerCase() === 'ar' || activeLanguage.toLowerCase().startsWith('ar-');
   
   // Router hook for URL-based routing on web
   const router = useRouter(currentScreen, setCurrentScreen);
 
   // Check session function - used by both useEffect and SplashScreen
   const checkSession = useCallback(async () => {
+    const setScreen = (screen: Screen) => {
+      setCurrentScreen(screen);
+      if (Platform.OS === 'android') setScreenStack([screen]);
+    };
     try {
       console.log('🔍 Checking for stored session and onboarding status...');
 
-      // Check login count (onboarding only shows if count is 0)
-      const loginCount = await storage.getLoginCount();
+      // Onboarding shows only: (1) after user signup, (2) after technician completes profile + 5 steps.
+      // Never show onboarding at login — go to welcome/login when not authenticated.
       const hasSeenOnboarding = await storage.hasSeenOnboarding();
-      console.log('📱 Login count:', loginCount);
-      console.log('📱 Has seen onboarding:', hasSeenOnboarding);
-
-      // Only show onboarding for brand new users who have NEVER logged in or signed up
-      if (loginCount === 0 && !hasSeenOnboarding) {
-        console.log('📍 Brand new user - showing onboarding');
-        setCurrentScreen('onboarding');
-        return;
-      }
 
       // Use checkAuthentication to validate token
       const { checkAuthentication } = await import('./src/utils/authGuard');
@@ -190,30 +212,28 @@ export default function App() {
           const status = authResult.user?.status;
           if (!authResult.profileComplete) {
             console.log('📍 Technician profile incomplete - redirecting to complete profile');
-            setCurrentScreen('technicianCompleteProfile');
+            setScreen('technicianCompleteProfile');
           } else if (status === 'WAITING_ADMIN_APPROVAL' || status === 'PENDING') {
             console.log('📍 Technician waiting for admin approval');
-            setCurrentScreen('waitingApproval');
+            setScreen('waitingApproval');
           } else if (!authResult.onboarded) {
             console.log('📍 Technician not onboarded - redirecting to onboarding');
-            setCurrentScreen('technicianOnboarding');
+            setScreen('technicianOnboarding');
           } else if (!hasSeenTour && Platform.OS !== 'web') {
             console.log('📍 Technician fully onboarded but hasn\'t seen product tour - showing tour');
-            setCurrentScreen('onboarding');
+            setScreen('onboarding');
           } else {
             console.log('📍 Technician fully onboarded - going to home');
-            setCurrentScreen('home');
+            setScreen('home');
           }
         } else {
           if (!authResult.profileComplete) {
             console.log('📍 User profile incomplete - redirecting to profile edit');
-            setCurrentScreen('editProfile');
-          } else if (!hasSeenTour && Platform.OS !== 'web') {
-            console.log('📍 User hasn\'t seen product tour - showing tour');
-            setCurrentScreen('onboarding');
+            setScreen('editProfile');
           } else {
+            // User: onboarding only after signup (handled in handleOTPVerificationSuccess), not on login
             console.log('📍 User profile complete - going to home');
-            setCurrentScreen('home');
+            setScreen('home');
           }
         }
       } else {
@@ -224,7 +244,7 @@ export default function App() {
         setUserId(0);
         setUserRole('user');
         // Navigate to login
-        setCurrentScreen('login');
+        setScreen('login');
       }
     } catch (error: any) {
       const message = error?.message ?? String(error ?? '');
@@ -242,7 +262,7 @@ export default function App() {
             ? 'Could not load. Check the dev server and refresh.'
             : 'Could not connect to dev server. Run "npm start" in the project, then reload the app (shake device → Reload).'
         );
-        setCurrentScreen('welcome');
+        setScreen('welcome');
         return;
       }
 
@@ -251,7 +271,7 @@ export default function App() {
       setAuthToken('');
       setUserId(0);
       setUserRole('user');
-      setCurrentScreen('login');
+      setScreen('login');
     }
   }, []);
 
@@ -261,11 +281,16 @@ export default function App() {
         await SplashScreenNative.preventAutoHideAsync();
 
         await Font.loadAsync({
-          // Sakkal Majalla font family - Primary app font (Arabic-friendly)
-          // Download from: https://alfont.com/sakkal-majalla-arabic-font-download.html
-          'SakkalMajalla': require('./assets/fonts/alfont_com_majalla.ttf'),
-          'SakkalMajalla-Regular': require('./assets/fonts/alfont_com_majalla.ttf'),
-          'SakkalMajalla-Bold': require('./assets/fonts/alfont_com_majalla.ttf'),
+          // Arabic — Cairo (same as web, from @expo-google-fonts/cairo)
+          Cairo_400Regular,
+          Cairo_500Medium,
+          Cairo_600SemiBold,
+          Cairo_700Bold,
+          Cairo_800ExtraBold,
+          // English — Poppins (from @expo-google-fonts/poppins)
+          Poppins_400Regular,
+          Poppins_600SemiBold,
+          Poppins_700Bold,
         });
 
         const localAssets = [
@@ -277,6 +302,12 @@ export default function App() {
         ];
 
         await Asset.loadAsync(localAssets);
+
+        // Apply saved language so UI and RTL are correct on load (no refresh needed after toggle)
+        const savedLang = await storage.getLanguage();
+        if (savedLang) {
+          await i18n.changeLanguage(savedLang);
+        }
 
         if (Platform.OS === 'web') {
           await Promise.all([
@@ -292,6 +323,18 @@ export default function App() {
     };
 
     prepareApp();
+  }, []);
+
+  // React immediately to language toggles so translated text/RTL styles update without manual reload.
+  useEffect(() => {
+    const handleLanguageChanged = (lng: string) => {
+      setActiveLanguage(lng || 'en');
+    };
+
+    i18n.on('languageChanged', handleLanguageChanged);
+    return () => {
+      i18n.off('languageChanged', handleLanguageChanged);
+    };
   }, []);
 
   const onLayoutRootView = useCallback(async () => {
@@ -521,12 +564,16 @@ export default function App() {
     };
   }, [authToken, userId]);
 
-  const navigateToScreen = (screen: Screen) => {
+  const navigateToScreen = (screen: Screen, replace?: boolean) => {
     if (Platform.OS === 'web') {
       router.navigate(screen);
-    } else {
-      setCurrentScreen(screen);
     }
+    if (replace) {
+      setScreenStack([screen]);
+    } else {
+      setScreenStack((prev) => [...prev, screen]);
+    }
+    setCurrentScreen(screen);
   };
 
   // Handle successful login
@@ -543,12 +590,17 @@ export default function App() {
         const technicianStatus = await getTechnicianStatus();
         if (!technicianStatus.profileComplete) {
           console.log('📍 Technician profile incomplete - redirecting to complete profile');
-          navigateToScreen('technicianCompleteProfile');
+          navigateToScreen('technicianCompleteProfile', true);
           return;
         }
         if (technicianStatus.status === 'WAITING_ADMIN_APPROVAL' || technicianStatus.status === 'PENDING') {
           console.log('📍 Technician waiting for admin approval');
-          navigateToScreen('waitingApproval');
+          navigateToScreen('waitingApproval', true);
+          return;
+        }
+        if (technicianStatus.status === 'REJECTED') {
+          console.log('📍 Technician application rejected');
+          navigateToScreen('waitingApproval', true);
           return;
         }
         if (technicianStatus.status === 'APPROVED' && !technicianStatus.onboarded) {
@@ -564,15 +616,20 @@ export default function App() {
           } catch (e) {
             console.warn('⚠️ Failed to fetch onboarding status:', e);
           }
-          navigateToScreen('technicianOnboarding');
+          navigateToScreen('technicianOnboarding', true);
           return;
         }
         console.log('📍 Technician ready - going to home');
-        navigateToScreen('home');
+        navigateToScreen('home', true);
         return;
-      } catch (err) {
+      } catch (err: unknown) {
+        if (isTechnicianWaitingScreenApiError(err)) {
+          console.log('📍 Technician rejected/suspended (status API) — waiting approval');
+          navigateToScreen('waitingApproval', true);
+          return;
+        }
         console.warn('⚠️ getTechnicianStatus failed, defaulting to home:', err);
-        navigateToScreen('home');
+        navigateToScreen('home', true);
         return;
       }
     }
@@ -620,7 +677,7 @@ export default function App() {
       }
     }
 
-    navigateToScreen('home');
+    navigateToScreen('home', true);
   };
 
   // Handle showing OTP popup after signup
@@ -648,12 +705,17 @@ export default function App() {
         const technicianStatus = await getTechnicianStatus(token);
         if (!technicianStatus.profileComplete) {
           console.log('📍 Technician profile incomplete - redirecting to complete profile');
-          navigateToScreen('technicianCompleteProfile');
+          navigateToScreen('technicianCompleteProfile', true);
           return;
         }
         if (technicianStatus.status === 'WAITING_ADMIN_APPROVAL' || technicianStatus.status === 'PENDING' || technicianStatus.recommendedPage === 'WAITING_APPROVAL') {
           console.log('📍 Technician waiting for admin approval');
-          navigateToScreen('waitingApproval');
+          navigateToScreen('waitingApproval', true);
+          return;
+        }
+        if (technicianStatus.status === 'REJECTED') {
+          console.log('📍 Technician application rejected');
+          navigateToScreen('waitingApproval', true);
           return;
         }
         if (technicianStatus.status === 'APPROVED' && !technicianStatus.onboarded) {
@@ -669,15 +731,20 @@ export default function App() {
           } catch (e) {
             console.warn('⚠️ Failed to fetch onboarding status (signup):', e);
           }
-          navigateToScreen('technicianOnboarding');
+          navigateToScreen('technicianOnboarding', true);
           return;
         }
         console.log('📍 Technician ready - going to home');
-        navigateToScreen('home');
+        navigateToScreen('home', true);
         return;
-      } catch (err) {
+      } catch (err: unknown) {
+        if (isTechnicianWaitingScreenApiError(err)) {
+          console.log('📍 Technician rejected/suspended (status API after OTP)');
+          navigateToScreen('waitingApproval', true);
+          return;
+        }
         console.warn('⚠️ getTechnicianStatus failed after OTP:', err);
-        navigateToScreen('technicianCompleteProfile');
+        navigateToScreen('technicianCompleteProfile', true);
         return;
       }
     }
@@ -728,9 +795,9 @@ export default function App() {
     if (isFirstSignup && Platform.OS !== 'web') {
       console.log('📍 First signup - showing onboarding');
       postOnboardingScreenRef.current = 'home';
-      navigateToScreen('onboarding');
+      navigateToScreen('onboarding', true);
     } else {
-      navigateToScreen('home');
+      navigateToScreen('home', true);
     }
   };
 
@@ -790,13 +857,17 @@ export default function App() {
     <ThemeProvider>
       <FontProvider>
         <GlobalAlertProvider>
-          <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
+          <View style={{ flex: 1, direction: isAppRTL ? 'rtl' : 'ltr' }} onLayout={onLayoutRootView}>
             <AppContent
               currentScreen={currentScreen}
               setCurrentScreen={setCurrentScreen}
+              screenStack={screenStack}
+              setScreenStack={setScreenStack}
               router={router}
               showProfile={showProfile}
               setShowProfile={setShowProfile}
+              portfolioReturnTo={portfolioReturnTo}
+              setPortfolioReturnTo={setPortfolioReturnTo}
               userRole={userRole}
               setUserRole={setUserRole}
               phoneNumber={phoneNumber}
@@ -873,9 +944,13 @@ export default function App() {
 function AppContent({
   currentScreen,
   setCurrentScreen,
+  screenStack,
+  setScreenStack,
   router,
   showProfile,
   setShowProfile,
+  portfolioReturnTo,
+  setPortfolioReturnTo,
   userRole,
   setUserRole,
   phoneNumber,
@@ -974,14 +1049,76 @@ function AppContent({
     setUserRole,
   );
 
-  // Helper function to navigate - uses router on web, setCurrentScreen on mobile
-  const navigate = (screen: Screen) => {
+  // Navigate: push to stack so back always goes to the previous screen.
+  // replaceCurrent: swap the top screen (e.g. after create ticket → list, back must not return to create).
+  const navigate = (screen: Screen, options?: { replace?: boolean; replaceCurrent?: boolean }) => {
     if (Platform.OS === 'web' && router) {
-      router.navigate(screen);
-    } else {
-      setCurrentScreen(screen);
+      router.navigate(screen, undefined, !!(options?.replace || options?.replaceCurrent));
     }
+    if (options?.replace) {
+      setScreenStack([screen]);
+    } else if (options?.replaceCurrent) {
+      setScreenStack((prev: Screen[]) => {
+        if (prev.length === 0) return [screen];
+        const withoutTop = prev.slice(0, -1);
+        // e.g. [home, ticketList, createTicket] → ticketList: drop create, keep single list (no duplicate list)
+        if (withoutTop.length > 0 && withoutTop[withoutTop.length - 1] === screen) {
+          return withoutTop;
+        }
+        return [...withoutTop, screen];
+      });
+    } else {
+      setScreenStack((prev: Screen[]) => [...prev, screen]);
+    }
+    setCurrentScreen(screen);
   };
+
+  // Pop stack so back goes to previous screen (e.g. Home → Create project → back → Home).
+  const goBack = useCallback(() => {
+    if (currentScreen === 'home' && showProfile) {
+      setShowProfile(false);
+      return;
+    }
+    if (screenStack.length <= 1) return;
+    const current = screenStack[screenStack.length - 1];
+    // Cleanup state tied to current screen before popping
+    if ((current === 'pendingProject' || current === 'bidReceivedProject' || current === 'approvedProject' || current === 'contractSigningProject' || current === 'inProgressProject' || current === 'completedProject') && selectedProjectForDetail) setSelectedProjectForDetail(null);
+    else if (current === 'changeRequestList' && changeRequestProjectId != null) { setChangeRequestProjectId(null); setPreviousScreenBeforeChangeRequests(null); }
+    else if (current === 'changeRequestDetail' && changeRequestId != null) setChangeRequestId(null);
+    else if (current === 'booking') { setBookingTechnician(null); setServiceProvidersBookingTechnician(null); setBookingProjectId(undefined); }
+    else if (current === 'technicianProfile' && viewTechnicianId) setViewTechnicianId(null);
+    else if (current === 'categorySubcategories') setSelectedCategory(null);
+    else if (current === 'creationMethod' && selectedSubcategory) setSelectedSubcategory(null);
+    else if (current === 'ticketDetail') setSelectedTicketId(0);
+    const newStack = screenStack.slice(0, -1);
+    const prevScreen = newStack[newStack.length - 1];
+    // Support Center is opened from Profile; header back sets showProfile — mirror that for hardware back.
+    if (current === 'ticketList' && prevScreen === 'home') {
+      setShowProfile(true);
+    }
+    setScreenStack(newStack);
+    setCurrentScreen(prevScreen);
+    if (Platform.OS === 'web' && router) {
+      router.navigate(prevScreen);
+    }
+  }, [currentScreen, showProfile, screenStack, selectedProjectForDetail, changeRequestProjectId, changeRequestId, previousScreenBeforeChangeRequests, bookingTechnician, serviceProvidersBookingTechnician, viewTechnicianId, selectedCategory, selectedSubcategory, router]);
+
+  // Android hardware back button: pop the navigation stack.
+  useEffect(() => {
+    if (Platform.OS === 'web' || Platform.OS === 'ios') return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (currentScreen === 'home' && showProfile) {
+        setShowProfile(false);
+        return true;
+      }
+      if (screenStack.length > 1) {
+        goBack();
+        return true;
+      }
+      return false;
+    });
+    return () => sub.remove();
+  }, [currentScreen, showProfile, screenStack.length, goBack]);
 
   // Show loading state while checking authentication
   if (isCheckingAuth) {
@@ -1031,9 +1168,11 @@ function AppContent({
                 if (loginCount === 0 && !hasSeenOnboarding) {
                   console.log('📍 Brand new user - showing onboarding');
                   setCurrentScreen('onboarding');
+                  if (Platform.OS === 'android') setScreenStack(['onboarding']);
                 } else {
                   // User has logged in before or seen onboarding, go to login
                   setCurrentScreen('login');
+                  if (Platform.OS === 'android') setScreenStack(['login']);
                 }
               }}
               onNavigateToOverview={() => {
@@ -1052,13 +1191,13 @@ function AppContent({
                 postOnboardingScreenRef.current = null;
                 if (nextScreen) {
                   console.log('✅ Onboarding completed - navigating to:', nextScreen);
-                  navigate(nextScreen);
+                  navigate(nextScreen, { replace: true });
                 } else if (authToken) {
                   console.log('✅ Onboarding completed (authenticated) - navigating to home');
-                  navigate('home');
+                  navigate('home', { replace: true });
                 } else {
                   console.log('✅ Onboarding completed - navigating to login');
-                  navigate('login');
+                  navigate('login', { replace: true });
                 }
               }}
             />
@@ -1087,49 +1226,49 @@ function AppContent({
 
           {currentScreen === 'about' && (
             <AboutScreen
-              onBack={() => navigate('overview')}
+              onBack={goBack}
             />
           )}
 
           {currentScreen === 'contact' && (
             <ContactScreen
-              onBack={() => navigate('overview')}
+              onBack={goBack}
             />
           )}
 
           {currentScreen === 'introToApp' && (
             <IntroToAppScreen
-              onBack={() => navigate('overview')}
+              onBack={goBack}
             />
           )}
 
           {currentScreen === 'voiceAI' && (
             <VoiceAIScreen
-              onBack={() => navigate('overview')}
+              onBack={goBack}
             />
           )}
 
           {currentScreen === 'costExplorer' && (
             <CostExplorerScreen
-              onBack={() => navigate('overview')}
+              onBack={goBack}
             />
           )}
 
           {currentScreen === 'roomVisualizer' && (
             <RoomVisualizerScreen
-              onBack={() => navigate('overview')}
+              onBack={goBack}
             />
           )}
 
           {currentScreen === 'askBonyadAI' && (
             <AskBonyadAIScreen
-              onBack={() => navigate('overview')}
+              onBack={goBack}
             />
           )}
 
           {currentScreen === 'chatbot' && (
             <ChatbotScreen
-              onBack={() => navigate('home')}
+              onBack={goBack}
               onRequestLiveAgent={(subject, aiHistory) => {
                 setChatbotSubject(subject);
                 setChatbotAIHistory(aiHistory);
@@ -1140,7 +1279,7 @@ function AppContent({
 
           {currentScreen === 'supportChat' && (
             <SupportChatScreen
-              onBack={() => navigate('home')}
+              onBack={goBack}
               initialSubject={chatbotSubject}
               aiHistory={chatbotAIHistory}
             />
@@ -1148,8 +1287,29 @@ function AppContent({
 
           {currentScreen === 'ticketList' && (
             <TicketListScreen
-              onBack={() => navigate('home')}
+              onPressChat={() => navigate('chatRooms')}
+              onPressInfo={() => navigate('about')}
+              onPressNotifications={() => navigate('notifications')}
+              onBack={() => {
+                setShowProfile(true);
+                goBack();
+              }}
               onCreateTicket={() => navigate('createTicket')}
+              onNavigateTab={(tab) => {
+                if (tab === 'home') {
+                  setShowProfile(false);
+                  navigate('home', { replaceCurrent: true });
+                } else if (tab === 'projects') {
+                  setShowProfile(false);
+                  navigate('projects');
+                } else if (tab === 'chat') {
+                  setShowProfile(false);
+                  navigate('chatRooms');
+                } else if (tab === 'profile') {
+                  setShowProfile(true);
+                  goBack();
+                }
+              }}
               onTicketPress={(ticket) => {
                 setSelectedTicketId(ticket.id);
                 navigate('ticketDetail');
@@ -1159,14 +1319,14 @@ function AppContent({
 
           {currentScreen === 'createTicket' && (
             <CreateTicketScreen
-              onBack={() => navigate('ticketList')}
-              onSuccess={() => navigate('ticketList')}
+              onBack={goBack}
+              onSuccess={() => navigate('ticketList', { replaceCurrent: true })}
             />
           )}
 
           {currentScreen === 'serviceProviders' && (
             <ServiceProvidersScreen
-              onBack={() => navigate('home')}
+              onBack={goBack}
               onNavigateToProfile={(technicianId) => {
                 setViewTechnicianId(technicianId);
                 navigate('technicianProfile');
@@ -1180,7 +1340,7 @@ function AppContent({
 
           {currentScreen === 'commissionPayment' && (
             <CommissionPaymentScreen
-              onBack={() => navigate('home')}
+              onBack={goBack}
               onNavigateToCheckout={(request, description) => {
                 setCheckoutRequest(request);
                 setCheckoutDescription(description);
@@ -1192,7 +1352,7 @@ function AppContent({
           {currentScreen === 'paymentCheckout' && checkoutRequest && (
             <PaymentCheckoutScreen
               checkoutRequest={checkoutRequest}
-              onBack={() => navigate('commissionPayment')}
+              onBack={goBack}
               onSuccess={(transactionId) => {
                 console.log('✅ Payment successful:', transactionId);
                 navigate('home');
@@ -1203,19 +1363,19 @@ function AppContent({
           {currentScreen === 'ticketDetail' && (
             <TicketDetailScreen
               ticketId={selectedTicketId}
-              onBack={() => navigate('ticketList')}
+              onBack={goBack}
             />
           )}
 
           {currentScreen === 'projectsMap' && (
             <ProjectsMapScreen
-              onBack={() => navigate('overview')}
+              onBack={goBack}
             />
           )}
 
           {currentScreen === 'roomDesign' && (
             <RoomDesignScreen
-              onBack={() => navigate('overview')}
+              onBack={goBack}
             />
           )}
 
@@ -1276,6 +1436,10 @@ function AppContent({
                     navigate('waitingApproval');
                     return;
                   }
+                  if (technicianStatus.status === 'REJECTED') {
+                    navigate('waitingApproval');
+                    return;
+                  }
                   if (technicianStatus.status === 'APPROVED' && !technicianStatus.onboarded) {
                     try {
                       const status = await getOnboardingStatus(authToken, userId);
@@ -1292,7 +1456,7 @@ function AppContent({
                     return;
                   }
                   navigate('home');
-                } catch (err) {
+                } catch (err: unknown) {
                   console.warn('⚠️ getTechnicianStatus failed after complete profile:', err);
                   navigate('waitingApproval');
                 }
@@ -1321,19 +1485,22 @@ function AppContent({
                     return;
                   }
                   navigate('home');
-                } catch (err) {
+                } catch (err: unknown) {
+                  if (isTechnicianWaitingScreenApiError(err)) {
+                    return;
+                  }
                   console.warn('⚠️ getTechnicianStatus failed on approval:', err);
                   navigate('home');
                 }
               }}
-              onBack={() => navigate('login')}
+              onBack={goBack}
               onLogout={handleLogout}
             />
           )}
 
           {currentScreen === 'forgotPassword' && (
             <ForgotPasswordScreen
-              onBack={() => navigate('login')}
+              onBack={goBack}
               onOTPSent={(phone, role) => {
                 setForgotPasswordPhone(phone);
                 setForgotPasswordRole(role);
@@ -1346,7 +1513,7 @@ function AppContent({
             <ForgotPasswordOTPScreen
               phoneNumber={forgotPasswordPhone}
               role={forgotPasswordRole}
-              onBack={() => navigate('forgotPassword')}
+              onBack={goBack}
               onOTPVerified={(otpCode) => {
                 setForgotPasswordOTP(otpCode);
                 navigate('resetPassword');
@@ -1359,7 +1526,7 @@ function AppContent({
               phoneNumber={forgotPasswordPhone}
               role={forgotPasswordRole}
               otpCode={forgotPasswordOTP}
-              onBack={() => navigate('otpVerification')}
+              onBack={goBack}
               onPasswordReset={() => {
                 // Reset forgot password state
                 setForgotPasswordPhone('');
@@ -1371,13 +1538,15 @@ function AppContent({
             />
           )}
 
-          {currentScreen === 'home' && !showProfile && (
+          {currentScreen === 'home' && (
             <>
               {userRole === 'user' ? (
                 <CoachMarkProvider>
                   <UserHomeScreen
                     onLogout={handleLogout}
                     onShowProfile={() => setShowProfile(true)}
+                    openProfileOnMount={showProfile}
+                    onProfileTabClosed={() => setShowProfile(false)}
                     onRequestProject={() => navigate('newProject')}
                     onShowProjects={(filter) => {
                       setProjectsFilter(filter);
@@ -1405,7 +1574,10 @@ function AppContent({
                       setShowProfile(true);
                       navigate('myData');
                     }}
-                    onNavigateToPortfolio={() => navigate('portfolio')}
+                    onNavigateToPortfolio={() => {
+                      setPortfolioReturnTo('home');
+                      navigate('portfolio');
+                    }}
                     onNavigateToSubscription={() => navigate('subscription')}
                     onNavigateToServices={() => navigate('services')}
                     onNavigateToAvailability={() => navigate('availability')}
@@ -1429,6 +1601,8 @@ function AppContent({
                   <TechnicianHomeScreen
                     onLogout={handleLogout}
                     onShowProfile={() => setShowProfile(true)}
+                    openProfileOnMount={showProfile}
+                    onProfileTabClosed={() => setShowProfile(false)}
                     onShowProjects={(filter) => {
                       setProjectsFilter(filter || 'available');
                       navigate('projects');
@@ -1444,41 +1618,16 @@ function AppContent({
                       userId={userId}
                     authToken={authToken}
                     projectsFilter={projectsFilter}
-                    onNavigateToChatDetail={(roomId, receiverId, receiverName) => {
-                      setChatRoomId(roomId);
-                      setChatReceiverId(receiverId);
-                      setChatReceiverName(receiverName);
-                      navigate('chatDetail');
-                    }}
                   />
                 </CoachMarkProvider>
               )}
             </>
           )}
 
-          {currentScreen === 'home' && showProfile && (
-            <ProfileScreen
-              onLogout={handleLogout}
-              onBack={() => setShowProfile(false)}
-              onNavigateToEditProfile={() => navigate('myData')}
-              onNavigateToPortfolio={() => navigate('portfolio')}
-              onNavigateToSubscription={() => navigate('subscription')}
-              onNavigateToServices={() => navigate('services')}
-              onNavigateToAvailability={() => navigate('availability')}
-              onNavigateToSupportTickets={() => {
-                console.log('🎧 Navigating to Support Tickets...');
-                setShowProfile(false);
-                // Small delay to ensure profile modal closes before navigation
-                setTimeout(() => {
-                  navigate('ticketList');
-                }, 100);
-              }}
-            />
-          )}
 
           {currentScreen === 'myData' && (
             <MyDataScreen
-              onBack={() => navigate('home')}
+              onBack={goBack}
               onEditProfile={() => navigate('editProfile')}
               onChangePhone={() => navigate('changePhone')}
               onChangePassword={() => navigate('changePassword')}
@@ -1492,34 +1641,49 @@ function AppContent({
           {currentScreen === 'editProfile' && (
             <EditProfileScreen
               userDetails={{ role: userRole }}
-              onBack={() => navigate('myData')}
+              onBack={goBack}
               onSave={() => navigate('myData')}
             />
           )}
 
           {currentScreen === 'changePhone' && (
             <ChangePhoneScreen
-              onBack={() => navigate('myData')}
+              onBack={goBack}
             />
           )}
 
           {currentScreen === 'changePassword' && (
             <ChangePasswordScreen
-              onBack={() => navigate('myData')}
+              onBack={goBack}
             />
           )}
 
           {currentScreen === 'portfolio' && (
             <PortfolioScreen
               userId={userId.toString()}
-              onBack={() => navigate('home')}
+              onBack={() => {
+                if (portfolioReturnTo === 'profile') setShowProfile(true);
+                setPortfolioReturnTo(null);
+                goBack();
+              }}
+              onNavigateTab={(tab) => {
+                setPortfolioReturnTo(null);
+                if (tab === 'home') navigate('home', { replace: true });
+                else if (tab === 'projects') navigate('projects');
+                else if (tab === 'payments') navigate('commissionPayment');
+                else if (tab === 'profile') {
+                  setShowProfile(true);
+                  navigate('home', { replace: true });
+                }
+              }}
+              onEditProfile={() => navigate('editProfile')}
             />
           )}
 
           {currentScreen === 'projects' && (
             <ProjectsScreen
               filter={projectsFilter}
-              onBack={() => navigate('home')}
+              onBack={goBack}
               onOpenChat={(roomId, receiverId, receiverName) => {
                 setChatRoomId(roomId);
                 setChatReceiverId(receiverId);
@@ -1535,7 +1699,7 @@ function AppContent({
 
           {currentScreen === 'runningProjects' && (
             <RunningProjectsScreen
-              onBack={() => navigate('home')}
+              onBack={goBack}
               isTechnician={userRole === 'technician'}
               onShowProjectDetails={(project) => {
                 if (!project) return;
@@ -1562,14 +1726,14 @@ function AppContent({
           {currentScreen === 'pendingProject' && selectedProjectForDetail && (
             <PendingProjectScreen
               project={selectedProjectForDetail}
-              onBack={() => { setSelectedProjectForDetail(null); setCurrentScreen('runningProjects'); }}
+              onBack={goBack}
               onSuccess={() => { setSelectedProjectForDetail(null); setCurrentScreen('runningProjects'); }}
             />
           )}
           {currentScreen === 'bidReceivedProject' && selectedProjectForDetail && (
             <BidReceivedProjectScreen
               project={selectedProjectForDetail}
-              onBack={() => { setSelectedProjectForDetail(null); setCurrentScreen('runningProjects'); }}
+              onBack={goBack}
               onSuccess={() => { setSelectedProjectForDetail(null); setCurrentScreen('runningProjects'); }}
               onOpenChat={(roomId, receiverId, receiverName) => {
                 setChatRoomId(roomId);
@@ -1583,7 +1747,7 @@ function AppContent({
           {currentScreen === 'approvedProject' && selectedProjectForDetail && (
             <ApprovedProjectScreen
               project={selectedProjectForDetail}
-              onBack={() => { setSelectedProjectForDetail(null); setCurrentScreen('runningProjects'); }}
+              onBack={goBack}
               onSuccess={() => { setSelectedProjectForDetail(null); setCurrentScreen('runningProjects'); }}
               onProceedToContract={() => setCurrentScreen('contractSigningProject')}
               onOpenChat={(roomId, receiverId, receiverName) => {
@@ -1603,7 +1767,7 @@ function AppContent({
             <ContractSigningProjectScreen
               project={selectedProjectForDetail}
               isTechnician={userRole === 'technician'}
-              onBack={() => { setSelectedProjectForDetail(null); setCurrentScreen('runningProjects'); }}
+              onBack={goBack}
               onSuccess={() => { setSelectedProjectForDetail(null); setCurrentScreen('runningProjects'); }}
             />
           )}
@@ -1611,7 +1775,7 @@ function AppContent({
             <InProgressProjectScreen
               project={selectedProjectForDetail}
               isTechnician={userRole === 'technician'}
-              onBack={() => { setSelectedProjectForDetail(null); setCurrentScreen('runningProjects'); }}
+              onBack={goBack}
               onOpenChat={(roomId, receiverId, receiverName) => {
                 setChatRoomId(roomId);
                 setChatReceiverId(receiverId);
@@ -1629,7 +1793,7 @@ function AppContent({
           {currentScreen === 'completedProject' && selectedProjectForDetail && (
             <CompletedProjectViewPage
               project={selectedProjectForDetail}
-              onBack={() => { setSelectedProjectForDetail(null); setCurrentScreen('runningProjects'); }}
+              onBack={goBack}
               onSuccess={() => { setSelectedProjectForDetail(null); setCurrentScreen('runningProjects'); }}
               onViewAllProjects={() => { setSelectedProjectForDetail(null); setCurrentScreen('runningProjects'); }}
               onStartNewProject={() => { setSelectedProjectForDetail(null); setCurrentScreen('newProject'); }}
@@ -1640,11 +1804,7 @@ function AppContent({
           {currentScreen === 'changeRequestList' && changeRequestProjectId != null && (
             <ChangeRequestListScreen
               projectId={changeRequestProjectId}
-              onBack={() => {
-                setChangeRequestProjectId(null);
-                setCurrentScreen(previousScreenBeforeChangeRequests || 'runningProjects');
-                setPreviousScreenBeforeChangeRequests(null);
-              }}
+              onBack={goBack}
               onViewDetail={(id) => {
                 setChangeRequestId(id);
                 setCurrentScreen('changeRequestDetail');
@@ -1656,33 +1816,33 @@ function AppContent({
             <ChangeRequestDetailScreen
               changeRequestId={changeRequestId}
               projectId={changeRequestProjectId}
-              onBack={() => { setChangeRequestId(null); setCurrentScreen('changeRequestList'); }}
+              onBack={goBack}
               onSuccess={() => {}}
             />
           )}
           {currentScreen === 'requestModification' && changeRequestProjectId != null && (
             <RequestModificationScreen
               projectId={changeRequestProjectId}
-              onBack={() => setCurrentScreen('changeRequestList')}
+              onBack={goBack}
               onSuccess={() => {}}
             />
           )}
 
           {currentScreen === 'services' && (
             <ServiceManagementScreen
-              onBack={() => navigate('home')}
+              onBack={goBack}
             />
           )}
 
           {currentScreen === 'availability' && (
             <AvailabilityScreen
-              onBack={() => navigate('home')}
+              onBack={goBack}
             />
           )}
 
           {currentScreen === 'subscription' && (
             <SubscriptionScreen
-              onBack={() => navigate('home')}
+              onBack={goBack}
             />
           )}
 
@@ -1690,15 +1850,15 @@ function AppContent({
             <NewProjectView
               onNavigateToAI={() => navigate('aiForm')}
               onNavigateToManual={() => navigate('manualForm')}
-              onBack={() => navigate('home')}
+              onBack={goBack}
             />
           )}
 
           {currentScreen === 'manualForm' && (
             <ManualProjectForm
-              onBack={() => navigate('newProject')}
+              onBack={goBack}
               onSuccess={() => {
-                navigate('home');
+                navigate('home', { replace: true });
                 globalAlertManager.showSuccess('Project submitted successfully!', 'Success');
               }}
             />
@@ -1706,9 +1866,9 @@ function AppContent({
 
           {currentScreen === 'aiForm' && (
             <ConversationalAIForm
-              onBack={() => navigate('newProject')}
+              onBack={goBack}
               onSuccess={() => {
-                navigate('home');
+                navigate('home', { replace: true });
                 globalAlertManager.showSuccess('Project generated and submitted successfully!', 'Success');
               }}
             />
@@ -1736,10 +1896,7 @@ function AppContent({
             <CreationMethodScreen
               category={selectedCategory}
               subcategory={selectedSubcategory}
-              onBack={() => {
-                setSelectedSubcategory(null);
-                navigate('categorySubcategories');
-              }}
+              onBack={goBack}
               onChooseAI={(category, subcategory) => {
                 navigate('aiForm');
               }}
@@ -1751,7 +1908,7 @@ function AppContent({
 
           {currentScreen === 'chatRooms' && (
             <ChatRoomsListScreen
-              onBack={() => navigate('home')}
+              onBack={goBack}
               onOpenChat={(roomId, receiverId, receiverName) => {
                 setChatRoomId(roomId);
                 setChatReceiverId(receiverId);
@@ -1766,19 +1923,19 @@ function AppContent({
               roomId={chatRoomId}
               receiverId={chatReceiverId}
               receiverName={chatReceiverName}
-              onBack={() => navigate('chatRooms')}
+              onBack={goBack}
             />
           )}
 
           {currentScreen === 'notifications' && (
             <NotificationsScreen
-              onBack={() => navigate('home')}
+              onBack={goBack}
             />
           )}
 
           {currentScreen === 'appointments' && (
             <AppointmentsScreen
-              onBack={() => navigate('home')}
+              onBack={goBack}
             />
           )}
 
@@ -1788,7 +1945,7 @@ function AppContent({
               technicianName={(bookingTechnician || serviceProvidersBookingTechnician)?.name}
               projectId={bookingProjectId}
               onBack={() => {
-                navigate('home');
+                goBack();
                 setBookingTechnician(null);
                 setServiceProvidersBookingTechnician(null);
                 setBookingProjectId(undefined);
@@ -1804,7 +1961,7 @@ function AppContent({
             <TechnicianProfileViewScreen
               technicianId={viewTechnicianId}
               onBack={() => {
-                navigate('home');
+                goBack();
                 setViewTechnicianId(null);
               }}
               onBooking={(technicianId, technicianName) => {

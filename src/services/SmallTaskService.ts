@@ -296,6 +296,17 @@ export async function getActiveSpecializations(): Promise<TechnicianSpecializati
   return Array.isArray(data) ? data : [];
 }
 
+/** Subscribe to a task type – POST /small-tasks/technician/specializations/:taskTypeId (same as web) */
+export async function subscribeToTaskType(taskTypeId: number): Promise<{ message: string }> {
+  const url = buildApiUrlWithParams(API_ENDPOINTS.SMALL_TASKS.SUBSCRIBE_TO_TYPE, { taskTypeId });
+  const response = await fetch(url, { method: 'POST', headers: await getAuthHeaders() });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error((err as { message?: string; error?: string }).message || (err as { message?: string; error?: string }).error || 'Failed to subscribe');
+  }
+  return (await response.json()) as { message: string };
+}
+
 /** Unsubscribe from a task type – DELETE /small-tasks/technician/specializations/:taskTypeId (same as web) */
 export async function unsubscribeFromTaskType(taskTypeId: number): Promise<{ message: string }> {
   const url = buildApiUrlWithParams(API_ENDPOINTS.SMALL_TASKS.UNSUBSCRIBE_FROM_TYPE, { taskTypeId });

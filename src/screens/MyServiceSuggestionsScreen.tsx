@@ -19,10 +19,141 @@ import { API_ENDPOINTS, buildApiUrl } from '../config/api';
 import { storage } from '../utils/storage';
 import { ServiceSuggestion } from '../types/smallTasks';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
+import { getTopPadding } from '../utils/statusBarHelper';
 
 interface MyServiceSuggestionsScreenProps {
   onBack: () => void;
   onAddNew?: () => void;
+}
+
+function SuggestionCard({
+  item,
+  index,
+  colors,
+  fonts,
+  language,
+  getStatusColor,
+  getStatusIcon,
+  getStatusLabel,
+  formatDate,
+  t,
+}: {
+  item: ServiceSuggestion;
+  index: number;
+  colors: Record<string, string>;
+  fonts: ReturnType<typeof useFontFamily>['fonts'];
+  language: string;
+  getStatusColor: (status: string) => string;
+  getStatusIcon: (status: string) => string;
+  getStatusLabel: (status: string) => string;
+  formatDate: (dateString: string) => string;
+  t: (key: string, options?: any) => string;
+}) {
+  const serviceName = language === 'ar' ? item.nameAr : item.nameEn;
+  const cardAnim = useRef(new Animated.Value(0)).current;
+  const cardSlide = useRef(new Animated.Value(30)).current;
+
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      const delay = index * 80;
+      Animated.parallel([
+        Animated.timing(cardAnim, {
+          toValue: 1,
+          duration: 400,
+          delay,
+          useNativeDriver: true,
+        }),
+        Animated.spring(cardSlide, {
+          toValue: 0,
+          tension: 50,
+          friction: 7,
+          delay,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      cardAnim.setValue(1);
+      cardSlide.setValue(0);
+    }
+  }, [index]);
+
+  return (
+    <Animated.View
+      style={{
+        opacity: cardAnim,
+        transform: [{ translateY: cardSlide }],
+      }}
+    >
+      <View style={[styles.suggestionCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+        <View style={[styles.cardHeader, { flexDirection: 'row' }]}>
+          <View style={[styles.iconContainer, { backgroundColor: colors.primary + '15' }]}>
+            <Ionicons name="bulb" size={24} color={colors.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.serviceName, { color: colors.text, fontFamily: fonts.primaryBold }]} numberOfLines={1}>
+              {serviceName}
+            </Text>
+            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
+              <Ionicons name={getStatusIcon(item.status) as any} size={12} color={getStatusColor(item.status)} />
+              <Text style={[styles.statusText, { color: getStatusColor(item.status), fontFamily: fonts.button }]}>
+                {getStatusLabel(item.status)}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        <Text
+          style={[
+            styles.description,
+            {
+              color: colors.textSecondary,
+              fontFamily: fonts.body,
+              textAlign: 'left',
+            },
+          ]}
+          numberOfLines={2}
+        >
+          {item.description}
+        </Text>
+
+        <View style={[styles.categoryRow, { flexDirection: 'row' }]}>
+          <Ionicons name="pricetag-outline" size={14} color={colors.textSecondary} />
+          <Text style={[styles.categoryText, { color: colors.textSecondary, fontFamily: fonts.body }]}>
+            {t(item.category)}
+          </Text>
+        </View>
+
+        {item.adminNotes && (
+          <View style={[styles.adminNotesContainer, { backgroundColor: colors.background, borderColor: colors.border }]}>
+            <View style={[styles.adminNotesHeader, { flexDirection: 'row' }]}>
+              <Ionicons name="chatbox-ellipses-outline" size={14} color={colors.primary} />
+              <Text style={[styles.adminNotesLabel, { color: colors.primary, fontFamily: fonts.button }]}>
+                {t('Admin Notes')}:
+              </Text>
+            </View>
+            <Text
+              style={[
+                styles.adminNotesText,
+                {
+                  color: colors.text,
+                  fontFamily: fonts.body,
+                  textAlign: 'left',
+                },
+              ]}
+            >
+              {item.adminNotes}
+            </Text>
+          </View>
+        )}
+
+        <View style={[styles.cardFooter, { borderTopColor: colors.border }]}>
+          <Text style={[styles.dateText, { color: colors.textSecondary, fontFamily: fonts.body }]}>
+            {formatDate(item.createdAt)}
+          </Text>
+        </View>
+      </View>
+    </Animated.View>
+  );
 }
 
 export default function MyServiceSuggestionsScreen({
@@ -31,7 +162,7 @@ export default function MyServiceSuggestionsScreen({
 }: MyServiceSuggestionsScreenProps) {
   const { t, i18n } = useTranslation();
   const { colors, theme } = useTheme();
-  const { fontFamily } = useFontFamily();
+  const { fonts } = useFontFamily();
   const insets = useSafeAreaInsets();
   const isRTL = i18n.language === 'ar';
 
@@ -176,130 +307,30 @@ export default function MyServiceSuggestionsScreen({
     };
   };
 
-  const renderSuggestion = ({ item, index }: { item: ServiceSuggestion; index: number }) => {
-    const serviceName = isRTL ? item.nameAr : item.nameEn;
-
-    // Animation for each card (Android only)
-    const cardAnim = useRef(new Animated.Value(0)).current;
-    const cardSlide = useRef(new Animated.Value(30)).current;
-
-    useEffect(() => {
-      if (Platform.OS === 'android') {
-        const delay = index * 80;
-        Animated.parallel([
-          Animated.timing(cardAnim, {
-            toValue: 1,
-            duration: 400,
-            delay,
-            useNativeDriver: true,
-          }),
-          Animated.spring(cardSlide, {
-            toValue: 0,
-            tension: 50,
-            friction: 7,
-            delay,
-            useNativeDriver: true,
-          }),
-        ]).start();
-      } else {
-        cardAnim.setValue(1);
-        cardSlide.setValue(0);
-      }
-    }, []);
-
-    return (
-      <Animated.View
-        style={{
-          opacity: cardAnim,
-          transform: [{ translateY: cardSlide }],
-        }}
-      >
-        <View style={[styles.suggestionCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
-          {/* Header */}
-          <View style={[styles.cardHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-            <View style={[styles.iconContainer, { backgroundColor: colors.primary + '15' }]}>
-              <Ionicons name="bulb" size={24} color={colors.primary} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.serviceName, { color: colors.text, fontFamily: fontFamily.bold }]} numberOfLines={1}>
-                {serviceName}
-              </Text>
-              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
-                <Ionicons name={getStatusIcon(item.status) as any} size={12} color={getStatusColor(item.status)} />
-                <Text style={[styles.statusText, { color: getStatusColor(item.status), fontFamily: fontFamily.semiBold }]}>
-                  {getStatusLabel(item.status)}
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Description */}
-          <Text
-            style={[
-              styles.description,
-              {
-                color: colors.textSecondary,
-                fontFamily: fontFamily.regular,
-                textAlign: isRTL ? 'right' : 'left',
-              },
-            ]}
-            numberOfLines={2}
-          >
-            {item.description}
-          </Text>
-
-          {/* Category */}
-          <View style={[styles.categoryRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-            <Ionicons name="pricetag-outline" size={14} color={colors.textSecondary} />
-            <Text style={[styles.categoryText, { color: colors.textSecondary, fontFamily: fontFamily.regular }]}>
-              {t(item.category)}
-            </Text>
-          </View>
-
-          {/* Admin Notes */}
-          {item.adminNotes && (
-            <View style={[styles.adminNotesContainer, { backgroundColor: colors.background, borderColor: colors.border }]}>
-              <View style={[styles.adminNotesHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-                <Ionicons name="chatbox-ellipses-outline" size={14} color={colors.primary} />
-                <Text style={[styles.adminNotesLabel, { color: colors.primary, fontFamily: fontFamily.semiBold }]}>
-                  {t('Admin Notes')}:
-                </Text>
-              </View>
-              <Text
-                style={[
-                  styles.adminNotesText,
-                  {
-                    color: colors.text,
-                    fontFamily: fontFamily.regular,
-                    textAlign: isRTL ? 'right' : 'left',
-                  },
-                ]}
-              >
-                {item.adminNotes}
-              </Text>
-            </View>
-          )}
-
-          {/* Footer */}
-          <View style={[styles.cardFooter, { borderTopColor: colors.border }]}>
-            <Text style={[styles.dateText, { color: colors.textSecondary, fontFamily: fontFamily.regular }]}>
-              {formatDate(item.createdAt)}
-            </Text>
-          </View>
-        </View>
-      </Animated.View>
-    );
-  };
+  const renderSuggestion = ({ item, index }: { item: ServiceSuggestion; index: number }) => (
+    <SuggestionCard
+      item={item}
+      index={index}
+      colors={colors}
+      fonts={fonts}
+      language={i18n.language}
+      getStatusColor={getStatusColor}
+      getStatusIcon={getStatusIcon}
+      getStatusLabel={getStatusLabel}
+      formatDate={formatDate}
+      t={t}
+    />
+  );
 
   const renderEmpty = () => (
     <View style={styles.emptyContainer}>
       <Ionicons name="bulb-outline" size={64} color={colors.textSecondary} />
-      <Text style={[styles.emptyText, { color: colors.textSecondary, fontFamily: fontFamily.semiBold }]}>
+      <Text style={[styles.emptyText, { color: colors.textSecondary, fontFamily: fonts.button }]}>
         {selectedFilter === 'ALL' 
           ? t('No service suggestions yet') 
           : t('No {{filter}} suggestions', { filter: selectedFilter.toLowerCase() })}
       </Text>
-      <Text style={[styles.emptySubtext, { color: colors.textSecondary, fontFamily: fontFamily.regular }]}>
+      <Text style={[styles.emptySubtext, { color: colors.textSecondary, fontFamily: fonts.body }]}>
         {t('Suggest services you can provide to expand the platform')}
       </Text>
       {onAddNew && (
@@ -308,7 +339,7 @@ export default function MyServiceSuggestionsScreen({
           onPress={onAddNew}
         >
           <Ionicons name="add" size={20} color="#fff" />
-          <Text style={[styles.addButtonText, { fontFamily: fontFamily.semiBold }]}>
+          <Text style={[styles.addButtonText, { fontFamily: fonts.button }]}>
             {t('Suggest Service')}
           </Text>
         </TouchableOpacity>
@@ -333,7 +364,7 @@ export default function MyServiceSuggestionsScreen({
           styles.filterButtonText,
           {
             color: selectedFilter === filter ? '#fff' : colors.text,
-            fontFamily: fontFamily.semiBold,
+            fontFamily: fonts.button,
           },
         ]}
       >
@@ -362,34 +393,34 @@ export default function MyServiceSuggestionsScreen({
         ]}
       >
         <View style={[styles.statCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
-          <Text style={[styles.statValue, { color: colors.text, fontFamily: fontFamily.bold }]}>
+          <Text style={[styles.statValue, { color: colors.text, fontFamily: fonts.primaryBold }]}>
             {stats.total}
           </Text>
-          <Text style={[styles.statLabel, { color: colors.textSecondary, fontFamily: fontFamily.regular }]}>
+          <Text style={[styles.statLabel, { color: colors.textSecondary, fontFamily: fonts.body }]}>
             {t('Total')}
           </Text>
         </View>
         <View style={[styles.statCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
-          <Text style={[styles.statValue, { color: '#FFB703', fontFamily: fontFamily.bold }]}>
+          <Text style={[styles.statValue, { color: '#FFB703', fontFamily: fonts.primaryBold }]}>
             {stats.pending}
           </Text>
-          <Text style={[styles.statLabel, { color: colors.textSecondary, fontFamily: fontFamily.regular }]}>
+          <Text style={[styles.statLabel, { color: colors.textSecondary, fontFamily: fonts.body }]}>
             {t('Pending')}
           </Text>
         </View>
         <View style={[styles.statCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
-          <Text style={[styles.statValue, { color: '#4CAF50', fontFamily: fontFamily.bold }]}>
+          <Text style={[styles.statValue, { color: '#4CAF50', fontFamily: fonts.primaryBold }]}>
             {stats.approved}
           </Text>
-          <Text style={[styles.statLabel, { color: colors.textSecondary, fontFamily: fontFamily.regular }]}>
+          <Text style={[styles.statLabel, { color: colors.textSecondary, fontFamily: fonts.body }]}>
             {t('Approved')}
           </Text>
         </View>
         <View style={[styles.statCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
-          <Text style={[styles.statValue, { color: '#F44336', fontFamily: fontFamily.bold }]}>
+          <Text style={[styles.statValue, { color: '#F44336', fontFamily: fonts.primaryBold }]}>
             {stats.rejected}
           </Text>
-          <Text style={[styles.statLabel, { color: colors.textSecondary, fontFamily: fontFamily.regular }]}>
+          <Text style={[styles.statLabel, { color: colors.textSecondary, fontFamily: fonts.body }]}>
             {t('Rejected')}
           </Text>
         </View>
@@ -402,7 +433,7 @@ export default function MyServiceSuggestionsScreen({
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, { color: colors.textSecondary, fontFamily: fontFamily.regular }]}>
+          <Text style={[styles.loadingText, { color: colors.textSecondary, fontFamily: fonts.body }]}>
             {t('Loading suggestions...')}
           </Text>
         </View>
@@ -417,7 +448,7 @@ export default function MyServiceSuggestionsScreen({
         style={[
           styles.header,
           {
-            paddingTop: Math.max(insets.top, 20),
+            paddingTop: getTopPadding(insets),
             borderBottomColor: colors.border,
             flexDirection: isRTL ? 'row-reverse' : 'row',
             opacity: headerAnim,
@@ -434,13 +465,13 @@ export default function MyServiceSuggestionsScreen({
       >
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <Ionicons
-            name={isRTL ? 'arrow-forward' : 'arrow-back'}
+            name="arrow-back"
             size={24}
             color={colors.text}
           />
         </TouchableOpacity>
         <View style={styles.headerTitleContainer}>
-          <Text style={[styles.headerTitle, { color: colors.text, fontFamily: fontFamily.bold }]}>
+          <Text style={[styles.headerTitle, { color: colors.text, fontFamily: fonts.primaryBold }]}>
             {t('My Service Suggestions')}
           </Text>
         </View>

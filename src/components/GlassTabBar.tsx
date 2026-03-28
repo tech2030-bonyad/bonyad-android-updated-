@@ -8,6 +8,7 @@ import {
   Dimensions,
   Easing,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -33,8 +34,8 @@ const DEFAULT_TABS: TabItemConfig[] = [
 ];
 
 export const TECHNICIAN_TABS: TabItemConfig[] = [
-  { id: 'appointments', icon: 'calendar-outline', iconActive: 'calendar', label: 'Calendar' },
   { id: 'home', icon: 'home-outline', iconActive: 'home', label: 'Home' },
+  { id: 'projects', icon: 'folder-outline', iconActive: 'folder', label: 'Projects' },
   { id: 'wallet', icon: 'card-outline', iconActive: 'card', label: 'Payments' },
   { id: 'profile', icon: 'person-outline', iconActive: 'person', label: 'Profile' },
 ];
@@ -60,8 +61,10 @@ export default function GlassTabBar({
   primaryColorDark = BRAND_BLUE_DARK,
   isDark = false,
   bottomInset = 20,
-  t = (k) => k,
+  t,
 }: GlassTabBarProps) {
+  const { t: i18nT } = useTranslation();
+  const tFn = t ?? i18nT ?? ((k: string) => k);
   const regularTabs = useMemo(() => tabs.filter((tab) => tab.id !== 'new'), [tabs]);
   const hasCenter = tabs.some((tab) => tab.id === 'new');
   const activeIndex = regularTabs.findIndex((tab) => tab.id === activeTab);
@@ -74,9 +77,12 @@ export default function GlassTabBar({
     if (activeIndex < 0) return;
     let physicalIdx = activeIndex;
     if (hasCenter) {
-      const centerSlot = Math.floor(tabs.indexOf(tabs.find((t) => t.id === 'new')!));
-      const beforeCenter = tabs.slice(0, centerSlot).filter((t) => t.id !== 'new').length;
-      physicalIdx = activeIndex < beforeCenter ? activeIndex : activeIndex + 1;
+      const newTab = tabs.find((t) => t.id === 'new');
+      if (newTab) {
+        const centerSlot = Math.floor(tabs.indexOf(newTab));
+        const beforeCenter = tabs.slice(0, centerSlot).filter((t) => t.id !== 'new').length;
+        physicalIdx = activeIndex < beforeCenter ? activeIndex : activeIndex + 1;
+      }
     }
     const target = physicalIdx * slotW + (slotW - 56) / 2;
     Animated.spring(indicatorX, {
@@ -85,11 +91,11 @@ export default function GlassTabBar({
       friction: 22,
       useNativeDriver: true,
     }).start();
-  }, [activeIndex, slotW, hasCenter]);
+  }, [activeIndex, slotW, hasCenter, tabs]);
 
   return (
-    <View style={[styles.outer, { paddingBottom: Math.max(bottomInset, 10) }]}>
-      <View style={[styles.pill, isDark ? styles.pillDark : styles.pillLight]}>
+    <View style={[styles.outer, { paddingBottom: Math.max(bottomInset, 10), direction: 'ltr' }]}>
+      <View style={[styles.pill, isDark ? styles.pillDark : styles.pillLight, { direction: 'ltr' }]}>
         <LinearGradient
           colors={
             isDark
@@ -107,8 +113,8 @@ export default function GlassTabBar({
             style={[
               styles.slidingIndicator,
               {
-                backgroundColor: primaryColor + '18',
-                borderColor: primaryColor + '30',
+                backgroundColor: (primaryColor || BRAND_BLUE) + '18',
+                borderColor: (primaryColor || BRAND_BLUE) + '30',
                 transform: [{ translateX: indicatorX }],
               },
             ]}
@@ -116,7 +122,7 @@ export default function GlassTabBar({
           />
         )}
 
-        <View style={styles.row}>
+        <View style={[styles.row, { flexDirection: 'row' }]}>
           {tabs.map((tab, i) =>
             tab.id === 'new' ? (
               <PlusButton
@@ -133,7 +139,7 @@ export default function GlassTabBar({
                 onPress={() => onTabPress(tab.id)}
                 primaryColor={primaryColor}
                 isDark={isDark}
-                t={t}
+                t={tFn}
               />
             ),
           )}

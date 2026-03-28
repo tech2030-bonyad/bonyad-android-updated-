@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,8 @@ import {
   TextInput,
   ActivityIndicator,
   Image,
+  Animated,
+  Dimensions,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,6 +20,7 @@ import { storage } from '../utils/storage';
 import { API_BASE_URL, API_ENDPOINTS, buildApiUrl } from '../config/api';
 import { requestPhoneChange } from '../services/ProfileService';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
+import { getTopPadding } from '../utils/statusBarHelper';
 
 // Figma Design Colors
 const FIGMA_COLORS = {
@@ -55,6 +58,26 @@ export default function ChangePhoneScreen({ onBack, onOTPSent }: ChangePhoneScre
   const isRTL = i18n.language === 'ar';
   
   const { alertState, showAlert, showError, hideAlert } = useAlertPopup();
+
+  const screenWidth = Dimensions.get('window').width;
+  const screenSlideX = useRef(new Animated.Value(0)).current;
+  const screenOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    screenSlideX.setValue(-screenWidth);
+    screenOpacity.setValue(0);
+    Animated.parallel([
+      Animated.timing(screenOpacity, { toValue: 1, duration: 220, useNativeDriver: true }),
+      Animated.spring(screenSlideX, { toValue: 0, tension: 65, friction: 11, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
+  const handleBackScreen = () => {
+    Animated.parallel([
+      Animated.timing(screenOpacity, { toValue: 0, duration: 180, useNativeDriver: true }),
+      Animated.timing(screenSlideX, { toValue: screenWidth, duration: 220, useNativeDriver: true }),
+    ]).start(() => onBack());
+  };
   
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [currentPhone, setCurrentPhone] = useState('');
@@ -172,19 +195,19 @@ export default function ChangePhoneScreen({ onBack, onOTPSent }: ChangePhoneScre
 
   if (isFetching) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: bgColor, paddingTop: insets.top }]}>
+      <Animated.View style={[styles.loadingContainer, { backgroundColor: bgColor, paddingTop: insets.top, opacity: screenOpacity, transform: [{ translateX: screenSlideX }] }]}>
         <ActivityIndicator size="large" color={primaryColor} />
-      </View>
+      </Animated.View>
     );
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: bgColor, paddingTop: insets.top }]}>
+    <Animated.View style={[styles.container, { backgroundColor: bgColor, paddingTop: insets.top, opacity: screenOpacity, transform: [{ translateX: screenSlideX }] }]}>
       {/* Header */}
       <View style={[styles.headerRow, isRTL && styles.rowRTL]}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
+        <TouchableOpacity onPress={handleBackScreen} style={styles.backButton}>
           <Ionicons
-            name={isRTL ? 'chevron-forward' : 'chevron-back'}
+            name="chevron-back"
             size={24}
             color={headerTextColor}
           />
@@ -284,7 +307,7 @@ export default function ChangePhoneScreen({ onBack, onOTPSent }: ChangePhoneScre
         buttons={alertState.buttons}
         onClose={hideAlert}
       />
-    </View>
+    </Animated.View>
   );
 }
 

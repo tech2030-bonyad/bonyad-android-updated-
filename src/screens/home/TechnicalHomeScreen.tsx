@@ -18,6 +18,7 @@ import StaggeredAppearView from '../../components/StaggeredAppearView';
 import PressableScaleView from '../../components/PressableScaleView';
 import BonyadLogo from '../../components/BonyadLogo';
 import ChatbotFab from '../../components/ChatbotFab';
+import RialIcon from '../../components/RialIcon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { buildApiUrl, API_ENDPOINTS } from '../../config/api';
 import { storage } from '../../utils/storage';
@@ -25,7 +26,7 @@ import { getAvailableRequests } from '../../services/SmallTaskService';
 import type { SmallTaskRequest } from '../../types/smallTasks';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const H_PADDING = 16;
+const H_PADDING = 20;
 const BANNER_PAGE_WIDTH = SCREEN_WIDTH - H_PADDING * 2;
 const SECTION_GAP = 16;
 const CARD_GAP = 12;
@@ -51,6 +52,9 @@ const COLORS = {
   yellowBorder: '#FDE68A',
   projectCardGradient: ['#EFF6FF', '#DBEAFE'] as const,
   smallTaskCardGradient: ['#FFFBEB', '#FEF3C7'] as const,
+  // Card dark mode
+  projectCardGradientDark: ['#1A2744', '#243B5C'] as const,
+  smallTaskCardGradientDark: ['#2D2A1E', '#3D3828'] as const,
   // Banner (light)
   bannerGradient: ['#F0FDF4', '#DCFCE7', '#BBF7D0'] as const,
   bannerTitle: '#166534',
@@ -148,7 +152,7 @@ export default function TechnicalHomeScreen({
   const { t, i18n } = useTranslation();
   const { colors: themeColors, theme } = useTheme();
   const { fontFamily, boldFontFamily, scaledSize } = useFontFamily();
-  const isRTL = i18n.language === 'ar';
+  const isArabic = i18n.language === 'ar';
   const isDarkMode = theme === 'dark';
   const primaryColor = isDarkMode ? themeColors.primary : IOS_PRIMARY;
 
@@ -223,19 +227,20 @@ export default function TechnicalHomeScreen({
 
   const formatBudget = (budget: number | null | undefined, budgetUnspecified?: boolean) => {
     if (budgetUnspecified || budget == null) return t('Flexible');
-    return `SR ${Number(budget).toLocaleString('en-SA')}`;
+    return Number(budget).toLocaleString('en-SA');
   };
 
   const getProjectUsername = (p: ApiProject) =>
     p.userName ?? p.user?.username ?? p.user?.name ?? p.ownerName ?? '—';
 
   const getTaskTypeName = (task: SmallTaskRequest) =>
-    isRTL ? (task.taskTypeNameAr ?? task.taskType?.nameAr ?? task.taskTypeNameEn) : (task.taskTypeNameEn ?? task.taskType?.nameEn ?? task.taskTypeNameAr);
+    isArabic ? (task.taskTypeNameAr ?? task.taskType?.nameAr ?? task.taskTypeNameEn) : (task.taskTypeNameEn ?? task.taskType?.nameEn ?? task.taskTypeNameAr);
 
   const projectCards = projects.slice(0, 2);
   const taskCards = smallTasks.slice(0, 2);
 
   const insets = useSafeAreaInsets();
+  const topSpacing = Platform.OS === 'android' ? Math.max(insets.top, 50) : Math.max(insets.top, 12);
 
   const onBannerScroll = (e: { nativeEvent: { contentOffset: { x: number }; layoutMeasurement: { width: number } } }) => {
     const x = e.nativeEvent.contentOffset.x;
@@ -269,11 +274,11 @@ export default function TechnicalHomeScreen({
         nestedScrollEnabled={true}
       >
         {/* Top bar — first item in scroll (matches iOS TechnicianHomeContentView) */}
-        <View style={[styles.iosTopBar, isRTL && styles.iosTopBarRTL, { paddingTop: Math.max(insets.top, 12), backgroundColor: isDarkMode ? themeColors.background : COLORS.background }]}>
+        <View style={[styles.iosTopBar, { paddingTop: topSpacing, backgroundColor: isDarkMode ? themeColors.background : COLORS.background }]}>
           <View style={styles.iosTopBarLogo}>
             <BonyadLogo size="small" responsive={false} variant={isDarkMode ? 'light' : 'dark'} />
           </View>
-          <View style={[styles.iosTopBarIcons, isRTL && styles.iosTopBarIconsRTL]}>
+          <View style={styles.iosTopBarIcons}>
             <TouchableOpacity style={styles.iosTopBarIconBtn} onPress={onPressChat} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
               <Ionicons name="chatbubbles-outline" size={24} color={primaryColor} />
             </TouchableOpacity>
@@ -315,13 +320,13 @@ export default function TechnicalHomeScreen({
                     colors={isDarkMode ? [...banner.gradientDark] : [...banner.gradientLight]}
                     style={styles.bannerCard}
                   >
-                    <View style={[styles.bannerContent, isRTL && styles.bannerContentRTL]}>
+                    <View style={styles.bannerContent}>
                       <View style={styles.bannerIconWrap}>
                         <View style={[styles.bannerIconGradient, { backgroundColor: isDarkMode ? 'rgba(0,165,244,0.25)' : 'rgba(0,165,244,0.15)' }]}>
                           <MaterialCommunityIcons name={banner.icon as any} size={26} color={IOS_PRIMARY} />
                         </View>
                       </View>
-                      <View style={[styles.bannerTextWrap, isRTL && styles.bannerTextWrapRTL]}>
+                      <View style={styles.bannerTextWrap}>
                         <Text style={[styles.bannerTitle, fontStyle, isDarkMode && { color: COLORS.bannerTitleDark }]} numberOfLines={1}>
                           {t(banner.titleKey)}
                         </Text>
@@ -358,7 +363,6 @@ export default function TechnicalHomeScreen({
           styles.mainTitle,
           { color: isDarkMode ? themeColors.text : COLORS.title },
           { fontSize: scaledSize(22), ...boldFontStyle },
-          isRTL && styles.textRight,
         ]}
       >
         {t('Available Opportunities')}
@@ -368,78 +372,65 @@ export default function TechnicalHomeScreen({
       {/* Section 2: Available Projects */}
       <StaggeredAppearView index={2}>
       <View style={styles.section}>
-        <View style={[styles.sectionHeader, isRTL && styles.sectionHeaderRTL]}>
-          <View style={[styles.sectionTitleRow, isRTL && styles.sectionTitleRowRTL]}>
+        <View style={styles.sectionHeader}>
+          <View style={styles.sectionTitleRow}>
             <View style={[styles.sectionIcon, { backgroundColor: 'rgba(37, 99, 235, 0.12)' }]}>
               <Feather name="folder" size={18} color={COLORS.blue} />
             </View>
-            <Text style={[styles.sectionHeading, { color: isDarkMode ? themeColors.text : COLORS.sectionTitle }, boldFontStyle, isRTL && styles.sectionHeadingRTL]}>
+            <Text style={[styles.sectionHeading, { color: isDarkMode ? themeColors.text : COLORS.sectionTitle }, boldFontStyle]}>
               {t('Look for Offers')}
             </Text>
           </View>
           <TouchableOpacity
-            style={[styles.viewAllBtn, { backgroundColor: COLORS.blueLight }, isRTL && styles.viewAllBtnRTL]}
+            style={[styles.viewAllBtn, { backgroundColor: isDarkMode ? themeColors.cardBackground : COLORS.blueLight, borderWidth: isDarkMode ? 1 : 0, borderColor: isDarkMode ? themeColors.border : 'transparent' }]}
             onPress={() => onPressAvailableProject?.('pending')}
             activeOpacity={0.8}
           >
-            <Text style={[styles.viewAllText, { color: COLORS.blueLightText }, fontStyle]}>
-              {isRTL ? `❯ ${t('View All')}` : `${t('View All')} ❯`}
+            <Text style={[styles.viewAllText, { color: isDarkMode ? themeColors.text : COLORS.blueLightText }, fontStyle]}>
+              {t('View All')} ←
             </Text>
           </TouchableOpacity>
         </View>
 
         {loadingProjects ? (
           <View style={styles.cardsRow}>
-            <ActivityIndicator size="small" color={COLORS.blue} />
+            <ActivityIndicator size="small" color={isDarkMode ? themeColors.primary : COLORS.blue} />
           </View>
         ) : (
-          <View style={[styles.cardsRow, isRTL && styles.cardsRowRTL]}>
+          <View style={styles.cardsRow}>
             {projectCards.length === 0 ? (
-              <Text style={[styles.emptyText, { color: COLORS.gray }, fontStyle]}>
+              <Text style={[styles.emptyText, { color: isDarkMode ? themeColors.textSecondary : COLORS.gray }, fontStyle]}>
                 {t('No projects found')}
               </Text>
             ) : (
               projectCards.map((project) => (
                 <PressableScaleView key={project.id} style={styles.cardWrapper} onPress={() => onPressProject?.(project)}>
                   <LinearGradient
-                    colors={COLORS.projectCardGradient}
+                    colors={isDarkMode ? [...COLORS.projectCardGradientDark] : COLORS.projectCardGradient}
                     style={[styles.projectCard, isDarkMode && styles.cardBorderDark]}
                   >
-                    <View style={[styles.cardBorder, { borderColor: COLORS.blueBorder }]} />
-                    <View style={[styles.cardInner, isRTL && styles.cardInnerRTL]}>
+                    <View style={[styles.cardBorder, { borderColor: isDarkMode ? themeColors.border : COLORS.blueBorder }]} />
+                    <View style={styles.cardInner}>
                       <View style={styles.cardTopRow}>
-                        {isRTL ? (
-                          <>
-                            <View style={styles.orangePill}>
-                              <Text style={[styles.orangePillText, fontStyle]}>{t('Bidding')} 🟠</Text>
-                            </View>
-                            <Text style={[styles.projectNumber, { color: COLORS.sectionTitle }, fontStyle]}>
-                              #{project.id}
-                            </Text>
-                          </>
-                        ) : (
-                          <>
-                            <Text style={[styles.projectNumber, { color: COLORS.sectionTitle }, fontStyle]}>
-                              #{project.id}
-                            </Text>
-                            <View style={styles.orangePill}>
-                              <Text style={[styles.orangePillText, fontStyle]}>{t('Bidding')} 🟠</Text>
-                            </View>
-                          </>
-                        )}
-                      </View>
-                      <View style={[styles.budgetRow, isRTL && styles.budgetRowRTL]}>
-                        <View style={styles.greenCircle}>
-                          <Text style={styles.dollarSign}>$</Text>
+                        <Text style={[styles.projectNumber, { color: isDarkMode ? themeColors.text : COLORS.sectionTitle }, fontStyle]}>
+                          #{project.id}
+                        </Text>
+                        <View style={[styles.orangePill, isDarkMode && { backgroundColor: 'rgba(234, 88, 12, 0.25)' }]}>
+                          <Text style={[styles.orangePillText, fontStyle, isDarkMode && { color: '#F97316' }]}>{t('Bidding')} 🟠</Text>
                         </View>
-                        <Text style={[styles.budgetText, boldFontStyle]}>{formatBudget(project.budget, project.budgetUnspecified)}</Text>
                       </View>
-                      <Text style={[styles.username, { color: COLORS.gray }, fontStyle]} numberOfLines={1}>
+                      <View style={styles.budgetRow}>
+                        <View style={[styles.greenCircle, isDarkMode && { backgroundColor: 'rgba(34, 197, 94, 0.25)' }]}>
+                          <RialIcon size={14} variant={isDarkMode ? 'light' : 'dark'} />
+                        </View>
+                        <Text style={[styles.budgetText, boldFontStyle, isDarkMode && { color: '#4ADE80' }]}>{formatBudget(project.budget, project.budgetUnspecified)}</Text>
+                      </View>
+                      <Text style={[styles.username, { color: isDarkMode ? themeColors.textSecondary : COLORS.gray }, fontStyle]} numberOfLines={1}>
                         {getProjectUsername(project)}
                       </Text>
-                      <View style={[styles.locationRow, isRTL && styles.locationRowRTL]}>
-                        <Ionicons name="information-circle" size={14} color={COLORS.blue} />
-                        <Text style={[styles.locationText, { color: COLORS.gray }, fontStyle]} numberOfLines={1}>
+                      <View style={styles.locationRow}>
+                        <Ionicons name="information-circle" size={14} color={isDarkMode ? themeColors.primary : COLORS.blue} />
+                        <Text style={[styles.locationText, { color: isDarkMode ? themeColors.textSecondary : COLORS.gray }, fontStyle]} numberOfLines={1}>
                           {project.address || '—'}
                         </Text>
                       </View>
@@ -456,87 +447,71 @@ export default function TechnicalHomeScreen({
       {/* Section 3: Small Tasks */}
       <StaggeredAppearView index={3}>
       <View style={styles.section}>
-        <View style={[styles.sectionHeader, isRTL && styles.sectionHeaderRTL]}>
-          <View style={[styles.sectionTitleRow, isRTL && styles.sectionTitleRowRTL]}>
+        <View style={styles.sectionHeader}>
+          <View style={styles.sectionTitleRow}>
             <View style={[styles.sectionIcon, { backgroundColor: 'rgba(251, 191, 36, 0.25)' }]}>
               <Ionicons name="flash" size={18} color={COLORS.yellow} />
             </View>
-            <Text style={[styles.sectionHeading, { color: isDarkMode ? themeColors.text : COLORS.sectionTitle }, boldFontStyle, isRTL && styles.sectionHeadingRTL]}>
+            <Text style={[styles.sectionHeading, { color: isDarkMode ? themeColors.text : COLORS.sectionTitle }, boldFontStyle]}>
               {t('Available Small Tasks')}
             </Text>
           </View>
           <TouchableOpacity
-            style={[styles.viewAllBtn, { backgroundColor: COLORS.orangePillBg }, isRTL && styles.viewAllBtnRTL]}
+            style={[styles.viewAllBtn, { backgroundColor: isDarkMode ? themeColors.cardBackground : COLORS.orangePillBg, borderWidth: isDarkMode ? 1 : 0, borderColor: isDarkMode ? themeColors.border : 'transparent' }]}
             onPress={() => onPressTaskCategory?.('small_tasks')}
             activeOpacity={0.8}
           >
-            <Text style={[styles.viewAllText, { color: COLORS.orange }, fontStyle]}>
-              {isRTL ? `❯ ${t('View All')}` : `${t('View All')} ❯`}
+            <Text style={[styles.viewAllText, { color: isDarkMode ? themeColors.text : COLORS.orange }, fontStyle]}>
+              {t('View All')} ←
             </Text>
           </TouchableOpacity>
         </View>
 
         {loadingTasks ? (
           <View style={styles.cardsRow}>
-            <ActivityIndicator size="small" color={COLORS.orange} />
+            <ActivityIndicator size="small" color={isDarkMode ? themeColors.warning : COLORS.orange} />
           </View>
         ) : (
-          <View style={[styles.cardsRow, isRTL && styles.cardsRowRTL]}>
+          <View style={styles.cardsRow}>
             {taskCards.length === 0 ? (
-              <Text style={[styles.emptyText, { color: COLORS.gray }, fontStyle]}>
+              <Text style={[styles.emptyText, { color: isDarkMode ? themeColors.textSecondary : COLORS.gray }, fontStyle]}>
                 {t('No available small tasks at the moment.')}
               </Text>
             ) : (
               taskCards.map((task) => (
                 <PressableScaleView key={task.id} style={styles.cardWrapper} onPress={() => onPressSmallTask?.(task)}>
                   <LinearGradient
-                    colors={COLORS.smallTaskCardGradient}
+                    colors={isDarkMode ? [...COLORS.smallTaskCardGradientDark] : COLORS.smallTaskCardGradient}
                     style={[styles.smallTaskCard, isDarkMode && styles.cardBorderDark]}
                   >
-                    <View style={[styles.cardBorder, { borderColor: COLORS.yellowBorder }]} />
-                    <View style={[styles.cardInner, isRTL && styles.cardInnerRTL]}>
+                    <View style={[styles.cardBorder, { borderColor: isDarkMode ? themeColors.border : COLORS.yellowBorder }]} />
+                    <View style={styles.cardInner}>
                       <View style={styles.cardTopRow}>
-                        {isRTL ? (
-                          <>
-                            <View style={styles.orangePill}>
-                              <Text style={[styles.orangePillText, fontStyle]}>⚡ {t('Quick task')}</Text>
-                            </View>
-                            <View style={[styles.peopleCountRow, isRTL && styles.peopleCountRowRTL]}>
-                              <Ionicons name="people-outline" size={14} color={COLORS.gray} />
-                              <Text style={[styles.peopleCount, { color: COLORS.gray }, fontStyle]}>
-                                {task.bidsCount ?? task.bidCount ?? 0}
-                              </Text>
-                            </View>
-                          </>
-                        ) : (
-                          <>
-                            <View style={[styles.peopleCountRow, isRTL && styles.peopleCountRowRTL]}>
-                              <Ionicons name="people-outline" size={14} color={COLORS.gray} />
-                              <Text style={[styles.peopleCount, { color: COLORS.gray }, fontStyle]}>
-                                {task.bidsCount ?? task.bidCount ?? 0}
-                              </Text>
-                            </View>
-                            <View style={styles.orangePill}>
-                              <Text style={[styles.orangePillText, fontStyle]}>⚡ {t('Quick task')}</Text>
-                            </View>
-                          </>
-                        )}
+                        <View style={styles.peopleCountRow}>
+                          <Ionicons name="people-outline" size={14} color={isDarkMode ? themeColors.textSecondary : COLORS.gray} />
+                          <Text style={[styles.peopleCount, { color: isDarkMode ? themeColors.textSecondary : COLORS.gray }, fontStyle]}>
+                            {task.bidsCount ?? task.bidCount ?? 0}
+                          </Text>
+                        </View>
+                        <View style={[styles.orangePill, isDarkMode && { backgroundColor: 'rgba(234, 88, 12, 0.25)' }]}>
+                          <Text style={[styles.orangePillText, fontStyle, isDarkMode && { color: '#F97316' }]}>⚡ {t('Quick task')}</Text>
+                        </View>
                       </View>
-                      <Text style={[styles.taskTitle, { color: COLORS.sectionTitle }, boldFontStyle]} numberOfLines={2}>
+                      <Text style={[styles.taskTitle, { color: isDarkMode ? themeColors.text : COLORS.sectionTitle }, boldFontStyle]} numberOfLines={2}>
                         {getTaskTypeName(task) || task.description || '—'}
                       </Text>
-                      <View style={[styles.budgetRow, isRTL && styles.budgetRowRTL]}>
-                        <View style={styles.greenCircle}>
-                          <Text style={styles.dollarSign}>$</Text>
+                      <View style={styles.budgetRow}>
+                        <View style={[styles.greenCircle, isDarkMode && { backgroundColor: 'rgba(34, 197, 94, 0.25)' }]}>
+                          <RialIcon size={14} variant={isDarkMode ? 'light' : 'dark'} />
                         </View>
-                        <Text style={[styles.budgetTextSmallTask, fontStyle]}>{t('Flexible')}</Text>
+                        <Text style={[styles.budgetTextSmallTask, fontStyle, isDarkMode && { color: themeColors.textSecondary }]}>{t('Flexible')}</Text>
                       </View>
-                      <Text style={[styles.username, { color: COLORS.gray }, fontStyle]} numberOfLines={1}>
+                      <Text style={[styles.username, { color: isDarkMode ? themeColors.textSecondary : COLORS.gray }, fontStyle]} numberOfLines={1}>
                         {task.userName ?? '—'}
                       </Text>
-                      <View style={[styles.locationRow, isRTL && styles.locationRowRTL]}>
-                        <Ionicons name="warning" size={14} color={COLORS.orange} />
-                        <Text style={[styles.locationText, { color: COLORS.gray }, fontStyle]} numberOfLines={1}>
+                      <View style={styles.locationRow}>
+                        <Ionicons name="warning" size={14} color={isDarkMode ? '#F97316' : COLORS.orange} />
+                        <Text style={[styles.locationText, { color: isDarkMode ? themeColors.textSecondary : COLORS.gray }, fontStyle]} numberOfLines={1}>
                           {task.address || '—'}
                         </Text>
                       </View>
@@ -553,28 +528,28 @@ export default function TechnicalHomeScreen({
       {/* Section 5: Quick Action Cards */}
       <StaggeredAppearView index={4}>
       <View style={[styles.section, { marginBottom: SECTION_GAP }]}>
-        <View style={[styles.quickActionsRow, isRTL && styles.quickActionsRowRTL]}>
-          <PressableScaleView style={styles.quickActionCard} onPress={() => onPressPortfolio?.()}>
-            <View style={[styles.quickActionIconWrap, { backgroundColor: COLORS.quickActionPurple }]}>
-              <Feather name="folder" size={22} color="#7C3AED" />
+        <View style={styles.quickActionsRow}>
+          <PressableScaleView style={[styles.quickActionCard, isDarkMode && { backgroundColor: themeColors.cardBackground, borderWidth: 1, borderColor: themeColors.border }]} onPress={() => onPressPortfolio?.()}>
+            <View style={[styles.quickActionIconWrap, { backgroundColor: isDarkMode ? 'rgba(124, 58, 237, 0.3)' : COLORS.quickActionPurple }]}>
+              <Feather name="folder" size={22} color={isDarkMode ? '#A78BFA' : '#7C3AED'} />
             </View>
-            <Text style={[styles.quickActionLabel, fontStyle]} numberOfLines={1}>
+            <Text style={[styles.quickActionLabel, fontStyle, isDarkMode && { color: themeColors.text }]} numberOfLines={1}>
               {t('Business gallery')}
             </Text>
           </PressableScaleView>
-          <PressableScaleView style={styles.quickActionCard} onPress={() => onPressAvailableProject?.('in_progress')}>
-            <View style={[styles.quickActionIconWrap, { backgroundColor: COLORS.quickActionOrange }]}>
-              <Feather name="briefcase" size={22} color={COLORS.orange} />
+          <PressableScaleView style={[styles.quickActionCard, isDarkMode && { backgroundColor: themeColors.cardBackground, borderWidth: 1, borderColor: themeColors.border }]} onPress={() => onPressAvailableProject?.('in_progress')}>
+            <View style={[styles.quickActionIconWrap, { backgroundColor: isDarkMode ? 'rgba(234, 88, 12, 0.3)' : COLORS.quickActionOrange }]}>
+              <Feather name="briefcase" size={22} color={isDarkMode ? '#FB923C' : COLORS.orange} />
             </View>
-            <Text style={[styles.quickActionLabel, fontStyle]} numberOfLines={1}>
+            <Text style={[styles.quickActionLabel, fontStyle, isDarkMode && { color: themeColors.text }]} numberOfLines={1}>
               {t('In Progress')}
             </Text>
           </PressableScaleView>
-          <PressableScaleView style={styles.quickActionCard} onPress={() => onPressSchedule?.()}>
-            <View style={[styles.quickActionIconWrap, { backgroundColor: COLORS.quickActionGreen }]}>
-              <Feather name="calendar" size={22} color={COLORS.green} />
+          <PressableScaleView style={[styles.quickActionCard, isDarkMode && { backgroundColor: themeColors.cardBackground, borderWidth: 1, borderColor: themeColors.border }]} onPress={() => onPressSchedule?.()}>
+            <View style={[styles.quickActionIconWrap, { backgroundColor: isDarkMode ? 'rgba(34, 197, 94, 0.3)' : COLORS.quickActionGreen }]}>
+              <Feather name="calendar" size={22} color={isDarkMode ? '#4ADE80' : COLORS.green} />
             </View>
-            <Text style={[styles.quickActionLabel, fontStyle]} numberOfLines={1}>
+            <Text style={[styles.quickActionLabel, fontStyle, isDarkMode && { color: themeColors.text }]} numberOfLines={1}>
               {t('My appointments')}
             </Text>
           </PressableScaleView>
@@ -589,7 +564,7 @@ export default function TechnicalHomeScreen({
         <ChatbotFab onPress={onPressChatbot} primaryColor={primaryColor} primaryDark={themeColors.primary} />
       ) : onPressFab ? (
         <TouchableOpacity
-          style={[styles.fab, { backgroundColor: themeColors.primary }, isRTL ? styles.fabRTL : styles.fabLTR]}
+          style={[styles.fab, { backgroundColor: themeColors.primary }, styles.fabLTR]}
           onPress={onPressFab}
           activeOpacity={0.9}
         >
@@ -618,10 +593,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: H_PADDING,
     marginBottom: 8,
   },
-  iosTopBarRTL: { flexDirection: 'row-reverse' },
   iosTopBarLogo: {},
   iosTopBarIcons: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  iosTopBarIconsRTL: { flexDirection: 'row-reverse' },
   iosTopBarIconBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   iosNotificationBadge: {
     position: 'absolute',
@@ -630,9 +603,6 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-  },
-  textRight: {
-    textAlign: 'right',
   },
   // Banner carousel
   bannerScroll: {
@@ -665,9 +635,7 @@ const styles = StyleSheet.create({
   bannerContent: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  bannerContentRTL: {
-    flexDirection: 'row-reverse',
+    gap: 16,
   },
   bannerIconWrap: {
     width: 56,
@@ -692,13 +660,8 @@ const styles = StyleSheet.create({
   },
   bannerTextWrap: {
     flex: 1,
-    marginLeft: 16,
+    minWidth: 0,
     justifyContent: 'center',
-  },
-  bannerTextWrapRTL: {
-    marginLeft: 0,
-    marginRight: 16,
-    alignItems: 'flex-end',
   },
   bannerTitle: {
     fontSize: 18,
@@ -733,9 +696,6 @@ const styles = StyleSheet.create({
   quickActionsRow: {
     flexDirection: 'row',
     gap: 10,
-  },
-  quickActionsRowRTL: {
-    flexDirection: 'row-reverse',
   },
   quickActionCard: {
     flex: 1,
@@ -772,7 +732,6 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '800',
     marginBottom: SECTION_GAP,
-    textAlign: 'right',
   },
   section: {
     marginBottom: SECTION_GAP,
@@ -783,16 +742,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 12,
   },
-  sectionHeaderRTL: {
-    flexDirection: 'row-reverse',
-  },
   sectionTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-  },
-  sectionTitleRowRTL: {
-    flexDirection: 'row-reverse',
   },
   sectionIcon: {
     width: 34,
@@ -805,16 +758,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
-  sectionHeadingRTL: {
-    textAlign: 'right',
-  },
   viewAllBtn: {
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-  },
-  viewAllBtnRTL: {
-    flexDirection: 'row-reverse',
   },
   viewAllText: {
     fontSize: 13,
@@ -824,10 +771,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: CARD_GAP,
-  },
-  cardsRowRTL: {
-    flexDirection: 'row-reverse',
-    flexWrap: 'wrap-reverse',
   },
   cardWrapper: {
     width: CARD_WIDTH,
@@ -877,17 +820,11 @@ const styles = StyleSheet.create({
     padding: 12,
     flex: 1,
   },
-  cardInnerRTL: {
-    alignItems: 'flex-end',
-  },
   cardTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 8,
-  },
-  cardTopRowRTL: {
-    flexDirection: 'row-reverse',
   },
   projectNumber: {
     fontSize: 13,
@@ -908,9 +845,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     marginBottom: 6,
-  },
-  budgetRowRTL: {
-    flexDirection: 'row-reverse',
   },
   greenCircle: {
     width: 22,
@@ -944,9 +878,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
   },
-  locationRowRTL: {
-    flexDirection: 'row-reverse',
-  },
   locationText: {
     fontSize: 11,
     flex: 1,
@@ -955,9 +886,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-  },
-  peopleCountRowRTL: {
-    flexDirection: 'row-reverse',
   },
   peopleCount: {
     fontSize: 12,
@@ -992,8 +920,5 @@ const styles = StyleSheet.create({
   },
   fabLTR: {
     right: 20,
-  },
-  fabRTL: {
-    left: 20,
   },
 });

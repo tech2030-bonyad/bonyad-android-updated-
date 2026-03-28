@@ -422,7 +422,7 @@ export default function PendingProjectScreen({
     <View style={[styles.container, { backgroundColor: c.bgWhite, paddingTop: IS_LARGE_WEB ? 0 : insets.top }]}>
       {/* Header - Hidden on large web */}
       {!IS_LARGE_WEB && (
-        <View style={[styles.header]}>
+        <View style={[styles.header, styles.headerLTR]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <Ionicons name="chevron-back" size={24} color={c.textBody} />
         </TouchableOpacity>
@@ -525,7 +525,9 @@ export default function PendingProjectScreen({
           </View>
           <View style={[styles.descriptionBox, IS_LARGE_WEB && styles.descriptionBoxLargeWeb]}>
             <Text style={[styles.descriptionText, IS_LARGE_WEB && styles.descriptionTextLargeWeb]}>
-              {project.description}
+              {(project.description && project.description.trim() && project.description.trim().toLowerCase() !== 'not specified')
+                ? project.description
+                : t('projectsScreen.notSpecified')}
             </Text>
           </View>
         </View>
@@ -540,7 +542,12 @@ export default function PendingProjectScreen({
           </View>
           <View style={[styles.descriptionBox, IS_LARGE_WEB && styles.descriptionBoxLargeWeb]}>
             <Text style={[styles.descriptionText, IS_LARGE_WEB && styles.descriptionTextLargeWeb]}>
-              {project.address || t('No address specified')}
+              {(() => {
+                const a = (project.address || '').trim();
+                if (!a) return t('No address specified');
+                if (a.toLowerCase() === 'not specified') return t('projectsScreen.notSpecified');
+                return a;
+              })()}
             </Text>
           </View>
         </View>
@@ -842,6 +849,9 @@ function makeStyles(c: typeof COLORS) {
     paddingHorizontal: 16,
     paddingVertical: 16,
     gap: 24,
+  },
+  headerLTR: {
+    direction: 'ltr',
   },
   headerLargeWeb: {
     paddingHorizontal: 48,

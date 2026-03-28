@@ -213,13 +213,15 @@ export default function AlertPopup({
   };
 
   const handleButtonPress = (button: AlertButton) => {
-    if (button.onPress) {
-      button.onPress();
+    button.onPress?.();
+    if (button.style !== 'cancel') {
+      handleClose();
     }
-    handleClose();
   };
 
-  const defaultButtons: AlertButton[] = [{ text: t('OK') || 'OK', style: 'default' }];
+  const defaultButtons: AlertButton[] = [
+    { text: t('OK') || 'OK', style: 'default', onPress: () => {} },
+  ];
   const actionButtons = buttons && buttons.length > 0 ? buttons : defaultButtons;
 
   if (!visible) {
@@ -297,7 +299,16 @@ export default function AlertPopup({
           {/* Message - ensure string (React Native Text cannot render objects) */}
           {message != null && message !== '' && (
             <Text style={[styles.message, { color: colors.textSecondary }]}>
-              {typeof message === 'string' ? message : (message?.message ?? String(message))}
+              {typeof message === 'string'
+                ? message
+                : String(
+                    typeof message === 'object' &&
+                      message !== null &&
+                      'message' in message &&
+                      typeof (message as { message?: unknown }).message === 'string'
+                      ? (message as { message: string }).message
+                      : message
+                  )}
             </Text>
           )}
 
@@ -454,11 +465,18 @@ export const useAlertPopup = () => {
       message,
       type: 'warning',
       buttons: [
-        { text: 'Cancel', style: 'cancel', onPress: onCancel },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+          onPress: () => {
+            onCancel?.();
+            hideAlert();
+          },
+        },
         { text: 'Confirm', style: 'default', onPress: onConfirm },
       ],
     });
-  }, []);
+  }, [hideAlert]);
 
   return {
     alertState,

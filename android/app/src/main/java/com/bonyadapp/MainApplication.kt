@@ -1,4 +1,4 @@
-package com.bonyaddandroid.ahmed
+package com.bonyadapp
 
 import android.app.Application
 import android.content.res.Configuration

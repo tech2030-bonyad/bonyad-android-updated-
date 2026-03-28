@@ -62,6 +62,7 @@ export default function SmallTaskRequestForm({
 
   const primaryColor = isDarkMode ? COLORS.primaryDark : COLORS.primaryLight;
   const borderColor = isDarkMode ? COLORS.borderDark : COLORS.borderLight;
+  const topSpacing = Platform.OS === 'android' ? 0 : insets.top;
 
   useEffect(() => {
     Animated.parallel([
@@ -82,7 +83,9 @@ export default function SmallTaskRequestForm({
   const isFormValid = 
     description.trim().length > 0 && 
     description.length <= 1000 && 
-    address.trim().length > 0;
+    address.trim().length > 0 &&
+    latitude !== null &&
+    longitude !== null;
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
@@ -103,6 +106,12 @@ export default function SmallTaskRequestForm({
 
       if (!address.trim()) {
         showError(t('enter_service_address'), t('validation_error'));
+        setIsSubmitting(false);
+        return;
+      }
+
+      if (latitude == null || longitude == null) {
+        showError(t('select_location_on_map'), t('validation_error'));
         setIsSubmitting(false);
         return;
       }
@@ -158,14 +167,14 @@ export default function SmallTaskRequestForm({
       <View style={[
         styles.header, 
         { 
-          paddingTop: Math.max(insets.top, 20), 
+          paddingTop: topSpacing, 
           borderBottomColor: colors.border,
           flexDirection: isRTL ? 'row-reverse' : 'row',
         }
       ]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <Ionicons 
-            name={isRTL ? "arrow-forward" : "arrow-back"} 
+            name="arrow-back" 
             size={24} 
             color={primaryColor} 
           />
@@ -419,7 +428,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 24,
-    paddingBottom: 80,
+    paddingBottom: 140,
   },
   taskTypeCard: {
     borderRadius: 12,

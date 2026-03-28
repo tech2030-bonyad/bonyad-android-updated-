@@ -1,11 +1,10 @@
 import React, { createContext, useContext, ReactNode, useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Platform } from 'react-native';
+import { I18nManager, Platform } from 'react-native';
 import { 
   getFontFamily, 
   getBoldFontFamily, 
   getLanguageFontFamily, 
-  ARABIC_FONT,
   FontSizeScale,
   FONT_SIZE_MULTIPLIERS,
   getScaledFontSizes,
@@ -65,7 +64,20 @@ export function FontProvider({ children }: { children: ReactNode }) {
     return Math.round(baseSize * FONT_SIZE_MULTIPLIERS[fontSizeScale]);
   }, [fontSizeScale]);
 
-  // Inject global CSS on web to override React Native Web's font shorthand
+  // RTL: Use component-level direction (useRTL hook) so language switch updates immediately.
+  // I18nManager.forceRTL requires app restart — we skip it and rely on flexDirection/textAlign in components.
+  useEffect(() => {
+    if (Platform.OS !== 'web') {
+      I18nManager.allowRTL(true);
+      // Do NOT call forceRTL — it requires restart. Components use useRTL() for immediate updates.
+    }
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      document.documentElement.dir = isArabic ? 'rtl' : 'ltr';
+      document.documentElement.lang = isArabic ? 'ar' : 'en';
+    }
+  }, [isArabic]);
+
+  // Inject global CSS on web to override React Native Web's font shorthand (same fonts as web)
   useEffect(() => {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
       let styleEl = document.getElementById(FONT_STYLE_ID) as HTMLStyleElement;
@@ -76,11 +88,10 @@ export function FontProvider({ children }: { children: ReactNode }) {
         document.head.appendChild(styleEl);
       }
       
-      // For Arabic: use SakkalMajalla
-      // For English: use system default fonts
+      // Same fonts as web: Cairo for Arabic, Poppins for English
       const fontFamilyCSS = isArabic 
-        ? `'SakkalMajalla', 'Noto Sans Arabic', system-ui, sans-serif`
-        : `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif`;
+        ? `'Cairo_400Regular', 'Cairo', sans-serif`
+        : `'Poppins_400Regular', 'Poppins', sans-serif`;
       
       // Get the font size multiplier for current scale
       const sizeMultiplier = FONT_SIZE_MULTIPLIERS[fontSizeScale];
@@ -106,6 +117,7 @@ export function FontProvider({ children }: { children: ReactNode }) {
         select,
         button {
           font-family: ${fontFamilyCSS} !important;
+          direction: ${isArabic ? 'rtl' : 'ltr'};
         }
       `;
     }

@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   Image,
   Alert,
@@ -11,589 +10,769 @@ import {
   Modal,
   TextInput,
   Platform,
+  Share,
+  Linking,
+  Pressable,
+  ScrollView,
+  Dimensions,
+  Animated,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Card } from 'react-native-paper';
+import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import { API_BASE_URL } from '../config/api';
-import { getMyPortfolio } from '../services/TechnicianService';
+import { getMyPortfolio, PortfolioProject } from '../services/TechnicianService';
 import * as ImagePicker from 'expo-image-picker';
-import { showAlert, showError, showSuccess } from '../utils/alert';
-import { uploadPortfolioPhoto, addPortfolioProject } from '../services/PortfolioService';
+import { showError, showSuccess } from '../utils/alert';
+import {
+  uploadPortfolioPhoto,
+  addPortfolioProject,
+  updatePortfolioProject,
+  deletePortfolioProject,
+  checkHasPortfolio,
+  createPortfolio,
+  generatePortfolioPDF,
+  getMyPDFInfo,
+  getQRCodeUrl,
+  PortfolioPDFInfo,
+} from '../services/PortfolioService';
+import { getUserProfile } from '../services/ProfileService';
+import { storage } from '../utils/storage';
+import {
+  PortfolioHeader,
+  ProfileSection,
+  PDFCard,
+  ProjectCard,
+  AddProjectButton,
+  PortfolioViewToggle,
+  PortfolioBottomTabBar,
+} from '../components/portfolio';
 
-interface PortfolioScreenProps {
+const SCREEN_W = Dimensions.get('window').width;
+const H_PAD = 20;
+const CARD_GAP = 12;
+const GRID_CARD_W = (SCREEN_W - H_PAD * 2 - CARD_GAP) / 2;
+
+export type PortfolioTabId = 'home' | 'projects' | 'payments' | 'profile';
+
+export interface PortfolioScreenProps {
   userId: string | number;
   onBack: () => void;
+  onNavigateTab?: (tab: PortfolioTabId) => void;
+  onEditProfile?: () => void;
 }
 
-interface PortfolioItem {
-  id: number;
-  title: string;
-  description: string;
-  images: string[];
-  date: string;
-  photos?: string[];
-  files?: string[];
+function normalizeAssetUrl(url: string | undefined | null): string {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  if (url.startsWith('/')) return `${API_BASE_URL.replace('/api', '')}${url}`;
+  return url;
 }
 
-export default function PortfolioScreen({ userId: userIdProp, onBack }: PortfolioScreenProps) {
+function initialsFromName(name: string | undefined): string {
+  if (!name?.trim()) return '?';
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+}
+
+function pickCategoryAndEmoji(title: string, description: string): { tag: string; emoji: string } {
+  const blob = `${title} ${description}`.toLowerCase();
+  if (/commercial|office|مكتب|تجاري/.test(blob)) return { tag: 'Commercial', emoji: '🏢' };
+  if (/interior|room|غرف|داخلي/.test(blob)) return { tag: 'Interior', emoji: '🏗️' };
+  if (/paint|دهان/.test(blob)) return { tag: 'Finishing', emoji: '' }; // remove emoji for finishing work
+  if (/electric|كهرباء/.test(blob)) return { tag: 'Electrical', emoji: '⚡' };
+  return { tag: 'Project', emoji: '🏗️' };
+}
+
+export default function PortfolioScreen({
+  userId: userIdProp,
+  onBack,
+  onNavigateTab,
+  onEditProfile,
+}: PortfolioScreenProps) {
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
-  const { colors } = useTheme();
-  const { fontFamily, scaledSize } = useFontFamily();
+  const { colors, theme } = useTheme();
+  const isDark = theme === 'dark';
+  const { fontFamily, boldFontFamily, scaledSize } = useFontFamily();
+  const bottomTabPad = Math.max(28, insets.bottom);
 
-  const [portfolioItems, setPortfolioItems] = useState<PortfolioItem[]>([]);
+  const fontStyle = { fontFamily: fontFamily || undefined };
+  const boldStyle = { fontFamily: boldFontFamily || fontFamily || undefined };
+
+  const [resolvedUserId, setResolvedUserId] = useState<number>(Number(userIdProp) || 0);
+  const [portfolioItems, setPortfolioItems] = useState<PortfolioProject[]>([]);
+  const [portfolioMeta, setPortfolioMeta] = useState<{ yearsOfExperience?: number; bio?: string } | null>(null);
+  const [userProfile, setUserProfile] = useState<any>(null);
+  const [pdfInfo, setPdfInfo] = useState<PortfolioPDFInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isAdding, setIsAdding] = useState(false);
+  const [isPdfBusy, setIsPdfBusy] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [selectedImages, setSelectedImages] = useState<ImagePicker.ImagePickerAsset[]>([]);
+  const [editingProject, setEditingProject] = useState<PortfolioProject | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [selectedProject, setSelectedProject] = useState<PortfolioItem | null>(null);
+  const [selectedImages, setSelectedImages] = useState<ImagePicker.ImagePickerAsset[]>([]);
+  const [qrVisible, setQrVisible] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
 
+  const backdropOpacity = useRef(new Animated.Value(0)).current;
+  const cardTranslateY = useRef(new Animated.Value(28)).current;
+
+  const screenSlideX = useRef(new Animated.Value(0)).current;
+  const screenOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    fetchPortfolio();
-  }, []);
+    screenSlideX.setValue(-SCREEN_W);
+    screenOpacity.setValue(0);
+    Animated.parallel([
+      Animated.timing(screenOpacity, { toValue: 1, duration: 220, useNativeDriver: true }),
+      Animated.spring(screenSlideX, { toValue: 0, tension: 65, friction: 11, useNativeDriver: true }),
+    ]).start();
+  }, [screenOpacity, screenSlideX]);
 
-  const mapProject = (p: any): PortfolioItem => ({
-    id: p.id,
-    title: p.title || '',
-    description: p.description || '',
-    images: p.photos || p.files || p.images || [],
-    date: p.startDate || p.endDate || p.date || '',
-  });
+  const handleBackScreen = useCallback(() => {
+    Animated.parallel([
+      Animated.timing(screenOpacity, { toValue: 0, duration: 180, useNativeDriver: true }),
+      Animated.timing(screenSlideX, { toValue: SCREEN_W, duration: 220, useNativeDriver: true }),
+    ]).start(() => onBack());
+  }, [onBack, screenOpacity, screenSlideX]);
 
-  const fetchPortfolio = async () => {
+  const modalChrome = useMemo(
+    () => ({
+      thinBorder: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)',
+      closeBtnBg: isDark ? '#2A2A2C' : '#F5F5F5',
+      closeBtnText: isDark ? '#CFCFD4' : '#666666',
+      subtitle: isDark ? '#A0A0A8' : '#888888',
+    }),
+    [isDark],
+  );
+
+  const closeAddModal = useCallback(() => {
+    Animated.parallel([
+      Animated.timing(backdropOpacity, { toValue: 0, duration: 220, useNativeDriver: true }),
+      Animated.timing(cardTranslateY, { toValue: 28, duration: 220, useNativeDriver: true }),
+    ]).start(({ finished }) => {
+      if (finished) setShowAddModal(false);
+    });
+  }, [backdropOpacity, cardTranslateY]);
+
+  useEffect(() => {
+    if (!showAddModal) return;
+    backdropOpacity.setValue(0);
+    cardTranslateY.setValue(28);
+    Animated.parallel([
+      Animated.timing(backdropOpacity, { toValue: 1, duration: 280, useNativeDriver: true }),
+      Animated.spring(cardTranslateY, { toValue: 0, useNativeDriver: true, tension: 72, friction: 12 }),
+    ]).start();
+  }, [showAddModal, backdropOpacity, cardTranslateY]);
+
+  useEffect(() => {
+    const n = Number(userIdProp);
+    if (n > 0) {
+      setResolvedUserId(n);
+      return;
+    }
+    storage.getUserId().then((id) => {
+      if (id != null && id > 0) setResolvedUserId(id);
+    });
+  }, [userIdProp]);
+
+  const loadAll = useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await getMyPortfolio();
-      console.log('📥 [PortfolioScreen] My Portfolio Response:', data);
-
+      const [data, profile, pdf] = await Promise.all([
+        getMyPortfolio(),
+        getUserProfile().catch(() => null),
+        getMyPDFInfo().catch(() => null),
+      ]);
+      setUserProfile(profile);
+      setPdfInfo(pdf);
       if (!data) {
         setPortfolioItems([]);
-      } else if (data.pastProjects && Array.isArray(data.pastProjects)) {
-        setPortfolioItems(data.pastProjects.map(mapProject));
+        setPortfolioMeta(null);
       } else {
-        setPortfolioItems([]);
+        setPortfolioMeta({
+          yearsOfExperience: data.yearsOfExperience,
+          bio: (data as { bio?: string }).bio,
+        });
+        setPortfolioItems(Array.isArray(data.pastProjects) ? data.pastProjects : []);
       }
-    } catch (error) {
-      console.error('Error fetching portfolio:', error);
+    } catch {
       setPortfolioItems([]);
+      setPortfolioMeta(null);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
-  const handleSelectImages = async () => {
+  useEffect(() => {
+    loadAll();
+  }, [loadAll]);
+
+  const displayName =
+    userProfile?.name ||
+    userProfile?.firstName ||
+    [userProfile?.firstName, userProfile?.lastName].filter(Boolean).join(' ') ||
+    '—';
+
+  const roleLabel = useMemo(() => {
+    const services = userProfile?.services;
+    if (Array.isArray(services) && services.length > 0) {
+      const s = services[0];
+      return i18n.language?.startsWith('ar') ? s.nameAr || s.nameEn : s.nameEn || s.nameAr;
+    }
+    return t('Construction Specialist');
+  }, [userProfile, i18n.language, t]);
+
+  const bioText = portfolioMeta?.bio?.trim() || userProfile?.description?.trim() || '';
+
+  const projectsCount = portfolioItems.length;
+  const ratingVal = userProfile?.averageRating;
+  const ratingText =
+    ratingVal != null && !Number.isNaN(Number(ratingVal)) ? Number(ratingVal).toFixed(1) : '—';
+  const years =
+    portfolioMeta?.yearsOfExperience ?? userProfile?.yearsOfExperience ?? userProfile?.experienceYears;
+  const activeText =
+    years != null && years !== ''
+      ? `${years}${i18n.language?.startsWith('ar') ? ' سنوات' : 'yr'}`
+      : '—';
+
+  const shareUrl = pdfInfo?.publicUrl || (resolvedUserId ? `https://www.bonyad-hub.com/portfolio/${resolvedUserId}` : '');
+
+  const handleShare = async () => {
     try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      
-      if (status !== 'granted') {
-        showError('Please grant permission to access your photos', 'Permission Required');
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsMultipleSelection: true,
-        quality: 0.8,
-      });
-
-      if (!result.canceled && result.assets) {
-        setSelectedImages([...selectedImages, ...result.assets]);
-      }
-    } catch (error) {
-      console.error('Error selecting images:', error);
+      const msg = shareUrl || t('My Portfolio');
+      await Share.share(
+        Platform.OS === 'web' ? { url: msg } : { message: msg, url: shareUrl || undefined },
+      );
+    } catch {
+      showError(t('network_error'));
     }
   };
 
-  const handleAddPortfolioItem = async () => {
-    if (!title.trim() || selectedImages.length === 0) {
-      showError('Please add a title and at least one image');
+  const handleHeaderMenu = () => {
+    const buttons: { text: string; onPress?: () => void; style?: 'cancel' | 'destructive' }[] = [
+      ...(onEditProfile ? [{ text: t('Edit Profile'), onPress: onEditProfile }] : []),
+      { text: t('Share'), onPress: () => handleShare() },
+      { text: t('Cancel'), style: 'cancel' },
+    ];
+    Alert.alert(t('My Portfolio'), undefined, buttons);
+  };
+
+  const handleEditProfilePress = () => {
+    if (onEditProfile) onEditProfile();
+    else handleHeaderMenu();
+  };
+
+  const handleGenerateOrOpenPdf = async () => {
+    if (pdfInfo?.pdfUrl) return;
+    setIsPdfBusy(true);
+    try {
+      const info = await generatePortfolioPDF({ regenerate: false });
+      setPdfInfo(info);
+      showSuccess(t('PDF generated successfully'));
+    } catch (e: any) {
+      showError(e?.message || t('Failed to generate PDF'));
+    } finally {
+      setIsPdfBusy(false);
+    }
+  };
+
+  const handlePdfEditRegenerate = () => {
+    Alert.alert(t('Edit'), t('Regenerate PDF?'), [
+      { text: t('Cancel'), style: 'cancel' },
+      {
+        text: t('Regenerate'),
+        onPress: async () => {
+          setIsPdfBusy(true);
+          try {
+            const info = await generatePortfolioPDF({ regenerate: true });
+            setPdfInfo(info);
+            showSuccess(t('PDF generated successfully'));
+          } catch (e: any) {
+            showError(e?.message || t('Failed to generate PDF'));
+          } finally {
+            setIsPdfBusy(false);
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleDownloadPdf = () => {
+    const raw = pdfInfo?.pdfUrl;
+    if (!raw) {
+      handleGenerateOrOpenPdf();
+      return;
+    }
+    const url = normalizeAssetUrl(raw);
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.open(url, '_blank');
+    } else {
+      Linking.openURL(url).catch(() => showError(t('network_error')));
+    }
+  };
+
+  const openAdd = () => {
+    setEditingProject(null);
+    setTitle('');
+    setDescription('');
+    setSelectedImages([]);
+    setShowAddModal(true);
+  };
+
+  const openEdit = (p: PortfolioProject) => {
+    setEditingProject(p);
+    setTitle(p.title || '');
+    setDescription(p.description || '');
+    setSelectedImages([]);
+    setShowAddModal(true);
+  };
+
+  const handleSaveProject = async () => {
+    if (!title.trim()) {
+      showError(t('Please enter a title'));
+      return;
+    }
+    if (!editingProject && selectedImages.length === 0) {
+      showError(t('missing_fields'));
       return;
     }
 
-    setIsAdding(true);
+    setIsSaving(true);
     try {
-      // Step 1: Upload all photos first and get their URLs
-      console.log('📤 [PortfolioScreen] Uploading photos...');
       const photoUrls: string[] = [];
-      
-      for (const imageAsset of selectedImages) {
-        try {
-          const photoUrl = await uploadPortfolioPhoto(imageAsset);
-          photoUrls.push(photoUrl);
-          console.log('✅ [PortfolioScreen] Photo uploaded:', photoUrl);
-        } catch (uploadError) {
-          console.error('❌ [PortfolioScreen] Failed to upload photo:', uploadError);
-          throw new Error('Failed to upload one or more photos');
-        }
+      for (const asset of selectedImages) {
+        photoUrls.push(await uploadPortfolioPhoto(asset));
       }
-      
-      // Step 2: Create the project with the photo URLs
-      console.log('📤 [PortfolioScreen] Creating project with photos:', photoUrls.length);
-      
-      const today = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
-      
-      await addPortfolioProject({
-        title: title.trim(),
-        description: description.trim() || title.trim(), // Use title as description if empty
-        startDate: today,
-        endDate: today,
-        photos: photoUrls,
-        isPublic: true,
-      });
 
-      showSuccess('Portfolio item added successfully');
-      setTimeout(() => {
-        setShowAddModal(false);
-        setTitle('');
-        setDescription('');
-        setSelectedImages([]);
-        fetchPortfolio();
-      }, 1000);
-    } catch (error: any) {
-      console.error('Error adding portfolio item:', error);
-      showError(error.message || 'Failed to add portfolio item');
+      if (editingProject) {
+        const payload: Record<string, unknown> = {
+          title: title.trim(),
+          description: description.trim() || title.trim(),
+        };
+        if (photoUrls.length > 0) payload.photos = photoUrls;
+        await updatePortfolioProject(editingProject.id, payload as any);
+        showSuccess(t('Project updated successfully'));
+      } else {
+        const hasPortfolio = await checkHasPortfolio();
+        if (!hasPortfolio) await createPortfolio();
+        const today = new Date().toISOString().split('T')[0];
+        await addPortfolioProject({
+          title: title.trim(),
+          description: description.trim() || title.trim(),
+          startDate: today,
+          endDate: today,
+          photos: photoUrls,
+          isPublic: true,
+        });
+        showSuccess(t('Project added successfully'));
+      }
+      closeAddModal();
+      loadAll();
+    } catch (e: any) {
+      showError(e?.message || t('Failed to save project'));
     } finally {
-      setIsAdding(false);
+      setIsSaving(false);
     }
   };
 
-  const handleDeleteImage = (index: number) => {
-    setSelectedImages(selectedImages.filter((_, i) => i !== index));
+  const handleDelete = (p: PortfolioProject) => {
+    Alert.alert(t('Delete Project'), t('Are you sure you want to delete this project? This action cannot be undone.'), [
+      { text: t('Cancel'), style: 'cancel' },
+      {
+        text: t('Delete'),
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await deletePortfolioProject(p.id);
+            showSuccess(t('Project deleted successfully'));
+            loadAll();
+          } catch (e: any) {
+            showError(e?.message || t('Failed to delete'));
+          }
+        },
+      },
+    ]);
   };
 
-  if (isLoading) {
-    return (
-      <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
+  const handleCardMenu = (p: PortfolioProject) => {
+    Alert.alert(p.title || t('Project'), undefined, [
+      { text: t('Edit'), onPress: () => openEdit(p) },
+      { text: t('Delete Project'), style: 'destructive', onPress: () => handleDelete(p) },
+      { text: t('Cancel'), style: 'cancel' },
+    ]);
+  };
+
+  const pickImages = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      showError(t('Please grant permission to access your photos'));
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsMultipleSelection: false,
+      allowsEditing: true,
+      aspect: [16, 9],
+      quality: 0.85,
+    });
+    if (!result.canceled && result.assets?.length) {
+      setSelectedImages((prev) => [...prev, ...result.assets]);
+    }
+  };
+
+  const removeImageAt = (index: number) => {
+    setSelectedImages((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const onBottomTab = (tab: 'home' | 'projects' | 'payments' | 'profile') => {
+    if (!onNavigateTab) return;
+    if (tab === 'home') onNavigateTab('home');
+    else if (tab === 'projects') onNavigateTab('projects');
+    else if (tab === 'payments') onNavigateTab('payments');
+    else if (tab === 'profile') onNavigateTab('profile');
+  };
+
+  const formatCardDate = (d: string | undefined) => {
+    if (!d) return '';
+    try {
+      const dt = new Date(d);
+      if (Number.isNaN(dt.getTime())) return d;
+      return dt.toLocaleDateString(i18n.language, { day: '2-digit', month: 'short' });
+    } catch {
+      return d;
+    }
+  };
+
+  const formatPdfLongDate = (d: string | undefined) => {
+    if (!d) return '';
+    try {
+      const dt = new Date(d);
+      if (Number.isNaN(dt.getTime())) return d;
+      return dt.toLocaleDateString(i18n.language, { day: 'numeric', month: 'short', year: 'numeric' });
+    } catch {
+      return d;
+    }
+  };
+
+  const pdfDateLine = pdfInfo?.generatedAt
+    ? `${t('Generated')} · ${formatPdfLongDate(pdfInfo.generatedAt)}`
+    : t('Tap to generate');
+
+  const renderProjectItem = (item: PortfolioProject, index: number) => {
+    const rawFiles = (item as PortfolioProject & { files?: string[] }).files;
+    const photos = item.photos?.length ? item.photos : rawFiles || [];
+    const first = photos[0];
+    const imageUri = first ? normalizeAssetUrl(typeof first === 'string' ? first : String(first)) : null;
+    const { tag, emoji } = pickCategoryAndEmoji(item.title || '', item.description || '');
+    const coverDate = formatCardDate(item.endDate || item.startDate);
+    const headerDate = formatCardDate(item.startDate || item.endDate) || '—';
+
+    const card = (
+      <ProjectCard
+        index={index}
+        title={item.title || ''}
+        description={item.description || ''}
+        ownerName={displayName}
+        initials={initialsFromName(displayName)}
+        imageUri={imageUri}
+        categoryTag={tag}
+        emoji={emoji}
+        coverDate={coverDate}
+        headerDate={headerDate}
+        boldFontFamily={boldFontFamily || undefined}
+        fontFamily={fontFamily || undefined}
+        onEdit={() => openEdit(item)}
+        onDelete={() => handleDelete(item)}
+        editLabel={t('Edit')}
+        deleteLabel={t('Delete')}
+        noImageLabel={t('No image available')}
+      />
+    );
+
+    if (viewMode === 'grid') {
+      return (
+        <View key={item.id} style={{ width: GRID_CARD_W }}>
+          {card}
         </View>
+      );
+    }
+    return (
+      <View key={item.id} style={{ width: '100%' }}>
+        {card}
       </View>
     );
-  }
+  };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View style={[styles.header, { backgroundColor: colors.cardBackground }]}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(18) }]}>{t('My Portfolio')}</Text>
-        <TouchableOpacity
-          style={[styles.addButton, { backgroundColor: colors.primary }]}
-          onPress={() => setShowAddModal(true)}
-        >
-          <Ionicons name="add" size={24} color="#fff" />
-        </TouchableOpacity>
-      </View>
+    <View style={[styles.container, { paddingTop: 0, backgroundColor: colors.background }]}>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
 
-      <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollView}>
+      <Animated.View
+        style={[
+          styles.animatedScreen,
+          {
+            opacity: screenOpacity,
+            transform: [{ translateX: screenSlideX }],
+          },
+        ]}
+      >
+        <>
+          <PortfolioHeader
+            title={t('Portfolio')}
+            onBack={handleBackScreen}
+            boldFontFamily={boldFontFamily || undefined}
+          />
+
+          {isLoading ? (
+            <View style={styles.loadingBox}>
+              <ActivityIndicator size="large" color={colors.primary} />
+            </View>
+          ) : (
+            <>
+              <ScrollView
+                contentContainerStyle={{
+                  paddingHorizontal: H_PAD,
+                  paddingTop: 4,
+                  // `PortfolioBottomTabBar` is `position: 'absolute'`, so we need extra bottom padding
+                  // to keep the scroll content above the bar.
+                  paddingBottom: onNavigateTab ? bottomTabPad + 120 : 40,
+                }}
+                showsVerticalScrollIndicator={false}
+              >
+                <ProfileSection
+          initials={initialsFromName(displayName)}
+          displayName={displayName}
+          roleLabel={roleLabel}
+          bioText={bioText}
+          projectsCount={String(projectsCount)}
+          ratingText={ratingText}
+          activeText={activeText}
+          labels={{
+            projects: t('Projects'),
+            rating: t('Rating'),
+            active: t('Active'),
+          }}
+          boldFontFamily={boldFontFamily || undefined}
+          fontFamily={fontFamily || undefined}
+          onEditProfile={handleEditProfilePress}
+          onShare={handleShare}
+          onMenu={handleHeaderMenu}
+          editProfileLabel={t('Edit Profile')}
+          shareLabel={t('Share')}
+        />
+
+        <PDFCard
+          pdfTitle={t('Portfolio PDF')}
+          dateLine={pdfDateLine}
+          readyLabel={t('Ready')}
+          hasPdf={!!pdfInfo?.pdfUrl}
+          isBusy={isPdfBusy}
+          boldFontFamily={boldFontFamily || undefined}
+          fontFamily={fontFamily || undefined}
+          onQr={() => (pdfInfo?.pdfUrl ? setQrVisible(true) : handleGenerateOrOpenPdf())}
+          onDownload={handleDownloadPdf}
+          onEdit={handlePdfEditRegenerate}
+          qrLabel={t('QR Code')}
+          downloadLabel={t('Download')}
+          editLabel={t('Edit')}
+        />
+
+        <View style={{ marginHorizontal: -H_PAD }}>
+          <PortfolioViewToggle mode={viewMode} onChange={setViewMode} />
+        </View>
+
         {portfolioItems.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Ionicons name="briefcase" size={80} color={colors.textSecondary} />
-            <Text style={[styles.emptyText, { color: colors.textSecondary, fontSize: scaledSize(18) }]}>
-              {t('No portfolio items yet')}
-            </Text>
-            <Text style={[styles.emptySubtext, { color: colors.textSecondary, fontSize: scaledSize(14) }]}>
-              {t('Add your work to showcase your skills')}
-            </Text>
-          </View>
+          <Text style={[styles.empty, fontStyle, { color: colors.textSecondary }]}>{t('No portfolio projects yet')}</Text>
         ) : (
-          <View style={styles.gridContainer}>
-            {Array.isArray(portfolioItems) ? portfolioItems.map((item) => {
-              const firstImage = item.images?.[0];
-              const imageUri = firstImage
-                ? (firstImage.startsWith('http') ? firstImage : `${API_BASE_URL.replace('/api', '')}${firstImage}`)
-                : null;
-              const imageCount = item.images?.length || 0;
-
-              return (
-                <TouchableOpacity
-                  key={item.id}
-                  style={styles.gridItem}
-                  activeOpacity={0.85}
-                  onPress={() => {
-                    setSelectedProject(item);
-                  }}
-                >
-                  {imageUri ? (
-                    <Image
-                      source={{ uri: imageUri }}
-                      style={styles.gridImage}
-                      resizeMode="cover"
-                    />
-                  ) : (
-                    <View style={[styles.gridImage, styles.gridPlaceholder, { backgroundColor: colors.cardBackground }]}>
-                      <Ionicons name="briefcase-outline" size={40} color={colors.textSecondary} />
-                    </View>
-                  )}
-                  {imageCount > 1 && (
-                    <View style={styles.gridBadge}>
-                      <Ionicons name="copy" size={14} color="#fff" />
-                    </View>
-                  )}
-                  <View style={[styles.gridOverlay]}>
-                    <Text style={styles.gridTitle} numberOfLines={1}>{item.title}</Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            }) : null}
+          <View
+            style={[
+              styles.projectsWrap,
+              viewMode === 'grid'
+                ? {
+                    flexDirection: 'row',
+                    flexWrap: 'wrap',
+                    justifyContent: 'space-between',
+                    paddingTop: 8,
+                  }
+                : { paddingTop: 8 },
+            ]}
+          >
+            {portfolioItems.map((item, index) => renderProjectItem(item, index))}
           </View>
         )}
-      </ScrollView>
 
-      {/* Project Detail Modal */}
-      {selectedProject && (
-        <Modal visible={!!selectedProject} animationType="fade" transparent>
-          <View style={styles.detailOverlay}>
-            <View style={[styles.detailCard, { backgroundColor: colors.cardBackground }]}>
-              <View style={styles.detailHeader}>
-                <Text style={[styles.detailTitle, { color: colors.text }]}>{selectedProject.title}</Text>
-                <TouchableOpacity onPress={() => setSelectedProject(null)}>
-                  <Ionicons name="close" size={24} color={colors.text} />
-                </TouchableOpacity>
-              </View>
-              {selectedProject.description ? (
-                <Text style={[styles.detailDescription, { color: colors.textSecondary }]}>
-                  {selectedProject.description}
-                </Text>
-              ) : null}
-              {selectedProject.images && selectedProject.images.length > 0 && (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.detailImagesScroll}>
-                  {selectedProject.images.map((image: string, index: number) => (
-                    <Image
-                      key={index}
-                      source={{ uri: image.startsWith('http') ? image : `${API_BASE_URL.replace('/api', '')}${image}` }}
-                      style={styles.detailImage}
-                      resizeMode="cover"
-                    />
-                  ))}
-                </ScrollView>
-              )}
-              {selectedProject.date ? (
-                <Text style={[styles.detailDate, { color: colors.textSecondary }]}>
-                  {new Date(selectedProject.date).toLocaleDateString()}
-                </Text>
-              ) : null}
-            </View>
-          </View>
-        </Modal>
-      )}
+                <AddProjectButton label={t('Add New Project')} onPress={openAdd} boldFontFamily={boldFontFamily || undefined} />
+              </ScrollView>
 
-      {/* Add Portfolio Modal */}
+              {onNavigateTab ? (
+                <PortfolioBottomTabBar activeTab="profile" onTabPress={onBottomTab} />
+              ) : null}
+            </>
+          )}
+        </>
+      </Animated.View>
+
       <Modal visible={showAddModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <Card style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.text, fontSize: scaledSize(18) }]}>{t('Add Portfolio Item')}</Text>
-              <TouchableOpacity onPress={() => setShowAddModal(false)}>
+          <View style={[styles.modalCard, { backgroundColor: colors.cardBackground }]}>
+            <View style={[styles.modalHeader, { flexDirection: 'row', borderBottomColor: modalChrome.thinBorder }]}>
+              <Text style={[boldStyle, { color: colors.text, fontSize: scaledSize(18) }]}>
+                {editingProject ? t('Edit Project') : t('Add Portfolio Item')}
+              </Text>
+              <TouchableOpacity onPress={closeAddModal}>
                 <Ionicons name="close" size={24} color={colors.text} />
               </TouchableOpacity>
             </View>
-
-            <ScrollView style={styles.modalScrollView}>
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
               <TextInput
-                style={[styles.input, { color: colors.text, borderColor: colors.border }]}
+                style={[styles.input, { color: colors.text, borderColor: colors.border, ...fontStyle }]}
                 value={title}
                 onChangeText={setTitle}
                 placeholder={t('Title')}
-                placeholderTextColor={colors.textSecondary}
+                placeholderTextColor={colors.textTertiary}
               />
-
               <TextInput
-                style={[styles.textArea, { color: colors.text, borderColor: colors.border }]}
+                style={[styles.textArea, { color: colors.text, borderColor: colors.border, ...fontStyle }]}
                 value={description}
                 onChangeText={setDescription}
                 placeholder={t('Description')}
-                placeholderTextColor={colors.textSecondary}
+                placeholderTextColor={colors.textTertiary}
                 multiline
-                numberOfLines={3}
                 textAlignVertical="top"
               />
-
-              <TouchableOpacity
-                style={[styles.addImageButton, { borderColor: colors.primary }]}
-                onPress={handleSelectImages}
-              >
-                <Ionicons name="image" size={24} color={colors.primary} />
-                <Text style={[styles.addImageText, { color: colors.primary }]}>
-                  {t('Add Images')}
-                </Text>
+              <TouchableOpacity style={[styles.addPhotosBtn, { borderColor: colors.primary }]} onPress={pickImages}>
+                <Ionicons name="images-outline" size={22} color={colors.primary} />
+                <Text style={{ color: colors.primary, marginLeft: 8, ...fontStyle }}>{t('Add Images')}</Text>
               </TouchableOpacity>
-
-              {selectedImages.length > 0 && (
-                <View style={styles.selectedImagesContainer}>
-                  {selectedImages.map((imageAsset, index) => (
-                    <View key={index} style={styles.imagePreviewContainer}>
-                      <Image source={{ uri: imageAsset.uri }} style={styles.imagePreview} />
-                      <TouchableOpacity
-                        style={styles.removeImageButton}
-                        onPress={() => handleDeleteImage(index)}
-                      >
-                        <Ionicons name="close-circle" size={24} color="#ff4444" />
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                </View>
-              )}
-
+              <View style={styles.thumbRow}>
+                {selectedImages.map((a, i) => (
+                  <View key={i} style={styles.thumbWrap}>
+                    <Image source={{ uri: a.uri }} style={styles.thumb} />
+                    <TouchableOpacity style={styles.thumbRemove} onPress={() => removeImageAt(i)}>
+                      <Ionicons name="close-circle" size={22} color="#ff4444" />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
               <TouchableOpacity
-                style={[styles.saveButton, { backgroundColor: colors.primary }]}
-                onPress={handleAddPortfolioItem}
-                disabled={isAdding}
+                style={[styles.saveBtn, { backgroundColor: colors.primary }]}
+                onPress={handleSaveProject}
+                disabled={isSaving}
               >
-                {isAdding ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.saveButtonText}>{t('Save')}</Text>
-                )}
+                {isSaving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>{t('Save')}</Text>}
               </TouchableOpacity>
             </ScrollView>
-          </Card>
+          </View>
         </View>
+      </Modal>
+
+      <Modal visible={qrVisible} transparent animationType="fade">
+        <Pressable style={styles.qrOverlay} onPress={() => setQrVisible(false)}>
+          <Pressable style={[styles.qrBox, { backgroundColor: colors.cardBackground }]} onPress={(e) => e.stopPropagation()}>
+            <Text style={[boldStyle, { color: colors.text, marginBottom: 12, fontSize: scaledSize(16) }]}>{t('Portfolio')} QR</Text>
+            {resolvedUserId ? (
+              <Image
+                source={{ uri: getQRCodeUrl(resolvedUserId) }}
+                style={{ width: 200, height: 200 }}
+                resizeMode="contain"
+              />
+            ) : null}
+            <TouchableOpacity onPress={() => setQrVisible(false)} style={{ marginTop: 16 }}>
+              <Text style={{ color: colors.primary, ...fontStyle }}>{t('Close')}</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
       </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
+  container: { flex: 1 },
+  animatedScreen: { flex: 1 },
+  loadingBox: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  projectsWrap: {},
+  empty: {
+    textAlign: 'center',
+    marginTop: 12,
   },
-  loadingContainer: {
+  modalOverlay: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'flex-end',
   },
-  header: {
+  modalCard: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '92%',
+    paddingBottom: 24,
+  },
+  modalHeader: {
     flexDirection: 'row',
+    padding: 18,
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.1)',
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
+  input: {
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 12,
+    marginHorizontal: 18,
+    marginTop: 12,
+    fontSize: 16,
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    flex: 1,
-    textAlign: 'center',
+  textArea: {
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 12,
+    marginHorizontal: 18,
+    marginTop: 10,
+    minHeight: 90,
+    fontSize: 15,
   },
-  addButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  emptyState: {
+  addPhotosBtn: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: 100,
+    marginHorizontal: 18,
+    marginTop: 14,
+    padding: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderStyle: 'dashed',
   },
-  emptyText: {
-    fontSize: 20,
-    fontWeight: '600',
-    marginTop: 20,
-    marginBottom: 8,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    textAlign: 'center',
-    paddingHorizontal: 40,
-  },
-  gridContainer: {
+  thumbRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    padding: 2,
+    gap: 10,
+    marginHorizontal: 18,
+    marginTop: 12,
   },
-  gridItem: {
-    width: '33.33%',
-    aspectRatio: 1,
-    padding: 2,
-    position: 'relative' as const,
-  },
-  gridImage: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 4,
-  },
-  gridPlaceholder: {
-    justifyContent: 'center',
+  thumbWrap: { position: 'relative' },
+  thumb: { width: 88, height: 88, borderRadius: 10 },
+  thumbRemove: { position: 'absolute', top: -6, right: -6 },
+  saveBtn: {
+    marginHorizontal: 18,
+    marginTop: 20,
+    padding: 16,
+    borderRadius: 12,
     alignItems: 'center',
-    borderRadius: 4,
   },
-  gridBadge: {
-    position: 'absolute' as const,
-    top: 8,
-    right: 8,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    borderRadius: 4,
-    padding: 4,
-  },
-  gridOverlay: {
-    position: 'absolute' as const,
-    bottom: 2,
-    left: 2,
-    right: 2,
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    borderBottomLeftRadius: 4,
-    borderBottomRightRadius: 4,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-  },
-  gridTitle: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  detailOverlay: {
+  saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  qrOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
   },
-  detailCard: {
-    width: '100%',
-    maxWidth: 600,
-    borderRadius: 16,
-    padding: 24,
-    ...Platform.select({
-      web: { boxShadow: '0 8px 32px rgba(0,0,0,0.25)' } as any,
-      default: { elevation: 8 },
-    }),
-  },
-  detailHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  detailTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    flex: 1,
-    marginRight: 16,
-  },
-  detailDescription: {
-    fontSize: 14,
-    lineHeight: 22,
-    marginBottom: 16,
-  },
-  detailImagesScroll: {
-    marginBottom: 12,
-  },
-  detailImage: {
-    width: 260,
-    height: 260,
-    borderRadius: 12,
-    marginRight: 12,
-  },
-  detailDate: {
-    fontSize: 12,
-    marginTop: 8,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '90%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.1)',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  modalScrollView: {
-    padding: 20,
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    marginBottom: 16,
-  },
-  textArea: {
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    minHeight: 80,
-    marginBottom: 16,
-  },
-  addImageButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 16,
-    borderStyle: 'dashed',
-    gap: 8,
-  },
-  addImageText: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  selectedImagesContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 16,
-  },
-  imagePreviewContainer: {
-    position: 'relative',
-  },
-  imagePreview: {
-    width: 100,
-    height: 100,
-    borderRadius: 8,
-  },
-  removeImageButton: {
-    position: 'absolute',
-    top: -8,
-    right: -8,
-  },
-  saveButton: {
-    padding: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  saveButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
+  qrBox: { borderRadius: 16, padding: 20, alignItems: 'center' },
 });
-

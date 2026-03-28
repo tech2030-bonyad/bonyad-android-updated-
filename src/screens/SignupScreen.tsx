@@ -23,11 +23,34 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { API_ENDPOINTS, buildApiUrl } from '../config/api';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
 import AnimatedRoleToggle from '../components/AnimatedRoleToggle';
-import { PhoneInput, NameInput, PasswordInput, CustomCheckbox } from '../components/CustomInput';
+import { PhoneInput, NameInput, EmailInput, PasswordInput, CustomCheckbox } from '../components/CustomInput';
 import { useSignupValidation } from '../validation/useSignupValidation';
 import TermsScreen from './TermsScreen';
 
-type FocusableField = 'phone' | 'name' | 'password' | 'confirm';
+type FocusableField = 'phone' | 'name' | 'email' | 'password' | 'confirm';
+
+function firstRegisterFieldErrorMessage(errors: unknown): string | null {
+  if (!errors || typeof errors !== 'object') return null;
+  const e = errors as Record<string, unknown>;
+  const keys = [
+    'password',
+    'Password',
+    'newPassword',
+    'confirmPassword',
+    'phoneNumber',
+    'phone',
+    'PhoneNumber',
+    'name',
+    'Name',
+  ];
+  for (const k of keys) {
+    const v = e[k];
+    if (v == null) continue;
+    if (Array.isArray(v) && v.length > 0) return String(v[0]);
+    if (typeof v === 'string') return v;
+  }
+  return null;
+}
 
 export default function SignupScreen({
   onNavigateToLogin,
@@ -65,6 +88,7 @@ export default function SignupScreen({
   const [selectedRole, setSelectedRole] = useState<'user' | 'technician'>('user');
   const [phone, setPhone] = useState('');
   const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [focusedField, setFocusedField] = useState<FocusableField | null>(null);
@@ -72,6 +96,7 @@ export default function SignupScreen({
   // Terms
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [showTermsScreen, setShowTermsScreen] = useState(false);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
 
   const isArabic = i18n.language.startsWith('ar');
   const alignment: 'flex-start' | 'flex-end' = isArabic ? 'flex-end' : 'flex-start';
@@ -81,7 +106,7 @@ export default function SignupScreen({
   const { values, flags } = useSignupValidation({
     phone,
     name,
-    email: '', // Not used in first step anymore
+    email,
     password,
     confirmPassword,
   });
@@ -124,6 +149,10 @@ export default function SignupScreen({
 
   const handleConfirmPasswordChange = (value: string) => {
     setConfirmPassword(value.replace(/\s/g, ''));
+  };
+
+  const handleEmailChange = (value: string) => {
+    setEmail(value.trim().toLowerCase());
   };
 
   const ValidationHintItem = ({
@@ -187,6 +216,8 @@ export default function SignupScreen({
       return;
     }
 
+    setSubmitAttempted(true);
+
     const formattedPhone = values.phone;
     setPhone(formattedPhone);
 
@@ -197,6 +228,11 @@ export default function SignupScreen({
 
     if (!flags.nameValid) {
       showError(t('signup.validation.name'), t('validation_failed'));
+      return;
+    }
+
+    if (!flags.emailValid) {
+      showError(t('signup.validation.email'), t('validation_failed'));
       return;
     }
 
@@ -224,13 +260,13 @@ export default function SignupScreen({
   const performSignup = async (formattedPhone: string) => {
     const apiURL = buildApiUrl(API_ENDPOINTS.AUTH.REGISTER);
     const phoneOnly = String(formattedPhone).replace(/\D/g, '').slice(0, 9);
-    if (phoneOnly.length !== 9) {
+    if (phoneOnly.length !== 9 || !phoneOnly.startsWith('5')) {
       showError(t('signup.validation.phone'), t('validation_failed'));
       setIsLoading(false);
       return;
     }
 
-    // Match web: USER sends email (generated); TECHNICIAN sends only name, phoneNumber, password, role
+    // USER sends entered email; TECHNICIAN sends basic registration fields.
     const requestBody: Record<string, string> =
       selectedRole === 'user'
         ? {
@@ -238,7 +274,7 @@ export default function SignupScreen({
             phoneNumber: phoneOnly,
             password: password,
             role: 'USER',
-            email: `${phoneOnly}${name.replace(/\s+/g, '')}@gmail.com`,
+            email: email.trim().toLowerCase(),
           }
         : {
             name: name.trim(),
@@ -281,7 +317,12 @@ export default function SignupScreen({
           );
           return;
         }
-        errorMessage = isArabic ? (data.messageAr || data.message) : (data.messageEn || data.message);
+        const fieldMsg = firstRegisterFieldErrorMessage(data.errors);
+        if (fieldMsg) {
+          errorMessage = fieldMsg;
+        } else {
+          errorMessage = isArabic ? (data.messageAr || data.message) : (data.messageEn || data.message);
+        }
       } catch (e) {
         errorMessage = responseText || errorMessage;
       }
@@ -363,16 +404,35 @@ export default function SignupScreen({
                 <ValidationHintItem passed={flags.nameValid} label={t('signup.validation.name')} isFirst />
               )}
 
+              <EmailInput
+                label={t('Email')}
+                value={email}
+                onChangeText={handleEmailChange}
+                placeholder={t('Enter your email')}
+                onFocus={handleFieldFocus('email')}
+                onBlur={handleFieldBlur('email')}
+              />
+              {focusedField === 'email' && (
+                <ValidationHintItem passed={flags.emailValid} label={t('signup.validation.email')} isFirst />
+              )}
+
               <PasswordInput
                 label={t('Password')}
                 value={password}
                 onChangeText={handlePasswordChange}
-                placeholder={t('Enter your password')}
+                placeholder={t('auth.placeholders.password')}
                 onFocus={handleFieldFocus('password')}
                 onBlur={handleFieldBlur('password')}
               />
-              {focusedField === 'password' && (
-                <ValidationHintItem passed={flags.passwordValid} label={t('signup.validation.password.requirements')} isFirst />
+              {(focusedField === 'password' || (submitAttempted && !flags.passwordValid)) && (
+                <View style={[styles.validationHintGroup, { alignItems: alignment }]}>
+                  <ValidationHintItem passed={flags.passwordRules.minLength} label={t('signup.validation.password.minLength')} isFirst />
+                  <ValidationHintItem passed={flags.passwordRules.uppercase} label={t('signup.validation.password.uppercase')} />
+                  <ValidationHintItem passed={flags.passwordRules.number} label={t('signup.validation.password.number')} />
+                  <ValidationHintItem passed={flags.passwordRules.special} label={t('signup.validation.password.special')} />
+                  <ValidationHintItem passed={flags.passwordRules.noSpaces} label={t('signup.validation.password.spaces')} />
+                  <ValidationHintItem passed={flags.passwordRules.noSequence} label={t('signup.validation.password.sequence')} />
+                </View>
               )}
 
               <PasswordInput
@@ -383,8 +443,8 @@ export default function SignupScreen({
                 onFocus={handleFieldFocus('confirm')}
                 onBlur={handleFieldBlur('confirm')}
               />
-              {focusedField === 'confirm' && (
-                <ValidationHintItem passed={flags.confirmValid} label={t('Passwords must match')} isFirst />
+              {(focusedField === 'confirm' || (submitAttempted && !flags.confirmValid)) && (
+                <ValidationHintItem passed={flags.confirmValid} label={t('signup.validation.confirm')} isFirst />
               )}
 
               {/* Terms */}
@@ -450,6 +510,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 24, fontWeight: 'bold', marginBottom: 8, textAlign: 'center' },
   subtitle: { fontSize: 16, textAlign: 'center', marginBottom: 24 },
   formSection: { width: '100%', gap: 16 },
+  validationHintGroup: { marginTop: 4, marginBottom: 8, width: '100%' },
   validationHintRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 2 },
   validationHintText: { fontSize: 12 },
   signupButton: { backgroundColor: '#00549B', padding: 16, borderRadius: 8, alignItems: 'center', marginTop: 16 },

@@ -22,6 +22,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AIService, { ProjectRequest, analyzeDescription, ServiceCategory } from '../services/AIService';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
+import { useRTL } from '../hooks/useRTL';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -57,6 +58,11 @@ interface ConversationalAIFormProps {
   technician?: any;
   onBack: () => void;
   onSuccess?: () => void;
+  /** When opening from category/subcategory selection, pre-fill service for the created project */
+  initialCategoryId?: number;
+  initialCategoryName?: string;
+  initialSubcategoryId?: number;
+  initialSubcategoryName?: string;
 }
 
 interface ChatMessage {
@@ -83,10 +89,15 @@ export default function ConversationalAIForm({
   technician,
   onBack,
   onSuccess,
+  initialCategoryId,
+  initialCategoryName,
+  initialSubcategoryId,
+  initialSubcategoryName,
 }: ConversationalAIFormProps) {
   const { t, i18n } = useTranslation();
   const { colors } = useTheme();
   const { fontFamily, scaledSize } = useFontFamily();
+  const { arrowBackIcon, backIcon } = useRTL();
   const insets = useSafeAreaInsets();
   const isRTL = i18n.language === 'ar';
   const router = useRouter('aiForm', () => {});
@@ -194,6 +205,9 @@ export default function ConversationalAIForm({
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const loadingRotateAnim = useRef(new Animated.Value(0)).current;
   const loadingAnimRef = useRef<Animated.CompositeAnimation | null>(null);
+  const screenOpacity = useRef(new Animated.Value(0)).current;
+  const screenTranslateY = useRef(new Animated.Value(18)).current;
+  const isClosingScreenRef = useRef(false);
 
   useEffect(() => {
     // Pulse animation
@@ -229,6 +243,41 @@ export default function ConversationalAIForm({
       rotateLoop.stop();
     };
   }, []);
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(screenOpacity, {
+        toValue: 1,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+      Animated.spring(screenTranslateY, {
+        toValue: 0,
+        friction: 9,
+        tension: 110,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [screenOpacity, screenTranslateY]);
+
+  const closeScreenAnimated = () => {
+    if (isClosingScreenRef.current) return;
+    isClosingScreenRef.current = true;
+    Animated.parallel([
+      Animated.timing(screenOpacity, {
+        toValue: 0,
+        duration: 170,
+        useNativeDriver: true,
+      }),
+      Animated.timing(screenTranslateY, {
+        toValue: 16,
+        duration: 170,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      onBack();
+    });
+  };
 
   // Loading spinner animation - starts/stops based on isLoading
   useEffect(() => {
@@ -430,13 +479,17 @@ export default function ConversationalAIForm({
       
       const project = await AIService.generateProject(fullDescription, i18n.language as 'en' | 'ar', serviceCategories);
       
-      // Match category to serviceId from backend
-      const serviceId = AIService.matchServiceId(project.category, serviceCategories, i18n.language as 'en' | 'ar');
-      project.serviceId = serviceId;
+      // Use preselected category/subcategory when coming from creation-method, else match from AI output
+      if (initialSubcategoryId != null || initialCategoryId != null) {
+        project.serviceId = initialSubcategoryId ?? initialCategoryId ?? project.serviceId;
+      } else {
+        const serviceId = AIService.matchServiceId(project.category, serviceCategories, i18n.language as 'en' | 'ar');
+        project.serviceId = serviceId;
+      }
       
       console.log('✅ Project generated:', project);
       console.log('   Category:', project.category);
-      console.log('   Matched serviceId:', serviceId);
+      console.log('   Matched serviceId:', project.serviceId);
       
       // Initialize editedPhases with generated phases
       if (project.phases && project.phases.length > 0) {
@@ -722,7 +775,7 @@ export default function ConversationalAIForm({
 
       const projectData: CreateProjectRequest = {
         description: project.description,
-        serviceId: project.serviceId || 1,
+        serviceId: (initialSubcategoryId ?? initialCategoryId ?? project.serviceId) || 1,
         address: project.address || '',
         latitude: project.latitude || 0,
         longitude: project.longitude || 0,
@@ -793,7 +846,7 @@ export default function ConversationalAIForm({
           if (router) {
             router.navigate('home');
           } else {
-            onBack();
+            closeScreenAnimated();
           }
         });
       } else {
@@ -803,7 +856,7 @@ export default function ConversationalAIForm({
         setTimeout(() => {
           setShowSuccessModal(false);
           onSuccess?.();
-          onBack();
+          closeScreenAnimated();
         }, 2000);
       }
     } catch (error: any) {
@@ -857,6 +910,7 @@ export default function ConversationalAIForm({
   // Render mobile layout
   if (shouldRenderMobile) {
     return (
+      <Animated.View style={{ flex: 1, opacity: screenOpacity, transform: [{ translateY: screenTranslateY }] }}>
       <KeyboardAvoidingView
         style={[styles.container, { backgroundColor: '#FFFFFF' }]}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -864,8 +918,8 @@ export default function ConversationalAIForm({
       >
         {/* Figma Header - Simple Back Button */}
         <View style={[styles.figmaHeader, { paddingTop: Math.max(insets.top, 16) }]}>
-          <TouchableOpacity onPress={onBack} style={styles.figmaBackButton}>
-            <Ionicons name="arrow-back" size={24} color="#383838" />
+          <TouchableOpacity onPress={closeScreenAnimated} style={styles.figmaBackButton}>
+            <Ionicons name={arrowBackIcon} size={24} color="#383838" />
           </TouchableOpacity>
         </View>
 
@@ -1848,7 +1902,7 @@ export default function ConversationalAIForm({
                 disabled={currentPhotoIndex === 0}
               >
                 <Ionicons
-                  name="chevron-back"
+                  name={backIcon}
                   size={32}
                   color={currentPhotoIndex === 0 ? 'rgba(255, 255, 255, 0.3)' : '#fff'}
                 />
@@ -1916,15 +1970,16 @@ export default function ConversationalAIForm({
         onCancel={hideConfirmation}
       />
     </KeyboardAvoidingView>
+    </Animated.View>
   );
 }
 
   // Render desktop layout - reuse mobile content but with desktop styling
   return (
-    <View style={[styles.desktopContainer, { backgroundColor: colors.background }]}>
+    <Animated.View style={[styles.desktopContainer, { backgroundColor: colors.background, opacity: screenOpacity, transform: [{ translateY: screenTranslateY }] }]}>
       {/* Desktop Header */}
       <View style={[styles.desktopHeader, { backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={onBack} style={styles.desktopBackButton}>
+        <TouchableOpacity onPress={closeScreenAnimated} style={styles.desktopBackButton}>
           <Ionicons name="close" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={[styles.desktopHeaderTitle, { color: colors.text }]}>{t('AI Project Generator')}</Text>
@@ -2803,7 +2858,7 @@ export default function ConversationalAIForm({
         onConfirm={confirmState.onConfirm}
         onCancel={hideConfirmation}
       />
-    </View>
+    </Animated.View>
   );
 }
 

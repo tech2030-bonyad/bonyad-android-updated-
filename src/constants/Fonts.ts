@@ -1,173 +1,109 @@
 /**
  * 🔤 FONTS: App-wide font family and size configuration
- * 
- * Language-aware fonts:
- * - English: System/default fonts
- * - Arabic: Sakkal Majalla
- * 
- * Font files should be placed in: assets/fonts/
- * Required files:
- * - alfont_com_majalla.ttf (SakkalMajalla)
- * 
- * Download from: https://alfont.com/sakkal-majalla-arabic-font-download.html
+ *
+ * Language-aware fonts (same as web):
+ * - Arabic: Cairo (Cairo-Regular, Cairo-Medium, Cairo-SemiBold, Cairo-Bold, Cairo-ExtraBold)
+ * - English: Poppins (Poppins-Regular, Poppins-SemiBold, Poppins-Bold)
+ *
+ * Font files: assets/fonts/
+ * Download Cairo from: https://fonts.google.com/specimen/Cairo
+ * See docs/CAIRO_FONT_INSTRUCTIONS.md
  */
 
 import { Platform } from 'react-native';
 
-// Arabic font family - used for Arabic language
-export const ARABIC_FONT = 'SakkalMajalla';
-export const ARABIC_FONT_BOLD = 'SakkalMajalla-Bold';
+// Arabic font family (same as web) - Cairo (@expo-google-fonts/cairo)
+export const ARABIC_FONTS = {
+  regular: 'Cairo_400Regular',
+  medium: 'Cairo_500Medium',
+  semiBold: 'Cairo_600SemiBold',
+  bold: 'Cairo_700Bold',
+  extraBold: 'Cairo_800ExtraBold',
+} as const;
 
-// System/default font - used for English and other languages
-export const SYSTEM_FONT = Platform.select({
-  ios: 'System',
-  android: 'Roboto',
-  web: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-  default: undefined,
-});
+// English font family (same as web) - Poppins (@expo-google-fonts/poppins)
+export const ENGLISH_FONTS = {
+  regular: 'Poppins_400Regular',
+  semiBold: 'Poppins_600SemiBold',
+  bold: 'Poppins_700Bold',
+} as const;
 
-export const SYSTEM_FONT_BOLD = Platform.select({
-  ios: 'System',
-  android: 'Roboto',
-  web: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-  default: undefined,
-});
+export type FontWeight = keyof typeof ARABIC_FONTS;
 
-// Legacy exports for backwards compatibility (these use Arabic font)
-export const PRIMARY_FONT = ARABIC_FONT;
-export const PRIMARY_FONT_BOLD = ARABIC_FONT_BOLD;
+export function getFont(isArabic: boolean, weight: FontWeight = 'regular'): string {
+  if (isArabic) {
+    return ARABIC_FONTS[weight] ?? ARABIC_FONTS.regular;
+  }
+  if (weight === 'regular' || weight === 'medium') return ENGLISH_FONTS.regular;
+  if (weight === 'semiBold') return ENGLISH_FONTS.semiBold;
+  return ENGLISH_FONTS.bold;
+}
+
+// Legacy aliases
+export const ARABIC_FONT = ARABIC_FONTS.regular;
+export const ARABIC_FONT_BOLD = ARABIC_FONTS.bold;
+export const SYSTEM_FONT = ENGLISH_FONTS.regular;
+export const SYSTEM_FONT_BOLD = ENGLISH_FONTS.bold;
 
 /**
  * Get font family based on language
- * @param isArabic - Whether the current language is Arabic
- * @returns The appropriate font family string
  */
-export const getFontFamily = (isArabic: boolean): string | undefined => {
-  if (isArabic) {
-    return ARABIC_FONT;
-  }
-  return SYSTEM_FONT;
+export const getFontFamily = (isArabic: boolean): string => {
+  return getFont(isArabic, 'regular');
 };
 
 /**
  * Get bold font family based on language
- * @param isArabic - Whether the current language is Arabic
- * @returns The appropriate bold font family string
  */
-export const getBoldFontFamily = (isArabic: boolean): string | undefined => {
-  if (isArabic) {
-    return ARABIC_FONT_BOLD;
-  }
-  return SYSTEM_FONT_BOLD;
+export const getBoldFontFamily = (isArabic: boolean): string => {
+  return getFont(isArabic, 'bold');
 };
 
-// Font families for different use cases (Arabic - legacy)
+// Font families for different use cases (legacy)
 export const Fonts = {
-  // Primary/Default font
-  primary: ARABIC_FONT,
-  primaryBold: ARABIC_FONT_BOLD,
-  
-  // Headings (titles, headers) - use bold
-  heading: ARABIC_FONT_BOLD,
-  
-  // Body text (paragraphs, descriptions)
-  body: ARABIC_FONT,
-  
-  // Labels (form labels, captions)
-  label: ARABIC_FONT,
-  
-  // Input text (text inside input fields)
-  input: ARABIC_FONT,
-  
-  // Buttons
-  button: ARABIC_FONT_BOLD,
-  
-  // Navigation (tabs, menu items)
-  navigation: ARABIC_FONT,
-  
-  // Monospace (code, technical text)
+  primary: ARABIC_FONTS.regular,
+  primaryBold: ARABIC_FONTS.bold,
+  heading: ARABIC_FONTS.bold,
+  body: ARABIC_FONTS.regular,
+  label: ARABIC_FONTS.medium,
+  input: ARABIC_FONTS.regular,
+  button: ARABIC_FONTS.semiBold,
+  navigation: ARABIC_FONTS.regular,
   mono: Platform.select({
     ios: 'Menlo',
     android: 'monospace',
     web: "'SF Mono', 'Monaco', 'Inconsolata', 'Fira Mono', monospace",
   }),
-  
-  // Arabic text (for RTL support)
-  arabic: Platform.select({
-    ios: ARABIC_FONT,
-    android: ARABIC_FONT,
-    web: `'${ARABIC_FONT}', 'Noto Sans Arabic', 'Arial', sans-serif`,
-  }),
+  arabic: ARABIC_FONTS.regular,
 };
 
-// Platform-specific font family strings (legacy - uses Arabic font)
+// Platform-specific font family strings (legacy)
 export const FontFamily = {
-  primary: Platform.select({
-    ios: ARABIC_FONT,
-    android: ARABIC_FONT,
-    web: `'${ARABIC_FONT}', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`,
-  }),
-  
-  primaryBold: Platform.select({
-    ios: ARABIC_FONT_BOLD,
-    android: ARABIC_FONT_BOLD,
-    web: `'${ARABIC_FONT_BOLD}', '${ARABIC_FONT}', system-ui, -apple-system, sans-serif`,
-  }),
-  
-  heading: Platform.select({
-    ios: Fonts.heading,
-    android: Fonts.heading,
-    web: `'${Fonts.heading}', '${ARABIC_FONT}', system-ui, -apple-system, sans-serif`,
-  }),
-  
-  body: Platform.select({
-    ios: Fonts.body,
-    android: Fonts.body,
-    web: `'${Fonts.body}', system-ui, -apple-system, sans-serif`,
-  }),
-  
-  label: Platform.select({
-    ios: Fonts.label,
-    android: Fonts.label,
-    web: `'${Fonts.label}', system-ui, -apple-system, sans-serif`,
-  }),
-  
-  input: Platform.select({
-    ios: Fonts.input,
-    android: Fonts.input,
-    web: `'${Fonts.input}', system-ui, -apple-system, sans-serif`,
-  }),
-  
-  button: Platform.select({
-    ios: Fonts.button,
-    android: Fonts.button,
-    web: `'${Fonts.button}', '${ARABIC_FONT}', system-ui, -apple-system, sans-serif`,
-  }),
-  
+  primary: Fonts.primary,
+  primaryBold: Fonts.primaryBold,
+  heading: Fonts.heading,
+  body: Fonts.body,
+  label: Fonts.label,
+  input: Fonts.input,
+  button: Fonts.button,
   mono: Fonts.mono,
-  
   arabic: Fonts.arabic,
 };
 
 /**
  * Get language-aware FontFamily object
- * @param isArabic - Whether the current language is Arabic
- * @returns FontFamily object with appropriate fonts
  */
 export const getLanguageFontFamily = (isArabic: boolean) => {
-  const font = getFontFamily(isArabic);
-  const boldFont = getBoldFontFamily(isArabic);
-  
   return {
-    primary: font,
-    primaryBold: boldFont,
-    heading: boldFont,
-    body: font,
-    label: font,
-    input: font,
-    button: boldFont,
+    primary: getFont(isArabic, 'regular'),
+    primaryBold: getFont(isArabic, 'bold'),
+    heading: getFont(isArabic, 'bold'),
+    body: getFont(isArabic, 'regular'),
+    label: getFont(isArabic, 'medium'),
+    input: getFont(isArabic, 'regular'),
+    button: getFont(isArabic, 'semiBold'),
     mono: Fonts.mono,
-    arabic: Fonts.arabic,
+    arabic: ARABIC_FONTS.regular,
   };
 };
 

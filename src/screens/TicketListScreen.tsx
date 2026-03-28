@@ -1,5 +1,5 @@
 // 🎫 TicketListScreen - Support Tickets List
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,10 +8,14 @@ import {
   StyleSheet,
   RefreshControl,
   Dimensions,
+  Animated,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import GlassTabBar from '../components/GlassTabBar';
+import AppTopBar from '../components/AppTopBar';
 import { useSupportTickets } from '../hooks/useSupportTickets';
 import { SupportTicket } from '../types/chat';
 
@@ -21,6 +25,10 @@ interface TicketListScreenProps {
   onBack?: () => void;
   onCreateTicket?: () => void;
   onTicketPress?: (ticket: SupportTicket) => void;
+  onNavigateTab?: (tab: 'home' | 'projects' | 'chat' | 'profile') => void;
+  onPressChat?: () => void;
+  onPressInfo?: () => void;
+  onPressNotifications?: () => void;
 }
 
 const TicketItem: React.FC<{
@@ -31,6 +39,7 @@ const TicketItem: React.FC<{
   getStatusColor: (status: string) => string;
   getStatusText: (status: string) => string;
   getPriorityColor: (priority: string) => string;
+  getPriorityText: (priority: string) => string;
   getCategoryText: (category: string) => string;
 }> = ({
   ticket,
@@ -40,8 +49,12 @@ const TicketItem: React.FC<{
   getStatusColor,
   getStatusText,
   getPriorityColor,
+  getPriorityText,
   getCategoryText,
-}) => (
+}) => {
+  const { t, i18n } = useTranslation();
+  const cardArrow = i18n.language === 'ar' ? 'chevron-back' : 'chevron-forward';
+  return (
   <TouchableOpacity
     style={[
       styles.ticketItem,
@@ -64,7 +77,7 @@ const TicketItem: React.FC<{
         </Text>
         {ticket.hasUnreadMessages || (ticket.unreadMessageCount ?? 0) > 0 ? (
           <View style={[styles.unreadBadge, { backgroundColor: colors.primary }]}>
-            <Text style={styles.unreadText}>NEW</Text>
+            <Text style={styles.unreadText}>{t('supportCenter.newBadge')}</Text>
           </View>
         ) : null}
       </View>
@@ -93,7 +106,7 @@ const TicketItem: React.FC<{
           </View>
           <View style={[styles.badge, { backgroundColor: getPriorityColor(ticket.priority) + '20' }]}>
             <Text style={[styles.badgeText, { color: getPriorityColor(ticket.priority) }]}>
-              {ticket.priority}
+              {getPriorityText(ticket.priority)}
             </Text>
           </View>
         </View>
@@ -103,42 +116,87 @@ const TicketItem: React.FC<{
       </View>
     </View>
 
-    {/* Arrow */}
-    <Ionicons name="chevron-forward" size={20} color={colors.textTertiary} />
+    {/* Arrow: point left in AR, right in LTR */}
+    <Ionicons name={cardArrow} size={20} color={colors.textTertiary} />
   </TouchableOpacity>
-);
+  );
+};
 
 const EmptyState: React.FC<{ colors: any; onCreate: () => void; isDarkMode: boolean }> = ({
   colors,
   onCreate,
   isDarkMode,
-}) => (
+}) => {
+  const { t } = useTranslation();
+  return (
   <View style={styles.emptyState}>
     <View style={[styles.emptyIconContainer, { backgroundColor: colors.primary + '15' }]}>
       <Ionicons name="headset-outline" size={48} color={colors.primary} />
     </View>
-    <Text style={[styles.emptyTitle, { color: colors.text }]}>Welcome to Support Center</Text>
+    <Text style={[styles.emptyTitle, { color: colors.text }]}>{t('supportCenter.welcome')}</Text>
     <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-      Create a ticket to get help. Track progress and review closed tickets here.
+      {t('supportCenter.emptySubtitle')}
     </Text>
     <TouchableOpacity
       style={[styles.emptyButton, { backgroundColor: colors.primary }]}
       onPress={onCreate}
     >
-      <Text style={styles.emptyButtonText}>Create Ticket</Text>
+      <Text style={styles.emptyButtonText}>{t('supportCenter.createTicket')}</Text>
     </TouchableOpacity>
   </View>
-);
+  );
+};
 
 const TicketListScreen: React.FC<TicketListScreenProps> = ({
   onBack,
   onCreateTicket,
   onTicketPress,
+  onNavigateTab,
+  onPressChat,
+  onPressInfo,
+  onPressNotifications,
 }) => {
   const { t, i18n } = useTranslation();
   const { colors, theme } = useTheme();
+  const insets = useSafeAreaInsets();
   const isDarkMode = theme === 'dark';
   const language = i18n.language === 'ar' ? 'ar' : 'en';
+  const isRTL = i18n.language === 'ar';
+  const screenOpacity = useRef(new Animated.Value(0)).current;
+  const screenSlideX = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    screenSlideX.setValue(-screenWidth);
+    screenOpacity.setValue(0);
+    Animated.parallel([
+      Animated.timing(screenOpacity, {
+        toValue: 1,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+      Animated.spring(screenSlideX, {
+        toValue: 0,
+        tension: 65,
+        friction: 11,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [screenOpacity, screenSlideX]);
+
+  const handleBackScreen = () => {
+    Animated.parallel([
+      Animated.timing(screenOpacity, {
+        toValue: 0,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+      Animated.timing(screenSlideX, {
+        toValue: screenWidth,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+    ]).start(() => onBack?.());
+  };
 
   const {
     tickets,
@@ -149,6 +207,7 @@ const TicketListScreen: React.FC<TicketListScreenProps> = ({
     getStatusColor,
     getStatusText,
     getPriorityColor,
+    getPriorityText,
     getCategoryText,
   } = useSupportTickets({ language });
 
@@ -161,18 +220,40 @@ const TicketListScreen: React.FC<TicketListScreenProps> = ({
       getStatusColor={getStatusColor}
       getStatusText={getStatusText}
       getPriorityColor={getPriorityColor}
+      getPriorityText={getPriorityText}
       getCategoryText={getCategoryText}
     />
-  ), [colors, isDarkMode, getStatusColor, getStatusText, getPriorityColor, getCategoryText, onTicketPress]);
+  ), [colors, isDarkMode, getStatusColor, getStatusText, getPriorityColor, getPriorityText, getCategoryText, onTicketPress]);
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View style={[styles.header, { backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
+    <Animated.View
+      style={[
+        styles.container,
+        {
+          backgroundColor: colors.background,
+          opacity: screenOpacity,
+          transform: [{ translateX: screenSlideX }],
+        },
+      ]}
+    >
+      <AppTopBar
+        onPressChat={onPressChat || (() => {})}
+        onPressInfo={onPressInfo || (() => {})}
+        onPressNotifications={onPressNotifications || (() => {})}
+        primaryColor={colors.primary}
+        isDark={isDarkMode}
+        backgroundColor={colors.background}
+      />
+      {/* Header: back button stays on the left in AR */}
+      <View style={[
+        styles.header,
+        { backgroundColor: colors.cardBackground, borderBottomColor: colors.border },
+        isRTL && { flexDirection: 'row-reverse' },
+      ]}>
+        <TouchableOpacity onPress={handleBackScreen} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Support Center</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>{t('supportCenter.title')}</Text>
         <View style={styles.headerRight} />
       </View>
 
@@ -180,17 +261,17 @@ const TicketListScreen: React.FC<TicketListScreenProps> = ({
       <View style={[styles.statsContainer, { backgroundColor: colors.cardBackground }]}>
         <View style={styles.statItem}>
           <Text style={[styles.statValue, { color: colors.primary }]}>{stats.total}</Text>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Total</Text>
+          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>{t('supportCenter.total')}</Text>
         </View>
         <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
         <View style={styles.statItem}>
           <Text style={[styles.statValue, { color: '#f59e0b' }]}>{stats.pending}</Text>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Pending</Text>
+          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>{t('supportCenter.pending')}</Text>
         </View>
         <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
         <View style={styles.statItem}>
           <Text style={[styles.statValue, { color: '#10b981' }]}>{stats.resolved}</Text>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Resolved</Text>
+          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>{t('supportCenter.resolved')}</Text>
         </View>
       </View>
 
@@ -199,7 +280,7 @@ const TicketListScreen: React.FC<TicketListScreenProps> = ({
         <View style={[styles.errorBanner, { backgroundColor: (colors.error || '#ef4444') + '20', marginHorizontal: 16, marginTop: 8 }]}>
           <Text style={[styles.errorBannerText, { color: colors.error || '#ef4444' }]}>{error}</Text>
           <TouchableOpacity onPress={fetchTickets} style={styles.errorRetry}>
-            <Text style={[styles.errorRetryText, { color: colors.primary }]}>{language === 'ar' ? 'حاول مرة أخرى' : 'Try again'}</Text>
+            <Text style={[styles.errorRetryText, { color: colors.primary }]}>{t('supportCenter.tryAgain')}</Text>
           </TouchableOpacity>
         </View>
       ) : null}
@@ -213,7 +294,7 @@ const TicketListScreen: React.FC<TicketListScreenProps> = ({
             data={tickets}
             keyExtractor={(item) => item.id.toString()}
             renderItem={renderTicket}
-            contentContainerStyle={styles.listContent}
+            contentContainerStyle={[styles.listContent, onNavigateTab ? { paddingBottom: Math.max(insets.bottom, 16) + 96 } : undefined]}
             refreshControl={
               <RefreshControl refreshing={loading} onRefresh={fetchTickets} tintColor={colors.primary} />
             }
@@ -224,13 +305,22 @@ const TicketListScreen: React.FC<TicketListScreenProps> = ({
 
       {/* FAB */}
       <TouchableOpacity
-        style={[styles.fab, { backgroundColor: colors.primary }]}
+        style={[styles.fab, { backgroundColor: colors.primary, bottom: onNavigateTab ? Math.max(insets.bottom, 12) + 88 : 20 }]}
         onPress={onCreateTicket}
         activeOpacity={0.8}
       >
         <Ionicons name="add" size={28} color="#fff" />
       </TouchableOpacity>
-    </View>
+      {onNavigateTab ? (
+        <GlassTabBar
+          activeTab="profile"
+          onTabPress={(tab) => onNavigateTab(tab as 'home' | 'projects' | 'chat' | 'profile')}
+          bottomInset={insets.bottom}
+          isDark={isDarkMode}
+          primaryColor={colors.primary}
+        />
+      ) : null}
+    </Animated.View>
   );
 };
 

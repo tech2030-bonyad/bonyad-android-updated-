@@ -1,14 +1,12 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  Modal,
   TextInput,
   TouchableOpacity,
   ActivityIndicator,
   ScrollView,
-  Animated,
   Platform,
   KeyboardAvoidingView,
 } from 'react-native';
@@ -21,6 +19,7 @@ import { storage } from '../utils/storage';
 import { createBid } from '../services/SmallTaskService';
 import { SmallTaskRequest } from '../types/smallTasks';
 import AlertPopup, { useAlertPopup } from './AlertPopup';
+import AppBottomSheetModal from './AppBottomSheetModal';
 
 interface SmallTaskBidFormModalProps {
   visible: boolean;
@@ -38,7 +37,6 @@ export default function SmallTaskBidFormModal({
   const { t, i18n } = useTranslation();
   const { colors, theme } = useTheme();
   const { fontFamily, fonts } = useFontFamily();
-  const isRTL = i18n.language === 'ar';
   const isDarkMode = theme === 'dark';
 
   const [amount, setAmount] = useState('');
@@ -47,30 +45,6 @@ export default function SmallTaskBidFormModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { alertState, showError, showSuccess, hideAlert } = useAlertPopup();
-
-  // Animation values (Android only)
-  const slideAnim = useRef(new Animated.Value(300)).current;
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (visible && Platform.OS === 'android') {
-      Animated.parallel([
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    } else if (!visible) {
-      slideAnim.setValue(300);
-      fadeAnim.setValue(0);
-    }
-  }, [visible]);
 
   useEffect(() => {
     if (visible && task) {
@@ -88,17 +62,17 @@ export default function SmallTaskBidFormModal({
   const handleSubmit = async () => {
     // Validation
     if (!amount || parseFloat(amount) <= 0) {
-      showError(t('Please enter a valid amount'), t('Validation Error'));
+      showError(t('smallTasks.bidModal.pleaseEnterValidAmount'), t('smallTasks.bidModal.validationError'));
       return;
     }
 
     if (!description.trim()) {
-      showError(t('Please enter a description'), t('Validation Error'));
+      showError(t('smallTasks.bidModal.pleaseEnterDescription'), t('smallTasks.bidModal.validationError'));
       return;
     }
 
     if (!estimatedHours || parseFloat(estimatedHours) <= 0) {
-      showError(t('Please enter valid hours'), t('Validation Error'));
+      showError(t('smallTasks.bidModal.pleaseEnterValidHours'), t('smallTasks.bidModal.validationError'));
       return;
     }
 
@@ -112,7 +86,7 @@ export default function SmallTaskBidFormModal({
         estimatedDuration: Math.round(parseFloat(estimatedHours) * 60),
         notes: description.trim(),
       });
-      showSuccess(t('Bid submitted successfully'), t('Success'));
+      showSuccess(t('smallTasks.bidModal.bidSubmittedSuccess'), t('smallTasks.success'));
       setAmount('');
       setDescription('');
       setEstimatedHours('');
@@ -123,72 +97,41 @@ export default function SmallTaskBidFormModal({
       }, 1500);
     } catch (error: unknown) {
       const err = error as { message?: string };
-      showError(err.message || t('Failed to submit bid'), t('Error'));
+      showError(err.message || t('smallTasks.bidModal.failedToSubmitBid'), t('smallTasks.error'));
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleClose = () => {
-    if (!isSubmitting) {
-      onClose();
-    }
+    if (isSubmitting) return;
+    onClose();
   };
 
   if (!task) return null;
 
   const taskName = task.taskType
-    ? isRTL
-      ? task.taskType?.nameAr || t('Task')
-      : task.taskType?.nameEn || t('Task')
-    : t('Task');
+    ? i18n.language === 'ar'
+      ? task.taskType?.nameAr || t('smallTasks.task')
+      : task.taskType?.nameEn || t('smallTasks.task')
+    : t('smallTasks.task');
   const riyalLogo = isDarkMode
     ? require('../../assets/saudi_riyal_logo_dark.svg')
     : require('../../assets/saudi_riyal_logo.svg');
 
   return (
-    <Modal visible={visible} animationType="none" transparent onRequestClose={handleClose}>
-      <KeyboardAvoidingView
-        style={styles.overlay}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    <>
+      <AppBottomSheetModal
+        visible={visible}
+        onClose={handleClose}
+        title={t('smallTasks.bidModal.submitBid')}
+        subtitle={taskName}
       >
-        <TouchableOpacity
-          style={styles.backdrop}
-          activeOpacity={1}
-          onPress={handleClose}
-        >
-          <Animated.View
-            style={{
-              opacity: fadeAnim,
-            }}
-          >
-            <View style={styles.backdropContent} />
-          </Animated.View>
-        </TouchableOpacity>
-
-        <Animated.View
-          style={[
-            styles.modal,
-            {
-              backgroundColor: colors.cardBackground,
-              transform: [{ translateY: Platform.OS === 'android' ? slideAnim : 0 }],
-            },
-          ]}
-        >
-          {/* Header */}
-          <View style={[styles.header, { borderBottomColor: colors.border }]}>
-            <Text style={[styles.title, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '700' }]}>
-              {t('Submit Bid')}
-            </Text>
-            <TouchableOpacity onPress={handleClose} disabled={isSubmitting}>
-              <Ionicons name="close" size={24} color={colors.text} />
-            </TouchableOpacity>
-          </View>
-
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.keyboardView}>
           <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
             {/* Task Info */}
             <View style={[styles.taskInfo, { backgroundColor: colors.background, borderColor: colors.border }]}>
-              <View style={[styles.taskHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+              <View style={styles.taskHeader}>
                 <View style={[styles.taskIcon, { backgroundColor: colors.primary + '15' }]}>
                   <Ionicons name="construct" size={20} color={colors.primary} />
                 </View>
@@ -197,9 +140,9 @@ export default function SmallTaskBidFormModal({
                     {taskName}
                   </Text>
                   {task.budget && (
-                    <View style={[styles.budgetRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+                    <View style={styles.budgetRow}>
                       <Text style={[styles.budgetLabel, { color: colors.textSecondary, fontFamily: fonts?.body || fontFamily }]}>
-                        {t('Budget')}:
+                        {t('smallTasks.bidModal.budget')}:
                       </Text>
                       <ExpoImage source={riyalLogo} style={styles.riyalLogoSmall} contentFit="contain" />
                       <Text style={[styles.budgetValue, { color: colors.primary, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '700' }]}>
@@ -214,23 +157,16 @@ export default function SmallTaskBidFormModal({
             {/* Amount Input */}
             <View style={styles.inputGroup}>
               <Text style={[styles.label, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>
-                {t('Your Bid Amount (SAR)')} *
+                {t('smallTasks.bidModal.yourBidAmountSar')} *
               </Text>
               <View style={[styles.inputWithIcon, { backgroundColor: colors.background, borderColor: colors.border }]}>
                 <ExpoImage source={riyalLogo} style={styles.riyalLogo} contentFit="contain" />
                 <TextInput
-                  style={[
-                    styles.input,
-                    {
-                      color: colors.text,
-                      fontFamily: fonts?.body || fontFamily,
-                      textAlign: isRTL ? 'right' : 'left',
-                    },
-                  ]}
+                  style={[styles.input, { color: colors.text, fontFamily: fonts?.body || fontFamily }]}
                   value={amount}
                   onChangeText={setAmount}
                   keyboardType="numeric"
-                  placeholder={t('Enter amount')}
+                  placeholder={t('smallTasks.bidModal.enterAmount')}
                   placeholderTextColor={colors.textSecondary}
                   editable={!isSubmitting}
                 />
@@ -240,23 +176,16 @@ export default function SmallTaskBidFormModal({
             {/* Hours Input */}
             <View style={styles.inputGroup}>
               <Text style={[styles.label, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>
-                {t('Estimated Hours')} *
+                {t('smallTasks.bidModal.estimatedHours')} *
               </Text>
               <View style={[styles.inputWithIcon, { backgroundColor: colors.background, borderColor: colors.border }]}>
                 <Ionicons name="time-outline" size={20} color={colors.textSecondary} />
                 <TextInput
-                  style={[
-                    styles.input,
-                    {
-                      color: colors.text,
-                      fontFamily: fonts?.body || fontFamily,
-                      textAlign: isRTL ? 'right' : 'left',
-                    },
-                  ]}
+                  style={[styles.input, { color: colors.text, fontFamily: fonts?.body || fontFamily }]}
                   value={estimatedHours}
                   onChangeText={setEstimatedHours}
                   keyboardType="numeric"
-                  placeholder={t('Enter hours')}
+                  placeholder={t('smallTasks.bidModal.enterHours')}
                   placeholderTextColor={colors.textSecondary}
                   editable={!isSubmitting}
                 />
@@ -266,7 +195,7 @@ export default function SmallTaskBidFormModal({
             {/* Description Input */}
             <View style={styles.inputGroup}>
               <Text style={[styles.label, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>
-                {t('Description')} *
+                {t('smallTasks.description')} *
               </Text>
               <TextInput
                 style={[
@@ -276,21 +205,19 @@ export default function SmallTaskBidFormModal({
                     color: colors.text,
                     borderColor: colors.border,
                     fontFamily: fonts?.body || fontFamily,
-                    textAlign: isRTL ? 'right' : 'left',
                   },
                 ]}
                 value={description}
                 onChangeText={setDescription}
                 multiline
                 numberOfLines={4}
-                placeholder={t('Describe your offer and experience...')}
+                placeholder={t('smallTasks.bidModal.describeOfferPlaceholder')}
                 placeholderTextColor={colors.textSecondary}
                 editable={!isSubmitting}
               />
             </View>
           </ScrollView>
 
-          {/* Footer */}
           <View style={[styles.footer, { borderTopColor: colors.border }]}>
             <TouchableOpacity
               style={[styles.button, styles.cancelButton, { borderColor: colors.border }]}
@@ -298,10 +225,9 @@ export default function SmallTaskBidFormModal({
               disabled={isSubmitting}
             >
               <Text style={[styles.buttonText, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>
-                {t('Cancel')}
+                {t('smallTasks.bidModal.cancel')}
               </Text>
             </TouchableOpacity>
-
             <TouchableOpacity
               style={[styles.button, styles.submitButton, { backgroundColor: colors.primary }]}
               onPress={handleSubmit}
@@ -311,68 +237,32 @@ export default function SmallTaskBidFormModal({
                 <ActivityIndicator color="#fff" />
               ) : (
                 <Text style={[styles.buttonText, { color: '#fff', fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>
-                  {t('Submit Bid')}
+                  {t('smallTasks.bidModal.submitBid')}
                 </Text>
               )}
             </TouchableOpacity>
           </View>
+        </KeyboardAvoidingView>
+      </AppBottomSheetModal>
 
-          {/* Alert Popup */}
-          <AlertPopup
-            visible={alertState.visible}
-            title={alertState.title}
-            message={alertState.message}
-            type={alertState.type}
-            buttons={alertState.buttons}
-            onClose={hideAlert}
-          />
-        </Animated.View>
-      </KeyboardAvoidingView>
-    </Modal>
+      <AlertPopup
+        visible={alertState.visible}
+        title={alertState.title}
+        message={alertState.message}
+        type={alertState.type}
+        buttons={alertState.buttons}
+        onClose={hideAlert}
+      />
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  backdropContent: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
-  modal: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '90%',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 10,
-      },
-      android: {
-        elevation: 10,
-      },
-    }),
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    borderBottomWidth: 1,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: '700',
+  keyboardView: {
+    width: '100%',
   },
   content: {
-    padding: 20,
+    padding: 0,
     maxHeight: 500,
   },
   taskInfo: {

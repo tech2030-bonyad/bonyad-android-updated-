@@ -14,12 +14,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { Button } from 'react-native-paper';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
+import { useRTL } from '../hooks/useRTL';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { forgotPassword } from '../services/AuthService';
 import { showAlert, showError } from '../utils/alert';
 import BonyadLogo from '../components/BonyadLogo';
 import AnimatedRoleToggle from '../components/AnimatedRoleToggle';
 import { PhoneInput } from '../components/CustomInput';
+import { getTopPadding } from '../utils/statusBarHelper';
 
 interface ForgotPasswordScreenProps {
   onBack: () => void;
@@ -35,6 +37,7 @@ export default function ForgotPasswordScreen({ onBack, onOTPSent }: ForgotPasswo
   const { t, i18n } = useTranslation();
   const { colors } = useTheme();
   const { fontFamily, scaledSize } = useFontFamily();
+  const { arrowBackIcon } = useRTL();
   const insets = useSafeAreaInsets();
   
   const [screenWidth, setScreenWidth] = useState(Dimensions.get('window').width);
@@ -92,13 +95,13 @@ export default function ForgotPasswordScreen({ onBack, onOTPSent }: ForgotPasswo
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
         <ScrollView
-          contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top }]}
+          contentContainerStyle={[styles.scrollContent, { paddingTop: getTopPadding(insets) }]}
           keyboardShouldPersistTaps="handled"
         >
           {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={onBack} style={styles.backButton}>
-              <Ionicons name="arrow-back" size={24} color={colors.text} />
+              <Ionicons name={arrowBackIcon} size={24} color={colors.text} />
             </TouchableOpacity>
             <BonyadLogo size="small" />
             <Text style={[styles.title, { color: colors.text, fontSize: scaledSize(24) }]}>{t('Forgot Password?')}</Text>
@@ -152,14 +155,14 @@ export default function ForgotPasswordScreen({ onBack, onOTPSent }: ForgotPasswo
   return (
     <View style={[styles.desktopContainer, { backgroundColor: colors.background }]}>
       <ScrollView
-        contentContainerStyle={[styles.desktopScrollContent, { paddingTop: insets.top }]}
+        contentContainerStyle={[styles.desktopScrollContent, { paddingTop: getTopPadding(insets) }]}
         keyboardShouldPersistTaps="handled"
       >
         <View style={[styles.desktopFormContainer, { backgroundColor: colors.cardBackground }]}>
           {/* Header */}
           <View style={styles.desktopHeader}>
             <TouchableOpacity onPress={onBack} style={styles.desktopBackButton}>
-              <Ionicons name="arrow-back" size={24} color={colors.text} />
+              <Ionicons name={arrowBackIcon} size={24} color={colors.text} />
             </TouchableOpacity>
             <BonyadLogo size="medium" />
             <Text style={[styles.desktopTitle, { color: colors.text, fontSize: scaledSize(28) }]}>{t('Forgot Password?')}</Text>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -67,6 +67,8 @@ interface ProjectsScreenProps {
   initialProject?: any;
   /** When set, auto-open this small task's detail screen on first mount (pass the full task object) */
   initialSmallTask?: any;
+  /** When 'small', show small tasks list on first mount (e.g. from Home "Available small tasks") */
+  initialProjectType?: 'large' | 'small';
   onOpenChat?: (roomId: string, receiverId: number, receiverName: string, projectId?: number | null) => void;
   onViewTechnician?: (technicianId: number) => void;
   onBookAppointment?: (technicianId: number, technicianName: string, projectId?: number) => void;
@@ -147,11 +149,32 @@ const FIGMA_COLORS = {
   white: '#FFFFFF',
 };
 
-export default function ProjectsScreen({ onBack, filter = 'available', initialServiceCategoryId, initialProject, initialSmallTask, onOpenChat, onViewTechnician, onBookAppointment, onRequestVisit, onFilterChange }: ProjectsScreenProps) {
+export default function ProjectsScreen({ onBack, filter = 'available', initialServiceCategoryId, initialProject, initialSmallTask, initialProjectType, onOpenChat, onViewTechnician, onBookAppointment, onRequestVisit, onFilterChange }: ProjectsScreenProps) {
   const { t, i18n } = useTranslation();
   const { colors, theme } = useTheme();
   const { fontFamily, scaledSize } = useFontFamily();
   const insets = useSafeAreaInsets();
+
+  const screenWidthForAnimation = Dimensions.get('window').width;
+  const screenSlideX = useRef(new Animated.Value(0)).current;
+  const screenOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    screenSlideX.setValue(-screenWidthForAnimation);
+    screenOpacity.setValue(0);
+    Animated.parallel([
+      Animated.timing(screenOpacity, { toValue: 1, duration: 220, useNativeDriver: true }),
+      Animated.spring(screenSlideX, { toValue: 0, tension: 65, friction: 11, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
+  const handleBackScreen = useCallback(() => {
+    Animated.parallel([
+      Animated.timing(screenOpacity, { toValue: 0, duration: 180, useNativeDriver: true }),
+      Animated.timing(screenSlideX, { toValue: screenWidthForAnimation, duration: 220, useNativeDriver: true }),
+    ]).start(() => onBack?.());
+  }, [onBack]);
+
   const [projects, setProjects] = useState<Project[]>([]);
   const [filteredProjects, setFilteredProjects] = useState<Project[]>([]);
   const [services, setServices] = useState<Service[]>([]);
@@ -161,18 +184,34 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
   /** When set, list is filtered by this category id (from Home → Category → View available projects) */
   const [serviceCategoryFilterId, setServiceCategoryFilterId] = useState<number | null>(initialServiceCategoryId ?? null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [showProjectDetail, setShowProjectDetail] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [showBidForm, setShowBidForm] = useState(false);
   const [showVisitRequest, setShowVisitRequest] = useState(false);
   const [screenWidth, setScreenWidth] = useState(Dimensions.get('window').width);
   const [localFilter, setLocalFilter] = useState<'all' | 'available' | 'running' | 'completed' | 'bid_received' | 'direct_offers'>(filter || 'available');
-  const [projectType, setProjectType] = useState<'large' | 'small'>('large'); // Large or Small projects
+  // When initialSmallTask is provided, start on the status screen to avoid flash of list/loading
+  const getInitialSmallTaskPage = (): 'list' | 'contract-signing' | 'progress' | 'user-phase-view' | 'user-contract-signing' | 'user-progress' | 'completed-project' | 'technician-profile' | 'project-detail' | 'owner-edit' | 'project-detail-screen' | 'pending-project' | 'bid-received-project' | 'technician-pending-project' | 'technician-bid-received' | 'approved-project' | 'technician-approved-project' | 'new-project' | 'project-type-selection' | 'small-task-type-selection' | 'small-task-request-form' | 'ai-form' | 'manual-form' | 'small-tasks-list' | 'small-task-detail' | 'pending-small-task' | 'assigned-small-task' | 'small-task-payment' | 'in-progress-small-task' | 'completed-small-task' => {
+    if (!initialSmallTask) return 'list';
+    const status = (initialSmallTask.status || 'PENDING').toUpperCase();
+    switch (status) {
+      case 'PENDING': return 'pending-small-task';
+      case 'ACCEPTED':
+      case 'ASSIGNED': return 'assigned-small-task';
+      case 'IN_PROGRESS': return 'in-progress-small-task';
+      case 'COMPLETED': return 'completed-small-task';
+      case 'CANCELLED': return 'small-task-detail';
+      default: return 'small-task-detail';
+    }
+  };
+  const [projectType, setProjectType] = useState<'large' | 'small'>(() =>
+    initialProjectType ?? (initialSmallTask ? 'small' : 'large')
+  );
   const [selectedTaskType, setSelectedTaskType] = useState<any>(null);
   const [smallTasksRefreshTrigger, setSmallTasksRefreshTrigger] = useState(0);
   // New pages for technicians and users
-  const [currentPage, setCurrentPage] = useState<'list' | 'contract-signing' | 'progress' | 'user-phase-view' | 'user-contract-signing' | 'user-progress' | 'completed-project' | 'technician-profile' | 'project-detail' | 'owner-edit' | 'project-detail-screen' | 'pending-project' | 'bid-received-project' | 'technician-pending-project' | 'technician-bid-received' | 'approved-project' | 'technician-approved-project' | 'new-project' | 'project-type-selection' | 'small-task-type-selection' | 'small-task-request-form' | 'ai-form' | 'manual-form' | 'small-tasks-list' | 'small-task-detail' | 'pending-small-task' | 'assigned-small-task' | 'small-task-payment' | 'in-progress-small-task' | 'completed-small-task'>('list');
+  const [currentPage, setCurrentPage] = useState<'list' | 'contract-signing' | 'progress' | 'user-phase-view' | 'user-contract-signing' | 'user-progress' | 'completed-project' | 'technician-profile' | 'project-detail' | 'owner-edit' | 'project-detail-screen' | 'pending-project' | 'bid-received-project' | 'technician-pending-project' | 'technician-bid-received' | 'approved-project' | 'technician-approved-project' | 'new-project' | 'project-type-selection' | 'small-task-type-selection' | 'small-task-request-form' | 'ai-form' | 'manual-form' | 'small-tasks-list' | 'small-task-detail' | 'pending-small-task' | 'assigned-small-task' | 'small-task-payment' | 'in-progress-small-task' | 'completed-small-task'>(getInitialSmallTaskPage);
+  const [selectedProject, setSelectedProject] = useState<Project | null>(() => initialSmallTask ?? null);
   const [selectedTechnicianId, setSelectedTechnicianId] = useState<number | null>(null);
   const [smallTaskPaymentAmount, setSmallTaskPaymentAmount] = useState<number>(0);
   
@@ -180,6 +219,10 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const dropdownAnimation = useRef(new Animated.Value(0)).current;
   const rotateAnimation = useRef(new Animated.Value(0)).current;
+
+  // Animate list content when switching between Small and Large (slide from left)
+  const listContentOpacity = useRef(new Animated.Value(1)).current;
+  const listContentTranslateX = useRef(new Animated.Value(0)).current;
   
   // Calculate fixed dropdown height for ScrollView
   const getFixedDropdownHeight = () => {
@@ -199,10 +242,86 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
   const didOpenInitialProject = useRef(false);
   const didOpenInitialTask = useRef(false);
 
+  /** Animate out (slide left) → switch project type → animate in (slide in from left) */
+  const handleProjectTypeChange = useCallback((type: 'large' | 'small') => {
+    if (type === projectType) return;
+    const slideDistance = Dimensions.get('window').width * 0.15; // ~15% of screen width
+    // Outgoing: slide current content left and fade out
+    Animated.parallel([
+      Animated.timing(listContentOpacity, {
+        toValue: 0,
+        duration: 160,
+        useNativeDriver: true,
+      }),
+      Animated.timing(listContentTranslateX, {
+        toValue: -slideDistance,
+        duration: 160,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setProjectType(type);
+      if (type === 'small') setLocalFilter('available');
+      // Incoming: start off-screen to the left, then slide in to center
+      listContentTranslateX.setValue(-slideDistance);
+      Animated.parallel([
+        Animated.timing(listContentOpacity, {
+          toValue: 1,
+          duration: 220,
+          useNativeDriver: true,
+        }),
+        Animated.timing(listContentTranslateX, {
+          toValue: 0,
+          duration: 220,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    });
+  }, [projectType]);
+
+  /** Back from root list only: go to Home when onBack provided, else stay on list. */
+  const handleBack = useCallback(() => {
+    if (onBack) {
+      onBack();
+    } else {
+      setCurrentPage('list');
+      setSelectedProject(null);
+      setSelectedTechnicianId(null);
+    }
+  }, [onBack]);
+
+  /** Stack-aware back: pop to projects list. Use for all sub-screens so back returns to list, not Home. */
+  const goToProjectList = useCallback(() => {
+    setCurrentPage('list');
+    setSelectedProject(null);
+    setSelectedTechnicianId(null);
+  }, []);
+
+  /** Back to small task type selection (when leaving request form). */
+  const goToSmallTaskTypeSelection = useCallback(() => {
+    setCurrentPage('small-task-type-selection');
+  }, []);
+
+  /** Back to project type selection (when leaving new project / manual / AI). */
+  const goToProjectTypeSelection = useCallback(() => {
+    setCurrentPage('project-type-selection');
+  }, []);
+
+  /** Back to new-project view (when leaving AI or manual form). */
+  const goToNewProject = useCallback(() => {
+    setCurrentPage('new-project');
+  }, []);
+
   // Update local filter when prop changes
   useEffect(() => {
     setLocalFilter(filter);
   }, [filter]);
+
+  // When parent asks to show small tasks list (e.g. from Home "Available small tasks")
+  useEffect(() => {
+    if (initialProjectType === 'small') {
+      setProjectType('small');
+    }
+  }, [initialProjectType]);
 
   // When navigating from Home → Category → View available projects, apply category filter
   useEffect(() => {
@@ -267,13 +386,13 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
 
   const handleDeleteProject = async (project: Project) => {
     showDeleteConfirmation(
-      t('Delete Project'),
-      t('Are you sure you want to delete this project? This action cannot be undone.'),
+      t('projectsScreen.deleteProject'),
+      t('projectsScreen.deleteConfirmMessage'),
       async () => {
         try {
           const token = await storage.getAuthToken();
           if (!token) {
-            showError(t('Please login again'), t('Error'));
+            showError(t('projectsScreen.pleaseLoginAgain'), t('projectsScreen.error'));
             return;
           }
 
@@ -287,15 +406,15 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
           });
 
           if (response.ok || response.status === 204) {
-            showSuccess(t('Project deleted successfully'), t('Success'));
+            showSuccess(t('projectsScreen.projectDeletedSuccess'), t('projectsScreen.success'));
             loadProjects();
           } else {
             const errorText = await response.text();
-            throw new Error(errorText || t('Failed to delete project'));
+            throw new Error(errorText || t('projectsScreen.failedToDeleteProject'));
           }
         } catch (error: any) {
           console.error('❌ Failed to delete project:', error);
-          showError(error.message || t('Failed to delete project'), t('Error'));
+          showError(error.message || t('projectsScreen.failedToDeleteProject'), t('projectsScreen.error'));
         }
       }
     );
@@ -376,7 +495,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
 
   const getStatusFilterLabel = (statusValue: string) => {
     if (statusValue === 'All') {
-      return t('All');
+      return t('projectsScreen.all');
     }
     return getStatusLabel(statusValue);
   };
@@ -704,7 +823,22 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
     : require('../../assets/saudi_riyal_logo.svg');
 
   const getStatusLabel = (status: string) => {
-    if (!status) return t('Unknown');
+    if (!status) return t('projectsScreen.unknown');
+    const key: Record<string, string> = {
+      PENDING: t('projectsScreen.statusPending'),
+      BID_RECEIVED: t('projectsScreen.statusBidReceived'),
+      APPROVED: t('projectsScreen.statusApproved'),
+      PHASE_PLANNING: t('projectsScreen.statusPhasePlanning'),
+      PHASE_PLANNING_APPROVED: t('projectsScreen.statusPhasePlanningApproved'),
+      IN_PROGRESS: t('projectsScreen.statusInProgress'),
+      COMPLETED: t('projectsScreen.statusCompleted'),
+      CANCELLED: t('projectsScreen.statusCancelled'),
+      CONTRACT_SIGNING: t('projectsScreen.statusContractSigning'),
+      ACCEPTED: t('projectsScreen.statusAccepted'),
+      ASSIGNED: t('projectsScreen.statusAssigned'),
+    };
+    const normalized = (status || '').trim().toUpperCase();
+    if (key[normalized]) return key[normalized];
     return status
       .toLowerCase()
       .split('_')
@@ -724,12 +858,12 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
 
     const totalBudget = phases.reduce((sum, phase) => sum + (phase.moneySpent || 0), 0);
     const percentData = phases.map((phase) => ({
-      name: `${t('Phase')} ${phase.phaseNumber}`,
+      name: `${t('projectsScreen.phase')} ${phase.phaseNumber}`,
       value: Math.max(1, Math.round((phase.moneySpent / totalBudget) * 100)),
     }));
 
     const budgetData = phases.map((phase) => ({
-      label: `${t('P')} ${phase.phaseNumber}`,
+      label: `${t('projectsScreen.p')} ${phase.phaseNumber}`,
       value: phase.moneySpent,
     }));
 
@@ -853,10 +987,10 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
         activeOpacity={0.7}
       >
         <Text style={[styles.figmaProjectTitle, { color: colors.text }]} numberOfLines={1}>
-          {serviceName || t('Project')}
+          {serviceName || t('projectsScreen.project')}
         </Text>
         <Text style={[styles.figmaProjectDescription, { color: colors.textSecondary }]} numberOfLines={2}>
-          {item.description || t('project description')}
+          {item.description || t('projectsScreen.projectDescription')}
         </Text>
       </TouchableOpacity>
     );
@@ -888,7 +1022,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
           <View style={styles.cardHeader}>
             <View style={styles.headerLeft}>
               <Text style={[styles.serviceName, { color: colors.text }]} numberOfLines={1}>
-                {serviceName || t('Project')}
+                {serviceName || t('projectsScreen.project')}
               </Text>
               {item.status && (
                 <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
@@ -925,7 +1059,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
               <View style={styles.metaItem}>
                 <Ionicons name="layers-outline" size={14} color={colors.textSecondary} />
                 <Text style={[styles.metaText, { color: colors.textSecondary }]}>
-                  {t('Phases')}: {phasesCount}
+                  {t('projectsScreen.phases')}: {phasesCount}
                 </Text>
               </View>
             )}
@@ -944,7 +1078,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
             >
               <Ionicons name="calendar-outline" size={16} color={colors.primary} />
               <Text style={[styles.actionButtonText, { color: colors.primary }]} numberOfLines={1} ellipsizeMode="tail">
-                {t('Ask for Visit')}
+                {t('projectsScreen.askForVisit')}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -956,7 +1090,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
             >
               <Ionicons name="cash-outline" size={16} color="#fff" />
               <Text style={[styles.actionButtonText, { color: '#fff' }]} numberOfLines={1} ellipsizeMode="tail">
-                {t('Bid Now')}
+                {t('projectsScreen.bidNow')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -975,7 +1109,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
             >
               <Ionicons name="create-outline" size={16} color="#fff" />
               <Text style={[styles.actionButtonText, { color: '#fff' }]} numberOfLines={1} ellipsizeMode="tail">
-                {t('Edit')}
+                {t('projectsScreen.edit')}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -988,7 +1122,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
             >
               <Ionicons name="trash-outline" size={16} color="#fff" />
               <Text style={[styles.actionButtonText, { color: '#fff' }]} numberOfLines={1} ellipsizeMode="tail">
-                {t('Delete')}
+                {t('projectsScreen.delete')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -997,32 +1131,39 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
     );
   };
 
-  if (isLoading) {
+  // Skip loading screen when navigating directly to a small task status screen (e.g. from Home card tap).
+  // We have all data needed; avoid flash of "Available" header + spinner before status screen.
+  if (isLoading && !initialSmallTask) {
     const isTechnician = userRole?.toUpperCase() === 'TECHNICIAN';
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={[styles.header, { paddingTop: Math.max(insets.top, 50), borderBottomColor: colors.border }]}>
+      <Animated.View
+        style={[
+          styles.container,
+          { backgroundColor: colors.background, opacity: screenOpacity, transform: [{ translateX: screenSlideX }] },
+        ]}
+      >
+        <View style={[styles.header, styles.headerLTR, { paddingTop: Math.max(insets.top, 50), borderBottomColor: colors.border }]}>
           {onBack ? (
-            <TouchableOpacity onPress={onBack}>
-              <Ionicons name="arrow-back" size={24} color={colors.text} />
+            <TouchableOpacity onPress={handleBackScreen}>
+              <Ionicons name="chevron-back" size={24} color={colors.text} />
             </TouchableOpacity>
           ) : (
             <View style={{ width: 24 }} />
           )}
           <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(18) }]}>
-            {localFilter === 'available' ? (isTechnician ? t('Available') : t('Available Projects')) :
-             localFilter === 'running' ? (isTechnician ? t('In-Progress') : t('Running Projects')) :
-             localFilter === 'bid_received' ? t('Bidding') :
-             localFilter === 'direct_offers' ? t('Direct Assigned') :
-             localFilter === 'completed' ? (isTechnician ? t('Completed') : t('Completed Projects')) :
-             t('Projects')}
+            {localFilter === 'available' ? (isTechnician ? t('projectsScreen.available') : t('projectsScreen.availableProjects')) :
+             localFilter === 'running' ? (isTechnician ? t('projectsScreen.inProgress') : t('projectsScreen.runningProjects')) :
+             localFilter === 'bid_received' ? t('projectsScreen.bidding') :
+             localFilter === 'direct_offers' ? t('projectsScreen.directAssigned') :
+             localFilter === 'completed' ? (isTechnician ? t('projectsScreen.completed') : t('projectsScreen.completedProjects')) :
+             t('projectsScreen.projects')}
           </Text>
           <View style={{ width: 24 }} />
         </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
-      </View>
+      </Animated.View>
     );
   }
 
@@ -1038,7 +1179,12 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
   }
 
   return (
-    <>
+    <Animated.View
+      style={[
+        styles.container,
+        { backgroundColor: colors.background, opacity: screenOpacity, transform: [{ translateX: screenSlideX }] },
+      ]}
+    >
       {/* New Pages for Technicians in Running Projects */}
       
       {/* Approved Project Screen - Technician View (handles both APPROVED and PHASE_PLANNING) */}
@@ -1049,11 +1195,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
         <ApprovedProjectScreen
           project={selectedProject}
           isTechnician={true}
-          onBack={() => {
-            console.log('🔵 [ProjectsScreen] Back from ApprovedProjectScreen (Technician)');
-            setCurrentPage('list');
-            setSelectedProject(null);
-          }}
+          onBack={goToProjectList}
           onSuccess={() => {
             console.log('🔵 [ProjectsScreen] ApprovedProjectScreen (Technician) success - reloading projects');
             loadProjects();
@@ -1069,11 +1211,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
         <ContractSigningProjectScreen
           project={selectedProject}
           isTechnician={true}
-          onBack={() => {
-            console.log('🔵 [ProjectsScreen] Back from ContractSigningProjectScreen (Technician)');
-            setCurrentPage('list');
-            setSelectedProject(null);
-          }}
+          onBack={goToProjectList}
           onSuccess={() => {
             console.log('🔵 [ProjectsScreen] ContractSigningProjectScreen success - reloading projects');
             loadProjects();
@@ -1090,11 +1228,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
         <InProgressProjectScreen
           project={selectedProject}
           isTechnician={true}
-          onBack={() => {
-            console.log('🔵 [ProjectsScreen] Back from InProgressProjectScreen (Technician)');
-            setCurrentPage('list');
-            setSelectedProject(null);
-          }}
+          onBack={goToProjectList}
           onOpenChat={onOpenChat}
           onSuccess={() => {
             console.log('🔵 [ProjectsScreen] InProgressProjectScreen (Technician) success - reloading projects');
@@ -1114,11 +1248,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
        currentPage === 'approved-project' && (
         <ApprovedProjectScreen
           project={selectedProject}
-          onBack={() => {
-            console.log('🔵 [ProjectsScreen] Back from ApprovedProjectScreen (User)');
-            setCurrentPage('list');
-            setSelectedProject(null);
-          }}
+          onBack={goToProjectList}
           onSuccess={() => {
             console.log('🔵 [ProjectsScreen] ApprovedProjectScreen success - reloading projects');
             loadProjects();
@@ -1140,11 +1270,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
        currentPage === 'user-phase-view' && (
         <UserPhaseViewPage
           project={selectedProject}
-          onBack={() => {
-            console.log('🔵 [ProjectsScreen] Back from UserPhaseViewPage');
-            setCurrentPage('list');
-            setSelectedProject(null);
-          }}
+          onBack={goToProjectList}
           onSuccess={() => {
             console.log('🔵 [ProjectsScreen] UserPhaseViewPage success - reloading projects');
             loadProjects();
@@ -1163,11 +1289,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
         <ContractSigningProjectScreen
           project={selectedProject}
           isTechnician={false}
-          onBack={() => {
-            console.log('🔵 [ProjectsScreen] Back from ContractSigningProjectScreen (User)');
-            setCurrentPage('list');
-            setSelectedProject(null);
-          }}
+          onBack={goToProjectList}
           onSuccess={() => {
             console.log('🔵 [ProjectsScreen] ContractSigningProjectScreen success - reloading projects');
             loadProjects();
@@ -1184,11 +1306,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
         <InProgressProjectScreen
           project={selectedProject}
           isTechnician={false}
-          onBack={() => {
-            console.log('🔵 [ProjectsScreen] Back from InProgressProjectScreen (User)');
-            setCurrentPage('list');
-            setSelectedProject(null);
-          }}
+          onBack={goToProjectList}
           onOpenChat={onOpenChat}
           onBookAppointment={onBookAppointment}
           onSuccess={() => {
@@ -1205,11 +1323,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
         <CompletedProjectScreen
           project={selectedProject}
           isTechnician={userRole?.toUpperCase() === 'TECHNICIAN'}
-          onBack={() => {
-            console.log('🔵 [ProjectsScreen] Back from CompletedProjectScreen');
-            setCurrentPage('list');
-            setSelectedProject(null);
-          }}
+          onBack={goToProjectList}
           onOpenChat={onOpenChat}
           onSuccess={() => {
             console.log('🔵 [ProjectsScreen] CompletedProjectScreen success - reloading projects');
@@ -1235,11 +1349,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
        currentPage === 'owner-edit' && (
         <OwnerProjectEditScreen
           projectId={selectedProject.id}
-          onBack={() => {
-            console.log('🔵 [ProjectsScreen] Back from OwnerProjectEditScreen');
-            setCurrentPage('list');
-            setSelectedProject(null);
-          }}
+          onBack={goToProjectList}
           onSuccess={() => {
             console.log('🔵 [ProjectsScreen] OwnerProjectEditScreen success - reloading projects');
             loadProjects();
@@ -1255,11 +1365,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
        currentPage === 'pending-project' && (
         <PendingProjectScreen
           project={selectedProject}
-          onBack={() => {
-            console.log('🔵 [ProjectsScreen] Back from PendingProjectScreen');
-            setCurrentPage('list');
-            setSelectedProject(null);
-          }}
+          onBack={goToProjectList}
           onEditProject={() => {
             console.log('🔵 [ProjectsScreen] Edit project from PendingProjectScreen');
             setCurrentPage('owner-edit');
@@ -1279,11 +1385,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
        currentPage === 'bid-received-project' && (
         <BidReceivedProjectScreen
           project={selectedProject}
-          onBack={() => {
-            console.log('🔵 [ProjectsScreen] Back from BidReceivedProjectScreen');
-            setCurrentPage('list');
-            setSelectedProject(null);
-          }}
+          onBack={goToProjectList}
           onSuccess={() => {
             console.log('🔵 [ProjectsScreen] BidReceivedProjectScreen success - reloading projects');
             loadProjects();
@@ -1305,11 +1407,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
         <BidReceivedProjectScreen
           project={selectedProject}
           isTechnician={true}
-          onBack={() => {
-            console.log('🔵 [ProjectsScreen] Back from TechnicianBidReceivedProjectScreen');
-            setCurrentPage('list');
-            setSelectedProject(null);
-          }}
+          onBack={goToProjectList}
           onSuccess={() => {
             console.log('🔵 [ProjectsScreen] TechnicianBidReceivedProjectScreen success - reloading projects');
             loadProjects();
@@ -1331,11 +1429,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
         <PendingProjectScreen
           project={selectedProject}
           isTechnician={true}
-          onBack={() => {
-            console.log('🔵 [ProjectsScreen] Back from TechnicianPendingProjectScreen');
-            setCurrentPage('list');
-            setSelectedProject(null);
-          }}
+          onBack={goToProjectList}
           onAskForVisit={() => {
             console.log('🔵 [ProjectsScreen] Ask for Visit from TechnicianPendingProjectScreen');
             setShowVisitRequest(true);
@@ -1357,11 +1451,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
       {currentPage === 'technician-profile' && selectedTechnicianId && (
         <TechnicianProfileView
           technicianId={selectedTechnicianId}
-          onBack={() => {
-            console.log('🔵 [ProjectsScreen] Back from TechnicianProfileView');
-            setCurrentPage('list');
-            setSelectedTechnicianId(null);
-          }}
+          onBack={goToProjectList}
         />
       )}
 
@@ -1375,14 +1465,20 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
           <View style={styles.androidProjectTypeSelector}>
             <AnimatedProjectTypeToggle
               selectedType={projectType}
-              onTypeChange={(type) => {
-                setProjectType(type);
-                if (type === 'small') setLocalFilter('available');
-              }}
+              onTypeChange={handleProjectTypeChange}
             />
           </View>
 
-          {/* Show Small Tasks or Large Projects */}
+          {/* Show Small Tasks or Large Projects - slide in from left when switching */}
+          <Animated.View
+            style={[
+              { flex: 1 },
+              {
+                opacity: listContentOpacity,
+                transform: [{ translateX: listContentTranslateX }],
+              },
+            ]}
+          >
           {projectType === 'small' ? (
             <ScrollView
               style={[styles.androidContent, { backgroundColor: colors.background }]}
@@ -1397,7 +1493,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
               }
             >
               <SmallTasksListScreen
-                onBack={onBack}
+                onBack={handleBack}
                 isTechnician={userRole?.toUpperCase() === 'TECHNICIAN'}
                 onTaskPress={(task) => {
                   // Route to appropriate status screen based on task status
@@ -1437,16 +1533,16 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
               {/* Header Section - Outside FlatList (dark mode supported) */}
               <View style={[styles.androidHeaderSection, { backgroundColor: colors.cardBackground }]}>
                 <View style={styles.androidTitleSection}>
-                  <Text style={[styles.androidPageTitle, { color: colors.text }]}>{t('My Projects')}</Text>
+                  <Text style={[styles.androidPageTitle, { color: colors.text }]}>{t('projectsScreen.myProjects')}</Text>
                   <Text style={[styles.androidProjectCount, { color: colors.textSecondary }]}>
-                    {filteredProjects.length} {t('Total Projects')}
+                    {filteredProjects.length} {t('projectsScreen.totalProjects')}
                   </Text>
                 </View>
                 <View style={[styles.androidSearchContainer, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
                   <Feather name="search" size={20} color={colors.textSecondary} />
                   <TextInput
                     style={[styles.androidSearchInput, { color: colors.text }]}
-                    placeholder={t('search for project..')}
+                    placeholder={t('projectsScreen.searchPlaceholder')}
                     placeholderTextColor={colors.textSecondary}
                     value={searchQuery}
                     onChangeText={setSearchQuery}
@@ -1475,7 +1571,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
                 keyExtractor={(item) => item.id.toString()}
                 renderItem={({ item: project }) => {
                   const truncateDescription = (text: string): string => {
-                    if (!text) return t('project description');
+                    if (!text) return t('projectsScreen.projectDescription');
                     const words = text.trim().split(/\s+/);
                     if (words.length <= 7) return text;
                     return words.slice(0, 7).join(' ') + '...';
@@ -1492,23 +1588,36 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
                   const visitsCount = project.visitRequestCount ?? 0;
                   return (
                     <TouchableOpacity
-                      style={[styles.androidProjectCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
+                      style={[
+                        styles.androidProjectCard,
+                        { backgroundColor: colors.cardBackground, borderColor: colors.border },
+                        i18n.language === 'ar' && { direction: 'ltr' },
+                      ]}
                       onPress={() => handleProjectCardPress(project)}
                       activeOpacity={0.7}
                     >
-                      <View style={[styles.androidCardHeaderRow, { flexDirection: i18n.language === 'ar' ? 'row-reverse' : 'row' }]}>
-                        <Text style={[styles.androidProjectId, { color: colors.textSecondary }]}>#{project.id}</Text>
-                        <View style={[styles.androidStatusBadge, { backgroundColor: statusColor + '20' }]}>
-                          <Text style={[styles.androidStatusText, { color: statusColor }]}>
-                            {statusLabel}
-                          </Text>
-                        </View>
+                      <View style={[styles.androidCardHeaderRow, i18n.language === 'ar' && { justifyContent: 'space-between' }]}>
+                        {i18n.language === 'ar' ? (
+                          <>
+                            <View style={[styles.androidStatusBadge, { backgroundColor: statusColor + '20' }]}>
+                              <Text style={[styles.androidStatusText, { color: statusColor }]}>{statusLabel}</Text>
+                            </View>
+                            <Text style={[styles.androidProjectId, { color: colors.textSecondary }]}>#{project.id}</Text>
+                          </>
+                        ) : (
+                          <>
+                            <Text style={[styles.androidProjectId, { color: colors.textSecondary }]}>#{project.id}</Text>
+                            <View style={[styles.androidStatusBadge, { backgroundColor: statusColor + '20' }]}>
+                              <Text style={[styles.androidStatusText, { color: statusColor }]}>{statusLabel}</Text>
+                            </View>
+                          </>
+                        )}
                       </View>
-                      <View style={[styles.androidCardHeader, { flexDirection: i18n.language === 'ar' ? 'row-reverse' : 'row' }]}>
+                      <View style={styles.androidCardHeader}>
                         <Text style={[styles.androidProjectTitle, { color: colors.text }]} numberOfLines={1}>
-                          {project.serviceNameEn || project.serviceNameAr || `Project ${project.id}`}
+                          {project.serviceNameEn || project.serviceNameAr || `${t('projectsScreen.project')} ${project.id}`}
                         </Text>
-                        <View style={[styles.androidPriceContainer, { flexDirection: i18n.language === 'ar' ? 'row-reverse' : 'row' }]}>
+                        <View style={styles.androidPriceContainer}>
                           <ExpoImage
                             source={riyalLogo}
                             style={styles.androidRiyalLogo}
@@ -1523,30 +1632,30 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
                         {truncateDescription(project.description || '')}
                       </Text>
                       {project.address ? (
-                        <View style={[styles.androidCardMetaRow, { flexDirection: i18n.language === 'ar' ? 'row-reverse' : 'row' }]}>
+                        <View style={styles.androidCardMetaRow}>
                           <Ionicons name="location-outline" size={14} color={colors.textSecondary} />
                           <Text style={[styles.androidCardMetaText, { color: colors.textSecondary }]} numberOfLines={1}>
                             {project.address}
                           </Text>
                         </View>
                       ) : null}
-                      <View style={[styles.androidCardMetaRow, { flexDirection: i18n.language === 'ar' ? 'row-reverse' : 'row' }]}>
+                      <View style={styles.androidCardMetaRow}>
                         <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
                         <Text style={[styles.androidCardMetaText, { color: colors.textSecondary }]}>
                           {formatCardDate(project.createdAt)}
                         </Text>
                       </View>
                       {(bidsCount > 0 || visitsCount > 0) ? (
-                        <View style={[styles.androidCardStatsRow, { flexDirection: i18n.language === 'ar' ? 'row-reverse' : 'row' }]}>
+                        <View style={styles.androidCardStatsRow}>
                           <View style={[styles.androidCardStatItem, { backgroundColor: colors.primary + '15' }]}>
                             <Ionicons name="hand-left-outline" size={14} color={colors.primary} />
                             <Text style={[styles.androidCardStatValue, { color: colors.primary }]}>{bidsCount}</Text>
-                            <Text style={[styles.androidCardStatLabel, { color: colors.textSecondary }]}>{t('Bids')}</Text>
+                            <Text style={[styles.androidCardStatLabel, { color: colors.textSecondary }]}>{t('projectsScreen.bids')}</Text>
                           </View>
                           <View style={[styles.androidCardStatItem, { backgroundColor: '#FF9500' + '15' }]}>
                             <Ionicons name="calendar-outline" size={14} color="#FF9500" />
                             <Text style={[styles.androidCardStatValue, { color: '#FF9500' }]}>{visitsCount}</Text>
-                            <Text style={[styles.androidCardStatLabel, { color: colors.textSecondary }]}>{t('Visits')}</Text>
+                            <Text style={[styles.androidCardStatLabel, { color: colors.textSecondary }]}>{t('projectsScreen.visits')}</Text>
                           </View>
                         </View>
                       ) : null}
@@ -1557,11 +1666,17 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
                   <View style={styles.androidEmptyContainer}>
                     <Ionicons name="folder-outline" size={80} color={colors.textSecondary} />
                     <Text style={[styles.androidEmptyText, { color: colors.textSecondary }]}>
-                      {t('No projects found')}
+                      {t('projectsScreen.noProjectsFound')}
                     </Text>
                   </View>
                 }
-                contentContainerStyle={[styles.androidListContentContainer, filteredProjects.length === 0 && styles.androidListEmptyContent]}
+                contentContainerStyle={[
+                  styles.androidListContentContainer,
+                  userRole?.toUpperCase() === 'TECHNICIAN' && {
+                    paddingBottom: Math.max(insets.bottom + 32, 48),
+                  },
+                  filteredProjects.length === 0 && styles.androidListEmptyContent,
+                ]}
                 style={[styles.androidContent, { backgroundColor: colors.background }]}
                 showsVerticalScrollIndicator={true}
                 refreshControl={
@@ -1608,7 +1723,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
                             { color: selectedCategory === 'All' ? colors.primary : colors.textSecondary, fontWeight: selectedCategory === 'All' ? '600' : '400' },
                           ]}
                         >
-                          {t('All')}
+                          {t('projectsScreen.all')}
                         </Text>
                         {selectedCategory === 'All' && (
                           <Feather name="check" size={16} color={colors.primary} />
@@ -1644,15 +1759,18 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
               )}
             </View>
             )}
+          </Animated.View>
 
-          {/* FAB - Floating Action Button (theme-aware) */}
-          <TouchableOpacity
-            style={[styles.androidFab, { backgroundColor: colors.primary }]}
-            onPress={() => setCurrentPage('project-type-selection')}
-            activeOpacity={0.8}
-          >
-            <Feather name="plus" size={28} color={colors.white} />
-          </TouchableOpacity>
+          {/* FAB – new project (users only; technicians browse/bid, no create-from-here) */}
+          {userRole?.toUpperCase() !== 'TECHNICIAN' && (
+            <TouchableOpacity
+              style={[styles.androidFab, { backgroundColor: colors.primary }]}
+              onPress={() => setCurrentPage('project-type-selection')}
+              activeOpacity={0.8}
+            >
+              <Feather name="plus" size={28} color={colors.white} />
+            </TouchableOpacity>
+          )}
         </View>
       ) : (
         <>
@@ -1660,21 +1778,21 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
       {!IS_LARGE_WEB && (() => {
         const isTechnician = userRole?.toUpperCase() === 'TECHNICIAN';
         return (
-          <View style={[styles.header, { paddingTop: Math.max(insets.top, 50), borderBottomColor: colors.border }]}>
+          <View style={[styles.header, styles.headerLTR, { paddingTop: Math.max(insets.top, 50), borderBottomColor: colors.border }]}>
             {onBack ? (
-              <TouchableOpacity onPress={onBack}>
-                <Ionicons name="arrow-back" size={24} color={colors.text} />
+              <TouchableOpacity onPress={handleBackScreen}>
+                <Ionicons name="chevron-back" size={24} color={colors.text} />
               </TouchableOpacity>
             ) : (
               <View style={{ width: 24 }} />
             )}
             <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(18) }]}>
-              {localFilter === 'available' ? (isTechnician ? t('Available') : t('Available Projects')) :
-               localFilter === 'running' ? (isTechnician ? t('In-Progress') : t('Running Projects')) :
-               localFilter === 'bid_received' ? t('Bidding') :
-               localFilter === 'direct_offers' ? t('Direct Assigned') :
-               localFilter === 'completed' ? (isTechnician ? t('Completed') : t('Completed Projects')) :
-               t('Projects')}
+              {localFilter === 'available' ? (isTechnician ? t('projectsScreen.available') : t('projectsScreen.availableProjects')) :
+               localFilter === 'running' ? (isTechnician ? t('projectsScreen.inProgress') : t('projectsScreen.runningProjects')) :
+               localFilter === 'bid_received' ? t('projectsScreen.bidding') :
+               localFilter === 'direct_offers' ? t('projectsScreen.directAssigned') :
+               localFilter === 'completed' ? (isTechnician ? t('projectsScreen.completed') : t('projectsScreen.completedProjects')) :
+               t('projectsScreen.projects')}
             </Text>
             <View style={{ width: 24 }} />
           </View>
@@ -1704,7 +1822,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
                   localFilter === 'available' && styles.tabButtonActive,
                   { color: localFilter === 'available' ? colors.primary : colors.textSecondary, fontSize: scaledSize(14) }
                 ]}>
-                  {t('Available')}
+                  {t('projectsScreen.available')}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -1719,7 +1837,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
                   localFilter === 'running' && styles.tabButtonActive,
                   { color: localFilter === 'running' ? colors.primary : colors.textSecondary, fontSize: scaledSize(14) }
                 ]}>
-                  {isTechnician ? t('In-Progress') : t('Running')}
+                  {isTechnician ? t('projectsScreen.inProgress') : t('projectsScreen.running')}
                 </Text>
               </TouchableOpacity>
               {isTechnician && (
@@ -1735,7 +1853,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
                     localFilter === 'direct_offers' && styles.tabButtonActive,
                     { color: localFilter === 'direct_offers' ? colors.primary : colors.textSecondary }
                   ]}>
-                    {t('Direct Assigned')}
+                    {t('projectsScreen.directAssigned')}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -1752,7 +1870,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
                     localFilter === 'bid_received' && styles.tabButtonActive,
                     { color: localFilter === 'bid_received' ? colors.primary : colors.textSecondary }
                   ]}>
-                    {t('Bidding')}
+                    {t('projectsScreen.bidding')}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -1768,7 +1886,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
                   localFilter === 'completed' && styles.tabButtonActive,
                   { color: localFilter === 'completed' ? colors.primary : colors.textSecondary }
                 ]}>
-                  {t('Completed')}
+                  {t('projectsScreen.completed')}
                 </Text>
               </TouchableOpacity>
               </View>
@@ -1969,10 +2087,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
             console.log('🔵 [ProjectsScreen] Selected Small Task');
             setCurrentPage('small-task-type-selection');
           }}
-          onBack={() => {
-            console.log('🔵 [ProjectsScreen] Back from ProjectTypeSelection');
-            setCurrentPage('list');
-          }}
+          onBack={goToProjectList}
         />
       )}
 
@@ -1984,10 +2099,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
             setSelectedTaskType(taskType);
             setCurrentPage('small-task-request-form');
           }}
-          onBack={() => {
-            console.log('🔵 [ProjectsScreen] Back from SmallTaskTypeSelection');
-            setCurrentPage('project-type-selection');
-          }}
+          onBack={goToProjectList}
         />
       )}
 
@@ -1995,10 +2107,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
       {currentPage === 'small-task-request-form' && selectedTaskType && (
         <SmallTaskRequestForm
           taskType={selectedTaskType}
-          onBack={() => {
-            console.log('🔵 [ProjectsScreen] Back from SmallTaskRequestForm');
-            setCurrentPage('small-task-type-selection');
-          }}
+          onBack={goToSmallTaskTypeSelection}
           onSuccess={() => {
             console.log('🔵 [ProjectsScreen] Small task request created successfully');
             // Trigger refresh of small tasks list
@@ -2021,20 +2130,14 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
             console.log('🔵 [ProjectsScreen] Navigate to manual project creation');
             setCurrentPage('manual-form');
           }}
-          onBack={() => {
-            console.log('🔵 [ProjectsScreen] Back from NewProjectView');
-            setCurrentPage('project-type-selection');
-          }}
+          onBack={goToProjectTypeSelection}
         />
       )}
 
       {/* AI Project Creation Form */}
       {currentPage === 'ai-form' && (
         <ConversationalAIForm
-          onBack={() => {
-            console.log('🔵 [ProjectsScreen] Back from AI Form');
-            setCurrentPage('new-project');
-          }}
+          onBack={goToNewProject}
           onSuccess={() => {
             console.log('🔵 [ProjectsScreen] AI Form success - reloading projects');
             loadProjects();
@@ -2046,10 +2149,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
       {/* Manual Project Creation Form */}
       {currentPage === 'manual-form' && (
         <ManualProjectForm
-          onBack={() => {
-            console.log('🔵 [ProjectsScreen] Back from Manual Form');
-            setCurrentPage('new-project');
-          }}
+          onBack={goToNewProject}
           onSuccess={() => {
             console.log('🔵 [ProjectsScreen] Manual Form success - reloading projects');
             loadProjects();
@@ -2062,10 +2162,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
       {currentPage === 'pending-small-task' && selectedProject && (
         <PendingSmallTaskScreen
           task={selectedProject as any}
-          onBack={() => {
-            setCurrentPage('list');
-            setSelectedProject(null);
-          }}
+          onBack={goToProjectList}
           onSuccess={() => {
             setSmallTasksRefreshTrigger(prev => prev + 1);
             setCurrentPage('list');
@@ -2081,10 +2178,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
       {currentPage === 'assigned-small-task' && selectedProject && (
         <AssignedSmallTaskScreen
           task={selectedProject as any}
-          onBack={() => {
-            setCurrentPage('list');
-            setSelectedProject(null);
-          }}
+          onBack={goToProjectList}
           onSuccess={() => {
             setSmallTasksRefreshTrigger(prev => prev + 1);
             setCurrentPage('list');
@@ -2107,9 +2201,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
         <SmallTaskPaymentScreen
           task={selectedProject as any}
           amount={smallTaskPaymentAmount}
-          onBack={() => {
-            setCurrentPage('assigned-small-task');
-          }}
+          onBack={goToProjectList}
           onSuccess={() => {
             setSmallTasksRefreshTrigger(prev => prev + 1);
             setCurrentPage('list');
@@ -2121,10 +2213,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
       {currentPage === 'in-progress-small-task' && selectedProject && (
         <InProgressSmallTaskScreen
           task={selectedProject as any}
-          onBack={() => {
-            setCurrentPage('list');
-            setSelectedProject(null);
-          }}
+          onBack={goToProjectList}
           onSuccess={() => {
             setSmallTasksRefreshTrigger(prev => prev + 1);
             setCurrentPage('list');
@@ -2137,10 +2226,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
       {currentPage === 'completed-small-task' && selectedProject && (
         <CompletedSmallTaskScreen
           task={selectedProject as any}
-          onBack={() => {
-            setCurrentPage('list');
-            setSelectedProject(null);
-          }}
+          onBack={goToProjectList}
           onSuccess={() => {
             setSmallTasksRefreshTrigger(prev => prev + 1);
             setCurrentPage('list');
@@ -2162,11 +2248,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
       {currentPage === 'small-task-detail' && selectedProject && (
         <SmallTaskDetailScreen
           task={selectedProject as any}
-          onBack={() => {
-            console.log('🔵 [ProjectsScreen] Back from Small Task Detail');
-            setCurrentPage('list');
-            setSelectedProject(null);
-          }}
+          onBack={goToProjectList}
           onSuccess={() => {
             console.log('🔵 [ProjectsScreen] Small task detail success');
             setSmallTasksRefreshTrigger(prev => prev + 1);
@@ -2199,7 +2281,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
         onConfirm={confirmState.onConfirm}
         onCancel={hideConfirmation}
       />
-    </>
+    </Animated.View>
   );
 }
 
@@ -2214,6 +2296,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
+  },
+  headerLTR: {
+    direction: 'ltr',
   },
   headerTitle: {
     fontSize: 18,

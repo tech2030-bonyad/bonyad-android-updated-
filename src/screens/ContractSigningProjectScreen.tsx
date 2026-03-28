@@ -25,6 +25,7 @@ import { useFontFamily } from '../context/FontContext';
 import { API_ENDPOINTS, buildApiUrl, buildApiUrlWithParams } from '../config/api';
 import { storage } from '../utils/storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getTopPadding } from '../utils/statusBarHelper';
 import ProjectCreationFlow from '../components/ProjectCreationFlow';
 import ContractViewerModal from './ContractViewerModal';
 
@@ -144,7 +145,6 @@ export default function ContractSigningProjectScreen({
   const screenWidth = Dimensions.get('window').width;
   const IS_WEB = Platform.OS === 'web';
   const IS_LARGE_WEB = IS_WEB && screenWidth >= 1024;
-  const isRTL = i18n.language === 'ar';
   
   const serviceName = i18n.language === 'ar' ? project?.serviceNameAr : project?.serviceNameEn;
 
@@ -250,7 +250,7 @@ export default function ContractSigningProjectScreen({
 
   if (isLoading) {
     return (
-      <View style={[styles.container, { backgroundColor: c.bgWhite, paddingTop: insets.top }]}>
+      <View style={[styles.container, { backgroundColor: c.bgWhite, paddingTop: getTopPadding(insets) }]}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={c.primary60} />
           <Text style={[styles.loadingText, { fontSize: scaledSize(14) }]}>{t('Loading...')}</Text>
@@ -260,22 +260,22 @@ export default function ContractSigningProjectScreen({
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: c.bgWhite, paddingTop: IS_LARGE_WEB ? 0 : insets.top }]}>
+    <View style={[styles.container, { backgroundColor: c.bgWhite, paddingTop: IS_LARGE_WEB ? 0 : getTopPadding(insets) }]}>
       {/* Header - Hidden on large web */}
       {!IS_LARGE_WEB && (
-      <View style={[styles.header, isRTL && { flexDirection: 'row-reverse' }]}>
+      <View style={[styles.header, styles.headerLTR]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <Ionicons 
-            name={isRTL ? "chevron-forward" : "chevron-back"} 
+            name="chevron-back" 
             size={24} 
             color={c.textHeader} 
           />
         </TouchableOpacity>
-        <View style={[styles.headerTitleContainer, isRTL && { alignItems: 'flex-end' }]}>
-          <Text style={[styles.headerTitle, isRTL && { textAlign: 'right' }, { fontSize: scaledSize(20) }]}>
+        <View style={[styles.headerTitleContainer]}>
+          <Text style={[styles.headerTitle, { fontSize: scaledSize(20) }]}>
             {serviceName || project?.description?.substring(0, 30) || t('Project')}
           </Text>
-          <Text style={[styles.headerSubtitle, isRTL && { textAlign: 'right' }, { fontSize: scaledSize(14) }]}>
+          <Text style={[styles.headerSubtitle, { fontSize: scaledSize(14) }]}>
               {t('Contract Signing')}
           </Text>
         </View>
@@ -296,16 +296,16 @@ export default function ContractSigningProjectScreen({
           <View style={styles.titleSectionLargeWeb}>
             <TouchableOpacity onPress={onBack} style={styles.titleBackButton}>
               <Ionicons 
-                name={isRTL ? "chevron-forward" : "chevron-back"} 
+                name="chevron-back" 
                 size={24} 
                 color={c.textHeader} 
               />
             </TouchableOpacity>
             <View style={styles.titleContainer}>
-              <Text style={[styles.titleMainText, isRTL && { textAlign: 'right' }, { fontSize: scaledSize(42) }]}>
+              <Text style={[styles.titleMainText, { fontSize: scaledSize(42) }]}>
                 {serviceName || project?.description?.substring(0, 30) || t('Project')}
               </Text>
-              <Text style={[styles.titleSubtext, isRTL && { textAlign: 'right' }, { fontSize: scaledSize(20) }]}>
+              <Text style={[styles.titleSubtext, { fontSize: scaledSize(20) }]}>
                 {t('Contract Signing')}
               </Text>
             </View>
@@ -320,7 +320,7 @@ export default function ContractSigningProjectScreen({
         {/* Divider */}
         <View style={[styles.divider, IS_LARGE_WEB && styles.dividerLargeWeb]} />
         {/* Contract Ready Badge */}
-        <View style={[styles.badgeContainer, isRTL && { alignItems: 'flex-end' }]}>
+        <View style={[styles.badgeContainer]}>
           <View style={styles.contractReadyBadge}>
             <Text style={styles.contractReadyText}>{t('Contract Ready')}</Text>
           </View>
@@ -328,10 +328,10 @@ export default function ContractSigningProjectScreen({
 
         {/* Contract Signing Section */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, isRTL && { textAlign: 'right' }]}>
+          <Text style={[styles.sectionTitle]}>
             {t('Contract Signing')}
           </Text>
-          <Text style={[styles.sectionDescription, isRTL && { textAlign: 'right' }]}>
+          <Text style={[styles.sectionDescription]}>
             {isTechnician 
               ? t('Review the contract details below.')
               : t('Review the contract details below. Contract signing links have been sent to your email.')
@@ -343,23 +343,23 @@ export default function ContractSigningProjectScreen({
         <View style={styles.contractCard}>
           {/* Contract Header */}
           <TouchableOpacity 
-            style={[styles.contractHeader, isRTL && { flexDirection: 'row-reverse' }]}
+            style={[styles.contractHeader]}
             onPress={handleDownloadContract}
             activeOpacity={0.7}
           >
             <View style={styles.contractIconContainer}>
               <Ionicons name="document-text-outline" size={24} color={c.purple60} />
             </View>
-            <View style={[styles.contractHeaderInfo, isRTL && { alignItems: 'flex-end' }]}>
-              <Text style={[styles.contractTitle, isRTL && { textAlign: 'right' }]}>
+            <View style={[styles.contractHeaderInfo]}>
+              <Text style={[styles.contractTitle]}>
                 {t('Service Agreement')}
               </Text>
-              <Text style={[styles.contractSubtitle, isRTL && { textAlign: 'right' }]}>
+              <Text style={[styles.contractSubtitle]}>
                 {t('Contract')} {contractNumber}
               </Text>
             </View>
             <Ionicons 
-              name={isRTL ? "chevron-back" : "chevron-forward"} 
+              name="chevron-forward" 
               size={20} 
               color={c.textSecondary} 
             />
@@ -368,55 +368,55 @@ export default function ContractSigningProjectScreen({
           {/* Contract Details */}
           <View style={styles.contractDetails}>
             {/* Provider */}
-            <View style={[styles.detailRow, isRTL && { flexDirection: 'row-reverse' }]}>
-              <Text style={[styles.detailLabel, isRTL && { textAlign: 'right' }]}>
+            <View style={[styles.detailRow]}>
+              <Text style={[styles.detailLabel]}>
                 {t('Provider')}
               </Text>
-              <Text style={[styles.detailValue, isRTL && { textAlign: 'left' }]}>
+              <Text style={[styles.detailValue]}>
                 {technicianName}
               </Text>
             </View>
             <View style={styles.detailDivider} />
 
             {/* Project */}
-            <View style={[styles.detailRow, isRTL && { flexDirection: 'row-reverse' }]}>
-              <Text style={[styles.detailLabel, isRTL && { textAlign: 'right' }]}>
+            <View style={[styles.detailRow]}>
+              <Text style={[styles.detailLabel]}>
                 {t('Project')}
               </Text>
-              <Text style={[styles.detailValue, isRTL && { textAlign: 'left' }]} numberOfLines={1}>
+              <Text style={[styles.detailValue]} numberOfLines={1}>
                 {serviceName || project?.description?.substring(0, 30) || t('Project')}
               </Text>
             </View>
             <View style={styles.detailDivider} />
 
             {/* Total Amount */}
-            <View style={[styles.detailRow, isRTL && { flexDirection: 'row-reverse' }]}>
-              <Text style={[styles.detailLabel, isRTL && { textAlign: 'right' }]}>
+            <View style={[styles.detailRow]}>
+              <Text style={[styles.detailLabel]}>
                 {t('Total Amount')}
               </Text>
-              <Text style={[styles.detailValueGreen, isRTL && { textAlign: 'left' }]}>
+              <Text style={[styles.detailValueGreen]}>
                 {formatBudget(totalAmount)} {t('SAR')}
               </Text>
             </View>
             <View style={styles.detailDivider} />
 
             {/* Start Date */}
-            <View style={[styles.detailRow, isRTL && { flexDirection: 'row-reverse' }]}>
-              <Text style={[styles.detailLabel, isRTL && { textAlign: 'right' }]}>
+            <View style={[styles.detailRow]}>
+              <Text style={[styles.detailLabel]}>
                 {t('Start Date')}
               </Text>
-              <Text style={[styles.detailValue, isRTL && { textAlign: 'left' }]}>
+              <Text style={[styles.detailValue]}>
                 {formatDate(project?.startDate)}
               </Text>
             </View>
             <View style={styles.detailDivider} />
 
             {/* Completion Date */}
-            <View style={[styles.detailRow, isRTL && { flexDirection: 'row-reverse' }]}>
-              <Text style={[styles.detailLabel, isRTL && { textAlign: 'right' }]}>
+            <View style={[styles.detailRow]}>
+              <Text style={[styles.detailLabel]}>
                 {t('Completion Date')}
               </Text>
-              <Text style={[styles.detailValue, isRTL && { textAlign: 'left' }]}>
+              <Text style={[styles.detailValue]}>
                 {formatDate(project?.completionDate)}
               </Text>
             </View>
@@ -425,7 +425,7 @@ export default function ContractSigningProjectScreen({
           {/* Download Contract Button */}
           <View style={styles.downloadButtonContainer}>
             <TouchableOpacity 
-              style={[styles.downloadButton, isRTL && { flexDirection: 'row-reverse' }]}
+              style={[styles.downloadButton]}
               onPress={handleDownloadContract}
               activeOpacity={0.8}
             >
@@ -439,15 +439,15 @@ export default function ContractSigningProjectScreen({
 
         {/* Email Signature Notice - User Only */}
         {!isTechnician && (
-          <View style={[styles.emailNotice, isRTL && { flexDirection: 'row-reverse' }]}>
+          <View style={[styles.emailNotice]}>
             <View style={styles.emailIconContainer}>
               <Ionicons name="checkmark-circle-outline" size={24} color={c.green60} />
             </View>
-            <View style={[styles.emailNoticeContent, isRTL && { alignItems: 'flex-end' }]}>
-              <Text style={[styles.emailNoticeTitle, isRTL && { textAlign: 'right' }]}>
+            <View style={[styles.emailNoticeContent]}>
+              <Text style={[styles.emailNoticeTitle]}>
                 {t('Contract Sent for Signature')}
               </Text>
-              <Text style={[styles.emailNoticeDescription, isRTL && { textAlign: 'right' }]}>
+              <Text style={[styles.emailNoticeDescription]}>
                 {t('Contract signing links have been sent to your email address. Please check your inbox to digitally sign the contract.')}
               </Text>
             </View>
@@ -490,6 +490,9 @@ function makeStyles(c: typeof COLORS) {
     paddingHorizontal: 16,
     paddingVertical: 16,
     gap: 16,
+  },
+  headerLTR: {
+    direction: 'ltr',
   },
   headerLargeWeb: {
     paddingHorizontal: 48,

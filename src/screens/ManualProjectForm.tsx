@@ -11,6 +11,10 @@ import {
   Image,
   useWindowDimensions,
   Animated,
+  Modal,
+  Pressable,
+  LayoutAnimation,
+  UIManager,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
@@ -43,6 +47,40 @@ interface ServiceCategory {
   nameEn: string;
   description?: string;
   imageUrl?: string;
+}
+
+interface PhaseInput {
+  title: string;
+  description: string;
+  durationDays: string;
+  amount: string;
+}
+
+function AnimatedPhaseCard({ children, style }: { children: React.ReactNode; style?: any }) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(14)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+      Animated.spring(translateY, {
+        toValue: 0,
+        friction: 8,
+        tension: 110,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [opacity, translateY]);
+
+  return (
+    <Animated.View style={[style, { opacity, transform: [{ translateY }] }]}>
+      {children}
+    </Animated.View>
+  );
 }
 
 // Design system colors from Figma
@@ -87,7 +125,14 @@ export default function ManualProjectForm({
   const isSmallScreen = width < 768;
 
   // Form state
+  const [projectName, setProjectName] = useState('');
   const [description, setDescription] = useState('');
+  const [targetScope, setTargetScope] = useState('');
+  const [timeline, setTimeline] = useState('');
+  const [requirements, setRequirements] = useState('');
+  const [projectPurpose, setProjectPurpose] = useState('');
+  const [deliverables, setDeliverables] = useState('');
+  const [projectPhases, setProjectPhases] = useState<PhaseInput[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<number>(initialCategoryId || 0);
   const [categoryDisplay, setCategoryDisplay] = useState(initialCategoryName || '');
   const [selectedSubcategoryId, setSelectedSubcategoryId] = useState<number>(initialSubcategoryId || 0);
@@ -113,6 +158,53 @@ export default function ManualProjectForm({
   // UI state
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showMapPicker, setShowMapPicker] = useState(false);
+  const [showPhasesModal, setShowPhasesModal] = useState(false);
+  const phaseModalOpacity = useRef(new Animated.Value(0)).current;
+  const phaseModalTranslateY = useRef(new Animated.Value(28)).current;
+  const screenOpacity = useRef(new Animated.Value(0)).current;
+  const screenTranslateY = useRef(new Animated.Value(18)).current;
+  const isClosingScreenRef = useRef(false);
+
+  useEffect(() => {
+    if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+      UIManager.setLayoutAnimationEnabledExperimental(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(screenOpacity, {
+        toValue: 1,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+      Animated.spring(screenTranslateY, {
+        toValue: 0,
+        friction: 9,
+        tension: 110,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [screenOpacity, screenTranslateY]);
+
+  const closeScreenAnimated = () => {
+    if (isClosingScreenRef.current) return;
+    isClosingScreenRef.current = true;
+    Animated.parallel([
+      Animated.timing(screenOpacity, {
+        toValue: 0,
+        duration: 170,
+        useNativeDriver: true,
+      }),
+      Animated.timing(screenTranslateY, {
+        toValue: 16,
+        duration: 170,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      onBack();
+    });
+  };
   
   // Date picker state for bid closed at
   const [bidClosedDate, setBidClosedDate] = useState<Date>(new Date());
@@ -290,6 +382,42 @@ export default function ManualProjectForm({
     setBidsCloseAt('');
   };
 
+  const addProjectPhase = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setProjectPhases((prev) => [
+      ...prev,
+      { title: '', description: '', durationDays: '', amount: '' },
+    ]);
+  };
+
+  const updateProjectPhase = (index: number, field: keyof PhaseInput, value: string) => {
+    setProjectPhases((prev) =>
+      prev.map((phase, i) => (i === index ? { ...phase, [field]: value } : phase))
+    );
+  };
+
+  const removeProjectPhase = (index: number) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setProjectPhases((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const openPhasesModal = () => {
+    phaseModalOpacity.setValue(0);
+    phaseModalTranslateY.setValue(28);
+    setShowPhasesModal(true);
+    Animated.parallel([
+      Animated.timing(phaseModalOpacity, { toValue: 1, duration: 220, useNativeDriver: true }),
+      Animated.spring(phaseModalTranslateY, { toValue: 0, friction: 9, tension: 110, useNativeDriver: true }),
+    ]).start();
+  };
+
+  const closePhasesModal = () => {
+    Animated.parallel([
+      Animated.timing(phaseModalOpacity, { toValue: 0, duration: 170, useNativeDriver: true }),
+      Animated.timing(phaseModalTranslateY, { toValue: 18, duration: 170, useNativeDriver: true }),
+    ]).start(() => setShowPhasesModal(false));
+  };
+
   // Submit project – same backend integration as web (ProjectService.createProject)
   const submitProject = async () => {
     if (!description.trim()) {
@@ -299,6 +427,18 @@ export default function ManualProjectForm({
 
     if (!selectedCategoryId) {
       showError(t('Please select a service category'));
+      return;
+    }
+
+    const hasValidLocation =
+      latitude != null &&
+      longitude != null &&
+      Number.isFinite(latitude) &&
+      Number.isFinite(longitude) &&
+      !(Math.abs(latitude) < 0.000001 && Math.abs(longitude) < 0.000001);
+
+    if (!hasValidLocation) {
+      showError(t('Please select a valid project location on the map'));
       return;
     }
 
@@ -332,12 +472,19 @@ export default function ManualProjectForm({
       });
 
       const projectData: CreateProjectRequest = {
+        title: projectName.trim() || undefined,
         description: description.trim(),
+        targetScope: targetScope.trim() || undefined,
+        timeline: timeline.trim() || undefined,
+        requirements: requirements.trim() || undefined,
+        projectPurpose: projectPurpose.trim() || undefined,
+        deliverables: deliverables.trim() || undefined,
+        projectPhases: projectPhases.map((phase) => phase.title.trim()).filter(Boolean),
         serviceCategoryId: selectedCategoryId,
         serviceSubcategoryId: selectedSubcategoryId || undefined,
         address: address || '',
-        latitude: latitude ?? 0,
-        longitude: longitude ?? 0,
+        latitude: latitude as number,
+        longitude: longitude as number,
         timeRequired: 7,
         projectType: technician ? 'DIRECT_ASSIGNMENT' : 'ALL',
         budget: budgetUnspecified ? undefined : parseFloat(budget || '0'),
@@ -349,8 +496,13 @@ export default function ManualProjectForm({
       };
 
       const data = await createProject(projectData);
+      const createdProjectId =
+        (data as any)?.id ??
+        (data as any)?.projectId ??
+        (data as any)?.data?.id ??
+        null;
 
-      if (data && data.id) {
+      if (createdProjectId) {
         const successMessage = technician ? 'Deal sent successfully!' : 'Project submitted successfully!';
         showAlert(
           t('Success'),
@@ -361,7 +513,7 @@ export default function ManualProjectForm({
               text: t('OK'),
               onPress: () => {
                 onSuccess?.();
-                onBack();
+                closeScreenAnimated();
               },
             },
           ]
@@ -387,7 +539,17 @@ export default function ManualProjectForm({
   const borderColor = isDark ? colors.border : FIGMA_COLORS.textDividers;
 
   return (
-    <View style={[styles.container, { backgroundColor: isDark ? colors.background : FIGMA_COLORS.white, paddingTop: isLargeWeb ? 0 : insets.top }]}>
+    <Animated.View
+      style={[
+        styles.container,
+        {
+          backgroundColor: isDark ? colors.background : FIGMA_COLORS.white,
+          paddingTop: isLargeWeb ? 0 : Platform.OS === 'android' ? 0 : insets.top,
+          opacity: screenOpacity,
+          transform: [{ translateY: screenTranslateY }],
+        },
+      ]}
+    >
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={[
@@ -404,8 +566,8 @@ export default function ManualProjectForm({
         {!isLargeWeb && (
         <View style={[styles.breadcrumbContainer, { borderBottomColor: borderColor }]}>
           <TouchableOpacity 
-            onPress={onBack} 
-            style={[styles.breadcrumbBack, isRTL && { transform: [{ scaleX: -1 }] }, isLargeWeb && styles.breadcrumbBackLargeWeb]}
+            onPress={closeScreenAnimated} 
+            style={[styles.breadcrumbBack, isLargeWeb && styles.breadcrumbBackLargeWeb]}
           >
             <Ionicons name="chevron-back" size={isLargeWeb ? 40 : 20} color={textPrimary} />
           </TouchableOpacity>
@@ -423,9 +585,9 @@ export default function ManualProjectForm({
         {/* Title Section - Large Web */}
         {isLargeWeb && (
           <View style={styles.titleSectionLargeWeb}>
-            <TouchableOpacity onPress={onBack} style={styles.titleBackButton}>
+            <TouchableOpacity onPress={closeScreenAnimated} style={styles.titleBackButton}>
               <Ionicons 
-                name={isRTL ? "chevron-forward" : "chevron-back"} 
+                name="chevron-back" 
                 size={24} 
                 color={textPrimary} 
               />
@@ -623,6 +785,25 @@ export default function ManualProjectForm({
           </View>
         ) : null}
 
+        {/* Project Name */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="create-outline" size={14} color={FIGMA_COLORS.bluePrimary80} />
+            <Text style={[styles.sectionLabel, { color: FIGMA_COLORS.bluePrimary80 }]}>
+              {t('Project Name')}
+            </Text>
+          </View>
+          <View style={[styles.inputContainer, styles.editableInput, { backgroundColor: cardBg, borderColor: borderColor }]}>
+            <TextInput
+              style={[styles.singleLineInput, { color: textBody, backgroundColor: cardBg }]}
+              value={projectName}
+              onChangeText={setProjectName}
+              placeholder={t('Enter project name')}
+              placeholderTextColor={textSecondary}
+            />
+          </View>
+        </View>
+
         {/* Description */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -643,6 +824,155 @@ export default function ManualProjectForm({
               textAlignVertical="top"
             />
           </View>
+        </View>
+
+        {/* Budget Range & Timeline */}
+        <View style={[styles.cardsRow, !isSmallScreen && styles.cardsRowWeb]}>
+          <View style={[
+            styles.statCard,
+            {
+              backgroundColor: cardBg,
+              borderColor: borderColor,
+              flex: isSmallScreen ? 1 : undefined,
+              width: isSmallScreen ? undefined : '48%',
+            }
+          ]}>
+            <View style={styles.statCardHeader}>
+              <Ionicons name="wallet-outline" size={14} color={FIGMA_COLORS.bluePrimary80} />
+              <Text style={[styles.statCardLabel, { color: FIGMA_COLORS.bluePrimary80 }]}>
+                {t('Budget Range')}
+              </Text>
+            </View>
+            <View style={[styles.budgetInputWrapper, { backgroundColor: lightBlueBg, borderColor: borderColor }]}>
+              <TextInput
+                style={[styles.budgetInput, { color: textBody }]}
+                value={targetScope}
+                onChangeText={setTargetScope}
+                placeholder={t('Avg. $30,000 - $50,000')}
+                placeholderTextColor={textSecondary}
+              />
+            </View>
+          </View>
+          <View style={[
+            styles.statCard,
+            {
+              backgroundColor: cardBg,
+              borderColor: borderColor,
+              flex: isSmallScreen ? 1 : undefined,
+              width: isSmallScreen ? undefined : '48%',
+            }
+          ]}>
+            <View style={styles.statCardHeader}>
+              <Ionicons name="calendar-outline" size={14} color={FIGMA_COLORS.bluePrimary80} />
+              <Text style={[styles.statCardLabel, { color: FIGMA_COLORS.bluePrimary80 }]}>
+                {t('Timeline')}
+              </Text>
+            </View>
+            <View style={[styles.budgetInputWrapper, { backgroundColor: lightBlueBg, borderColor: borderColor }]}>
+              <TextInput
+                style={[styles.budgetInput, { color: textBody }]}
+                value={timeline}
+                onChangeText={setTimeline}
+                placeholder={t('Avg. 9-12 weeks')}
+                placeholderTextColor={textSecondary}
+              />
+            </View>
+          </View>
+        </View>
+
+        {/* Requirements */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="list-outline" size={14} color={FIGMA_COLORS.bluePrimary80} />
+            <Text style={[styles.sectionLabel, { color: FIGMA_COLORS.bluePrimary80 }]}>
+              {t('Requirements')}
+            </Text>
+          </View>
+          <View style={[styles.inputContainer, styles.editableInput, { backgroundColor: cardBg, borderColor: borderColor }]}>
+            <TextInput
+              style={[styles.textArea, { color: textBody, backgroundColor: cardBg }]}
+              multiline
+              numberOfLines={4}
+              value={requirements}
+              onChangeText={setRequirements}
+              placeholder={t('Enter requirements')}
+              placeholderTextColor={textSecondary}
+              textAlignVertical="top"
+            />
+          </View>
+        </View>
+
+        {/* Project Purpose */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="flag-outline" size={14} color={FIGMA_COLORS.bluePrimary80} />
+            <Text style={[styles.sectionLabel, { color: FIGMA_COLORS.bluePrimary80 }]}>
+              {t('Project Purpose')}
+            </Text>
+          </View>
+          <View style={[styles.inputContainer, styles.editableInput, { backgroundColor: cardBg, borderColor: borderColor }]}>
+            <TextInput
+              style={[styles.textArea, { color: textBody, backgroundColor: cardBg }]}
+              multiline
+              numberOfLines={3}
+              value={projectPurpose}
+              onChangeText={setProjectPurpose}
+              placeholder={t('Enter project purpose')}
+              placeholderTextColor={textSecondary}
+              textAlignVertical="top"
+            />
+          </View>
+        </View>
+
+        {/* Deliverables */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="checkmark-done-outline" size={14} color={FIGMA_COLORS.bluePrimary80} />
+            <Text style={[styles.sectionLabel, { color: FIGMA_COLORS.bluePrimary80 }]}>
+              {t('Deliverables')}
+            </Text>
+          </View>
+          <View style={[styles.inputContainer, styles.editableInput, { backgroundColor: cardBg, borderColor: borderColor }]}>
+            <TextInput
+              style={[styles.textArea, { color: textBody, backgroundColor: cardBg }]}
+              multiline
+              numberOfLines={3}
+              value={deliverables}
+              onChangeText={setDeliverables}
+              placeholder={t('Enter deliverables')}
+              placeholderTextColor={textSecondary}
+              textAlignVertical="top"
+            />
+          </View>
+        </View>
+
+        {/* Project Phases */}
+        <View style={styles.section}>
+          <View style={[styles.sectionHeader, { justifyContent: 'space-between' }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Ionicons name="git-branch-outline" size={14} color={FIGMA_COLORS.bluePrimary80} />
+              <Text style={[styles.sectionLabel, { color: FIGMA_COLORS.bluePrimary80 }]}>
+                {t('Project Phases')}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={openPhasesModal} style={styles.phaseAddButton}>
+              <Ionicons name="add" size={18} color={primaryBlue} />
+              <Text style={[styles.phaseAddButtonText, { color: primaryBlue }]}>{t('Add')}</Text>
+            </TouchableOpacity>
+          </View>
+          {projectPhases.length > 0 ? (
+            projectPhases.map((phase, index) => (
+              <View key={`phase-${index}`} style={[styles.phaseChip, { borderColor, backgroundColor: lightBlueBg }]}>
+                <Text style={[styles.phaseChipText, { color: textBody }]} numberOfLines={1}>
+                  {phase.title?.trim() || `${t('Phase')} ${index + 1}`}
+                </Text>
+              </View>
+            ))
+          ) : (
+            <Text style={[styles.phaseEmptyText, { color: textSecondary }]}>
+              {t('No phases added yet')}
+            </Text>
+          )}
         </View>
 
         {/* Budget & Duration Row */}
@@ -841,7 +1171,7 @@ export default function ManualProjectForm({
         {/* Cancel Button */}
         <TouchableOpacity
           style={[styles.cancelButton, { backgroundColor: FIGMA_COLORS.purple10, borderColor: FIGMA_COLORS.purple100 }]}
-          onPress={onBack}
+          onPress={closeScreenAnimated}
         >
           <Text style={[styles.cancelButtonText, { color: FIGMA_COLORS.purple100 }]}>
             {t('Cancel')}
@@ -853,7 +1183,7 @@ export default function ManualProjectForm({
       {showMapPicker && (
         <LocationPicker
           initialLocation={
-            latitude && longitude ? { latitude, longitude } : undefined
+            latitude != null && longitude != null ? { latitude, longitude } : undefined
           }
           initialAddress={address}
           onLocationSelect={(location) => {
@@ -910,8 +1240,108 @@ export default function ManualProjectForm({
           </View>
         </View>
       )}
+      <AlertPopup
+        visible={alertState.visible}
+        title={alertState.title}
+        message={alertState.message}
+        type={alertState.type}
+        buttons={alertState.buttons}
+        onClose={hideAlert}
+        countdown={alertState.countdown}
+      />
+      <Modal visible={showPhasesModal} transparent animationType="none" onRequestClose={closePhasesModal}>
+        <Animated.View style={[styles.phaseModalBackdrop, { opacity: phaseModalOpacity }]}>
+          <Pressable style={styles.phaseModalDismiss} onPress={closePhasesModal} />
+          <Animated.View
+            style={[
+              styles.phaseModalSheet,
+              { backgroundColor: cardBg, borderColor },
+              { transform: [{ translateY: phaseModalTranslateY }] },
+            ]}
+          >
+            <View style={styles.phaseModalHeader}>
+              <Text style={[styles.phaseModalTitle, { color: textPrimary }]}>{t('Project Phases')}</Text>
+              <TouchableOpacity onPress={closePhasesModal} style={styles.phaseModalCloseBtn} hitSlop={10}>
+                <Text style={[styles.phaseModalCloseText, { color: textSecondary }]}>x</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={[styles.phaseModalSubtitle, { color: textSecondary }]}>
+              {t('Add trackable stages for your project')}
+            </Text>
+            <ScrollView style={styles.phaseModalList} contentContainerStyle={styles.phaseModalListContent}>
+              {projectPhases.length > 0 ? (
+                projectPhases.map((phase, index) => (
+                  <AnimatedPhaseCard key={`phase-modal-${index}`} style={[styles.phaseCard, { borderColor }]}>
+                    <View style={styles.phaseCardHeader}>
+                      <Text style={[styles.phaseCardTitle, { color: textPrimary }]}>{`${t('Phase')} ${index + 1}`}</Text>
+                      <TouchableOpacity onPress={() => removeProjectPhase(index)} style={styles.phaseRemoveButton}>
+                        <Ionicons name="close" size={18} color={textSecondary} />
+                      </TouchableOpacity>
+                    </View>
+                    <Text style={[styles.phaseFieldLabel, { color: textSecondary }]}>{t('Phase name / Title')}</Text>
+                    <TextInput
+                      style={[styles.phaseInput, { color: textBody, borderColor }]}
+                      value={phase.title}
+                      onChangeText={(text) => updateProjectPhase(index, 'title', text)}
+                      placeholder={t('e.g. Design & Planning')}
+                      placeholderTextColor={textSecondary}
+                    />
+                    <Text style={[styles.phaseFieldLabel, { color: textSecondary }]}>{t('Description')}</Text>
+                    <TextInput
+                      style={[styles.phaseInput, styles.phaseDescriptionInput, { color: textBody, borderColor }]}
+                      value={phase.description}
+                      onChangeText={(text) => updateProjectPhase(index, 'description', text)}
+                      placeholder={t('Describe this phase')}
+                      placeholderTextColor={textSecondary}
+                      multiline
+                      numberOfLines={2}
+                    />
+                    <View style={styles.phaseInlineRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.phaseFieldLabel, { color: textSecondary }]}>{t('Duration (days)')}</Text>
+                        <TextInput
+                          style={[styles.phaseInput, { color: textBody, borderColor }]}
+                          value={phase.durationDays}
+                          onChangeText={(text) => updateProjectPhase(index, 'durationDays', text)}
+                          placeholder={t('e.g. 14')}
+                          placeholderTextColor={textSecondary}
+                          keyboardType="numeric"
+                        />
+                      </View>
+                      <View style={{ width: 10 }} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.phaseFieldLabel, { color: textSecondary }]}>{t('Amount (SAR)')}</Text>
+                        <TextInput
+                          style={[styles.phaseInput, { color: textBody, borderColor }]}
+                          value={phase.amount}
+                          onChangeText={(text) => updateProjectPhase(index, 'amount', text)}
+                          placeholder={t('e.g. 5000')}
+                          placeholderTextColor={textSecondary}
+                          keyboardType="numeric"
+                        />
+                      </View>
+                    </View>
+                  </AnimatedPhaseCard>
+                ))
+              ) : (
+                <View style={[styles.phaseCard, { borderColor, alignItems: 'center', justifyContent: 'center' }]}>
+                  <Text style={[styles.phaseEmptyText, { color: textSecondary, textAlign: 'center' }]}>
+                    {t('Add trackable stages for your project')}
+                  </Text>
+                </View>
+              )}
+              <TouchableOpacity style={[styles.phaseModalAddBtn, { borderColor }]} onPress={addProjectPhase}>
+                <Text style={[styles.phaseModalAddBtnText, { color: textSecondary }]}>+ {t('Add Phase')}</Text>
+              </TouchableOpacity>
+            </ScrollView>
+            <TouchableOpacity onPress={closePhasesModal} style={[styles.phaseModalDoneBtn, { backgroundColor: primaryBlue }]}>
+              <Text style={styles.phaseModalDoneBtnText}>{t('Done')}</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </Animated.View>
+      </Modal>
       <View style={{ height: 40 }} />
-    </View>
+    </Animated.View>
   );
 }
 
@@ -1083,6 +1513,153 @@ const styles = StyleSheet.create({
     fontSize: 14,
     minHeight: 120,
     textAlignVertical: 'top',
+  },
+  singleLineInput: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 14,
+  },
+  phaseAddButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  phaseAddButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  phaseCard: {
+    borderWidth: 1,
+    borderRadius: 12,
+    marginBottom: 12,
+    padding: 12,
+    backgroundColor: 'transparent',
+  },
+  phaseCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  phaseCardTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  phaseFieldLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  phaseInput: {
+    fontSize: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 10,
+    marginBottom: 10,
+  },
+  phaseDescriptionInput: {
+    minHeight: 72,
+    textAlignVertical: 'top',
+  },
+  phaseInlineRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  phaseRemoveButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  phaseChip: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 8,
+  },
+  phaseChipText: {
+    fontSize: 14,
+  },
+  phaseEmptyText: {
+    fontSize: 13,
+  },
+  phaseModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+  phaseModalDismiss: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  phaseModalSheet: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 16,
+    width: '100%',
+    maxWidth: 520,
+    maxHeight: '78%',
+  },
+  phaseModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  phaseModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  phaseModalCloseBtn: {
+    width: 30,
+    height: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  phaseModalCloseText: {
+    fontSize: 22,
+    lineHeight: 24,
+    fontWeight: '400',
+  },
+  phaseModalSubtitle: {
+    fontSize: 13,
+    marginBottom: 12,
+  },
+  phaseModalList: {
+    maxHeight: 360,
+  },
+  phaseModalListContent: {
+    paddingBottom: 8,
+  },
+  phaseModalAddBtn: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: 11,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  phaseModalAddBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  phaseModalDoneBtn: {
+    marginTop: 10,
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  phaseModalDoneBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
   },
   cardsRow: {
     flexDirection: 'row',

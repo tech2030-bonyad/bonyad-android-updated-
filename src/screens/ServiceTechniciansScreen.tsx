@@ -16,11 +16,13 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
+import { useRTL } from '../hooks/useRTL';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getTechniciansByService } from '../services/TechnicianService';
 import TechnicianProfileView from './TechnicianProfileView';
 import { generateRoomId } from '../utils/chatUtils';
 import { storage } from '../utils/storage';
+import { getTopPadding } from '../utils/statusBarHelper';
 
 const { width } = Dimensions.get('window');
 const IS_LARGE_WEB = Platform.OS === 'web' && width >= 1024;
@@ -45,6 +47,7 @@ export default function ServiceTechniciansScreen({
   const { t, i18n } = useTranslation();
   const { colors } = useTheme();
   const { fontFamily, scaledSize } = useFontFamily();
+  const { arrowBackIcon } = useRTL();
   const insets = useSafeAreaInsets();
   
   const [technicians, setTechnicians] = useState<any[]>([]);
@@ -274,7 +277,7 @@ export default function ServiceTechniciansScreen({
       <View style={[styles.header, { backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
         {onBack && (
           <TouchableOpacity onPress={onBack} style={styles.backButtonHeader}>
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
+            <Ionicons name={arrowBackIcon} size={24} color={colors.text} />
           </TouchableOpacity>
         )}
         <Text style={[styles.headerTitle, { color: colors.text }]}>

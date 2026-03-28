@@ -17,6 +17,7 @@ import { Surface } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
+import { useRTL } from '../hooks/useRTL';
 
 interface NewProjectViewProps {
   onNavigateToAI: () => void;
@@ -44,6 +45,7 @@ export default function NewProjectView({
   const { t, i18n } = useTranslation();
   const { colors } = useTheme();
   const { fontFamily, scaledSize } = useFontFamily();
+  const { arrowBackIcon } = useRTL();
   const insets = useSafeAreaInsets();
   const [animatedText, setAnimatedText] = useState('');
   const [currentTextIndex, setCurrentTextIndex] = useState(0);
@@ -143,7 +145,7 @@ export default function NewProjectView({
         <View style={styles.figmaBackContainer}>
           {onBack && (
             <TouchableOpacity onPress={onBack} style={styles.figmaBackButton}>
-              <Ionicons name="arrow-back" size={24} color={colors.text} />
+              <Ionicons name={arrowBackIcon} size={24} color={colors.text} />
             </TouchableOpacity>
           )}
         </View>
@@ -221,7 +223,7 @@ export default function NewProjectView({
       <View style={[styles.desktopHeader, { backgroundColor: colors.cardBackground }]}>
         {onBack ? (
           <TouchableOpacity onPress={onBack} style={styles.desktopBackButton}>
-            <Ionicons name="arrow-back" size={24} color={colors.primary} />
+            <Ionicons name={arrowBackIcon} size={24} color={colors.primary} />
           </TouchableOpacity>
         ) : (
           <View style={{ width: 40 }} />

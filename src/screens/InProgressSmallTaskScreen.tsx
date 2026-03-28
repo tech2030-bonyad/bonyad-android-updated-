@@ -52,7 +52,6 @@ export default function InProgressSmallTaskScreen({
   const { colors, theme } = useTheme();
   const { fontFamily, fonts, scaledSize } = useFontFamily();
   const insets = useSafeAreaInsets();
-  const isRTL = i18n.language === 'ar';
   const isDarkMode = theme === 'dark';
   const screenWidth = Dimensions.get('window').width;
   const screenHeight = Dimensions.get('window').height;
@@ -79,6 +78,7 @@ export default function InProgressSmallTaskScreen({
 
   const primaryColor = isDarkMode ? COLORS.primaryDark : COLORS.primaryLight;
   const borderColor = isDarkMode ? COLORS.borderDark : COLORS.borderLight;
+  const topSpacing = Platform.OS === 'android' ? 0 : insets.top;
 
   const formatDate = (dateString: string) => {
     try {
@@ -140,7 +140,7 @@ export default function InProgressSmallTaskScreen({
       await loadTaskDetails();
     } catch (err) {
       console.error('Error loading data:', err);
-      setError(t('Failed to load data. Please try again.'));
+      setError(t('smallTasks.failedToLoadData'));
       setHasError(true);
     } finally {
       setIsLoading(false);
@@ -166,18 +166,18 @@ export default function InProgressSmallTaskScreen({
 
   const handleMarkComplete = () => {
     showConfirmation(
-      t('Mark Complete'),
-      t('Are you sure you want to mark this task as completed?'),
+      t('smallTasks.markComplete'),
+      t('smallTasks.markCompleteConfirm'),
       async () => {
         setIsCompleting(true);
         try {
           await updateRequestStatus(task.id, 'COMPLETED');
-          showSuccess(t('Task marked as completed'), t('Success'));
+          showSuccess(t('smallTasks.taskMarkedCompleted'), t('smallTasks.success'));
           await loadData();
           onSuccess?.();
         } catch (error) {
           console.error('Error updating status:', error);
-          showError(t('Error updating status'), t('Error'));
+          showError(t('smallTasks.errorUpdatingStatus'), t('smallTasks.error'));
         } finally {
           setIsCompleting(false);
         }
@@ -198,19 +198,19 @@ export default function InProgressSmallTaskScreen({
         : taskDetails.assignedTechnicianId || 0;
 
       if (!otherUserId) {
-        showError(t('Unable to start chat'), t('Error'));
+        showError(t('smallTasks.unableToStartChat'), t('smallTasks.error'));
         return;
       }
 
       const roomId = `room_${Math.min(currentUserId || 0, otherUserId || 0)}_${Math.max(currentUserId || 0, otherUserId || 0)}`;
       const receiverName = isTechnician
-        ? taskDetails.userName || t('User')
-        : taskDetails.assignedTechnicianName || t('Technician');
+        ? taskDetails.userName || t('smallTasks.user')
+        : taskDetails.assignedTechnicianName || t('smallTasks.technician');
 
       onOpenChat(roomId, otherUserId, receiverName);
     } catch (error) {
       console.error('Error opening chat:', error);
-      showError(t('Error opening chat'), t('Error'));
+      showError(t('smallTasks.errorOpeningChat'), t('smallTasks.error'));
     }
   };
 
@@ -224,16 +224,16 @@ export default function InProgressSmallTaskScreen({
 
   const taskName = taskDetails?.taskType
     ? i18n.language === 'ar'
-      ? taskDetails.taskType?.nameAr || t('Task')
-      : taskDetails.taskType?.nameEn || t('Task')
-    : t('Task');
+      ? taskDetails.taskType?.nameAr || t('smallTasks.task')
+      : taskDetails.taskType?.nameEn || t('smallTasks.task')
+    : t('smallTasks.task');
 
   if (isLoading && !hasError) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+      <View style={[styles.container, { backgroundColor: colors.background, paddingTop: topSpacing }]}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={primaryColor} />
-          <Text style={[styles.loadingText, { color: colors.text }]}>{t('Loading...')}</Text>
+          <Text style={[styles.loadingText, { color: colors.text }]}>{t('smallTasks.loading')}</Text>
         </View>
       </View>
     );
@@ -241,14 +241,14 @@ export default function InProgressSmallTaskScreen({
 
   if (hasError) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+      <View style={[styles.container, { backgroundColor: colors.background, paddingTop: topSpacing }]}>
         <View style={styles.errorContainer}>
           <Ionicons name="alert-circle-outline" size={64} color={colors.error} />
           <Text style={[styles.errorTitle, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '700' }]}>
-            {t('Error')}
+            {t('smallTasks.error')}
           </Text>
           <Text style={[styles.errorMessage, { color: colors.textSecondary }]}>
-            {error || t('Something went wrong. Please try again.')}
+            {error || t('smallTasks.somethingWentWrong')}
           </Text>
           <TouchableOpacity
             style={[styles.retryButton, { backgroundColor: primaryColor }]}
@@ -256,7 +256,7 @@ export default function InProgressSmallTaskScreen({
           >
             <Ionicons name="refresh" size={20} color="#FFFFFF" />
             <Text style={[styles.retryButtonText, { fontFamily: fonts?.button || fontFamily, fontWeight: '600' }]}>
-              {t('Retry')}
+              {t('smallTasks.retry')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -267,11 +267,11 @@ export default function InProgressSmallTaskScreen({
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header - iOS style */}
-      <View style={[styles.header, { paddingTop: insets.top, borderBottomColor: colors.border }, isRTL && { flexDirection: 'row-reverse' }]}>
+      <View style={[styles.header, styles.headerLTR, { paddingTop: topSpacing, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.headerBackButton}>
-          <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={24} color={primaryColor} />
+          <Ionicons name="chevron-back" size={24} color={primaryColor} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: primaryColor }]}>{t('task_request_details')}</Text>
+        <Text style={[styles.headerTitle, { color: primaryColor }]}>{t('smallTasks.taskRequestDetails')}</Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -292,39 +292,43 @@ export default function InProgressSmallTaskScreen({
         >
           {/* Status Card - iOS style */}
           <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: COLORS.statusInProgress + '30' }]}>
-            <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('status')}</Text>
-            <View style={[styles.statusRow, isRTL && { flexDirection: 'row-reverse' }]}>
+            <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('smallTasks.status')}</Text>
+            <View style={styles.statusRow}>
               <View style={[styles.statusDot, { backgroundColor: COLORS.statusInProgress }]} />
-              <Text style={[styles.statusValue, { color: COLORS.statusInProgress }]}>{t('in_progress')}</Text>
+              <Text style={[styles.statusValue, { color: COLORS.statusInProgress }]}>{t('smallTasks.statusInProgress')}</Text>
             </View>
           </View>
 
           {/* Task Type Card */}
           <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: borderColor }]}>
-            <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('task_type')}</Text>
+            <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('smallTasks.taskType')}</Text>
             <Text style={[styles.cardValue, { color: colors.text }]}>{taskName}</Text>
           </View>
 
           {/* Description Card */}
-          {taskDetails.description ? (
-            <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: borderColor }]}>
-              <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('description')}</Text>
-              <Text style={[styles.cardValue, { color: colors.text, textAlign: isRTL ? 'right' : 'left' }]}>{taskDetails.description}</Text>
+          <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: borderColor }]}>
+              <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('smallTasks.description')}</Text>
+              <Text style={[styles.cardValue, { color: colors.text }]}>
+                {(() => {
+                  const s = taskDetails.description?.trim();
+                  if (!s || s === 'Not specified' || /<script/i.test(s)) return t('smallTasks.noDescriptionProvided');
+                  return s;
+                })()}
+              </Text>
             </View>
-          ) : null}
 
           {/* Address Card */}
           {taskDetails.address ? (
             <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: borderColor }]}>
-              <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('address')}</Text>
-              <Text style={[styles.cardValue, { color: colors.text, textAlign: isRTL ? 'right' : 'left' }]}>{taskDetails.address}</Text>
+              <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('smallTasks.address')}</Text>
+              <Text style={[styles.cardValue, { color: colors.text }]}>{taskDetails.address}</Text>
             </View>
           ) : null}
 
           {/* Created At Card */}
           {taskDetails.createdAt ? (
             <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: borderColor }]}>
-              <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('created_at')}</Text>
+              <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{t('smallTasks.createdAt')}</Text>
               <Text style={[styles.cardValue, { color: colors.text }]}>{formatDate(taskDetails.createdAt)}</Text>
             </View>
           ) : null}
@@ -332,9 +336,9 @@ export default function InProgressSmallTaskScreen({
           {/* Contact */}
           <View style={styles.contactSection}>
             <Text style={[styles.sectionTitle, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '700' }]}>
-              {isTechnician ? t('Client') : t('Technician')}
+              {isTechnician ? t('smallTasks.client') : t('smallTasks.technician')}
             </Text>
-            <View style={[styles.contactInfoRow, isRTL && { flexDirection: 'row-reverse' }]}>
+            <View style={styles.contactInfoRow}>
               <View style={[styles.contactIconContainer, { backgroundColor: primaryColor + '15' }]}>
                 <Ionicons
                   name={isTechnician ? 'person-outline' : 'construct-outline'}
@@ -354,7 +358,7 @@ export default function InProgressSmallTaskScreen({
                 onPress={handleOpenChat}
               >
                 <Ionicons name="chatbubble-outline" size={18} color={COLORS.textWhite} />
-                <Text style={[styles.chatButtonText, { fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>{t('Chat')}</Text>
+                <Text style={[styles.chatButtonText, { fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>{t('smallTasks.chat')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -392,7 +396,7 @@ export default function InProgressSmallTaskScreen({
               <>
                 <Ionicons name="checkmark-circle" size={20} color={COLORS.textWhite} />
                 <Text style={[styles.floatingButtonText, { fontFamily: fonts?.primaryBold || fontFamily, fontWeight: '600' }]}>
-                  {t('Mark Complete')}
+                  {t('smallTasks.markComplete')}
                 </Text>
               </>
             )}
@@ -446,6 +450,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 12,
     borderBottomWidth: 1,
+  },
+  headerLTR: {
+    direction: 'ltr',
   },
   headerBackButton: {
     width: 40,

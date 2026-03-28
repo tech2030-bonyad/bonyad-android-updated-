@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,12 +8,16 @@ import {
   ActivityIndicator,
   Modal,
   Platform,
+  Animated,
+  Dimensions,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
+import { useRTL } from '../hooks/useRTL';
+import { getTopPadding } from '../utils/statusBarHelper';
 import { storage } from '../utils/storage';
 import { API_ENDPOINTS, buildApiUrl } from '../config/api';
 import { fetchSubscriptionPlans } from '../services/onboardingApi';
@@ -61,8 +65,10 @@ interface BidQuotaInfo {
 export default function SubscriptionScreen({ onBack }: SubscriptionScreenProps) {
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
-  const { colors } = useTheme();
+  const { colors, theme } = useTheme();
   const { fontFamily, scaledSize } = useFontFamily();
+  const { backIcon } = useRTL();
+  const isDarkMode = theme === 'dark';
   
   const [subscription, setSubscription] = useState<CurrentSubscription | null>(null);
   const [bidQuota, setBidQuota] = useState<BidQuotaInfo | null>(null);
@@ -70,6 +76,26 @@ export default function SubscriptionScreen({ onBack }: SubscriptionScreenProps) 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [showPlanModal, setShowPlanModal] = useState(false);
+
+  const screenWidth = Dimensions.get('window').width;
+  const screenSlideX = useRef(new Animated.Value(0)).current;
+  const screenOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    screenSlideX.setValue(-screenWidth);
+    screenOpacity.setValue(0);
+    Animated.parallel([
+      Animated.timing(screenOpacity, { toValue: 1, duration: 220, useNativeDriver: true }),
+      Animated.spring(screenSlideX, { toValue: 0, tension: 65, friction: 11, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
+  const handleBackScreen = () => {
+    Animated.parallel([
+      Animated.timing(screenOpacity, { toValue: 0, duration: 180, useNativeDriver: true }),
+      Animated.timing(screenSlideX, { toValue: screenWidth, duration: 220, useNativeDriver: true }),
+    ]).start(() => onBack());
+  };
   
   // Custom popup hooks
   const { alertState, showSuccess, showError, hideAlert } = useAlertPopup();
@@ -300,11 +326,11 @@ export default function SubscriptionScreen({ onBack }: SubscriptionScreenProps) 
 
   if (isLoading) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top, backgroundColor: '#FFFFFF' }]}>
+      <Animated.View style={[styles.container, { paddingTop: getTopPadding(insets), backgroundColor: colors.background, opacity: screenOpacity, transform: [{ translateX: screenSlideX }] }]}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#00549B" />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
-      </View>
+      </Animated.View>
     );
   }
 
@@ -333,13 +359,13 @@ export default function SubscriptionScreen({ onBack }: SubscriptionScreenProps) 
   const daysRemaining = subscription?.daysRemaining;
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: '#FFFFFF' }]}>
+    <Animated.View style={[styles.container, { paddingTop: getTopPadding(insets), backgroundColor: colors.background, opacity: screenOpacity, transform: [{ translateX: screenSlideX }] }]}>
       {/* Header */}
-      <View style={styles.headerContainer}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={24} color="#003867" />
+      <View style={[styles.headerContainer, { borderBottomWidth: 1, borderBottomColor: colors.border }]}>
+        <TouchableOpacity onPress={handleBackScreen} style={styles.backButton}>
+          <Ionicons name={backIcon} size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { fontSize: scaledSize(18) }]}>{t('Active Subscription') || 'Active Subscription'}</Text>
+        <Text style={[styles.headerTitle, { fontSize: scaledSize(18), color: colors.text }]}>{t('Active Subscription') || 'Active Subscription'}</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -347,53 +373,53 @@ export default function SubscriptionScreen({ onBack }: SubscriptionScreenProps) 
         <View style={styles.content}>
           {/* Current Subscription Card */}
           {hasActive && subscriptionName ? (
-            <View style={[styles.card, { backgroundColor: '#FFFFFF', borderColor: '#D9D9D9' }]}>
+            <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
               <View style={styles.cardContent}>
                 {/* Card Header */}
                 <View style={styles.cardHeader}>
-                  <Text style={[styles.cardTitle, { fontSize: scaledSize(20) }]}>{subscriptionName}</Text>
+                  <Text style={[styles.cardTitle, { fontSize: scaledSize(20), color: colors.text }]}>{subscriptionName}</Text>
                   {subscriptionPrice !== undefined && (
                     <View style={styles.priceRow}>
-                      <RialIcon size={scaledSize(16)} variant="dark" />
-                      <Text style={[styles.cardPrice, { fontSize: scaledSize(18), marginLeft: 4 }]}>{subscriptionPrice.toFixed(0)}</Text>
+                      <RialIcon size={scaledSize(16)} variant={isDarkMode ? 'light' : 'dark'} />
+                      <Text style={[styles.cardPrice, { fontSize: scaledSize(18), marginLeft: 4, color: colors.primary }]}>{subscriptionPrice.toFixed(0)}</Text>
                     </View>
                   )}
                 </View>
 
                 {/* Divider */}
-                <View style={styles.divider} />
+                <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
                 {/* Details List */}
                 <View style={styles.detailsList}>
                   <View style={styles.detailRow}>
-                    <Text style={[styles.detailLabel, { fontSize: scaledSize(14) }]}>{t('Start Date')}</Text>
-                    <Text style={[styles.detailValue, { fontSize: scaledSize(14) }]}>{formatDateDDMMYYYY(startDate)}</Text>
+                    <Text style={[styles.detailLabel, { fontSize: scaledSize(14), color: colors.textSecondary }]}>{t('Start Date')}</Text>
+                    <Text style={[styles.detailValue, { fontSize: scaledSize(14), color: colors.text }]}>{formatDateDDMMYYYY(startDate)}</Text>
                   </View>
                   <View style={styles.detailRow}>
-                    <Text style={[styles.detailLabel, { fontSize: scaledSize(14) }]}>{t('End Date')}</Text>
-                    <Text style={[styles.detailValue, { fontSize: scaledSize(14) }]}>{formatDateDDMMYYYY(endDate)}</Text>
+                    <Text style={[styles.detailLabel, { fontSize: scaledSize(14), color: colors.textSecondary }]}>{t('End Date')}</Text>
+                    <Text style={[styles.detailValue, { fontSize: scaledSize(14), color: colors.text }]}>{formatDateDDMMYYYY(endDate)}</Text>
                   </View>
                   {daysRemaining !== undefined && (
                     <View style={styles.detailRow}>
-                      <Text style={[styles.detailLabel, { fontSize: scaledSize(14) }]}>{t('Days Remaining')}</Text>
-                      <Text style={[styles.detailValue, { fontSize: scaledSize(14) }]}>{daysRemaining}</Text>
+                      <Text style={[styles.detailLabel, { fontSize: scaledSize(14), color: colors.textSecondary }]}>{t('Days Remaining')}</Text>
+                      <Text style={[styles.detailValue, { fontSize: scaledSize(14), color: colors.text }]}>{daysRemaining}</Text>
                     </View>
                   )}
                   <View style={styles.detailRow}>
-                    <Text style={[styles.detailLabel, { fontSize: scaledSize(14) }]}>{t('Status')}</Text>
-                    <Text style={[styles.detailValue, { fontSize: scaledSize(14) }]}>{t('Active')}</Text>
+                    <Text style={[styles.detailLabel, { fontSize: scaledSize(14), color: colors.textSecondary }]}>{t('Status')}</Text>
+                    <Text style={[styles.detailValue, { fontSize: scaledSize(14), color: colors.text }]}>{t('Active')}</Text>
                   </View>
                 </View>
               </View>
             </View>
           ) : (
-            <View style={[styles.card, { backgroundColor: '#FFFFFF', borderColor: '#D9D9D9' }]}>
+            <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
               <View style={[styles.cardContent, styles.noSubscriptionContent]}>
-                <Ionicons name="close-circle" size={60} color="#A3A3A3" />
-                <Text style={[styles.noSubscriptionText, { fontSize: scaledSize(18) }]}>
+                <Ionicons name="close-circle" size={60} color={colors.textSecondary} />
+                <Text style={[styles.noSubscriptionText, { fontSize: scaledSize(18), color: colors.text }]}>
                   {t('No Active Subscription') || 'No Active Subscription'}
                 </Text>
-                <Text style={[styles.noSubscriptionSubtext, { fontSize: scaledSize(14) }]}>
+                <Text style={[styles.noSubscriptionSubtext, { fontSize: scaledSize(14), color: colors.textSecondary }]}>
                   {t('Subscribe to a plan to get started') || 'Subscribe to a plan to get started'}
                 </Text>
               </View>
@@ -402,43 +428,43 @@ export default function SubscriptionScreen({ onBack }: SubscriptionScreenProps) 
 
           {/* Bid Usage Card */}
           {bidQuota?.hasActiveSubscription && (
-            <View style={[styles.card, { backgroundColor: '#FFFFFF', borderColor: '#D9D9D9' }]}>
+            <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
               <View style={styles.cardContent}>
                 {/* Card Header */}
                 <View style={styles.cardHeader}>
-                  <Text style={styles.cardTitle}>{t('subscription.bidQuota.title') || 'Bid Usage'}</Text>
-                  <Text style={styles.cardPrice}>{subscriptionName}</Text>
+                  <Text style={[styles.cardTitle, { color: colors.text }]}>{t('subscription.bidQuota.title') || 'Bid Usage'}</Text>
+                  <Text style={[styles.cardPrice, { color: colors.primary }]}>{subscriptionName}</Text>
                 </View>
 
                 {/* Divider */}
-                <View style={styles.divider} />
+                <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
                 {/* Details List */}
                 <View style={styles.detailsList}>
                   <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>{t('subscription.bidQuota.weeklyQuota') || 'Weekly Quota'}</Text>
-                    <Text style={styles.detailValue}>{bidQuota.weeklyQuota ?? 0}</Text>
+                    <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>{t('subscription.bidQuota.weeklyQuota') || 'Weekly Quota'}</Text>
+                    <Text style={[styles.detailValue, { color: colors.text }]}>{bidQuota.weeklyQuota ?? 0}</Text>
                   </View>
                   <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>{t('subscription.bidQuota.bidsRemaining') || 'Bids Remaining'}</Text>
-                    <Text style={styles.detailValue}>{bidQuota.bidsRemaining ?? 0}</Text>
+                    <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>{t('subscription.bidQuota.bidsRemaining') || 'Bids Remaining'}</Text>
+                    <Text style={[styles.detailValue, { color: colors.text }]}>{bidQuota.bidsRemaining ?? 0}</Text>
                   </View>
                   {bidQuota.lastResetAt && (
                     <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>{t('Last Reset') || 'Last Reset'}</Text>
-                      <Text style={styles.detailValue}>{formatDateDDMMYYYY(bidQuota.lastResetAt)}</Text>
+                      <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>{t('Last Reset') || 'Last Reset'}</Text>
+                      <Text style={[styles.detailValue, { color: colors.text }]}>{formatDateDDMMYYYY(bidQuota.lastResetAt)}</Text>
                     </View>
                   )}
                   {bidQuota.nextResetAt && (
                     <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>{t('Next Reset') || 'Next Reset'}</Text>
-                      <Text style={styles.detailValue}>{formatDateDDMMYYYY(bidQuota.nextResetAt)}</Text>
+                      <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>{t('Next Reset') || 'Next Reset'}</Text>
+                      <Text style={[styles.detailValue, { color: colors.text }]}>{formatDateDDMMYYYY(bidQuota.nextResetAt)}</Text>
                     </View>
                   )}
                   {bidQuota.secondsUntilReset !== undefined && (
                     <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>{t('subscription.bidQuota.resetsIn') || 'Resets In'}</Text>
-                      <Text style={styles.detailValue}>
+                      <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>{t('subscription.bidQuota.resetsIn') || 'Resets In'}</Text>
+                      <Text style={[styles.detailValue, { color: colors.text }]}>
                         {formatTimeUntilReset(bidQuota.secondsUntilReset)}
                       </Text>
                     </View>
@@ -446,7 +472,7 @@ export default function SubscriptionScreen({ onBack }: SubscriptionScreenProps) 
                 </View>
 
                 {/* Divider */}
-                <View style={styles.divider} />
+                <View style={[styles.divider, { backgroundColor: colors.border }]} />
               </View>
             </View>
           )}
@@ -454,19 +480,22 @@ export default function SubscriptionScreen({ onBack }: SubscriptionScreenProps) 
           {/* Cancel Subscription Button */}
           {hasActive && (
             <TouchableOpacity
-              style={styles.cancelButton}
+              style={[styles.cancelButton, {
+                backgroundColor: isDarkMode ? colors.primary + '25' : '#EFE6F5',
+                borderColor: colors.primary,
+              }]}
               onPress={handleCancelSubscription}
               disabled={isSaving}
             >
-              <Ionicons name="close-circle" size={24} color="#6A0DAD" />
-              <Text style={styles.cancelButtonText}>{t('subscription.confirmCancelTitle') || 'Cancel Subscription'}</Text>
+              <Ionicons name="close-circle" size={24} color={colors.primary} />
+              <Text style={[styles.cancelButtonText, { color: colors.primary }]}>{t('subscription.confirmCancelTitle') || 'Cancel Subscription'}</Text>
             </TouchableOpacity>
           )}
 
           {/* Available Plans - Only show if no active subscription */}
           {!hasActive && (
             <>
-              <Text style={styles.sectionTitle}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>
                 {t('Available Plans')}
               </Text>
 
@@ -483,15 +512,15 @@ export default function SubscriptionScreen({ onBack }: SubscriptionScreenProps) 
                     : [];
 
                 return (
-                  <View key={plan.id} style={[styles.card, { backgroundColor: '#FFFFFF', borderColor: '#D9D9D9' }]}>
+                  <View key={plan.id} style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
                     <View style={styles.cardContent}>
                       <View style={styles.planHeader}>
-                        <Text style={styles.planName}>
+                        <Text style={[styles.planName, { color: colors.text }]}>
                           {displayName}
                         </Text>
-                        <View style={styles.priceBadge}>
+                        <View style={[styles.priceBadge, { backgroundColor: colors.primary }]}>
                           <View style={styles.priceRow}>
-                            <RialIcon size={14} variant="dark" />
+                            <RialIcon size={14} variant="light" />
                             <Text style={[styles.priceText, { marginLeft: 4 }]}>{priceValue.toFixed(2)}</Text>
                           </View>
                           <Text style={styles.pricePeriod}>/month</Text>
@@ -502,8 +531,8 @@ export default function SubscriptionScreen({ onBack }: SubscriptionScreenProps) 
                         <View style={styles.featuresList}>
                           {featureList.map((feature, index) => (
                             <View key={index} style={styles.featureItem}>
-                              <Ionicons name="checkmark" size={16} color="#00549B" />
-                              <Text style={styles.featureText}>
+                              <Ionicons name="checkmark" size={16} color={colors.primary} />
+                              <Text style={[styles.featureText, { color: colors.textSecondary }]}>
                                 {feature}
                               </Text>
                             </View>
@@ -512,13 +541,13 @@ export default function SubscriptionScreen({ onBack }: SubscriptionScreenProps) 
                       ) : null}
 
                       {featureList.length === 0 && displayDescription ? (
-                        <Text style={styles.featureText}>
+                        <Text style={[styles.featureText, { color: colors.textSecondary }]}>
                           {displayDescription}
                         </Text>
                       ) : null}
 
                       <TouchableOpacity
-                        style={styles.subscribeButton}
+                        style={[styles.subscribeButton, { backgroundColor: colors.primary }]}
                         onPress={() => handleSubscribe(plan.id)}
                         disabled={isSaving}
                       >
@@ -561,14 +590,13 @@ export default function SubscriptionScreen({ onBack }: SubscriptionScreenProps) 
         onConfirm={confirmState.onConfirm}
         onCancel={hideConfirmation}
       />
-    </View>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   loadingContainer: {
     flex: 1,
@@ -594,7 +622,6 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     flex: 1,
     textAlign: 'center',
-    color: '#003867',
   },
   scrollView: {
     flex: 1,
@@ -619,18 +646,15 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333333',
     flex: 1,
   },
   cardPrice: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#00549B',
     textAlign: 'right',
   },
   divider: {
     height: 0.5,
-    backgroundColor: '#D9D9D9',
     marginVertical: 16,
   },
   detailsList: {
@@ -645,12 +669,10 @@ const styles = StyleSheet.create({
   detailLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#A3A3A3',
   },
   detailValue: {
     fontSize: 14,
     fontWeight: '400',
-    color: '#383838',
     textAlign: 'right',
   },
   noSubscriptionContent: {
@@ -663,13 +685,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 16,
     marginBottom: 8,
-    color: '#333333',
   },
   noSubscriptionSubtext: {
     fontSize: 14,
     textAlign: 'center',
     marginBottom: 24,
-    color: '#6E6E6E',
   },
   cancelButton: {
     flexDirection: 'row',
@@ -677,14 +697,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 16,
     borderRadius: 6,
-    backgroundColor: '#EFE6F5',
     borderWidth: 0.5,
-    borderColor: '#6A0DAD',
   },
   cancelButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#6A0DAD',
     marginLeft: 6,
   },
   sectionTitle: {
@@ -692,7 +709,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 12,
     marginTop: 8,
-    color: '#333333',
   },
   planHeader: {
     flexDirection: 'row',
@@ -703,7 +719,6 @@ const styles = StyleSheet.create({
   planName: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#333333',
   },
   priceRow: {
     flexDirection: 'row',
@@ -715,7 +730,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
-    backgroundColor: '#00549B',
   },
   priceText: {
     fontSize: 18,
@@ -738,13 +752,11 @@ const styles = StyleSheet.create({
   featureText: {
     fontSize: 14,
     marginLeft: 8,
-    color: '#6E6E6E',
   },
   subscribeButton: {
     padding: 14,
     borderRadius: 8,
     alignItems: 'center',
-    backgroundColor: '#00549B',
     marginTop: 8,
   },
   subscribeButtonText: {

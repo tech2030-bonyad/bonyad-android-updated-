@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,8 @@ import {
   TextInput,
   ActivityIndicator,
   Image,
+  Animated,
+  Dimensions,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,7 +19,9 @@ import { useFontFamily } from '../context/FontContext';
 import { storage } from '../utils/storage';
 import { API_BASE_URL, API_ENDPOINTS, buildApiUrl } from '../config/api';
 import { changePassword } from '../services/ProfileService';
+import { getTopPadding } from '../utils/statusBarHelper';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
+import { evaluatePassword } from '../validation/passwordPolicy';
 
 // Figma Design Colors
 const FIGMA_COLORS = {
@@ -49,9 +53,29 @@ export default function ChangePasswordScreen({ onBack }: ChangePasswordScreenPro
   const { colors, theme } = useTheme();
   const { fontFamily, scaledSize } = useFontFamily();
   const isDarkMode = theme === 'dark';
-  const isRTL = i18n.language === 'ar';
+  const inputTextAlign = i18n.language?.startsWith('ar') ? 'right' : 'left';
   
   const { alertState, showAlert, showError, hideAlert } = useAlertPopup();
+
+  const screenWidth = Dimensions.get('window').width;
+  const screenSlideX = useRef(new Animated.Value(0)).current;
+  const screenOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    screenSlideX.setValue(-screenWidth);
+    screenOpacity.setValue(0);
+    Animated.parallel([
+      Animated.timing(screenOpacity, { toValue: 1, duration: 220, useNativeDriver: true }),
+      Animated.spring(screenSlideX, { toValue: 0, tension: 65, friction: 11, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
+  const handleBackScreen = () => {
+    Animated.parallel([
+      Animated.timing(screenOpacity, { toValue: 0, duration: 180, useNativeDriver: true }),
+      Animated.timing(screenSlideX, { toValue: screenWidth, duration: 220, useNativeDriver: true }),
+    ]).start(() => onBack());
+  };
   
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [oldPassword, setOldPassword] = useState('');
@@ -60,8 +84,62 @@ export default function ChangePasswordScreen({ onBack }: ChangePasswordScreenPro
   const [showOldPassword, setShowOldPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [focusedField, setFocusedField] = useState<'new' | 'confirm' | null>(null);
+  const [validationAttempted, setValidationAttempted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isFetching, setIsFetching] = useState(true);
+
+  const isArabic = i18n.language?.startsWith('ar');
+  const alignment: 'flex-start' | 'flex-end' = isArabic ? 'flex-end' : 'flex-start';
+  const hintSuccess = colors.success || '#22C55E';
+  const hintMuted = colors.textTertiary || colors.textSecondary || '#9CA3AF';
+
+  const { rules: passwordRules, isValid: newPasswordValid } = useMemo(
+    () => evaluatePassword(newPassword),
+    [newPassword]
+  );
+  const confirmValid = confirmPassword.length > 0 && newPassword === confirmPassword;
+
+  const showNewPasswordHints =
+    focusedField === 'new' || newPassword.length > 0 || validationAttempted;
+  const showConfirmHints =
+    focusedField === 'confirm' || confirmPassword.length > 0 || validationAttempted;
+
+  const PasswordHintItem = ({
+    passed,
+    label,
+    isFirst = false,
+  }: {
+    passed: boolean;
+    label: string;
+    isFirst?: boolean;
+  }) => (
+    <View
+      style={[
+        styles.validationHintRow,
+        {
+          marginTop: isFirst ? 0 : 4,
+          flexDirection: isArabic ? 'row-reverse' : 'row',
+        },
+      ]}
+    >
+      <Ionicons name={passed ? 'checkmark-circle' : 'ellipse-outline'} size={16} color={passed ? hintSuccess : hintMuted} />
+      <Text
+        style={[
+          styles.validationHintText,
+          {
+            marginLeft: isArabic ? 0 : 6,
+            marginRight: isArabic ? 6 : 0,
+            color: passed ? hintSuccess : hintMuted,
+            textAlign: isArabic ? 'right' : 'left',
+            fontSize: scaledSize(12),
+          },
+        ]}
+      >
+        {label}
+      </Text>
+    </View>
+  );
 
   useEffect(() => {
     loadUserProfile();
@@ -109,49 +187,47 @@ export default function ChangePasswordScreen({ onBack }: ChangePasswordScreenPro
   };
 
   const handleChangePassword = async () => {
-    // Validation
     if (!oldPassword || !newPassword || !confirmPassword) {
-      showError(t('All fields are required'));
+      setValidationAttempted(true);
+      showError(t('changePassword.allFieldsRequired'), t('validation_failed'));
       return;
     }
-    
+    if (!newPasswordValid) {
+      setValidationAttempted(true);
+      showError(t('signup.validation.password.requirements'), t('validation_failed'));
+      return;
+    }
     if (newPassword !== confirmPassword) {
-      showError(t('New passwords do not match'));
+      setValidationAttempted(true);
+      showError(t('signup.validation.confirm'), t('validation_failed'));
       return;
     }
-    
-    if (newPassword.length < 6) {
-      showError(t('New password must be at least 6 characters'));
-      return;
-    }
-    
     if (oldPassword === newPassword) {
-      showError(t('New password must be different from current password'));
+      setValidationAttempted(true);
+      showError(t('changePassword.mustBeDifferent'), t('validation_failed'));
       return;
     }
-    
+
     setIsLoading(true);
-    
+
     try {
       const result = await changePassword(oldPassword, newPassword);
-      
-      showAlert(t('Success'), result.message, 'success', [
+
+      showAlert(t('changePassword.success'), result.message, 'success', [
         {
-          text: t('OK'),
+          text: t('changePassword.ok'),
           onPress: () => {
-            // Clear fields
             setOldPassword('');
             setNewPassword('');
             setConfirmPassword('');
-            
-            // Go back to profile
-            onBack();
-          }
-        }
+            setValidationAttempted(false);
+            setFocusedField(null);
+            handleBackScreen();
+          },
+        },
       ]);
-      
     } catch (error: any) {
-      showError(error.message || t('Failed to change password'));
+      showError(error.message || t('changePassword.failed'), t('Error'));
     } finally {
       setIsLoading(false);
     }
@@ -170,25 +246,25 @@ export default function ChangePasswordScreen({ onBack }: ChangePasswordScreenPro
 
   if (isFetching) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: bgColor, paddingTop: insets.top }]}>
+      <Animated.View style={[styles.loadingContainer, { backgroundColor: bgColor, paddingTop: insets.top, opacity: screenOpacity, transform: [{ translateX: screenSlideX }] }]}>
         <ActivityIndicator size="large" color={primaryColor} />
-      </View>
+      </Animated.View>
     );
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: bgColor, paddingTop: insets.top }]}>
+    <Animated.View style={[styles.container, { backgroundColor: bgColor, paddingTop: insets.top, opacity: screenOpacity, transform: [{ translateX: screenSlideX }] }]}>
       {/* Header */}
-      <View style={[styles.headerRow, isRTL && styles.rowRTL]}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
+      <View style={[styles.headerRow, styles.headerLTR]}>
+        <TouchableOpacity onPress={handleBackScreen} style={styles.backButton}>
           <Ionicons
-            name={isRTL ? 'chevron-forward' : 'chevron-back'}
+            name="chevron-back"
             size={24}
             color={headerTextColor}
           />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: headerTextColor, fontSize: scaledSize(18) }]}>
-          {t('Change Password')}
+          {t('changePassword.title')}
         </Text>
         <View style={styles.placeholder} />
       </View>
@@ -212,7 +288,7 @@ export default function ChangePasswordScreen({ onBack }: ChangePasswordScreenPro
             )}
           </View>
           <Text style={[styles.userName, { color: headerTextColor, fontSize: scaledSize(18) }]}>
-            {userProfile?.name || t('profile.usernamePlaceholder')}
+            {userProfile?.name || t('myData.usernamePlaceholder')}
           </Text>
         </View>
 
@@ -223,15 +299,15 @@ export default function ChangePasswordScreen({ onBack }: ChangePasswordScreenPro
         <View style={styles.formSection}>
           {/* Enter Current Password */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: textColor, fontSize: scaledSize(14) }, isRTL && styles.textRTL]}>
-              {t('Enter Current Password')}
+            <Text style={[styles.label, { color: textColor, fontSize: scaledSize(14) }]}>
+              {t('changePassword.currentPassword')}
             </Text>
             <View style={[styles.inputWrapper, { backgroundColor: inputBgColor, borderColor: inputBorderColor }]}>
                 <TextInput
-                style={[styles.input, { color: inputTextColor }, isRTL && styles.textRTL]}
+                style={[styles.input, { color: inputTextColor, textAlign: inputTextAlign }]}
                   value={oldPassword}
                   onChangeText={setOldPassword}
-                  placeholder={t('Enter current password')}
+                  placeholder={t('changePassword.enterCurrentPassword')}
                 placeholderTextColor={isDarkMode ? '#888888' : '#999999'}
                   secureTextEntry={!showOldPassword}
                 />
@@ -247,17 +323,19 @@ export default function ChangePasswordScreen({ onBack }: ChangePasswordScreenPro
 
           {/* Enter New Password */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: textColor, fontSize: scaledSize(14) }, isRTL && styles.textRTL]}>
-              {t('Enter New Password')}
+            <Text style={[styles.label, { color: textColor, fontSize: scaledSize(14) }]}>
+              {t('changePassword.newPassword')}
             </Text>
             <View style={[styles.inputWrapper, { backgroundColor: inputBgColor, borderColor: inputBorderColor }]}>
                 <TextInput
-                style={[styles.input, { color: inputTextColor }, isRTL && styles.textRTL]}
+                style={[styles.input, { color: inputTextColor, textAlign: inputTextAlign }]}
                   value={newPassword}
-                  onChangeText={setNewPassword}
-                  placeholder={t('Enter new password')}
+                  onChangeText={(v) => setNewPassword(v.replace(/\s/g, ''))}
+                  placeholder={t('changePassword.enterNewPassword')}
                 placeholderTextColor={isDarkMode ? '#888888' : '#999999'}
                   secureTextEntry={!showNewPassword}
+                  onFocus={() => setFocusedField('new')}
+                  onBlur={() => setFocusedField((f) => (f === 'new' ? null : f))}
                 />
               <TouchableOpacity onPress={() => setShowNewPassword(!showNewPassword)} style={styles.eyeIcon}>
                   <Ionicons
@@ -271,17 +349,19 @@ export default function ChangePasswordScreen({ onBack }: ChangePasswordScreenPro
 
           {/* Re-Enter New Password */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: textColor, fontSize: scaledSize(14) }, isRTL && styles.textRTL]}>
-              {t('Re-Enter New Password')}
-              </Text>
+            <Text style={[styles.label, { color: textColor, fontSize: scaledSize(14) }]}>
+              {t('changePassword.reEnterNewPassword')}
+            </Text>
             <View style={[styles.inputWrapper, { backgroundColor: inputBgColor, borderColor: inputBorderColor }]}>
                 <TextInput
-                style={[styles.input, { color: inputTextColor }, isRTL && styles.textRTL]}
+                style={[styles.input, { color: inputTextColor, textAlign: inputTextAlign }]}
                   value={confirmPassword}
-                  onChangeText={setConfirmPassword}
-                  placeholder={t('Confirm new password')}
+                  onChangeText={(v) => setConfirmPassword(v.replace(/\s/g, ''))}
+                  placeholder={t('changePassword.confirmNewPassword')}
                 placeholderTextColor={isDarkMode ? '#888888' : '#999999'}
                   secureTextEntry={!showConfirmPassword}
+                  onFocus={() => setFocusedField('confirm')}
+                  onBlur={() => setFocusedField((f) => (f === 'confirm' ? null : f))}
                 />
               <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)} style={styles.eyeIcon}>
                   <Ionicons
@@ -291,6 +371,11 @@ export default function ChangePasswordScreen({ onBack }: ChangePasswordScreenPro
                   />
                 </TouchableOpacity>
               </View>
+            {showConfirmHints && (
+              <View style={[styles.validationHintGroup, { alignItems: alignment }]}>
+                <PasswordHintItem passed={confirmValid} label={t('signup.validation.confirm')} isFirst />
+              </View>
+            )}
           </View>
         </View>
 
@@ -307,7 +392,7 @@ export default function ChangePasswordScreen({ onBack }: ChangePasswordScreenPro
             {isLoading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-            <Text style={styles.saveButtonText}>{t('Save')}</Text>
+            <Text style={styles.saveButtonText}>{t('changePassword.save')}</Text>
             )}
           </TouchableOpacity>
       </ScrollView>
@@ -321,7 +406,7 @@ export default function ChangePasswordScreen({ onBack }: ChangePasswordScreenPro
         buttons={alertState.buttons}
         onClose={hideAlert}
       />
-    </View>
+    </Animated.View>
   );
 }
 
@@ -340,6 +425,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
+  },
+  headerLTR: {
+    direction: 'ltr',
   },
   backButton: {
     width: 40,
@@ -420,6 +508,17 @@ const styles = StyleSheet.create({
   eyeIcon: {
     padding: 4,
   },
+  validationHintGroup: {
+    marginTop: 6,
+    marginBottom: 4,
+  },
+  validationHintRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  validationHintText: {
+    lineHeight: 16,
+  },
   saveButton: {
     paddingVertical: 16,
     borderRadius: 8,
@@ -434,11 +533,5 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '400',
-  },
-  rowRTL: {
-    flexDirection: 'row-reverse',
-  },
-  textRTL: {
-    textAlign: 'right',
   },
 });

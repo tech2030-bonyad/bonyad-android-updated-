@@ -23,8 +23,10 @@ if (__DEV__) {
   console.log('✅ [API] API_BASE_URL (small tasks use this):', API_BASE_URL);
 }
 
-// Chatbot API - Ngrok endpoint (only for AI chat)
-export const CHATBOT_BASE_URL = 'https://glynda-unvexatious-felisa.ngrok-free.dev';
+// Chatbot API - Local development server (Python chatbot on port 7860)
+// For Android emulator: use 10.0.2.2 which maps to host's localhost
+// For physical device: use your machine's actual IP (e.g., http://192.168.1.xxx:7860)
+export const CHATBOT_BASE_URL = 'http://10.0.2.2:7860';
 
 export const API_ENDPOINTS = {
   // Authentication

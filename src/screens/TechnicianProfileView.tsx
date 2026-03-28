@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
+import { useRTL } from '../hooks/useRTL';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getTechnicianProfile, TechnicianProfile } from '../services/TechnicianService';
 import { getPublicPortfolio, getPublicPDFInfo, getQRCodeUrl, PortfolioPDFInfo } from '../services/PortfolioService';
@@ -52,6 +53,7 @@ export default function TechnicianProfileView({
   const { t, i18n } = useTranslation();
   const { colors } = useTheme();
   const { fontFamily, scaledSize } = useFontFamily();
+  const { arrowBackIcon, backIcon } = useRTL();
   const insets = useSafeAreaInsets();
   
   // Responsive dimensions
@@ -288,7 +290,7 @@ export default function TechnicianProfileView({
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={[styles.header, { paddingTop: Math.max(insets.top, 50), borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={onBack}>
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
+            <Ionicons name={arrowBackIcon} size={24} color={colors.text} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: colors.text }]}>
             {t('Technician Profile')}
@@ -310,7 +312,7 @@ export default function TechnicianProfileView({
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={[styles.header, { paddingTop: Math.max(insets.top, 50), borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={onBack}>
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
+            <Ionicons name={arrowBackIcon} size={24} color={colors.text} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: colors.text }]}>
             {t('Technician Profile')}
@@ -351,7 +353,7 @@ export default function TechnicianProfileView({
           }
         ]}>
           <TouchableOpacity onPress={onBack}>
-            <Ionicons name="arrow-back" size={IS_SMALL_WEB ? 22 : 24} color={colors.text} />
+            <Ionicons name={arrowBackIcon} size={IS_SMALL_WEB ? 22 : 24} color={colors.text} />
           </TouchableOpacity>
           <Text style={[
             styles.headerTitle, 
@@ -1081,7 +1083,7 @@ export default function TechnicianProfileView({
                   disabled={currentPhotoIndex === 0}
             >
               <Ionicons 
-                    name="chevron-back"
+                    name={backIcon}
                     size={32}
                     color={currentPhotoIndex === 0 ? 'rgba(255, 255, 255, 0.3)' : '#fff'}
                   />
@@ -1158,7 +1160,7 @@ export default function TechnicianProfileView({
         }
       ]}>
         <TouchableOpacity onPress={onBack}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+          <Ionicons name={arrowBackIcon} size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={[
           styles.desktopHeaderTitle, 
@@ -1869,7 +1871,7 @@ export default function TechnicianProfileView({
                 disabled={currentPhotoIndex === 0}
               >
                 <Ionicons
-                  name="chevron-back"
+                  name={backIcon}
                   size={32}
                   color={currentPhotoIndex === 0 ? 'rgba(255, 255, 255, 0.3)' : '#fff'}
                 />

@@ -10,7 +10,14 @@ import { API_ENDPOINTS, buildApiUrl, buildApiUrlWithParams } from '../config/api
  * Legacy: serviceId.
  */
 export interface CreateProjectRequest {
+  title?: string;
   description: string;
+  targetScope?: string;
+  timeline?: string;
+  requirements?: string;
+  projectPurpose?: string;
+  deliverables?: string;
+  projectPhases?: string[];
   serviceCategoryId?: number;
   serviceSubcategoryId?: number;
   serviceId?: number;
@@ -66,7 +73,28 @@ export const createProject = async (data: CreateProjectRequest): Promise<CreateP
     }
 
     const formData = new FormData();
+    if (data.title) {
+      formData.append('title', data.title);
+    }
     formData.append('description', data.description);
+    if (data.targetScope) {
+      formData.append('targetScope', data.targetScope);
+    }
+    if (data.timeline) {
+      formData.append('timeline', data.timeline);
+    }
+    if (data.requirements) {
+      formData.append('requirements', data.requirements);
+    }
+    if (data.projectPurpose) {
+      formData.append('projectPurpose', data.projectPurpose);
+    }
+    if (data.deliverables) {
+      formData.append('deliverables', data.deliverables);
+    }
+    if (data.projectPhases && data.projectPhases.length > 0) {
+      formData.append('projectPhases', JSON.stringify(data.projectPhases));
+    }
 
     if (data.serviceCategoryId) {
       formData.append('serviceCategoryId', data.serviceCategoryId.toString());

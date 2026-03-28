@@ -9,12 +9,13 @@ import {
   Keyboard,
   Platform,
   KeyboardAvoidingView,
+  Animated,
+  Dimensions,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
 import ConfirmationPopup, { useConfirmationPopup } from '../components/ConfirmationPopup';
 import { CreateCheckoutRequest } from '../services/PaymentService';
@@ -38,7 +39,27 @@ export default function CommissionPaymentScreen({
   const { t } = useTranslation();
   const { colors } = useTheme();
   const { fontFamily, scaledSize } = useFontFamily();
-  const insets = useSafeAreaInsets();
+  const screenWidth = Dimensions.get('window').width;
+  const screenSlideX = useRef(new Animated.Value(0)).current;
+  const screenOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    screenSlideX.setValue(-screenWidth);
+    screenOpacity.setValue(0);
+    Animated.parallel([
+      Animated.timing(screenOpacity, { toValue: 1, duration: 220, useNativeDriver: true }),
+      Animated.spring(screenSlideX, { toValue: 0, tension: 65, friction: 11, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
+  const handleBackScreen = () => {
+    Keyboard.dismiss();
+    Animated.parallel([
+      Animated.timing(screenOpacity, { toValue: 0, duration: 180, useNativeDriver: true }),
+      Animated.timing(screenSlideX, { toValue: screenWidth, duration: 220, useNativeDriver: true }),
+    ]).start(() => onBack?.());
+  };
+
   const [projectAmount, setProjectAmount] = useState('');
   const [commission, setCommission] = useState('');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
@@ -142,7 +163,7 @@ export default function CommissionPaymentScreen({
 
     console.log('📤 [CommissionPayment] Checkout request built:', JSON.stringify(checkoutRequest, null, 2));
 
-    const description = t('Commission payment for project worth {{amount}} SAR', {
+    const description = t('commissionPayment.paymentDescription', {
       amount: projectAmountValue.toFixed(2),
     });
 
@@ -156,8 +177,8 @@ export default function CommissionPaymentScreen({
     if (commissionAmount <= 0) return;
 
     showConfirmation(
-      t('Payment Confirmation'),
-      t('You are about to pay {{amount}} SAR commission for a project worth {{project}} SAR', { 
+      t('commissionPayment.confirmTitle'),
+      t('commissionPayment.confirmMessage', {
         amount: commissionAmount.toFixed(2),
         project: projectAmountValue.toFixed(2),
       }),
@@ -171,121 +192,134 @@ export default function CommissionPaymentScreen({
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
     >
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        onScrollBeginDrag={() => Keyboard.dismiss()}
+      <Animated.View
+        style={[
+          styles.animatedScreen,
+          {
+            backgroundColor: colors.background,
+            // Flush under AppTopBar — same as portfolio (no duplicate safe-area inset)
+            paddingTop: 0,
+            opacity: screenOpacity,
+            transform: [{ translateX: screenSlideX }],
+          },
+        ]}
       >
-        {/* Header */}
-        {onBack && (
-          <View style={[styles.header, { paddingTop: Math.max(insets.top, 50), borderBottomColor: colors.border }]}>
-            <TouchableOpacity onPress={onBack}>
-              <Ionicons name="arrow-back" size={24} color={colors.text} />
-            </TouchableOpacity>
-            <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(20) }]}>
-              {t('Commission Payment')}
-            </Text>
-            <View style={{ width: 24 }} />
-          </View>
-        )}
-
-        <View style={styles.content}>
-          {/* Title */}
-          <Text style={[styles.title, { color: colors.text, fontSize: scaledSize(24) }]}>
-            {t('Commission Payment')}
-          </Text>
-
-          {/* Description */}
-          <Text style={[styles.description, { color: colors.textSecondary, fontSize: scaledSize(14) }]}>
-            {t('Enter the project amount to calculate and pay the commission fee ({{rate}}% of project amount, min {{min}} SAR)', {
-              rate: (commissionSettings.commissionRate * 100).toFixed(0),
-              min: commissionSettings.minCommission,
-            })}
-          </Text>
-
-          {/* Project Amount Field */}
-          <View style={styles.fieldContainer}>
-            <Text style={[styles.fieldLabel, { color: colors.text, fontSize: scaledSize(16) }]}>
-              {t('Project Amount')}
-            </Text>
-            <View style={[styles.inputContainer, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
-              <TextInput
-                style={[styles.input, { color: colors.text }]}
-                placeholder={t('Enter project amount')}
-                placeholderTextColor={colors.textSecondary}
-                value={projectAmount}
-                onChangeText={handleAmountChange}
-                keyboardType="decimal-pad"
-                {...Platform.select({
-                  web: {
-                    inputMode: 'decimal' as any,
-                    autoComplete: 'off' as any,
-                    type: 'text' as any,
-                  },
-                })}
-              />
-              <RialIcon size={scaledSize(18)} variant="dark" />
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          onScrollBeginDrag={() => Keyboard.dismiss()}
+        >
+          {/* Header – LTR so back stays left */}
+          {onBack && (
+            <View style={[styles.header, styles.headerLTR, { borderBottomColor: colors.border }]}>
+              <TouchableOpacity onPress={handleBackScreen}>
+                <Ionicons name="chevron-back" size={24} color={colors.text} />
+              </TouchableOpacity>
+              <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(17) }]}>
+                {t('commissionPayment.title')}
+              </Text>
+              <View style={{ width: 24 }} />
             </View>
-          </View>
+          )}
 
-          {/* Commission Value Field (Read-only) */}
-          <View style={styles.fieldContainer}>
-            <Text style={[styles.fieldLabel, { color: colors.text, fontSize: scaledSize(16) }]}>
-              {t('Commission Amount')}
+          <View style={styles.content}>
+            {/* Title */}
+            <Text style={[styles.title, { color: colors.text, fontSize: scaledSize(24) }]}>
+              {t('commissionPayment.title')}
             </Text>
-            <View style={[styles.inputContainer, styles.disabledInput, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
-              <TextInput
-                style={[styles.input, { color: colors.text }]}
-                value={commission ? `${commission}` : ''}
-                placeholder={t('Will be calculated automatically')}
-                placeholderTextColor={colors.textSecondary}
-                editable={false}
-              />
-            </View>
-          </View>
 
-          {/* Info Text */}
-          <View style={[styles.infoContainer, { backgroundColor: colors.primary + '10', borderColor: colors.primary + '30' }]}>
-            <Ionicons name="information-circle" size={20} color={colors.primary} />
-            <Text style={[styles.infoText, { color: colors.text, fontSize: scaledSize(14) }]}>
-              {t('Commission is calculated as {{rate}}% of the project amount, with a minimum of {{min}} SAR and maximum of {{max}} SAR', {
+            {/* Description */}
+            <Text style={[styles.description, { color: colors.textSecondary, fontSize: scaledSize(14) }]}>
+              {t('commissionPayment.description', {
                 rate: (commissionSettings.commissionRate * 100).toFixed(0),
                 min: commissionSettings.minCommission,
-                max: commissionSettings.maxCommission,
               })}
             </Text>
-          </View>
 
-          {/* Pay Button - Inside scroll content for proper positioning with tab bar */}
-          <View style={[styles.buttonContainer, { paddingBottom: 20 }]}>
-            <TouchableOpacity
-              style={[
-                styles.payButton,
-                {
-                  backgroundColor: commissionAmount > 0 ? colors.primary : colors.border,
-                  opacity: commissionAmount > 0 && !isProcessingPayment ? 1 : 0.6,
-                },
-              ]}
-              onPress={processPayment}
-              disabled={commissionAmount <= 0 || isProcessingPayment}
-            >
-              {isProcessingPayment ? (
-                <View style={styles.processingContainer}>
-                  <Text style={[styles.payButtonText, { color: colors.cardBackground, fontSize: scaledSize(18) }]}>
-                    {t('Processing...')}
+            {/* Project Amount Field */}
+            <View style={styles.fieldContainer}>
+              <Text style={[styles.fieldLabel, { color: colors.text, fontSize: scaledSize(16) }]}>
+                {t('commissionPayment.projectAmount')}
+              </Text>
+              <View style={[styles.inputContainer, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+                <TextInput
+                  style={[styles.input, { color: colors.text }]}
+                  placeholder={t('commissionPayment.enterProjectAmount')}
+                  placeholderTextColor={colors.textSecondary}
+                  value={projectAmount}
+                  onChangeText={handleAmountChange}
+                  keyboardType="decimal-pad"
+                  {...Platform.select({
+                    web: {
+                      inputMode: 'decimal' as any,
+                      autoComplete: 'off' as any,
+                      type: 'text' as any,
+                    },
+                  })}
+                />
+                <RialIcon size={scaledSize(18)} variant="dark" />
+              </View>
+            </View>
+
+            {/* Commission Value Field (Read-only) */}
+            <View style={styles.fieldContainer}>
+              <Text style={[styles.fieldLabel, { color: colors.text, fontSize: scaledSize(16) }]}>
+                {t('commissionPayment.commissionAmount')}
+              </Text>
+              <View style={[styles.inputContainer, styles.disabledInput, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+                <TextInput
+                  style={[styles.input, { color: colors.text }]}
+                  value={commission ? `${commission}` : ''}
+                  placeholder={t('commissionPayment.calculatedAutomatically')}
+                  placeholderTextColor={colors.textSecondary}
+                  editable={false}
+                />
+              </View>
+            </View>
+
+            {/* Info Text */}
+            <View style={[styles.infoContainer, { backgroundColor: colors.primary + '10', borderColor: colors.primary + '30' }]}>
+              <Ionicons name="information-circle" size={20} color={colors.primary} />
+              <Text style={[styles.infoText, { color: colors.text, fontSize: scaledSize(14) }]}>
+                {t('commissionPayment.infoText', {
+                  rate: (commissionSettings.commissionRate * 100).toFixed(0),
+                  min: commissionSettings.minCommission,
+                  max: commissionSettings.maxCommission,
+                })}
+              </Text>
+            </View>
+
+            {/* Pay Button */}
+            <View style={[styles.buttonContainer, { paddingBottom: 20 }]}>
+              <TouchableOpacity
+                style={[
+                  styles.payButton,
+                  {
+                    backgroundColor: commissionAmount > 0 ? colors.primary : colors.border,
+                    opacity: commissionAmount > 0 && !isProcessingPayment ? 1 : 0.6,
+                  },
+                ]}
+                onPress={processPayment}
+                disabled={commissionAmount <= 0 || isProcessingPayment}
+              >
+                {isProcessingPayment ? (
+                  <View style={styles.processingContainer}>
+                    <Text style={[styles.payButtonText, { color: colors.cardBackground, fontSize: scaledSize(18) }]}>
+                    {t('commissionPayment.processing')}
                   </Text>
-                </View>
-              ) : (
-                <Text style={[styles.payButtonText, { color: colors.cardBackground, fontSize: scaledSize(18) }]}>
-                  {t('Pay {{amount}} SAR', { amount: commissionAmount > 0 ? commissionAmount.toFixed(2) : '0.00' })}
-                </Text>
-              )}
-            </TouchableOpacity>
+                  </View>
+                ) : (
+                  <Text style={[styles.payButtonText, { color: colors.cardBackground, fontSize: scaledSize(18) }]}>
+                    {t('commissionPayment.payAmount', { amount: commissionAmount > 0 ? commissionAmount.toFixed(2) : '0.00' })}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
+      </Animated.View>
       
       {/* Alert Popup -->
       <AlertPopup
@@ -318,30 +352,38 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  animatedScreen: {
+    flex: 1,
+  },
+  headerLTR: {
+    direction: 'ltr',
+  },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    padding: 20,
-    paddingBottom: 40, // Reduced padding since button is now inside scroll content
+    paddingHorizontal: 20,
+    paddingTop: 0,
+    paddingBottom: 40,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
+    paddingHorizontal: 0,
+    paddingTop: 0,
+    paddingBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 17,
+    fontWeight: '700',
     flex: 1,
     textAlign: 'center',
   },
   content: {
     flex: 1,
-    paddingTop: 20,
+    paddingTop: 16,
   },
   title: {
     fontSize: 24,

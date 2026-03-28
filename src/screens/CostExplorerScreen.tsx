@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Picker } from '@react-native-picker/picker';
 import { buildApiUrl, API_ENDPOINTS } from '../config/api';
 import { storage } from '../utils/storage';
+import { getTopPadding } from '../utils/statusBarHelper';
 
 interface CostExplorerScreenProps {
   onBack: () => void;
@@ -91,11 +92,11 @@ export default function CostExplorerScreen({ onBack }: CostExplorerScreenProps) 
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
+    <View style={[styles.container, { paddingTop: getTopPadding(insets), backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={[styles.header, { backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Ionicons name={i18n.language === 'ar' ? 'arrow-forward' : 'arrow-back'} size={24} color={colors.text} />
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(18) }]}>
           {i18n.language === 'en' ? 'Cost Explorer' : 'استكشاف التكاليف'}

@@ -98,6 +98,7 @@ export default function AnimatedProjectTypeToggle({
         flexDirection: 'row',
         overflow: 'hidden',
         height: 52, // Increased for larger font
+        direction: 'ltr', // Keep toggle order consistent (Large left, Small right), no RTL mirroring
       }}
       onLayout={handleLayout}
     >
@@ -130,7 +131,7 @@ export default function AnimatedProjectTypeToggle({
           }}
           numberOfLines={1}
         >
-          {selectedType === 'large' ? t('Large') : t('Small')}
+          {selectedType === 'large' ? t('projectsScreen.large') : t('projectsScreen.small')}
         </Text>
       </Animated.View>
 
@@ -160,7 +161,7 @@ export default function AnimatedProjectTypeToggle({
             }}
             numberOfLines={1}
           >
-            {t('Large')}
+            {t('projectsScreen.large')}
           </Text>
         )}
       </TouchableOpacity>
@@ -191,7 +192,7 @@ export default function AnimatedProjectTypeToggle({
             }}
             numberOfLines={1}
           >
-            {t('Small')}
+            {t('projectsScreen.small')}
           </Text>
         )}
       </TouchableOpacity>

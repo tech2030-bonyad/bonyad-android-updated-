@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   Image,
   ActivityIndicator,
+  Animated,
+  Dimensions,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
@@ -64,9 +66,29 @@ export default function MyDataScreen({
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const screenWidth = Dimensions.get('window').width;
+  const screenSlideX = useRef(new Animated.Value(0)).current;
+  const screenOpacity = useRef(new Animated.Value(0)).current;
+
   useEffect(() => {
     fetchUserProfile();
   }, []);
+
+  useEffect(() => {
+    screenSlideX.setValue(-screenWidth);
+    screenOpacity.setValue(0);
+    Animated.parallel([
+      Animated.timing(screenOpacity, { toValue: 1, duration: 220, useNativeDriver: true }),
+      Animated.spring(screenSlideX, { toValue: 0, tension: 65, friction: 11, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
+  const handleBackScreen = () => {
+    Animated.parallel([
+      Animated.timing(screenOpacity, { toValue: 0, duration: 180, useNativeDriver: true }),
+      Animated.timing(screenSlideX, { toValue: screenWidth, duration: 220, useNativeDriver: true }),
+    ]).start(() => onBack());
+  };
 
   const fetchUserProfile = async () => {
     try {
@@ -92,9 +114,9 @@ export default function MyDataScreen({
 
   if (isLoading) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: bgColor, paddingTop: insets.top }]}>
+      <Animated.View style={[styles.loadingContainer, { backgroundColor: bgColor, paddingTop: insets.top, opacity: screenOpacity, transform: [{ translateX: screenSlideX }] }]}>
         <ActivityIndicator size="large" color={primaryColor} />
-      </View>
+      </Animated.View>
     );
   }
 
@@ -110,43 +132,38 @@ export default function MyDataScreen({
     <TouchableOpacity
       style={[
         styles.menuOption,
-        { 
+        {
           borderColor: FIGMA_COLORS.borderLight,
           backgroundColor: cardBgColor,
         },
-        isRTL && styles.rowRTL,
       ]}
       onPress={onPress}
     >
       <View style={[styles.menuIconContainer, { backgroundColor: iconBgColor }]}>
         <Ionicons name={icon} size={24} color={iconColor} />
       </View>
-      <View style={[styles.menuTextContainer, isRTL && styles.textContainerRTL]}>
-        <Text style={[styles.menuTitle, { color: textColor, fontSize: scaledSize(16) }, isRTL && styles.textRTL]}>
+      <View style={styles.menuTextContainer}>
+        <Text style={[styles.menuTitle, { color: textColor, fontSize: scaledSize(16) }]}>
           {title}
         </Text>
       </View>
-      <Ionicons 
-        name={isRTL ? 'chevron-back' : 'chevron-forward'} 
-        size={24} 
-        color={primaryColor} 
-      />
+      <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={24} color={primaryColor} />
     </TouchableOpacity>
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: bgColor, paddingTop: insets.top }]}>
+    <Animated.View style={[styles.container, { backgroundColor: bgColor, paddingTop: insets.top, opacity: screenOpacity, transform: [{ translateX: screenSlideX }] }]}>
       {/* Header */}
-      <View style={[styles.headerRow, isRTL && styles.rowRTL]}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
+      <View style={[styles.headerRow, styles.headerLTR]}>
+        <TouchableOpacity onPress={handleBackScreen} style={styles.backButton}>
           <Ionicons
-            name={isRTL ? 'chevron-forward' : 'chevron-back'}
+            name="chevron-back"
             size={24}
             color={textColor}
           />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: textColor, fontSize: scaledSize(18) }]}>
-          {isTechnician ? t('Service Provider Profile') : t('User Profile')}
+          {isTechnician ? t('myData.titleTechnician') : t('myData.titleUser')}
         </Text>
         <View style={styles.placeholder} />
       </View>
@@ -169,7 +186,7 @@ export default function MyDataScreen({
             )}
           </View>
           <Text style={[styles.userName, { color: textColor, fontSize: scaledSize(18) }]}>
-            {userProfile?.name || t('profile.usernamePlaceholder')}
+            {userProfile?.name || t('myData.usernamePlaceholder')}
           </Text>
         </View>
 
@@ -180,19 +197,19 @@ export default function MyDataScreen({
         <View style={styles.menuSection}>
           <MenuOption
             icon="person-outline"
-            title={t('Edit Profile Info')}
+            title={t('myData.editProfileInfo')}
             onPress={onEditProfile}
           />
 
           <MenuOption
             icon="call-outline"
-            title={t('Change Phone Number')}
+            title={t('myData.changePhoneNumber')}
             onPress={onChangePhone}
           />
 
           <MenuOption
             icon="lock-closed-outline"
-            title={t('Change Password')}
+            title={t('myData.changePassword')}
             onPress={onChangePassword}
           />
 
@@ -201,12 +218,12 @@ export default function MyDataScreen({
         {/* Save Button */}
         <TouchableOpacity
           style={[styles.saveButton, { backgroundColor: primaryColor }]}
-          onPress={onBack}
+          onPress={handleBackScreen}
         >
-          <Text style={styles.saveButtonText}>{t('Save')}</Text>
+          <Text style={styles.saveButtonText}>{t('myData.save')}</Text>
         </TouchableOpacity>
       </ScrollView>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -225,6 +242,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
+  },
+  headerLTR: {
+    direction: 'ltr',
   },
   backButton: {
     width: 40,
@@ -316,14 +336,5 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '400',
-  },
-  rowRTL: {
-    flexDirection: 'row-reverse',
-  },
-  textRTL: {
-    textAlign: 'right',
-  },
-  textContainerRTL: {
-    alignItems: 'flex-end',
   },
 });

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   ScrollView,
   Platform,
@@ -14,11 +14,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { Button } from 'react-native-paper';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
+import { useRTL } from '../hooks/useRTL';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { resetPassword } from '../services/AuthService';
 import { showAlert, showError } from '../utils/alert';
+import { getTopPadding } from '../utils/statusBarHelper';
 import { PasswordInput } from '../components/CustomInput';
 import BonyadLogo from '../components/BonyadLogo';
+import { evaluatePassword } from '../validation/passwordPolicy';
 
 interface ResetPasswordScreenProps {
   phoneNumber: string;
@@ -29,13 +32,17 @@ interface ResetPasswordScreenProps {
 }
 
 export default function ResetPasswordScreen({ phoneNumber, role, otpCode, onBack, onPasswordReset }: ResetPasswordScreenProps) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const { colors } = useTheme();
-  const { fontFamily, scaledSize } = useFontFamily();
+  const { scaledSize } = useFontFamily();
+  const { arrowBackIcon, isRTL, rowDirection, textAlign } = useRTL();
   const insets = useSafeAreaInsets();
-  
+  const alignment: 'flex-start' | 'flex-end' = isRTL ? 'flex-end' : 'flex-start';
+  const hintSuccess = colors.success || '#22C55E';
+  const hintMuted = colors.textTertiary || colors.textSecondary || '#9CA3AF';
+
   const [screenWidth, setScreenWidth] = useState(Dimensions.get('window').width);
-  
+
   useEffect(() => {
     const subscription = Dimensions.addEventListener('change', ({ window }) => {
       setScreenWidth(window.width);
@@ -49,21 +56,71 @@ export default function ResetPasswordScreen({ phoneNumber, role, otpCode, onBack
 
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [focusedField, setFocusedField] = useState<'new' | 'confirm' | null>(null);
+  const [validationAttempted, setValidationAttempted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
+  const { rules: passwordRules, isValid: newPasswordValid } = useMemo(
+    () => evaluatePassword(newPassword),
+    [newPassword]
+  );
+  const confirmValid = confirmPassword.length > 0 && newPassword === confirmPassword;
+
+  const PasswordHintItem = ({
+    passed,
+    label,
+    isFirst = false,
+  }: {
+    passed: boolean;
+    label: string;
+    isFirst?: boolean;
+  }) => (
+    <View
+      style={[
+        styles.validationHintRow,
+        {
+          marginTop: isFirst ? 0 : 4,
+          flexDirection: rowDirection,
+        },
+      ]}
+    >
+      <Ionicons name={passed ? 'checkmark-circle' : 'ellipse-outline'} size={16} color={passed ? hintSuccess : hintMuted} />
+      <Text
+        style={[
+          styles.validationHintText,
+          {
+            marginLeft: isRTL ? 0 : 6,
+            marginRight: isRTL ? 6 : 0,
+            color: passed ? hintSuccess : hintMuted,
+            textAlign: textAlign as 'left' | 'right',
+            fontSize: scaledSize(12),
+          },
+        ]}
+      >
+        {label}
+      </Text>
+    </View>
+  );
+
+  const showNewHints =
+    focusedField === 'new' || newPassword.length > 0 || validationAttempted;
+  const showConfirmHints =
+    focusedField === 'confirm' || confirmPassword.length > 0 || validationAttempted;
+
   const handleReset = async () => {
-    if (!newPassword.trim()) {
-      showError(t('Please enter a new password'));
+    if (!newPassword.trim() || !confirmPassword.trim()) {
+      setValidationAttempted(true);
+      showError(t('missing_fields'), t('validation_failed'));
       return;
     }
-
-    if (newPassword.length < 6) {
-      showError(t('Password must be at least 6 characters'));
+    if (!newPasswordValid) {
+      setValidationAttempted(true);
+      showError(t('signup.validation.password.requirements'), t('validation_failed'));
       return;
     }
-
-    if (newPassword !== confirmPassword) {
-      showError(t('Passwords do not match'));
+    if (!confirmValid) {
+      setValidationAttempted(true);
+      showError(t('signup.validation.confirm'), t('validation_failed'));
       return;
     }
 
@@ -73,11 +130,50 @@ export default function ResetPasswordScreen({ phoneNumber, role, otpCode, onBack
       showAlert(t('Password reset successfully'));
       onPasswordReset();
     } catch (error: any) {
-      showError(error.message || t('Failed to reset password'));
+      showError(error.message || t('Failed to reset password'), t('Error'));
     } finally {
       setIsLoading(false);
     }
   };
+
+  const passwordFormFields = (
+    <>
+      <PasswordInput
+        label={t('New Password')}
+        value={newPassword}
+        onChangeText={(v) => setNewPassword(v.replace(/\s/g, ''))}
+        placeholder={t('Enter your new password')}
+        autoCapitalize="none"
+        onFocus={() => setFocusedField('new')}
+        onBlur={() => setFocusedField((f) => (f === 'new' ? null : f))}
+      />
+      {showNewHints && (
+        <View style={[styles.validationHintGroup, { alignItems: alignment }]}>
+          <PasswordHintItem passed={passwordRules.minLength} label={t('signup.validation.password.minLength')} isFirst />
+          <PasswordHintItem passed={passwordRules.uppercase} label={t('signup.validation.password.uppercase')} />
+          <PasswordHintItem passed={passwordRules.number} label={t('signup.validation.password.number')} />
+          <PasswordHintItem passed={passwordRules.special} label={t('signup.validation.password.special')} />
+          <PasswordHintItem passed={passwordRules.noSpaces} label={t('signup.validation.password.spaces')} />
+          <PasswordHintItem passed={passwordRules.noSequence} label={t('signup.validation.password.sequence')} />
+        </View>
+      )}
+
+      <PasswordInput
+        label={t('Confirm Password')}
+        value={confirmPassword}
+        onChangeText={(v) => setConfirmPassword(v.replace(/\s/g, ''))}
+        placeholder={t('Confirm your new password')}
+        autoCapitalize="none"
+        onFocus={() => setFocusedField('confirm')}
+        onBlur={() => setFocusedField((f) => (f === 'confirm' ? null : f))}
+      />
+      {showConfirmHints && (
+        <View style={[styles.validationHintGroup, { alignItems: alignment }]}>
+          <PasswordHintItem passed={confirmValid} label={t('signup.validation.confirm')} isFirst />
+        </View>
+      )}
+    </>
+  );
 
   if (shouldRenderMobile) {
     return (
@@ -87,13 +183,13 @@ export default function ResetPasswordScreen({ phoneNumber, role, otpCode, onBack
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
         <ScrollView
-          contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top }]}
+          contentContainerStyle={[styles.scrollContent, { paddingTop: getTopPadding(insets) }]}
           keyboardShouldPersistTaps="handled"
         >
           {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={onBack} style={styles.backButton}>
-              <Ionicons name="arrow-back" size={24} color={colors.text} />
+              <Ionicons name={arrowBackIcon} size={24} color={colors.text} />
             </TouchableOpacity>
             <BonyadLogo size="small" />
             <Text style={[styles.title, { color: colors.text, fontSize: scaledSize(24) }]}>{t('Reset Password')}</Text>
@@ -102,27 +198,13 @@ export default function ResetPasswordScreen({ phoneNumber, role, otpCode, onBack
             </Text>
           </View>
 
-          {/* New Password Input */}
-          <PasswordInput
-            label={t('New Password')}
-            value={newPassword}
-            onChangeText={setNewPassword}
-            placeholder={t('Enter your new password')}
-          />
-
-          {/* Confirm Password Input */}
-          <PasswordInput
-            label={t('Confirm Password')}
-            value={confirmPassword}
-            onChangeText={setConfirmPassword}
-            placeholder={t('Confirm your new password')}
-          />
+          {passwordFormFields}
 
           {/* Reset Button */}
           <Button
             mode="contained"
             onPress={handleReset}
-            disabled={isLoading || !newPassword.trim() || !confirmPassword.trim() || newPassword !== confirmPassword}
+            disabled={isLoading}
             style={[styles.resetButton, { backgroundColor: colors.primary }]}
             contentStyle={styles.resetButtonContent}
             loading={isLoading}
@@ -147,14 +229,14 @@ export default function ResetPasswordScreen({ phoneNumber, role, otpCode, onBack
   return (
     <View style={[styles.desktopContainer, { backgroundColor: colors.background }]}>
       <ScrollView
-        contentContainerStyle={[styles.desktopScrollContent, { paddingTop: insets.top }]}
+        contentContainerStyle={[styles.desktopScrollContent, { paddingTop: getTopPadding(insets) }]}
         keyboardShouldPersistTaps="handled"
       >
         <View style={[styles.desktopFormContainer, { backgroundColor: colors.cardBackground }]}>
           {/* Header */}
           <View style={styles.desktopHeader}>
             <TouchableOpacity onPress={onBack} style={styles.desktopBackButton}>
-              <Ionicons name="arrow-back" size={24} color={colors.text} />
+              <Ionicons name={arrowBackIcon} size={24} color={colors.text} />
             </TouchableOpacity>
             <BonyadLogo size="medium" />
             <Text style={[styles.desktopTitle, { color: colors.text, fontSize: scaledSize(28) }]}>{t('Reset Password')}</Text>
@@ -163,27 +245,13 @@ export default function ResetPasswordScreen({ phoneNumber, role, otpCode, onBack
             </Text>
           </View>
 
-          {/* New Password Input */}
-          <PasswordInput
-            label={t('New Password')}
-            value={newPassword}
-            onChangeText={setNewPassword}
-            placeholder={t('Enter your new password')}
-          />
-
-          {/* Confirm Password Input */}
-          <PasswordInput
-            label={t('Confirm Password')}
-            value={confirmPassword}
-            onChangeText={setConfirmPassword}
-            placeholder={t('Confirm your new password')}
-          />
+          {passwordFormFields}
 
           {/* Reset Button */}
           <Button
             mode="contained"
             onPress={handleReset}
-            disabled={isLoading || !newPassword.trim() || !confirmPassword.trim() || newPassword !== confirmPassword}
+            disabled={isLoading}
             style={[styles.desktopResetButton, { backgroundColor: colors.primary }]}
             contentStyle={styles.desktopResetButtonContent}
             loading={isLoading}
@@ -246,6 +314,17 @@ const styles = StyleSheet.create({
   },
   backToLoginText: {
     fontSize: 14,
+  },
+  validationHintGroup: {
+    marginTop: 6,
+    marginBottom: 12,
+  },
+  validationHintRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  validationHintText: {
+    lineHeight: 16,
   },
   // Desktop styles
   desktopContainer: {

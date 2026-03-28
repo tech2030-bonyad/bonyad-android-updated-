@@ -10,7 +10,6 @@ import {
 import { WebView } from 'react-native-webview';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import {
@@ -46,7 +45,6 @@ export default function PaymentCheckoutScreen({
   subscriptionId,
 }: PaymentCheckoutScreenProps) {
   const { t, i18n } = useTranslation();
-  const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { scaledSize } = useFontFamily();
   const isRTL = i18n.language === 'ar';
@@ -250,12 +248,12 @@ export default function PaymentCheckoutScreen({
             {
               backgroundColor: colors.cardBackground,
               borderBottomColor: colors.border,
-              paddingTop: insets.top,
+              paddingTop: 0,
             },
           ]}
         >
           <TouchableOpacity onPress={onBack} style={styles.backButton}>
-            <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={24} color={colors.text} />
+            <Ionicons name="arrow-back" size={24} color={colors.text} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(20) }]}>
             {t('Payment Checkout')}
@@ -281,12 +279,12 @@ export default function PaymentCheckoutScreen({
             {
               backgroundColor: colors.cardBackground,
               borderBottomColor: colors.border,
-              paddingTop: insets.top,
+              paddingTop: 0,
             },
           ]}
         >
           <TouchableOpacity onPress={onBack} style={styles.backButton}>
-            <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={24} color={colors.text} />
+            <Ionicons name="arrow-back" size={24} color={colors.text} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(20) }]}>
             {t('Payment Checkout')}
@@ -320,12 +318,12 @@ export default function PaymentCheckoutScreen({
           {
             backgroundColor: colors.cardBackground,
             borderBottomColor: colors.border,
-            paddingTop: insets.top,
+            paddingTop: 0,
           },
         ]}
       >
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={24} color={colors.text} />
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
           <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(18) }]}>
@@ -374,9 +372,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
+    paddingHorizontal: 20,
+    paddingTop: 0,
+    paddingBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   backButton: {
     padding: 4,

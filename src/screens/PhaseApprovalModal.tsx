@@ -13,12 +13,12 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { Image as ExpoImage } from 'expo-image';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import { API_ENDPOINTS, buildApiUrlWithParams, buildApiUrl } from '../config/api';
 import { storage } from '../utils/storage';
 import { showAlert, showError, showSuccess } from '../utils/alert';
-import RialIcon from '../components/RialIcon';
 
 // ===== DESIGN TOKENS (match Approved/Phase Planning screens) =====
 const COLORS = {
@@ -80,8 +80,11 @@ export default function PhaseApprovalModal({
   onOpenContract,
 }: PhaseApprovalModalProps) {
   const { t, i18n } = useTranslation();
-  const { colors } = useTheme();
+  const { colors, theme } = useTheme();
   const { fontFamily, scaledSize } = useFontFamily();
+  const riyalLogo = theme === 'dark'
+    ? require('../../assets/saudi_riyal_logo_dark.svg')
+    : require('../../assets/saudi_riyal_logo.svg');
   const [phases, setPhases] = useState<Phase[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isApproving, setIsApproving] = useState(false);
@@ -593,7 +596,7 @@ export default function PhaseApprovalModal({
   const payForPhase = async (phaseId: number, amount: number) => {
     Alert.alert(
       t('Payment Confirmation'),
-      t('Pay {{amount}} SAR for this phase?', { amount: amount }),
+      t('Pay {{amount}} for this phase?', { amount: new Intl.NumberFormat(i18n.language === 'ar' ? 'ar-SA' : 'en-US').format(amount) }),
       [
         { text: t('Cancel'), style: 'cancel' },
         {
@@ -864,10 +867,6 @@ export default function PhaseApprovalModal({
     return COLORS.textSecondary;
   };
 
-  const formatBudget = (budget: number) => {
-    return new Intl.NumberFormat('en-US').format(budget);
-  };
-
   const renderPhase = (phase: Phase) => {
     const isApproved = !!phase.approved;
     const borderColor = isApproved ? COLORS.green60 : COLORS.primary10;
@@ -915,9 +914,9 @@ export default function PhaseApprovalModal({
           <Ionicons name="cash-outline" size={16} color={COLORS.textSecondary} />
           <View style={styles.detailRow}>
             <Text style={styles.detailText}>
-              {formatBudget(phase.moneySpent)}
+              {new Intl.NumberFormat(i18n.language === 'ar' ? 'ar-SA' : 'en-US').format(phase.moneySpent)}
             </Text>
-            <RialIcon size={12} variant="dark" />
+            <ExpoImage source={riyalLogo} style={{ width: 14, height: 14 }} contentFit="contain" />
           </View>
         </View>
       </View>
@@ -950,8 +949,9 @@ export default function PhaseApprovalModal({
         >
           <Ionicons name="wallet-outline" size={20} color="#fff" />
           <Text style={styles.payButtonText}>
-            {t('Pay {{amount}} SAR', { amount: formatBudget(phase.moneySpent) })}
+            {t('Pay')} {new Intl.NumberFormat(i18n.language === 'ar' ? 'ar-SA' : 'en-US').format(phase.moneySpent)}
           </Text>
+          <ExpoImage source={riyalLogo} style={{ width: 18, height: 18 }} contentFit="contain" />
         </TouchableOpacity>
       )}
 
@@ -1050,9 +1050,12 @@ export default function PhaseApprovalModal({
                 <Text style={[styles.summaryTitle, { fontSize: scaledSize(16) }]}>
                   {t('Project Total')}
                 </Text>
-                <Text style={styles.summaryAmount}>
-                  {formatBudget(phases.reduce((sum, p) => sum + p.moneySpent, 0))} {t('SAR')}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={styles.summaryAmount}>
+                    {new Intl.NumberFormat(i18n.language === 'ar' ? 'ar-SA' : 'en-US').format(phases.reduce((sum, p) => sum + p.moneySpent, 0))}
+                  </Text>
+                  <ExpoImage source={riyalLogo} style={{ width: 20, height: 20 }} contentFit="contain" />
+                </View>
               </View>
 
               {/* View Contract Button */}
@@ -1114,7 +1117,7 @@ export default function PhaseApprovalModal({
                   />
 
                   <Text style={[styles.inputLabel, { color: colors.text }]}>
-                    {t('Cost (SAR)')}
+                    {t('Cost')}
                   </Text>
                   <TextInput
                     style={[
@@ -1204,7 +1207,7 @@ export default function PhaseApprovalModal({
                   />
 
                   <Text style={[styles.inputLabel, { color: colors.text }]}>
-                    {t('Cost (SAR)')}
+                    {t('Cost')}
                   </Text>
                   <TextInput
                     style={[

@@ -87,16 +87,13 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.bonyaddandroid.ahmed'
+    namespace "com.bonyadapp"
     defaultConfig {
-        applicationId 'com.bonyaddandroid.ahmed'
+        applicationId "com.bonyadapp"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
-        versionName "1.0.0"
-
-        // Build only for real devices (avoids x86_64 CMake issues with react-native-reanimated)
-        ndk { abiFilters "arm64-v8a", "armeabi-v7a" }
+        versionName "1.0"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }
@@ -183,5 +180,3 @@ dependencies {
         implementation jscFlavor
     }
 }
-
-apply plugin: 'com.google.gms.google-services'

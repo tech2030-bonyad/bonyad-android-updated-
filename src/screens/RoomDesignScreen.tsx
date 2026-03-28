@@ -26,7 +26,7 @@ export default function RoomDesignScreen({ onBack }: RoomDesignScreenProps) {
         <View style={styles.headerContent}>
           <TouchableOpacity onPress={onBack} style={styles.backButton}>
             <Ionicons 
-              name={i18n.language === 'ar' ? 'arrow-forward' : 'arrow-back'} 
+              name="arrow-back" 
               size={24} 
               color={colors.text} 
             />

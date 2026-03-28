@@ -469,7 +469,7 @@ export default function OwnerProjectEditScreen({ projectId, onBack, onSuccess }:
       >
         <View style={styles.sectionHeader}>
           <TouchableOpacity onPress={onBack} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
+            <Ionicons name="chevron-back" size={24} color={colors.text} />
           </TouchableOpacity>
           <Text style={[styles.title, { color: colors.text }]}>{t('Edit Project')}</Text>
         </View>
@@ -762,7 +762,7 @@ export default function OwnerProjectEditScreen({ projectId, onBack, onSuccess }:
                 disabled={currentPhotoIndex === 0}
               >
                 <Ionicons
-                  name="chevron-back"
+                  name={backIcon}
                   size={32}
                   color={currentPhotoIndex === 0 ? 'rgba(255, 255, 255, 0.3)' : '#fff'}
                 />
@@ -847,6 +847,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 24,
+    direction: 'ltr',
   },
   backButton: {
     padding: 8,

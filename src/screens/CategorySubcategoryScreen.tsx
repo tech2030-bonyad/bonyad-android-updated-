@@ -51,6 +51,7 @@ export default function CategorySubcategoryScreen({
   const { width } = useWindowDimensions();
   const isRTL = i18n.language === 'ar';
   const isDark = theme === 'dark';
+  const backIcon = 'chevron-back';
 
   const [subcategories, setSubcategories] = useState<ServiceSubcategory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -89,7 +90,7 @@ export default function CategorySubcategoryScreen({
           style={[styles.backBtn, isRTL && { transform: [{ scaleX: -1 }] }]}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
-          <Ionicons name="chevron-back" size={24} color={colors.text} />
+          <Ionicons name={backIcon} size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
           {categoryName}

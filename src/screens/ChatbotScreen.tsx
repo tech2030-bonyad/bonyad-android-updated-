@@ -129,6 +129,7 @@ const ChatbotScreen: React.FC<ChatbotScreenProps> = ({
   const isDarkMode = theme === 'dark';
   const language = propLanguage || (i18n.language === 'ar' ? 'ar' : 'en');
   const isRTL = language === 'ar';
+  const headerDirectionStyle = { direction: 'ltr' as const };
 
   const {
     messages,
@@ -227,13 +228,15 @@ const ChatbotScreen: React.FC<ChatbotScreenProps> = ({
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Ionicons
-            name={isRTL ? 'chevron-forward' : 'chevron-back'}
-            size={24}
-            color={colors.text}
-          />
+      <View
+        style={[
+          styles.header,
+          { backgroundColor: colors.cardBackground, borderBottomColor: colors.border },
+          headerDirectionStyle,
+        ]}
+      >
+        <TouchableOpacity onPress={onBack} style={styles.backButton} accessibilityRole="button">
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
 
         <View style={styles.headerCenter}>
@@ -241,7 +244,7 @@ const ChatbotScreen: React.FC<ChatbotScreenProps> = ({
             <MaterialCommunityIcons name="robot" size={24} color={colors.primary} />
           </View>
           <View>
-            <Text style={[styles.headerTitle, { color: colors.text }]}>
+            <Text style={[styles.headerTitle, { color: colors.text, textAlign: 'left' }]}>
               {language === 'ar' ? 'Bonyad Assistant' : 'Bonyad Assistant'}
             </Text>
             <View style={styles.onlineIndicator}>

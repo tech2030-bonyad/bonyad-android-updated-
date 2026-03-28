@@ -1,7 +1,8 @@
 /**
  * Notifications Screen – same mechanism as web (notificationService, filter tabs, section list, mark read, delete).
+ * Layout is LTR only; filter changes animate like a book (cards enter from left, exit to right).
  */
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,6 +12,8 @@ import {
   ActivityIndicator,
   Alert,
   SectionList,
+  Animated,
+  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -18,6 +21,10 @@ import { useFontFamily } from '../context/FontContext';
 import { useTranslation } from 'react-i18next';
 import { notificationService } from '../services/NotificationService';
 import type { Notification } from '../services/NotificationService';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const FILTER_ANIMATION_DURATION = 280;
+const SCREEN_OPEN_DURATION = 300;
 
 /**
  * Parse notification date: datetime without timezone = Saudi Arabia (Asia/Riyadh, UTC+3)
@@ -84,6 +91,8 @@ function parseNotificationDate(value: string | number | undefined | Record<strin
 
 type NotificationFilter = 'all' | 'unread' | 'read';
 
+const FILTER_ORDER: NotificationFilter[] = ['all', 'unread', 'read'];
+
 interface NotificationsScreenProps {
   onBack?: () => void;
   onNavigateToProject?: (projectId: number) => void;
@@ -100,13 +109,17 @@ export default function NotificationsScreen({
   onUnreadCountChange,
 }: NotificationsScreenProps) {
   const { colors, theme } = useTheme();
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const { scaledSize } = useFontFamily();
   const isDarkMode = theme === 'dark';
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState<NotificationFilter>('all');
+  const slideAnim = useRef(new Animated.Value(0)).current;
+  const isAnimating = useRef(false);
+  const screenSlideAnim = useRef(new Animated.Value(SCREEN_WIDTH)).current;
+  const isClosing = useRef(false);
 
   const fetchNotifications = async () => {
     try {
@@ -133,6 +146,26 @@ export default function NotificationsScreen({
   useEffect(() => {
     fetchNotifications();
   }, []);
+
+  useEffect(() => {
+    Animated.timing(screenSlideAnim, {
+      toValue: 0,
+      duration: SCREEN_OPEN_DURATION,
+      useNativeDriver: true,
+    }).start();
+  }, []);
+
+  const handleBack = () => {
+    if (!onBack || isClosing.current) return;
+    isClosing.current = true;
+    Animated.timing(screenSlideAnim, {
+      toValue: SCREEN_WIDTH,
+      duration: SCREEN_OPEN_DURATION,
+      useNativeDriver: true,
+    }).start(() => {
+      onBack();
+    });
+  };
 
   const onRefresh = () => {
     setIsRefreshing(true);
@@ -200,12 +233,38 @@ export default function NotificationsScreen({
     }
   };
 
-  const getFilteredNotifications = () => {
-    switch (selectedFilter) {
+  const getFilteredNotifications = (filter: NotificationFilter) => {
+    switch (filter) {
       case 'unread': return notifications.filter((n) => !n.read);
       case 'read': return notifications.filter((n) => n.read);
       default: return notifications;
     }
+  };
+
+  const runFilterTransition = (newFilter: NotificationFilter) => {
+    if (newFilter === selectedFilter || isAnimating.current) return;
+    isAnimating.current = true;
+    const currentIndex = FILTER_ORDER.indexOf(selectedFilter);
+    const newIndex = FILTER_ORDER.indexOf(newFilter);
+    const goingRight = newIndex > currentIndex;
+    const exitToValue = goingRight ? SCREEN_WIDTH : -SCREEN_WIDTH;
+    const enterFromValue = goingRight ? -SCREEN_WIDTH : SCREEN_WIDTH;
+    const onExitEnd = () => {
+      setSelectedFilter(newFilter);
+      slideAnim.setValue(enterFromValue);
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: FILTER_ANIMATION_DURATION,
+        useNativeDriver: true,
+      }).start(() => {
+        isAnimating.current = false;
+      });
+    };
+    Animated.timing(slideAnim, {
+      toValue: exitToValue,
+      duration: FILTER_ANIMATION_DURATION,
+      useNativeDriver: true,
+    }).start(onExitEnd);
   };
 
   const groupNotificationsByTime = (notifs: Notification[]) => {
@@ -232,94 +291,112 @@ export default function NotificationsScreen({
   };
 
   const unreadCount = notifications.filter((n) => !n.read).length;
-  const filteredNotifications = getFilteredNotifications();
+  const filteredNotifications = getFilteredNotifications(selectedFilter);
   const sections = useMemo(() => groupNotificationsByTime(filteredNotifications), [filteredNotifications]);
+
+  const screenStyle = [
+    styles.container,
+    { backgroundColor: colors.background, transform: [{ translateX: screenSlideAnim }] },
+  ];
 
   if (isLoading) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <Animated.View style={screenStyle}>
         <ActivityIndicator size="large" color={colors.primary} />
         <Text style={[styles.loadingText, { color: colors.textSecondary }]}>{t('Loading notifications...')}</Text>
-      </View>
+      </Animated.View>
     );
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { backgroundColor: colors.background, paddingVertical: 16, paddingHorizontal: 16 }]}>
-        {onBack && (
-          <TouchableOpacity onPress={onBack} style={styles.backButton}>
-            <Ionicons name="chevron-back" size={24} color={colors.text} />
-          </TouchableOpacity>
-        )}
-        <Text style={[styles.title, { color: colors.text, fontSize: scaledSize(20), marginLeft: onBack ? 0 : 16 }]}>
+    <Animated.View style={screenStyle}>
+      {/* Header: LTR only, title centered */}
+      <View style={[styles.header, styles.headerLtr, { backgroundColor: colors.background, paddingVertical: 16, paddingHorizontal: 16 }]}>
+        <View style={styles.headerSide}>
+          {onBack ? (
+            <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+              <Ionicons name="chevron-back" size={24} color={colors.text} />
+            </TouchableOpacity>
+          ) : null}
+        </View>
+        <Text style={[styles.title, styles.titleCentered, { color: colors.text, fontSize: scaledSize(20) }]}>
           {t('Notifications')}
         </Text>
+        <View style={styles.headerSide} />
       </View>
 
-      <View style={[styles.filterTabs, { backgroundColor: colors.background, paddingBottom: 16, paddingHorizontal: 16, gap: 10 }]}>
+      <View style={[styles.filterTabs, { backgroundColor: colors.background, paddingBottom: 16, paddingHorizontal: 16, gap: 8 }]}>
         <TouchableOpacity
-          onPress={() => setSelectedFilter('all')}
-          style={[styles.tab, { backgroundColor: selectedFilter === 'all' ? colors.primary : colors.gray100, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 6 }]}
+          onPress={() => runFilterTransition('all')}
+          style={[styles.tab, { backgroundColor: selectedFilter === 'all' ? colors.primary : colors.gray100, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 6 }]}
         >
-          <Text style={[styles.tabText, { color: selectedFilter === 'all' ? colors.white : colors.textSecondary, fontSize: scaledSize(14) }]}>
+          <Text style={[styles.tabText, { color: selectedFilter === 'all' ? colors.white : colors.textSecondary, fontSize: scaledSize(13) }]} numberOfLines={1}>
             {t('All')} ({notifications.length})
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          onPress={() => setSelectedFilter('unread')}
-          style={[styles.tab, { backgroundColor: selectedFilter === 'unread' ? colors.primary : colors.gray100, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 6 }]}
+          onPress={() => runFilterTransition('unread')}
+          style={[styles.tab, { backgroundColor: selectedFilter === 'unread' ? colors.primary : colors.gray100, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 6 }]}
         >
-          <Text style={[styles.tabText, { color: selectedFilter === 'unread' ? colors.white : colors.textSecondary, fontSize: scaledSize(14) }]}>
+          <Text style={[styles.tabText, { color: selectedFilter === 'unread' ? colors.white : colors.textSecondary, fontSize: scaledSize(13) }]} numberOfLines={1}>
             {t('Unread')} ({unreadCount})
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          onPress={() => setSelectedFilter('read')}
-          style={[styles.tab, { backgroundColor: selectedFilter === 'read' ? colors.primary : colors.gray100, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 6 }]}
+          onPress={() => runFilterTransition('read')}
+          style={[styles.tab, { backgroundColor: selectedFilter === 'read' ? colors.primary : colors.gray100, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 6 }]}
         >
-          <Text style={[styles.tabText, { color: selectedFilter === 'read' ? colors.white : colors.textSecondary, fontSize: scaledSize(14) }]}>
+          <Text style={[styles.tabText, { color: selectedFilter === 'read' ? colors.white : colors.textSecondary, fontSize: scaledSize(13) }]} numberOfLines={1}>
             {t('Read')} ({notifications.length - unreadCount})
           </Text>
         </TouchableOpacity>
       </View>
 
-      <SectionList
-        sections={sections}
-        style={{ flex: 1, backgroundColor: colors.background }}
-        contentContainerStyle={[styles.listContent, { paddingTop: 8, paddingBottom: 32, paddingHorizontal: 4, backgroundColor: colors.background }]}
-        renderItem={({ item, index }) => (
-          <NotificationCard
-            notification={item}
-            index={index}
-            onTap={() => handleNotificationTap(item)}
-            onDelete={() => deleteNotification(item.id)}
-            colors={colors}
-            isDarkMode={isDarkMode}
-            t={t}
-            textAlign={i18n.language === 'ar' ? 'right' : 'left'}
-            scaledSize={scaledSize}
-          />
-        )}
-        renderSectionHeader={({ section: { title } }) => (
-          <Text style={[styles.sectionHeader, { color: colors.text, fontSize: scaledSize(16), marginTop: 16, marginBottom: 8 }]}>
-            {t(title)}
-          </Text>
-        )}
-        renderSectionFooter={() => <View style={[styles.sectionDivider, { backgroundColor: colors.border, marginVertical: 10 }]} />}
-        keyExtractor={(item) => item.id.toString()}
-        stickySectionHeadersEnabled={false}
-        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
-        ListEmptyComponent={
-          <View style={[styles.emptyState, { padding: 40, backgroundColor: colors.background }]}>
-            <Ionicons name="notifications-off-outline" size={64} color={colors.textSecondary} />
-            <Text style={[styles.emptyText, { color: colors.textSecondary, fontSize: scaledSize(16), marginTop: 16 }]}>
-              {selectedFilter === 'unread' ? t('No unread notifications') : t('No notifications')}
+      <Animated.View
+        style={[
+          styles.listWrapper,
+          {
+            transform: [{ translateX: slideAnim }],
+          },
+        ]}
+      >
+        <SectionList
+          key={selectedFilter}
+          sections={sections}
+          style={{ flex: 1, backgroundColor: colors.background }}
+          contentContainerStyle={[styles.listContent, { paddingTop: 8, paddingBottom: 32, paddingHorizontal: 4, backgroundColor: colors.background }]}
+          renderItem={({ item, index }) => (
+            <NotificationCard
+              notification={item}
+              index={index}
+              onTap={() => handleNotificationTap(item)}
+              onDelete={() => deleteNotification(item.id)}
+              colors={colors}
+              isDarkMode={isDarkMode}
+              t={t}
+              scaledSize={scaledSize}
+            />
+          )}
+          renderSectionHeader={({ section: { title } }) => (
+            <Text style={[styles.sectionHeader, { color: colors.text, fontSize: scaledSize(16), marginTop: 16, marginBottom: 8 }]}>
+              {t(title)}
             </Text>
-          </View>
-        }
-      />
-    </View>
+          )}
+          renderSectionFooter={() => <View style={[styles.sectionDivider, { backgroundColor: colors.border, marginVertical: 10 }]} />}
+          keyExtractor={(item) => item.id.toString()}
+          stickySectionHeadersEnabled={false}
+          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+          ListEmptyComponent={
+            <View style={[styles.emptyState, { padding: 40, backgroundColor: colors.background }]}>
+              <Ionicons name="notifications-off-outline" size={64} color={colors.textSecondary} />
+              <Text style={[styles.emptyText, { color: colors.textSecondary, fontSize: scaledSize(16), marginTop: 16 }]}>
+                {selectedFilter === 'unread' ? t('No unread notifications') : t('No notifications')}
+              </Text>
+            </View>
+          }
+        />
+      </Animated.View>
+    </Animated.View>
   );
 }
 
@@ -331,11 +408,10 @@ interface NotificationCardProps {
   colors: typeof import('../constants/Colors').LightColors;
   isDarkMode: boolean;
   t: (key: string) => string;
-  textAlign?: 'left' | 'right';
   scaledSize: (n: number) => number;
 }
 
-function NotificationCard({ notification, onTap, onDelete, colors, isDarkMode, t, textAlign = 'left', scaledSize }: NotificationCardProps) {
+function NotificationCard({ notification, onTap, onDelete, colors, isDarkMode, t, scaledSize }: NotificationCardProps) {
   const getIconName = (type: string): string => {
     switch (type) {
       case 'BID_RECEIVED':
@@ -398,20 +474,20 @@ function NotificationCard({ notification, onTap, onDelete, colors, isDarkMode, t
           },
         ]}
       >
-        <View style={[styles.cardContent, { flexDirection: textAlign === 'right' ? 'row-reverse' : 'row', gap: 12 }]}>
-          <View style={[styles.iconCircle, { width: 48, height: 48, borderRadius: 24, backgroundColor: badgeBg, marginLeft: textAlign === 'right' ? 16 : 16, marginRight: textAlign === 'right' ? 0 : undefined }]}>
+        <View style={[styles.cardContent, { flexDirection: 'row', gap: 12 }]}>
+          <View style={[styles.iconCircle, { width: 48, height: 48, borderRadius: 24, backgroundColor: badgeBg }]}>
             <Ionicons name={getIconName(notification.notificationType) as any} size={20} color={colors.white} />
           </View>
-          <View style={[styles.cardTextContent, { flex: 1, gap: 4, marginLeft: textAlign === 'right' ? 0 : 16, marginRight: textAlign === 'right' ? 16 : 0 }]}>
-            <Text style={[styles.cardTitle, { color: colors.text, textAlign, fontSize: scaledSize(16), lineHeight: 22 }]} numberOfLines={1}>
+          <View style={[styles.cardTextContent, { flex: 1, gap: 4 }]}>
+            <Text style={[styles.cardTitle, { color: colors.text, textAlign: 'left', fontSize: scaledSize(16), lineHeight: 22 }]} numberOfLines={1}>
               {notification.title}
             </Text>
-            <Text style={[styles.message, { color: colors.text, textAlign, fontSize: scaledSize(14), lineHeight: 20 }]} numberOfLines={2}>
+            <Text style={[styles.message, { color: colors.text, textAlign: 'left', fontSize: scaledSize(14), lineHeight: 20 }]} numberOfLines={2}>
               {notification.message}
             </Text>
           </View>
           <View style={[styles.cardRight, { gap: 8, minWidth: 50 }]}>
-            <View style={[styles.timestampRow, { flexDirection: textAlign === 'right' ? 'row-reverse' : 'row', gap: 4 }]}>
+            <View style={[styles.timestampRow, { flexDirection: 'row', gap: 4 }]}>
               <Ionicons name="time-outline" size={14} color={colors.textSecondary} />
               <Text style={[styles.timestamp, { color: colors.textSecondary, fontSize: scaledSize(12) }]}>{formatTime(notification.createdAt)}</Text>
             </View>
@@ -429,12 +505,16 @@ function NotificationCard({ notification, onTap, onDelete, colors, isDarkMode, t
 const styles = StyleSheet.create({
   container: { flex: 1 },
   loadingText: { marginTop: 12 },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  header: { flexDirection: 'row', alignItems: 'center' },
+  headerLtr: { direction: 'ltr' },
+  headerSide: { width: 40, alignItems: 'flex-start', justifyContent: 'center' },
   backButton: {},
   title: { fontWeight: '400', flex: 1 },
-  filterTabs: { flexDirection: 'row' },
-  tab: { flex: 1, alignItems: 'center' },
+  titleCentered: { textAlign: 'center' },
+  filterTabs: { flexDirection: 'row', flexWrap: 'nowrap', alignItems: 'center' },
+  tab: { flex: 1, alignItems: 'center', minWidth: 0 },
   tabText: { fontWeight: '600' },
+  listWrapper: { flex: 1 },
   listContent: {},
   sectionHeader: { fontWeight: '500' },
   sectionDivider: { height: 1 },

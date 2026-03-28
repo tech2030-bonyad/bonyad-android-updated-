@@ -27,6 +27,7 @@ import {
   SubscriptionPlan,
 } from '../services/onboardingApi';
 import RialIcon from '../components/RialIcon';
+import { getTopPadding } from '../utils/statusBarHelper';
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -913,6 +914,44 @@ const ConfirmationStep: React.FC<ConfirmationStepProps> = ({
       >
         <View style={styles.summaryRow}>
           <View style={styles.summaryContent}>
+            <Text style={[styles.summaryTitle, { color: colors.text }]}>
+              {t('onboarding.steps.specializations') || 'Specializations'}
+            </Text>
+            <Text style={[styles.summarySubtitle, { color: colors.textSecondary }]}>
+              {services.length === 0
+                ? (t('onboarding.summary.servicesEmpty') || 'No services selected yet')
+                : (t('onboarding.summary.servicesDescription', { count: services.length }) || `${services.length} selected`)}
+            </Text>
+          </View>
+          <TouchableOpacity onPress={() => onEditStep(2)}>
+            <Text style={[styles.editLink, { color: colors.primary }]}>{t('onboarding.summary.edit')}</Text>
+          </TouchableOpacity>
+        </View>
+        {services.length > 0 ? (
+          <View style={styles.summaryList}>
+            {services.map(service => {
+              const itemName = language === 'ar' && service.nameAr ? service.nameAr : service.nameEn;
+              return (
+                <Text key={`spec-${service.id}`} style={[styles.summaryListItem, { color: colors.textSecondary }]}>
+                  {itemName}
+                </Text>
+              );
+            })}
+          </View>
+        ) : null}
+      </View>
+
+      <View
+        style={[
+          styles.summaryCard,
+          {
+            backgroundColor: colors.surface || colors.cardBackground,
+            borderColor: colors.border || '#E4E7EC',
+          },
+        ]}
+      >
+        <View style={styles.summaryRow}>
+          <View style={styles.summaryContent}>
             <Text style={[styles.summaryTitle, { color: colors.text }]}>{t('onboarding.summary.servicesTitle')}</Text>
             <Text style={[styles.summarySubtitle, { color: colors.textSecondary }]}>
               {services.length === 0
@@ -1119,7 +1158,7 @@ const OnboardingProgress: React.FC<OnboardingProgressProps> = ({ current, colors
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingTop: Platform.OS === 'web' ? 40 : 20,
+    paddingTop: Platform.OS === 'web' ? 40 : getTopPadding({ top: 0 } as any),
     paddingHorizontal: Platform.OS === 'web' ? 32 : 16,
   },
   header: {

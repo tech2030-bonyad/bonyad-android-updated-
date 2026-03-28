@@ -5,9 +5,12 @@ import {
   Image,
   StyleSheet,
   TouchableOpacity,
+  Platform,
+  StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Figma Design Colors
 const FIGMA_COLORS = {
@@ -44,6 +47,16 @@ export default function ProfileHeader({
 }: ProfileHeaderProps) {
   const { i18n } = useTranslation();
   const isRTL = i18n.language === 'ar';
+  const insets = useSafeAreaInsets();
+
+  // Calculate top padding to avoid status bar overlap on Android
+  const getTopPadding = (): number => {
+    if (Platform.OS === 'android') {
+      const statusBarHeight = StatusBar.currentHeight ?? 0;
+      return (statusBarHeight > 0 ? statusBarHeight : 32) + 8;
+    }
+    return insets.top > 0 ? insets.top : 10;
+  };
 
   // Theme-aware colors
   const bgColor = colors?.background || (isDarkMode ? '#1C1C1E' : FIGMA_COLORS.white);
@@ -53,12 +66,12 @@ export default function ProfileHeader({
   const avatarBgColor = isDarkMode ? '#2D2D2D' : FIGMA_COLORS.primaryLight;
 
   return (
-    <View style={[styles.container, { backgroundColor: bgColor }]}>
+    <View style={[styles.container, { backgroundColor: bgColor, paddingTop: getTopPadding() }]}>
       {/* Header Row */}
       <View style={[styles.headerRow, isRTL && styles.rowRTL]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <Ionicons
-            name={isRTL ? 'chevron-forward' : 'chevron-back'}
+            name="chevron-back"
             size={24}
             color={textColor}
           />

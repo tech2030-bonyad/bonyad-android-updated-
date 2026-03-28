@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,8 @@ import {
   ActivityIndicator,
   RefreshControl,
   Platform,
+  Animated,
+  Dimensions,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,6 +23,7 @@ import {
   PaymentType,
 } from '../services/PaymentService';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
+import { getTopPadding } from '../utils/statusBarHelper';
 
 interface PaymentTransactionScreenProps {
   onBack: () => void;
@@ -37,7 +40,6 @@ export default function PaymentTransactionScreen({
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { scaledSize } = useFontFamily();
-  const isRTL = i18n.language === 'ar';
 
   const [transactions, setTransactions] = useState<PaymentTransaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -49,6 +51,26 @@ export default function PaymentTransactionScreen({
   const [hasMore, setHasMore] = useState(true);
 
   const { alertState, showError, hideAlert } = useAlertPopup();
+
+  const screenWidth = Dimensions.get('window').width;
+  const screenSlideX = useRef(new Animated.Value(0)).current;
+  const screenOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    screenSlideX.setValue(-screenWidth);
+    screenOpacity.setValue(0);
+    Animated.parallel([
+      Animated.timing(screenOpacity, { toValue: 1, duration: 220, useNativeDriver: true }),
+      Animated.spring(screenSlideX, { toValue: 0, tension: 65, friction: 11, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
+  const handleBackScreen = () => {
+    Animated.parallel([
+      Animated.timing(screenOpacity, { toValue: 0, duration: 180, useNativeDriver: true }),
+      Animated.timing(screenSlideX, { toValue: screenWidth, duration: 220, useNativeDriver: true }),
+    ]).start(() => onBack());
+  };
 
   useEffect(() => {
     loadTransactions();
@@ -82,7 +104,7 @@ export default function PaymentTransactionScreen({
       setPage(currentPage + 1);
     } catch (error: any) {
       console.error('Error loading transactions:', error);
-      showError(error.message || t('Failed to load transactions'), t('Error'));
+      showError(error.message || t('payments.loadFailed'), t('payments.Error'));
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -151,15 +173,30 @@ export default function PaymentTransactionScreen({
   const getPaymentTypeLabel = (type: PaymentType) => {
     switch (type) {
       case 'PROJECT':
-        return t('Project');
+        return t('payments.typeProject');
       case 'PHASE':
-        return t('Phase');
+        return t('payments.typePhase');
       case 'SMALL_TASK':
-        return t('Small Task');
+        return t('payments.typeSmallTask');
       case 'SUBSCRIPTION':
-        return t('Subscription');
+        return t('payments.typeSubscription');
       default:
         return type;
+    }
+  };
+
+  const getStatusLabel = (status: PaymentStatus) => {
+    switch (status) {
+      case 'COMPLETED':
+        return t('payments.statusCompleted');
+      case 'PENDING':
+        return t('payments.statusPending');
+      case 'FAILED':
+        return t('payments.statusFailed');
+      case 'REFUNDED':
+        return t('payments.statusRefunded');
+      default:
+        return status;
     }
   };
 
@@ -178,7 +215,7 @@ export default function PaymentTransactionScreen({
           {/* Status Filters */}
           <View style={styles.filterGroup}>
             <Text style={[styles.filterLabel, { color: colors.textSecondary, fontSize: scaledSize(12) }]}>
-              {t('Status')}:
+              {t('payments.status')}:
             </Text>
             {statuses.map((status) => (
               <TouchableOpacity
@@ -202,7 +239,7 @@ export default function PaymentTransactionScreen({
                     },
                   ]}
                 >
-                  {status === 'ALL' ? t('All') : t(status)}
+                  {status === 'ALL' ? t('payments.all') : getStatusLabel(status as PaymentStatus)}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -211,7 +248,7 @@ export default function PaymentTransactionScreen({
           {/* Type Filters */}
           <View style={styles.filterGroup}>
             <Text style={[styles.filterLabel, { color: colors.textSecondary, fontSize: scaledSize(12) }]}>
-              {t('Type')}:
+              {t('payments.type')}:
             </Text>
             {types.map((type) => (
               <TouchableOpacity
@@ -234,7 +271,7 @@ export default function PaymentTransactionScreen({
                     },
                   ]}
                 >
-                  {type === 'ALL' ? t('All') : getPaymentTypeLabel(type as PaymentType)}
+                  {type === 'ALL' ? t('payments.all') : getPaymentTypeLabel(type as PaymentType)}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -271,7 +308,7 @@ export default function PaymentTransactionScreen({
           </View>
           <View style={[styles.statusBadge, { backgroundColor: statusColor + '20' }]}>
             <Text style={[styles.statusText, { color: statusColor, fontSize: scaledSize(11) }]}>
-              {t(transaction.status)}
+              {getStatusLabel(transaction.status)}
             </Text>
           </View>
         </View>
@@ -293,7 +330,7 @@ export default function PaymentTransactionScreen({
             <View style={styles.detailRow}>
               <Ionicons name="receipt" size={14} color={colors.textSecondary} />
               <Text style={[styles.detailText, { color: colors.textSecondary, fontSize: scaledSize(12) }]}>
-                {t('Commission')}: {formatAmount(transaction.commissionAmount, transaction.currency)}
+                {t('payments.commission')}: {formatAmount(transaction.commissionAmount, transaction.currency)}
               </Text>
             </View>
           )}
@@ -306,7 +343,7 @@ export default function PaymentTransactionScreen({
           >
             <Ionicons name="arrow-undo" size={16} color={colors.primary} />
             <Text style={[styles.refundButtonText, { color: colors.primary, fontSize: scaledSize(12) }]}>
-              {t('Request Refund')}
+              {t('payments.requestRefund')}
             </Text>
           </TouchableOpacity>
         )}
@@ -315,7 +352,7 @@ export default function PaymentTransactionScreen({
           <View style={[styles.refundRequestedBadge, { backgroundColor: colors.warning + '20' }]}>
             <Ionicons name="time" size={14} color={colors.warning} />
             <Text style={[styles.refundRequestedText, { color: colors.warning, fontSize: scaledSize(11) }]}>
-              {t('Refund Requested')}
+              {t('payments.refundRequested')}
             </Text>
           </View>
         )}
@@ -324,23 +361,25 @@ export default function PaymentTransactionScreen({
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
+    <Animated.View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top, opacity: screenOpacity, transform: [{ translateX: screenSlideX }] }]}>
+      {/* Header – LTR so back stays left, title center */}
       <View
         style={[
           styles.header,
           {
             backgroundColor: colors.cardBackground,
             borderBottomColor: colors.border,
-            paddingTop: insets.top,
+            paddingTop: 0,
+            direction: 'ltr',
+            flexDirection: 'row',
           },
         ]}
       >
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={24} color={colors.text} />
+        <TouchableOpacity onPress={handleBackScreen} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(20) }]}>
-          {t('Payment Transactions')}
+          {t('payments.title')}
         </Text>
         <View style={{ width: 24 }} />
       </View>
@@ -353,17 +392,17 @@ export default function PaymentTransactionScreen({
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={[styles.loadingText, { color: colors.textSecondary, fontSize: scaledSize(14) }]}>
-            {t('Loading transactions...')}
+            {t('payments.loading')}
           </Text>
         </View>
       ) : transactions.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Ionicons name="receipt-outline" size={64} color={colors.textSecondary} />
           <Text style={[styles.emptyText, { color: colors.textSecondary, fontSize: scaledSize(16) }]}>
-            {t('No transactions found')}
+            {t('payments.empty')}
           </Text>
           <Text style={[styles.emptySubtext, { color: colors.textSecondary, fontSize: scaledSize(12) }]}>
-            {t('Your payment history will appear here')}
+            {t('payments.emptyHint')}
           </Text>
         </View>
       ) : (
@@ -391,7 +430,7 @@ export default function PaymentTransactionScreen({
         buttons={alertState.buttons}
         onClose={hideAlert}
       />
-    </View>
+    </Animated.View>
   );
 }
 
@@ -406,6 +445,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
+    direction: 'ltr',
   },
   backButton: {
     padding: 4,

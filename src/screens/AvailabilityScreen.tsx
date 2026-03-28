@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,14 @@ import {
   ActivityIndicator,
   Modal,
   Platform,
+  Animated,
+  UIManager,
+  Dimensions,
 } from 'react-native';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -40,13 +47,13 @@ interface AvailabilityData {
 }
 
 const DAYS_OF_WEEK = [
-  { value: 'MONDAY', label: 'Monday' },
-  { value: 'TUESDAY', label: 'Tuesday' },
-  { value: 'WEDNESDAY', label: 'Wednesday' },
-  { value: 'THURSDAY', label: 'Thursday' },
-  { value: 'FRIDAY', label: 'Friday' },
-  { value: 'SATURDAY', label: 'Saturday' },
-  { value: 'SUNDAY', label: 'Sunday' },
+  { value: 'MONDAY', dayKey: 'monday', shortKey: 'mon' },
+  { value: 'TUESDAY', dayKey: 'tuesday', shortKey: 'tue' },
+  { value: 'WEDNESDAY', dayKey: 'wednesday', shortKey: 'wed' },
+  { value: 'THURSDAY', dayKey: 'thursday', shortKey: 'thu' },
+  { value: 'FRIDAY', dayKey: 'friday', shortKey: 'fri' },
+  { value: 'SATURDAY', dayKey: 'saturday', shortKey: 'sat' },
+  { value: 'SUNDAY', dayKey: 'sunday', shortKey: 'sun' },
 ];
 
 const TIME_SLOTS = [
@@ -56,7 +63,7 @@ const TIME_SLOTS = [
 ];
 
 export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { fontFamily, scaledSize } = useFontFamily();
@@ -104,9 +111,135 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
   const [editStartTimeDate, setEditStartTimeDate] = useState(timeStringToDate('09:00'));
   const [editEndTimeDate, setEditEndTimeDate] = useState(timeStringToDate('17:00'));
 
+  // Mode toggle slide animation: 0 = Anytime, 1 = Fixed Times
+  const modeSlideAnim = useRef(new Animated.Value(availabilityMode === 'AVAILABLE_ANYTIME' ? 0 : 1)).current;
+  const [modeContainerWidth, setModeContainerWidth] = useState(0);
+
+  const screenWidth = Dimensions.get('window').width;
+  const screenSlideX = useRef(new Animated.Value(0)).current;
+  const screenOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    screenSlideX.setValue(-screenWidth);
+    screenOpacity.setValue(0);
+    Animated.parallel([
+      Animated.timing(screenOpacity, { toValue: 1, duration: 220, useNativeDriver: true }),
+      Animated.spring(screenSlideX, { toValue: 0, tension: 65, friction: 11, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
+  const handleBackScreen = () => {
+    Animated.parallel([
+      Animated.timing(screenOpacity, { toValue: 0, duration: 180, useNativeDriver: true }),
+      Animated.timing(screenSlideX, { toValue: screenWidth, duration: 220, useNativeDriver: true }),
+    ]).start(() => onBack());
+  };
+
+  // Modal open animation
+  const addModalFadeAnim = useRef(new Animated.Value(0)).current;
+  const addModalSlideAnim = useRef(new Animated.Value(80)).current;
+  const addModalScaleAnim = useRef(new Animated.Value(0.95)).current;
+  const editModalFadeAnim = useRef(new Animated.Value(0)).current;
+  const editModalSlideAnim = useRef(new Animated.Value(80)).current;
+  const editModalScaleAnim = useRef(new Animated.Value(0.95)).current;
+
+  // Time slots section appear animation
+  const timeSlotsOpacity = useRef(new Animated.Value(availabilityMode === 'FIXED_TIMES' ? 1 : 0)).current;
+  const timeSlotsTranslateY = useRef(new Animated.Value(availabilityMode === 'FIXED_TIMES' ? 0 : -20)).current;
+
   useEffect(() => {
     fetchAvailability();
   }, []);
+
+  // Animate mode toggle when availabilityMode changes
+  useEffect(() => {
+    Animated.spring(modeSlideAnim, {
+      toValue: availabilityMode === 'AVAILABLE_ANYTIME' ? 0 : 1,
+      useNativeDriver: true,
+      tension: 100,
+      friction: 10,
+    }).start();
+  }, [availabilityMode]);
+
+  // Animate time slots section when switching to FIXED_TIMES
+  useEffect(() => {
+    if (availabilityMode === 'FIXED_TIMES') {
+      Animated.parallel([
+        Animated.timing(timeSlotsOpacity, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.spring(timeSlotsTranslateY, {
+          toValue: 0,
+          tension: 80,
+          friction: 10,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      timeSlotsOpacity.setValue(0);
+      timeSlotsTranslateY.setValue(-20);
+    }
+  }, [availabilityMode]);
+
+  // Animate Add modal open/close
+  useEffect(() => {
+    if (showAddModal) {
+      Animated.parallel([
+        Animated.timing(addModalFadeAnim, {
+          toValue: 1,
+          duration: 280,
+          useNativeDriver: true,
+        }),
+        Animated.spring(addModalSlideAnim, {
+          toValue: 0,
+          tension: 65,
+          friction: 9,
+          useNativeDriver: true,
+        }),
+        Animated.spring(addModalScaleAnim, {
+          toValue: 1,
+          tension: 65,
+          friction: 9,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      addModalFadeAnim.setValue(0);
+      addModalSlideAnim.setValue(80);
+      addModalScaleAnim.setValue(0.95);
+    }
+  }, [showAddModal]);
+
+  // Animate Edit modal open/close
+  useEffect(() => {
+    if (showEditModal) {
+      Animated.parallel([
+        Animated.timing(editModalFadeAnim, {
+          toValue: 1,
+          duration: 280,
+          useNativeDriver: true,
+        }),
+        Animated.spring(editModalSlideAnim, {
+          toValue: 0,
+          tension: 65,
+          friction: 9,
+          useNativeDriver: true,
+        }),
+        Animated.spring(editModalScaleAnim, {
+          toValue: 1,
+          tension: 65,
+          friction: 9,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      editModalFadeAnim.setValue(0);
+      editModalSlideAnim.setValue(80);
+      editModalScaleAnim.setValue(0.95);
+    }
+  }, [showEditModal]);
 
   const fetchAvailability = async () => {
     setIsLoading(true);
@@ -188,7 +321,7 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
         await fetchAvailability();
         // Show success alert after refresh
         setTimeout(() => {
-          showSuccess(`Availability mode set to ${mode}`, t('Success'));
+          showSuccess(t('availability.modeSetSuccess'), t('Success'));
         }, 100);
       } else {
         const errorText = await response.text();
@@ -232,7 +365,7 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
             // Status was updated successfully, just show success
             console.log('✅ Status was updated successfully despite error response');
             setTimeout(() => {
-              showSuccess(`Availability mode set to ${mode}`, t('Success'));
+              showSuccess(t('availability.modeSetSuccess'), t('Success'));
             }, 100);
             return; // Exit early, don't throw error
           }
@@ -243,7 +376,7 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
       }
     } catch (error: any) {
       console.error('❌ Error setting availability mode:', error);
-      showError(error.message || t('Failed to update availability mode'), t('Error'));
+      showError(error.message || t('availability.failedSetMode'), t('Error'));
     } finally {
       setIsSaving(false);
     }
@@ -251,7 +384,7 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
 
   const handleAddSlot = async () => {
     if (!selectedDay) {
-      showError(t('Please select a day'), t('Error'));
+      showError(t('availability.pleaseSelectDay'), t('Error'));
       return;
     }
 
@@ -289,14 +422,14 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
         setStartTime('09:00');
         setEndTime('17:00');
         setTimeout(() => {
-          showSuccess(t('Time slot added successfully'), t('Success'));
+          showSuccess(t('availability.timeSlotAdded'), t('Success'));
         }, 100);
       } else {
         throw new Error('Failed to add time slot');
       }
     } catch (error) {
       console.error('Error adding time slot:', error);
-      showError(t('Failed to add time slot'), t('Error'));
+      showError(t('availability.failedAddSlot'), t('Error'));
     } finally {
       setIsSaving(false);
     }
@@ -352,7 +485,7 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
         await fetchAvailability();
         // Show success alert after refresh
         setTimeout(() => {
-          showSuccess(t('All time slots saved successfully'), t('Success'));
+          showSuccess(t('availability.allSlotsSaved'), t('Success'));
         }, 100);
       } else {
         const errorText = await response.text();
@@ -361,7 +494,7 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
       }
     } catch (error: any) {
       console.error('❌ Error saving all slots:', error);
-      showError(error.message || t('Failed to save all slots'), t('Error'));
+      showError(error.message || t('availability.failedSaveSlots'), t('Error'));
     } finally {
       setIsSaving(false);
     }
@@ -419,14 +552,14 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
         setShowEditModal(false);
         setEditingSlot(null);
         setTimeout(() => {
-          showSuccess(t('Time slot updated successfully'), t('Success'));
+          showSuccess(t('availability.timeSlotUpdated'), t('Success'));
         }, 100);
       } else {
         throw new Error('Failed to update time slot');
       }
     } catch (error) {
       console.error('Error updating time slot:', error);
-      showError(t('Failed to update time slot'), t('Error'));
+      showError(t('availability.failedUpdateSlot'), t('Error'));
     } finally {
       setIsSaving(false);
     }
@@ -451,7 +584,7 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
         );
 
         if (response.ok) {
-          showSuccess(t('Time slot deleted successfully'), t('Success'));
+          showSuccess(t('availability.timeSlotDeleted'), t('Success'));
           fetchAvailability();
         } else {
           const errorText = await response.text();
@@ -460,13 +593,13 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
         }
       } catch (error) {
         console.error('Error deleting time slot:', error);
-        showError((error as Error)?.message || t('Failed to delete time slot'), t('Error'));
+        showError((error as Error)?.message || t('availability.failedDeleteSlot'), t('Error'));
       }
     };
 
     showDeleteConfirmation(
-      t('Delete Time Slot'),
-      t('Are you sure you want to delete this time slot?'),
+      t('availability.deleteTimeSlot'),
+      t('availability.deleteTimeSlotConfirm'),
       confirmDelete,
       t('Delete')
     );
@@ -474,19 +607,19 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
 
   if (isLoading) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
+      <Animated.View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background, opacity: screenOpacity, transform: [{ translateX: screenSlideX }] }]}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
-      </View>
+      </Animated.View>
     );
   }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
+    <Animated.View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background, direction: 'ltr', opacity: screenOpacity, transform: [{ translateX: screenSlideX }] }]}>
       {/* Header */}
       <View style={[styles.header, { backgroundColor: colors.cardBackground }]}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
+        <TouchableOpacity onPress={handleBackScreen} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(18) }]}>{t('Availability')}</Text>
@@ -503,14 +636,34 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
           {/* Availability Mode Selection */}
           <Card style={[styles.card, { backgroundColor: colors.cardBackground }]}>
             <Card.Content>
-              <Text style={[styles.sectionTitle, { color: colors.text, fontSize: scaledSize(18) }]}>{t('Availability Mode')}</Text>
+              <Text style={[styles.sectionTitle, { color: colors.text, fontSize: scaledSize(18) }]}>{t('availability.mode')}</Text>
               
-              <View style={styles.modeButtons}>
+              <View
+                style={[styles.modeButtons, { backgroundColor: colors.gray100 }]}
+                onLayout={(e) => setModeContainerWidth(e.nativeEvent.layout.width)}
+              >
+                {/* Animated sliding indicator */}
+                {modeContainerWidth > 0 && (
+                  <Animated.View
+                    style={[
+                      styles.modeSlider,
+                      {
+                        backgroundColor: colors.primary,
+                        width: (modeContainerWidth - 12) / 2,
+                        transform: [
+                          {
+                            translateX: modeSlideAnim.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [0, (modeContainerWidth - 12) / 2 + 12],
+                            }),
+                          },
+                        ],
+                      },
+                    ]}
+                  />
+                )}
                 <TouchableOpacity
-                  style={[
-                    styles.modeButton,
-                    { backgroundColor: availabilityMode === 'AVAILABLE_ANYTIME' ? colors.primary : colors.gray100 },
-                  ]}
+                  style={[styles.modeButton, { backgroundColor: 'transparent' }]}
                   onPress={() => handleSetMode('AVAILABLE_ANYTIME')}
                   disabled={isSaving}
                 >
@@ -525,15 +678,12 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
                       { color: availabilityMode === 'AVAILABLE_ANYTIME' ? '#fff' : colors.textSecondary, fontSize: scaledSize(16) },
                     ]}
                   >
-                    {t('Anytime')}
+                    {t('availability.anytime')}
                   </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[
-                    styles.modeButton,
-                    { backgroundColor: availabilityMode === 'FIXED_TIMES' ? colors.primary : colors.gray100 },
-                  ]}
+                  style={[styles.modeButton, { backgroundColor: 'transparent' }]}
                   onPress={() => handleSetMode('FIXED_TIMES')}
                   disabled={isSaving}
                 >
@@ -548,7 +698,7 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
                       { color: availabilityMode === 'FIXED_TIMES' ? '#fff' : colors.textSecondary, fontSize: scaledSize(16) },
                     ]}
                   >
-                    {t('Fixed Times')}
+                    {t('availability.fixedTimes')}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -557,10 +707,10 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
 
           {/* Time Slots */}
           {availabilityMode === 'FIXED_TIMES' && (
-            <>
+            <Animated.View style={{ opacity: timeSlotsOpacity, transform: [{ translateY: timeSlotsTranslateY }] }}>
               <View style={styles.sectionHeader}>
                 <Text style={[styles.sectionTitle, { color: colors.text, fontSize: scaledSize(18) }]}>
-                  {t('Time Slots')} ({availability?.slots?.length || 0})
+                  {t('availability.timeSlots')} ({availability?.slots?.length || 0})
                 </Text>
                 {availability?.slots && availability.slots.length > 0 && (
                   <TouchableOpacity
@@ -573,7 +723,7 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
                     ) : (
                       <>
                         <Ionicons name="save" size={16} color="#fff" />
-                        <Text style={[styles.saveAllButtonText, { fontSize: scaledSize(14) }]}>{t('Save All')}</Text>
+                        <Text style={[styles.saveAllButtonText, { fontSize: scaledSize(14) }]}>{t('availability.saveAll')}</Text>
                       </>
                     )}
                   </TouchableOpacity>
@@ -585,10 +735,10 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
                   <Card.Content style={styles.emptyState}>
                     <Ionicons name="time-outline" size={60} color={colors.textSecondary} />
                     <Text style={[styles.emptyText, { color: colors.textSecondary, fontSize: scaledSize(16) }]}>
-                      {t('No time slots added')}
+                      {t('availability.noTimeSlots')}
                     </Text>
                     <Text style={[styles.emptySubtext, { color: colors.textSecondary, fontSize: scaledSize(14) }]}>
-                      {t('Add your working hours or save without slots')}
+                      {t('availability.addWorkingHoursHint')}
                     </Text>
                     <TouchableOpacity
                       style={[styles.saveButton, { backgroundColor: colors.primary, marginTop: 16 }]}
@@ -598,7 +748,7 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
                       {isSaving ? (
                         <ActivityIndicator color="#fff" />
                       ) : (
-                        <Text style={[styles.saveButtonText, { fontSize: scaledSize(16) }]}>{t('Save FIXED_TIMES Status')}</Text>
+                        <Text style={[styles.saveButtonText, { fontSize: scaledSize(16) }]}>{t('availability.saveFixedStatus')}</Text>
                       )}
                     </TouchableOpacity>
                   </Card.Content>
@@ -609,7 +759,7 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
                     <Card.Content style={styles.slotContent}>
                       <View>
                         <Text style={[styles.slotDay, { color: colors.text, fontSize: scaledSize(16) }]}>
-                          {DAYS_OF_WEEK.find(d => d.value === slot.dayOfWeek)?.label || slot.dayOfWeek}
+                          {t(`days.${DAYS_OF_WEEK.find(d => d.value === slot.dayOfWeek)?.dayKey || 'monday'}`)}
                         </Text>
                         <Text style={[styles.slotTime, { color: colors.textSecondary, fontSize: scaledSize(14) }]}>
                           {slot.startTime} - {slot.endTime}
@@ -640,17 +790,28 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
                   </Card>
                 ))
               )}
-            </>
+            </Animated.View>
           )}
         </View>
       </ScrollView>
 
       {/* Add Time Slot Modal */}
-      <Modal visible={showAddModal} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
+      <Modal visible={showAddModal} animationType="none" transparent>
+        <Animated.View style={[styles.modalOverlay, { opacity: addModalFadeAnim }]}>
+          <Animated.View
+            style={[
+              styles.modalContentWrapper,
+              {
+                transform: [
+                  { translateY: addModalSlideAnim },
+                  { scale: addModalScaleAnim },
+                ],
+              },
+            ]}
+          >
           <Card style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.text, fontSize: scaledSize(18) }]}>{t('Add Time Slot')}</Text>
+              <Text style={[styles.modalTitle, { color: colors.text, fontSize: scaledSize(18) }]}>{t('availability.addTimeSlot')}</Text>
               <TouchableOpacity onPress={() => setShowAddModal(false)}>
                 <Ionicons name="close" size={24} color={colors.text} />
               </TouchableOpacity>
@@ -658,7 +819,7 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
 
             <ScrollView style={styles.modalScrollView}>
               {/* Day Selection */}
-              <Text style={[styles.label, { color: colors.text, fontSize: scaledSize(14) }]}>{t('Day of Week')}</Text>
+              <Text style={[styles.label, { color: colors.text, fontSize: scaledSize(14) }]}>{t('availability.dayOfWeek')}</Text>
               <View style={styles.dayGrid}>
                 {DAYS_OF_WEEK.map((day) => (
                   <TouchableOpacity
@@ -674,8 +835,9 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
                         styles.dayButtonText,
                         { color: selectedDay === day.value ? '#fff' : colors.text, fontSize: scaledSize(14) },
                       ]}
+                      numberOfLines={1}
                     >
-                      {day.label.slice(0, 3)}
+                      {t(`days.${day.dayKey}`)}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -777,7 +939,7 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
                 <View style={styles.webTimePickers}>
                   {showStartTimePicker && (
                     <View style={styles.webTimePickerContainer}>
-                      <Text style={[styles.label, { color: colors.text, fontSize: scaledSize(14) }]}>{t('Select Start Time')}</Text>
+                      <Text style={[styles.label, { color: colors.text, fontSize: scaledSize(14) }]}>{t('availability.selectStartTime')}</Text>
                       <input
                         type="time"
                         value={startTime}
@@ -799,13 +961,13 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
                         style={[styles.timePickerDoneButton, { backgroundColor: colors.primary }]}
                         onPress={() => setShowStartTimePicker(false)}
                       >
-                        <Text style={[styles.timePickerDoneText, { fontSize: scaledSize(16) }]}>{t('Done')}</Text>
+                        <Text style={[styles.timePickerDoneText, { fontSize: scaledSize(16) }]}>{t('availability.done')}</Text>
                       </TouchableOpacity>
                     </View>
                   )}
                   {showEndTimePicker && (
                     <View style={styles.webTimePickerContainer}>
-                      <Text style={[styles.label, { color: colors.text, fontSize: scaledSize(14) }]}>{t('Select End Time')}</Text>
+                      <Text style={[styles.label, { color: colors.text, fontSize: scaledSize(14) }]}>{t('availability.selectEndTime')}</Text>
                       <input
                         type="time"
                         value={endTime}
@@ -827,7 +989,7 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
                         style={[styles.timePickerDoneButton, { backgroundColor: colors.primary }]}
                         onPress={() => setShowEndTimePicker(false)}
                       >
-                        <Text style={[styles.timePickerDoneText, { fontSize: scaledSize(16) }]}>{t('Done')}</Text>
+                        <Text style={[styles.timePickerDoneText, { fontSize: scaledSize(16) }]}>{t('availability.done')}</Text>
                       </TouchableOpacity>
                     </View>
                   )}
@@ -842,20 +1004,32 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
                 {isSaving ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <Text style={[styles.saveButtonText, { fontSize: scaledSize(16) }]}>{t('Add Slot')}</Text>
+                  <Text style={[styles.saveButtonText, { fontSize: scaledSize(16) }]}>{t('availability.addSlot')}</Text>
                 )}
               </TouchableOpacity>
             </ScrollView>
           </Card>
-        </View>
+          </Animated.View>
+        </Animated.View>
       </Modal>
 
       {/* Edit Time Slot Modal */}
-      <Modal visible={showEditModal} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
+      <Modal visible={showEditModal} animationType="none" transparent>
+        <Animated.View style={[styles.modalOverlay, { opacity: editModalFadeAnim }]}>
+          <Animated.View
+            style={[
+              styles.modalContentWrapper,
+              {
+                transform: [
+                  { translateY: editModalSlideAnim },
+                  { scale: editModalScaleAnim },
+                ],
+              },
+            ]}
+          >
           <Card style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.text, fontSize: scaledSize(18) }]}>{t('Edit Time Slot')}</Text>
+              <Text style={[styles.modalTitle, { color: colors.text, fontSize: scaledSize(18) }]}>{t('availability.editTimeSlot')}</Text>
               <TouchableOpacity onPress={() => {
                 setShowEditModal(false);
                 setEditingSlot(null);
@@ -867,9 +1041,9 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
             <ScrollView style={styles.modalScrollView}>
               {/* Day Display (read-only) */}
               <View style={styles.editDayDisplay}>
-                <Text style={[styles.label, { color: colors.text, fontSize: scaledSize(14) }]}>{t('Day of Week')}</Text>
+                <Text style={[styles.label, { color: colors.text, fontSize: scaledSize(14) }]}>{t('availability.dayOfWeek')}</Text>
                 <Text style={[styles.editDayText, { color: colors.text, fontSize: scaledSize(16) }]}>
-                  {DAYS_OF_WEEK.find(d => d.value === editingSlot?.dayOfWeek)?.label || editingSlot?.dayOfWeek}
+                  {t(`days.${DAYS_OF_WEEK.find(d => d.value === editingSlot?.dayOfWeek)?.dayKey || 'monday'}`)}
                 </Text>
               </View>
 
@@ -975,7 +1149,7 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
                 <View style={styles.webTimePickers}>
                   {showEditStartTimePicker && (
                     <View style={styles.webTimePickerContainer}>
-                      <Text style={[styles.label, { color: colors.text, fontSize: scaledSize(14) }]}>{t('Select Start Time')}</Text>
+                      <Text style={[styles.label, { color: colors.text, fontSize: scaledSize(14) }]}>{t('availability.selectStartTime')}</Text>
                       <input
                         type="time"
                         value={editStartTime}
@@ -997,13 +1171,13 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
                         style={[styles.timePickerDoneButton, { backgroundColor: colors.primary }]}
                         onPress={() => setShowEditStartTimePicker(false)}
                       >
-                        <Text style={[styles.timePickerDoneText, { fontSize: scaledSize(16) }]}>{t('Done')}</Text>
+                        <Text style={[styles.timePickerDoneText, { fontSize: scaledSize(16) }]}>{t('availability.done')}</Text>
                       </TouchableOpacity>
                     </View>
                   )}
                   {showEditEndTimePicker && (
                     <View style={styles.webTimePickerContainer}>
-                      <Text style={[styles.label, { color: colors.text, fontSize: scaledSize(14) }]}>{t('Select End Time')}</Text>
+                      <Text style={[styles.label, { color: colors.text, fontSize: scaledSize(14) }]}>{t('availability.selectEndTime')}</Text>
                       <input
                         type="time"
                         value={editEndTime}
@@ -1025,7 +1199,7 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
                         style={[styles.timePickerDoneButton, { backgroundColor: colors.primary }]}
                         onPress={() => setShowEditEndTimePicker(false)}
                       >
-                        <Text style={[styles.timePickerDoneText, { fontSize: scaledSize(16) }]}>{t('Done')}</Text>
+                        <Text style={[styles.timePickerDoneText, { fontSize: scaledSize(16) }]}>{t('availability.done')}</Text>
                       </TouchableOpacity>
                     </View>
                   )}
@@ -1040,12 +1214,13 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
                 {isSaving ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <Text style={[styles.saveButtonText, { fontSize: scaledSize(16) }]}>{t('Update Slot')}</Text>
+                  <Text style={[styles.saveButtonText, { fontSize: scaledSize(16) }]}>{t('availability.updateSlot')}</Text>
                 )}
               </TouchableOpacity>
             </ScrollView>
           </Card>
-        </View>
+          </Animated.View>
+        </Animated.View>
       </Modal>
       
       {/* Alert Popup */}
@@ -1071,7 +1246,7 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
         onConfirm={confirmState.onConfirm}
         onCancel={hideConfirmation}
       />
-    </View>
+    </Animated.View>
   );
 }
 
@@ -1151,6 +1326,15 @@ const styles = StyleSheet.create({
   modeButtons: {
     flexDirection: 'row',
     gap: 12,
+    position: 'relative',
+  },
+  modeSlider: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    borderRadius: 8,
+    zIndex: 0,
   },
   modeButton: {
     flex: 1,
@@ -1160,6 +1344,7 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 8,
     gap: 8,
+    zIndex: 1,
   },
   modeButtonText: {
     fontSize: 16,
@@ -1220,6 +1405,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
   },
+  modalContentWrapper: {
+    width: '100%',
+  },
   modalContent: {
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
@@ -1253,9 +1441,10 @@ const styles = StyleSheet.create({
   },
   dayButton: {
     paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     borderRadius: 8,
-    minWidth: 80,
+    minWidth: '30%',
+    flex: 1,
     alignItems: 'center',
   },
   dayButtonText: {

@@ -49,6 +49,7 @@ export default function SmallTaskTypeSelectionScreen({
 
   const primaryColor = isDarkMode ? COLORS.primaryDark : COLORS.primaryLight;
   const borderColor = isDarkMode ? COLORS.borderDark : COLORS.borderLight;
+  const topSpacing = Platform.OS === 'android' ? 0 : Math.max(insets.top, 20);
 
   useEffect(() => {
     loadTaskTypes();
@@ -106,14 +107,14 @@ export default function SmallTaskTypeSelectionScreen({
         <View style={[
           styles.header, 
           { 
-            paddingTop: Math.max(insets.top, 20),
+            paddingTop: topSpacing,
             flexDirection: isRTL ? 'row-reverse' : 'row',
             borderBottomColor: colors.border,
           }
         ]}>
           <TouchableOpacity onPress={onBack} style={styles.backButton}>
             <Ionicons 
-              name={isRTL ? "arrow-forward" : "arrow-back"} 
+              name="arrow-back" 
               size={24} 
               color={primaryColor} 
             />
@@ -136,14 +137,14 @@ export default function SmallTaskTypeSelectionScreen({
         <View style={[
           styles.header, 
           { 
-            paddingTop: Math.max(insets.top, 20),
+            paddingTop: topSpacing,
             flexDirection: isRTL ? 'row-reverse' : 'row',
             borderBottomColor: colors.border,
           }
         ]}>
           <TouchableOpacity onPress={onBack} style={styles.backButton}>
             <Ionicons 
-              name={isRTL ? "arrow-forward" : "arrow-back"} 
+              name="arrow-back" 
               size={24} 
               color={primaryColor} 
             />
@@ -175,14 +176,14 @@ export default function SmallTaskTypeSelectionScreen({
         <View style={[
           styles.header, 
           { 
-            paddingTop: Math.max(insets.top, 20),
+            paddingTop: topSpacing,
             flexDirection: isRTL ? 'row-reverse' : 'row',
             borderBottomColor: colors.border,
           }
         ]}>
           <TouchableOpacity onPress={onBack} style={styles.backButton}>
             <Ionicons 
-              name={isRTL ? "arrow-forward" : "arrow-back"} 
+              name="arrow-back" 
               size={24} 
               color={primaryColor} 
             />
@@ -208,14 +209,14 @@ export default function SmallTaskTypeSelectionScreen({
       <View style={[
         styles.header, 
         { 
-          paddingTop: Math.max(insets.top, 20),
+          paddingTop: topSpacing,
           flexDirection: isRTL ? 'row-reverse' : 'row',
           borderBottomColor: colors.border,
         }
       ]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <Ionicons 
-            name={isRTL ? "arrow-forward" : "arrow-back"} 
+            name="arrow-back" 
             size={24} 
             color={primaryColor} 
           />

@@ -10,26 +10,22 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
-  Modal,
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Dimensions,
-  TouchableWithoutFeedback,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { API_ENDPOINTS, buildApiUrl } from '../config/api';
 import { storage } from '../utils/storage';
 import { showSuccess, showError } from '../utils/alert';
-import RialIcon from '../components/RialIcon';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
+import AppBottomSheetModal from '../components/AppBottomSheetModal';
 
 // ===== DESIGN TOKENS FROM FIGMA =====
 const COLORS = {
@@ -71,32 +67,14 @@ interface BidFormModalProps {
 
 export default function BidFormModal({ visible, project, onClose, onSuccess }: BidFormModalProps) {
   const { t, i18n } = useTranslation();
-  const { colors } = useTheme();
+  const { colors, theme } = useTheme();
   const { fontFamily, scaledSize } = useFontFamily();
-  const insets = useSafeAreaInsets();
   const [bidPrice, setBidPrice] = useState('');
   const [bidDescription, setBidDescription] = useState('');
   const [estimatedDays, setEstimatedDays] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const screenWidth = Dimensions.get('window').width;
-  const screenHeight = Dimensions.get('window').height;
-  const IS_WEB = Platform.OS === 'web';
-  const IS_MOBILE = Platform.OS === 'ios' || Platform.OS === 'android';
-  
-  // Custom popup hooks
-  const { alertState, showError: showErrorAlert, hideAlert } = useAlertPopup();
-  
-  // Larger modal dimensions - matching VisitRequestModal
-  const modalWidth = IS_WEB ? Math.min(520, screenWidth - 32) : screenWidth - 32;
-  const modalMaxHeight = IS_MOBILE ? screenHeight - 100 : screenHeight * 0.85;
 
-  const formatBudget = (budget: number) => {
-    return new Intl.NumberFormat(i18n.language === 'ar' ? 'ar-SA' : 'en-US', {
-      style: 'currency',
-      currency: 'SAR',
-      minimumFractionDigits: 0,
-    }).format(budget);
-  };
+  const { alertState, showError: showErrorAlert, hideAlert } = useAlertPopup();
 
   const getServiceName = () => {
     if (!project) return '';
@@ -188,172 +166,135 @@ export default function BidFormModal({ visible, project, onClose, onSuccess }: B
   };
 
   const isSubmitDisabled = isSubmitting || !bidPrice || !bidDescription || !estimatedDays;
+  const isDark = theme === 'dark';
+  const riyalLogo = isDark
+    ? require('../../assets/saudi_riyal_logo_dark.svg')
+    : require('../../assets/saudi_riyal_logo.svg');
 
   return (
-    <Modal
-      visible={visible}
-      animationType="fade"
-      transparent={true}
-      onRequestClose={handleClose}
-    >
-      <TouchableWithoutFeedback onPress={handleClose}>
-        <View style={styles.overlay}>
-          <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
-            <KeyboardAvoidingView
-              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-              style={styles.keyboardView}
-            >
-              <View style={[styles.modalContainer, { width: modalWidth, maxHeight: modalMaxHeight }]}>
-                {/* Header */}
-                <View style={styles.header}>
-                  <View style={styles.headerIconContainer}>
-                    <Ionicons name="cash" size={28} color={COLORS.green80} />
-                  </View>
-                  <Text style={[styles.headerTitle, { fontSize: scaledSize(20) }]}>{t('Place Bid')}</Text>
-                  <TouchableOpacity 
-                    onPress={handleClose} 
-                    style={styles.closeButton}
-                    disabled={isSubmitting}
-                  >
-                    <Ionicons name="close" size={24} color={COLORS.textSecondary} />
-                  </TouchableOpacity>
+    <>
+      <AppBottomSheetModal
+        visible={visible}
+        onClose={handleClose}
+        title={t('Place Bid')}
+        subtitle={getServiceName() || undefined}
+      >
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardView}>
+          {/* Project Info Card */}
+          <View style={styles.projectCard}>
+            <View style={styles.projectCardHeader}>
+              <Ionicons name="briefcase-outline" size={16} color={COLORS.primary80} />
+              <Text style={styles.projectCardLabel}>{t('Project')}</Text>
+            </View>
+            <Text style={styles.projectDescription} numberOfLines={3}>
+              {project?.description || t('No description')}
+            </Text>
+            <View style={styles.projectMeta}>
+              {getServiceName() && (
+                <View style={styles.serviceBadge}>
+                  <Text style={styles.serviceText}>{getServiceName()}</Text>
                 </View>
-
-                {/* Content */}
-                <ScrollView 
-                  style={styles.scrollContent}
-                  showsVerticalScrollIndicator={false}
-                  contentContainerStyle={styles.scrollContentContainer}
-                >
-                  {/* Project Info Card */}
-                  <View style={styles.projectCard}>
-                    <View style={styles.projectCardHeader}>
-                      <Ionicons name="briefcase-outline" size={16} color={COLORS.primary80} />
-                      <Text style={styles.projectCardLabel}>{t('Project')}</Text>
-                    </View>
-                    <Text style={styles.projectDescription} numberOfLines={3}>
-                      {project?.description || t('No description')}
-                    </Text>
-                    <View style={styles.projectMeta}>
-                      {getServiceName() && (
-                        <View style={styles.serviceBadge}>
-                          <Text style={styles.serviceText}>{getServiceName()}</Text>
-                        </View>
-                      )}
-                      {project?.budget && (
-                        <View style={styles.budgetRow}>
-                          <Text style={styles.budgetLabel}>{t('Budget')}:</Text>
-                          <Text style={styles.budgetText}>{formatBudget(project.budget)}</Text>
-                        </View>
-                      )}
-                    </View>
-                  </View>
-
-                  {/* Bid Price Input */}
-                  <View style={styles.inputSection}>
-                    <View style={styles.inputHeader}>
-                      <Ionicons name="cash-outline" size={16} color={COLORS.green80} />
-                      <Text style={[styles.inputLabel, { color: COLORS.green80 }]}>{t('Your Bid Price')}</Text>
-                      <Text style={styles.requiredText}>*</Text>
-                    </View>
-                    <View style={styles.priceInputContainer}>
-                      <TextInput
-                        style={styles.priceInput}
-                        placeholder={t('Enter amount')}
-                        placeholderTextColor={COLORS.textSecondary}
-                        value={bidPrice}
-                        onChangeText={setBidPrice}
-                        keyboardType="decimal-pad"
-                        editable={!isSubmitting}
-                      />
-                      <View style={styles.currencyBadge}>
-                        <RialIcon size={14} variant="light" />
-                      </View>
-                    </View>
-                  </View>
-
-                  {/* Duration Input */}
-                  <View style={styles.inputSection}>
-                    <View style={styles.inputHeader}>
-                      <Ionicons name="time-outline" size={16} color={COLORS.primary80} />
-                      <Text style={styles.inputLabel}>{t('Estimated Duration')}</Text>
-                      <Text style={styles.requiredText}>*</Text>
-                    </View>
-                    <View style={styles.durationInputContainer}>
-                      <TextInput
-                        style={styles.durationInput}
-                        placeholder={t('Enter amount')}
-                        placeholderTextColor={COLORS.textSecondary}
-                        value={estimatedDays}
-                        onChangeText={setEstimatedDays}
-                        keyboardType="number-pad"
-                        editable={!isSubmitting}
-                      />
-                      <View style={styles.daysBadge}>
-                        <Ionicons name="calendar-outline" size={16} color={COLORS.primary80} />
-                        <Text style={styles.daysText}>{t('Days')}</Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  {/* Description Input */}
-                  <View style={styles.inputSection}>
-                    <View style={styles.inputHeader}>
-                      <Ionicons name="document-text-outline" size={16} color={COLORS.amber60} />
-                      <Text style={[styles.inputLabel, { color: COLORS.amber60 }]}>{t('Proposal Description')}</Text>
-                      <Text style={styles.requiredText}>*</Text>
-                    </View>
-                    <TextInput
-                      style={styles.textArea}
-                      placeholder={t('Describe your approach, experience, and why you are the best fit for this project...')}
-                      placeholderTextColor={COLORS.textSecondary}
-                      value={bidDescription}
-                      onChangeText={setBidDescription}
-                      multiline
-                      numberOfLines={4}
-                      maxLength={500}
-                      editable={!isSubmitting}
-                    />
-                    <Text style={styles.charCount}>
-                      {bidDescription.length}/500
-                    </Text>
-                  </View>
-                </ScrollView>
-
-                {/* Action Buttons - Fixed at bottom */}
-                <View style={styles.actionButtons}>
-                  <TouchableOpacity
-                    style={styles.cancelButton}
-                    onPress={handleClose}
-                    disabled={isSubmitting}
-                  >
-                    <Text style={[styles.cancelButtonText, { fontSize: scaledSize(16) }]}>{t('Cancel')}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.submitButton, 
-                      isSubmitDisabled && styles.submitButtonDisabled
-                    ]}
-                    onPress={submitBid}
-                    disabled={isSubmitDisabled}
-                  >
-                    {isSubmitting ? (
-                      <ActivityIndicator size="small" color={COLORS.textWhite} />
-                    ) : (
-                      <>
-                        <Ionicons name="send" size={18} color={COLORS.textWhite} />
-                        <Text style={[styles.submitButtonText, { fontSize: scaledSize(16) }]}>{t('Submit Bid')}</Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
+              )}
+              {project?.budget != null && (
+                <View style={styles.budgetRow}>
+                  <Text style={styles.budgetLabel}>{t('Budget')}:</Text>
+                  <ExpoImage source={riyalLogo} style={{ width: 16, height: 16 }} contentFit="contain" />
+                  <Text style={styles.budgetText}>{new Intl.NumberFormat(i18n.language === 'ar' ? 'ar-SA' : 'en-US').format(project.budget)}</Text>
                 </View>
+              )}
+            </View>
+          </View>
+
+          {/* Bid Price Input */}
+          <View style={styles.inputSection}>
+            <View style={styles.inputHeader}>
+              <Text style={[styles.inputLabel, { color: COLORS.green80 }]}>{t('Your Bid Price')}</Text>
+              <Text style={styles.requiredText}>*</Text>
+            </View>
+            <View style={styles.priceInputContainer}>
+              <TextInput
+                style={styles.priceInput}
+                placeholder={t('Enter amount')}
+                placeholderTextColor={COLORS.textSecondary}
+                value={bidPrice}
+                onChangeText={setBidPrice}
+                keyboardType="decimal-pad"
+                editable={!isSubmitting}
+              />
+              <View style={styles.currencyBadge}>
+                <ExpoImage source={riyalLogo} style={{ width: 20, height: 20 }} contentFit="contain" />
               </View>
-            </KeyboardAvoidingView>
-          </TouchableWithoutFeedback>
-        </View>
-      </TouchableWithoutFeedback>
-      
-      {/* Alert Popup */}
+            </View>
+          </View>
+
+          {/* Duration Input */}
+          <View style={styles.inputSection}>
+            <View style={styles.inputHeader}>
+              <Ionicons name="time-outline" size={16} color={COLORS.primary80} />
+              <Text style={styles.inputLabel}>{t('Estimated Duration')}</Text>
+              <Text style={styles.requiredText}>*</Text>
+            </View>
+            <View style={styles.durationInputContainer}>
+              <TextInput
+                style={styles.durationInput}
+                placeholder={t('Enter amount')}
+                placeholderTextColor={COLORS.textSecondary}
+                value={estimatedDays}
+                onChangeText={setEstimatedDays}
+                keyboardType="number-pad"
+                editable={!isSubmitting}
+              />
+              <View style={styles.daysBadge}>
+                <Ionicons name="calendar-outline" size={16} color={COLORS.primary80} />
+                <Text style={styles.daysText}>{t('Days')}</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Description Input */}
+          <View style={styles.inputSection}>
+            <View style={styles.inputHeader}>
+              <Ionicons name="document-text-outline" size={16} color={COLORS.amber60} />
+              <Text style={[styles.inputLabel, { color: COLORS.amber60 }]}>{t('Proposal Description')}</Text>
+              <Text style={styles.requiredText}>*</Text>
+            </View>
+            <TextInput
+              style={styles.textArea}
+              placeholder={t('Describe your approach, experience, and why you are the best fit for this project...')}
+              placeholderTextColor={COLORS.textSecondary}
+              value={bidDescription}
+              onChangeText={setBidDescription}
+              multiline
+              numberOfLines={4}
+              maxLength={500}
+              editable={!isSubmitting}
+            />
+            <Text style={styles.charCount}>{bidDescription.length}/500</Text>
+          </View>
+
+          {/* Action Buttons */}
+          <View style={styles.actionButtons}>
+            <TouchableOpacity style={styles.cancelButton} onPress={handleClose} disabled={isSubmitting}>
+              <Text style={[styles.cancelButtonText, { fontSize: scaledSize(16) }]}>{t('Cancel')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.submitButton, isSubmitDisabled && styles.submitButtonDisabled]}
+              onPress={submitBid}
+              disabled={isSubmitDisabled}
+            >
+              {isSubmitting ? (
+                <ActivityIndicator size="small" color={COLORS.textWhite} />
+              ) : (
+                <>
+                  <Ionicons name="send" size={18} color={COLORS.textWhite} />
+                  <Text style={[styles.submitButtonText, { fontSize: scaledSize(16) }]}>{t('Submit Bid')}</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </AppBottomSheetModal>
+
       <AlertPopup
         visible={alertState.visible}
         title={alertState.title}
@@ -362,79 +303,13 @@ export default function BidFormModal({ visible, project, onClose, onSuccess }: B
         buttons={alertState.buttons}
         onClose={hideAlert}
       />
-    </Modal>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: COLORS.bgOverlay,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 16,
-  },
   keyboardView: {
-    justifyContent: 'center',
-    alignItems: 'center',
     width: '100%',
-  },
-  modalContainer: {
-    backgroundColor: COLORS.bgWhite,
-    borderRadius: 16,
-    overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 12,
-      },
-      android: {
-        elevation: 8,
-      },
-      web: {
-        boxShadow: '0px 4px 24px rgba(0, 0, 0, 0.15)',
-      },
-    }),
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 20,
-    paddingBottom: 16,
-    gap: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.textDividers,
-  },
-  headerIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: COLORS.green10,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    flex: 1,
-    fontSize: 20,
-    fontWeight: '700',
-    color: COLORS.textHeader,
-  },
-  closeButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.primary10,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  scrollContent: {
-    flexGrow: 0,
-    maxHeight: 400,
-  },
-  scrollContentContainer: {
-    padding: 20,
     gap: 20,
   },
   projectCard: {

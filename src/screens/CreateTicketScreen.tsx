@@ -1,5 +1,5 @@
 // 🎫 CreateTicketScreen – same integration as web (getSupportCategoriesHierarchy, createTicket with categoryId/subcategoryId)
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   Image,
+  Animated,
+  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -19,6 +21,7 @@ import {
   getSupportCategoriesHierarchy,
   hierarchyToRequestTypes,
   createTicket,
+  getPriorityText,
 } from '../services/SupportTicketService';
 import FileUploadService from '../services/FileUploadService';
 import type { SupportRequestType, TicketPriority } from '../types/chat';
@@ -57,6 +60,8 @@ const FALLBACK_CATEGORIES: SupportRequestType[] = [
 
 const PRIORITIES: TicketPriority[] = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
 
+const DESCRIPTION_MIN_LEN = 10;
+
 const CreateTicketScreen: React.FC<CreateTicketScreenProps> = ({
   onBack,
   onSuccess,
@@ -64,6 +69,9 @@ const CreateTicketScreen: React.FC<CreateTicketScreenProps> = ({
   const { t, i18n } = useTranslation();
   const { colors, theme } = useTheme();
   const isDarkMode = theme === 'dark';
+  const screenWidth = Dimensions.get('window').width;
+  const slideXAnim = useRef(new Animated.Value(0)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
   const language = i18n.language === 'ar' ? 'ar' : 'en';
   const isRTL = language === 'ar';
   const { alertState, showSuccess, showError, hideAlert } = useAlertPopup();
@@ -84,6 +92,43 @@ const CreateTicketScreen: React.FC<CreateTicketScreenProps> = ({
     ? (categories.find(c => c.id === categoryId)?.subcategories || []).filter(s => s.active !== false)
     : [];
 
+  const submitBlockers = useMemo(() => {
+    const messages: string[] = [];
+    if (loadingCategories) {
+      messages.push(t('support.createTicket.loadingCategories'));
+      return messages;
+    }
+    if (!subject.trim()) {
+      messages.push(t('support.createTicket.needSubject'));
+    }
+    const desc = description.trim();
+    if (!desc) {
+      messages.push(t('support.createTicket.needDescription'));
+    } else if (desc.length < DESCRIPTION_MIN_LEN) {
+      messages.push(
+        t('support.createTicket.descriptionMinLength', {
+          count: DESCRIPTION_MIN_LEN,
+          current: desc.length,
+        })
+      );
+    }
+    if (categories.length > 0 && categoryId == null && subcategoryId == null) {
+      messages.push(t('support.createTicket.needCategory'));
+    }
+    return messages;
+  }, [
+    loadingCategories,
+    subject,
+    description,
+    categories.length,
+    categoryId,
+    subcategoryId,
+    t,
+  ]);
+
+  const canSubmit = submitBlockers.length === 0;
+  const submitDisabled = !canSubmit || loading || loadingCategories || uploadingFiles;
+
   const loadCategories = useCallback(async () => {
     setLoadingCategories(true);
     try {
@@ -103,6 +148,23 @@ const CreateTicketScreen: React.FC<CreateTicketScreenProps> = ({
   useEffect(() => {
     loadCategories();
   }, [loadCategories]);
+
+  // Opening animation: content comes from the left
+  useEffect(() => {
+    slideXAnim.setValue(-screenWidth);
+    opacityAnim.setValue(0);
+    Animated.parallel([
+      Animated.timing(opacityAnim, { toValue: 1, duration: 220, useNativeDriver: true }),
+      Animated.spring(slideXAnim, { toValue: 0, tension: 65, friction: 11, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
+  const handleBack = () => {
+    Animated.parallel([
+      Animated.timing(opacityAnim, { toValue: 0, duration: 180, useNativeDriver: true }),
+      Animated.timing(slideXAnim, { toValue: screenWidth, duration: 220, useNativeDriver: true }),
+    ]).start(() => onBack?.());
+  };
 
   const handleCategorySelect = (id: number) => {
     setCategoryId(id);
@@ -243,8 +305,12 @@ const CreateTicketScreen: React.FC<CreateTicketScreenProps> = ({
       showError(language === 'ar' ? 'الرجاء إدخال الوصف' : 'Please enter a description');
       return;
     }
-    if (description.trim().length < 10) {
-      showError(language === 'ar' ? 'الوصف قصير جداً' : 'Description is too short');
+    if (description.trim().length < DESCRIPTION_MIN_LEN) {
+      showError(
+        language === 'ar'
+          ? `الوصف يجب أن يكون ${DESCRIPTION_MIN_LEN} أحرف على الأقل`
+          : `Description must be at least ${DESCRIPTION_MIN_LEN} characters`
+      );
       return;
     }
     if (categories.length > 0 && categoryId == null && subcategoryId == null) {
@@ -288,13 +354,14 @@ const CreateTicketScreen: React.FC<CreateTicketScreenProps> = ({
   };
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      {/* Header */}
+    <Animated.View style={[styles.container, { backgroundColor: colors.background, opacity: opacityAnim, transform: [{ translateX: slideXAnim }] }]}>
+      <KeyboardAvoidingView
+        style={styles.keyboardView}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+      {/* Header – LTR so back stays left, title center */}
       <View style={[styles.header, { backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
+        <TouchableOpacity onPress={handleBack} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>
@@ -412,7 +479,7 @@ const CreateTicketScreen: React.FC<CreateTicketScreenProps> = ({
                   },
                 ]}
               >
-                <Text style={[styles.categoryChipText, { color: priority === p ? colors.primary : colors.text }]}>{p}</Text>
+                <Text style={[styles.categoryChipText, { color: priority === p ? colors.primary : colors.text }]}>{getPriorityText(p, language)}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -539,15 +606,54 @@ const CreateTicketScreen: React.FC<CreateTicketScreenProps> = ({
           </Text>
         </View>
 
+        {/* Why submit is disabled — always visible when form is incomplete */}
+        {!loading && submitBlockers.length > 0 && (
+          <View
+            style={[
+              styles.submitHintBox,
+              {
+                backgroundColor: isDarkMode ? 'rgba(251, 191, 36, 0.12)' : '#FFFBEB',
+                borderColor: isDarkMode ? 'rgba(245, 158, 11, 0.45)' : '#FCD34D',
+              },
+            ]}
+            accessibilityRole="alert"
+          >
+            <View style={[styles.submitHintHeader, isRTL && styles.rowReverse]}>
+              <Ionicons name="information-circle" size={22} color={isDarkMode ? '#FBBF24' : '#D97706'} />
+              <Text
+                style={[
+                  styles.submitHintTitle,
+                  { color: isDarkMode ? '#FDE68A' : '#92400E' },
+                  isRTL ? { textAlign: 'right', marginRight: 8, marginLeft: 0 } : { marginLeft: 8 },
+                ]}
+              >
+                {t('support.createTicket.cannotSubmitTitle')}
+              </Text>
+            </View>
+            {submitBlockers.map((line, idx) => (
+              <Text
+                key={idx}
+                style={[
+                  styles.submitHintLine,
+                  { color: isDarkMode ? '#FEF3C7' : '#78350F' },
+                  isRTL && { textAlign: 'right' },
+                ]}
+              >
+                {`\u2022 ${line}`}
+              </Text>
+            ))}
+          </View>
+        )}
+
         {/* Submit Button */}
         <TouchableOpacity
           style={[
             styles.submitButton,
             { backgroundColor: colors.primary },
-            (loading || (categories.length > 0 && categoryId == null && subcategoryId == null)) && { opacity: 0.6 },
+            submitDisabled && !loading && { opacity: 0.5 },
           ]}
           onPress={handleSubmit}
-          disabled={loading || !subject.trim() || !description.trim() || loadingCategories || (categories.length > 0 && categoryId == null && subcategoryId == null)}
+          disabled={submitDisabled}
           activeOpacity={0.8}
         >
           {loading ? (
@@ -571,7 +677,8 @@ const CreateTicketScreen: React.FC<CreateTicketScreenProps> = ({
         buttons={alertState.buttons}
         onClose={hideAlert}
       />
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </Animated.View>
   );
 };
 
@@ -579,10 +686,14 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  keyboardView: {
+    flex: 1,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    direction: 'ltr',
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
@@ -762,6 +873,31 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 10,
     textAlign: 'center',
+  },
+
+  submitHintBox: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 14,
+    marginBottom: 12,
+  },
+  submitHintHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  rowReverse: {
+    flexDirection: 'row-reverse',
+  },
+  submitHintTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    flex: 1,
+  },
+  submitHintLine: {
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 4,
   },
 
   // Submit

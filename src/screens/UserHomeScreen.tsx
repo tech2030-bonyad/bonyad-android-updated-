@@ -57,6 +57,7 @@ import SmallTaskTypesScreen from './SmallTaskTypesScreen';
 import PaymentTransactionScreen from './PaymentTransactionScreen';
 import ConversationalAIForm from './ConversationalAIForm';
 import ManualProjectForm from './ManualProjectForm';
+import CreationMethodScreen from './CreationMethodScreen';
 import ServiceTechniciansScreen from './ServiceTechniciansScreen';
 import TechnicianProfileView from './TechnicianProfileView';
 import ProjectCards from '../components/ProjectCards';
@@ -71,6 +72,10 @@ import CategorySubcategoryScreen from './CategorySubcategoryScreen';
 interface UserHomeScreenProps {
   onShowProfile: () => void;
   onLogout: () => void;
+  /** When true, open profile tab on mount so nav bar stays visible */
+  openProfileOnMount?: boolean;
+  /** Called when user switches away from profile tab */
+  onProfileTabClosed?: () => void;
   onRequestProject?: () => void;
   onShowProjects?: (filter: 'available' | 'running' | 'completed') => void;
   onShowChat?: () => void;
@@ -100,6 +105,8 @@ interface UserHomeScreenProps {
 export default function UserHomeScreen({
   onLogout,
   onShowProfile,
+  openProfileOnMount = false,
+  onProfileTabClosed,
   onRequestProject,
   onShowProjects,
   onShowChat,
@@ -143,7 +150,9 @@ export default function UserHomeScreen({
   const { fontFamily, scaledSize } = useFontFamily();
   const isDarkMode = theme === 'dark';
   const [showProjectsDropdown, setShowProjectsDropdown] = useState(false);
-  const [activeTab, setActiveTab] = useState<'home' | 'projects' | 'chat' | 'profile' | 'notifications' | 'appointments' | 'new' | 'service-technicians' | 'technician-profile' | 'services-list'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'projects' | 'chat' | 'profile' | 'notifications' | 'appointments' | 'new' | 'service-technicians' | 'technician-profile' | 'services-list'>(
+    openProfileOnMount ? 'profile' : 'home'
+  );
 
   // Animation values for dropdowns and tab content transition
   const mobileDropdownAnim = useRef(new Animated.Value(0)).current;
@@ -170,7 +179,7 @@ export default function UserHomeScreen({
   const [currentProjectsFilter, setCurrentProjectsFilter] = useState<'available' | 'running' | 'completed'>(projectsFilter || 'available');
   const [profileSubView, setProfileSubView] = useState<'myData' | 'editProfile' | 'portfolio' | 'subscription' | 'services' | 'availability' | 'regions' | 'smallTaskTypes' | 'paymentHistory' | 'changePassword' | 'changePhone' | 'verifyPhoneChange' | null>(null);
   const [phoneChangeNumber, setPhoneChangeNumber] = useState<string>('');
-  const [newProjectSubView, setNewProjectSubView] = useState<'project-type-selection' | 'ai' | 'manual' | 'small-task-type-selection' | 'small-task-request-form' | null>(null);
+  const [newProjectSubView, setNewProjectSubView] = useState<'project-type-selection' | 'creation-method' | 'ai' | 'manual' | 'small-task-type-selection' | 'small-task-request-form' | null>(null);
   const [selectedTaskType, setSelectedTaskType] = useState<any>(null);
   const [selectedChat, setSelectedChat] = useState<{ roomId: string; receiverId: number; receiverName: string; projectId?: number | null } | null>(null);
   const [showChatList, setShowChatList] = useState(true);
@@ -271,6 +280,13 @@ export default function UserHomeScreen({
       setCurrentProjectsFilter(projectsFilter);
     }
   }, [projectsFilter]);
+
+  // When openProfileOnMount is true (e.g. from profile icon tap), switch to profile tab so nav bar stays visible
+  useEffect(() => {
+    if (openProfileOnMount) {
+      setActiveTab('profile');
+    }
+  }, [openProfileOnMount]);
 
   // Animate mobile dropdown
   useEffect(() => {
@@ -845,8 +861,9 @@ export default function UserHomeScreen({
 
         {/* Render content based on active tab — animated transition */}
         <Animated.View style={{ flex: 1, opacity: tabContentOpacity, transform: [{ translateY: tabContentTranslateY }] }}>
-        {activeTab === 'home' && (
-          selectedCategory ? (
+        {/* Home tab - always mounted to preserve state when navigating back */}
+        <View style={{ flex: 1, display: activeTab === 'home' ? 'flex' : 'none', pointerEvents: activeTab === 'home' ? 'auto' : 'none' }}>
+        {selectedCategory ? (
             <CategorySubcategoryScreen
               category={selectedCategory}
               onBack={() => setSelectedCategory(null)}
@@ -917,7 +934,7 @@ export default function UserHomeScreen({
                   categoryNameAr: category.nameAr,
                 });
                 setActiveTab('new');
-                setNewProjectSubView('manual');
+                setNewProjectSubView('creation-method');
               }}
               onPressSubcategoryForManual={(category, subcategory) => {
                 setManualFormInitial({
@@ -929,7 +946,7 @@ export default function UserHomeScreen({
                   subcategoryNameAr: subcategory.nameAr,
                 });
                 setActiveTab('new');
-                setNewProjectSubView('manual');
+                setNewProjectSubView('creation-method');
               }}
               onPressChatbot={onShowChatbot}
               onPressProject={(project) => {
@@ -956,8 +973,8 @@ export default function UserHomeScreen({
                 setCurrentProjectsFilter('available');
               }}
             />
-          )
-        )}
+          )}
+        </View>
 
         {/* Keep search results modal for backward compatibility */}
         {false && activeTab === 'home' && (
@@ -1380,6 +1397,10 @@ export default function UserHomeScreen({
               initialServiceCategoryId={projectsScreenCategoryId}
               initialProject={pendingOpenProject}
               initialSmallTask={pendingOpenSmallTask}
+              onBack={() => {
+                setActiveTab('home');
+                setProjectsScreenCategoryId(null);
+              }}
               onFilterChange={(newFilter) => {
                 setCurrentProjectsFilter(newFilter as any);
               }}
@@ -1509,6 +1530,7 @@ export default function UserHomeScreen({
                   receiverId={selectedChat.receiverId}
                   receiverName={selectedChat.receiverName}
                   projectId={selectedChat.projectId ?? undefined}
+                  hasBottomTabBar
                   onBack={IS_LARGE_WEB ? undefined : handleChatBackNavigation}
                 />
               </View>
@@ -1613,7 +1635,13 @@ export default function UserHomeScreen({
             {newProjectSubView === 'project-type-selection' ? (
               <ProjectTypeSelectionScreen
                 onSelectLarge={() => {
-                  setNewProjectSubView(null);
+                  setSelectedTaskType(null);
+                  setManualFormInitial({
+                    categoryId: 0,
+                    categoryNameEn: 'All services',
+                    categoryNameAr: 'كل الخدمات',
+                  });
+                  setNewProjectSubView('creation-method');
                 }}
                 onSelectSmall={() => {
                   setNewProjectSubView('small-task-type-selection');
@@ -1646,16 +1674,50 @@ export default function UserHomeScreen({
                   setNewProjectSubView(null);
                 }}
               />
+            ) : newProjectSubView === 'creation-method' && manualFormInitial ? (
+              <CreationMethodScreen
+                category={{
+                  id: manualFormInitial.categoryId,
+                  nameEn: manualFormInitial.categoryNameEn,
+                  nameAr: manualFormInitial.categoryNameAr,
+                }}
+                subcategory={
+                  manualFormInitial.subcategoryId != null
+                    ? {
+                        id: manualFormInitial.subcategoryId,
+                        nameEn: manualFormInitial.subcategoryNameEn || '',
+                        nameAr: manualFormInitial.subcategoryNameAr,
+                      }
+                    : { id: 0, nameEn: 'All services', nameAr: 'الكل' }
+                }
+                onBack={() => {
+                  setActiveTab('home');
+                  setNewProjectSubView(null);
+                  setManualFormInitial(null);
+                }}
+                onChooseAI={() => setNewProjectSubView('ai')}
+                onChooseManual={() => setNewProjectSubView('manual')}
+              />
             ) : newProjectSubView === null ? (
               <NewProjectView
                 onNavigateToAI={() => setNewProjectSubView('ai')}
                 onNavigateToManual={() => setNewProjectSubView('manual')}
+                onBack={() => {
+                  setActiveTab('home');
+                  setNewProjectSubView(null);
+                  setHiringTechnician(null);
+                }}
                 technician={hiringTechnician}
               />
             ) : newProjectSubView === 'ai' ? (
               <ConversationalAIForm
                 technician={hiringTechnician}
+                initialCategoryId={manualFormInitial?.categoryId}
+                initialCategoryName={i18n.language === 'ar' ? manualFormInitial?.categoryNameAr : manualFormInitial?.categoryNameEn}
+                initialSubcategoryId={manualFormInitial?.subcategoryId}
+                initialSubcategoryName={i18n.language === 'ar' ? manualFormInitial?.subcategoryNameAr : manualFormInitial?.subcategoryNameEn}
                 onBack={() => {
+                  setActiveTab('home');
                   setNewProjectSubView(null);
                   setHiringTechnician(null);
                 }}
@@ -1668,6 +1730,7 @@ export default function UserHomeScreen({
               <ManualProjectForm
                 technician={hiringTechnician}
                 onBack={() => {
+                  setActiveTab('home');
                   setNewProjectSubView(null);
                   setHiringTechnician(null);
                   setManualFormInitial(null);
@@ -1699,7 +1762,12 @@ export default function UserHomeScreen({
                     ? 'home'
                     : 'home'
             }
-            onTabPress={(tab) => setActiveTab(tab as typeof activeTab)}
+            onTabPress={(tab) => {
+              if (activeTab === 'profile' && tab !== 'profile') {
+                onProfileTabClosed?.();
+              }
+              setActiveTab(tab as typeof activeTab);
+            }}
             onNewPress={() => {
               setActiveTab('new');
               setNewProjectSubView('project-type-selection');
@@ -1913,8 +1981,9 @@ export default function UserHomeScreen({
 
       {/* Main content - Render based on active tab */}
       <View style={styles.desktopMainContentWrapper}>
-        {activeTab === 'home' && (
-          selectedCategory ? (
+        {/* Home tab - always mounted to preserve state when navigating back */}
+        <View style={{ flex: 1, display: activeTab === 'home' ? 'flex' : 'none', pointerEvents: activeTab === 'home' ? 'auto' : 'none' }}>
+        {selectedCategory ? (
             <CategorySubcategoryScreen
               category={selectedCategory}
               onBack={() => setSelectedCategory(null)}
@@ -1985,7 +2054,7 @@ export default function UserHomeScreen({
                   categoryNameAr: category.nameAr,
                 });
                 setActiveTab('new');
-                setNewProjectSubView('manual');
+                setNewProjectSubView('creation-method');
               }}
               onPressSubcategoryForManual={(category, subcategory) => {
                 setManualFormInitial({
@@ -1997,7 +2066,7 @@ export default function UserHomeScreen({
                   subcategoryNameAr: subcategory.nameAr,
                 });
                 setActiveTab('new');
-                setNewProjectSubView('manual');
+                setNewProjectSubView('creation-method');
               }}
               onPressChatbot={onShowChatbot}
               onPressProject={(project) => {
@@ -2024,8 +2093,8 @@ export default function UserHomeScreen({
                 setCurrentProjectsFilter('available');
               }}
             />
-          )
-        )}
+          )}
+        </View>
 
         {/* Keep old desktop content for reference - disabled */}
         {false && activeTab === 'home' && (
@@ -2315,6 +2384,10 @@ export default function UserHomeScreen({
                 initialServiceCategoryId={projectsScreenCategoryId}
                 initialProject={pendingOpenProject}
                 initialSmallTask={pendingOpenSmallTask}
+                onBack={() => {
+                  setActiveTab('home');
+                  setProjectsScreenCategoryId(null);
+                }}
                 onFilterChange={(newFilter) => {
                   setCurrentProjectsFilter(newFilter as any);
                 }}
@@ -2579,16 +2652,50 @@ export default function UserHomeScreen({
             showsVerticalScrollIndicator={true}
           >
             <View style={styles.mainContentWrapper}>
-              {newProjectSubView === null ? (
+              {newProjectSubView === 'creation-method' && manualFormInitial ? (
+                <CreationMethodScreen
+                  category={{
+                    id: manualFormInitial.categoryId,
+                    nameEn: manualFormInitial.categoryNameEn,
+                    nameAr: manualFormInitial.categoryNameAr,
+                  }}
+                  subcategory={
+                    manualFormInitial.subcategoryId != null
+                      ? {
+                          id: manualFormInitial.subcategoryId,
+                          nameEn: manualFormInitial.subcategoryNameEn || '',
+                          nameAr: manualFormInitial.subcategoryNameAr,
+                        }
+                      : { id: 0, nameEn: 'All services', nameAr: 'الكل' }
+                  }
+                  onBack={() => {
+                    setActiveTab('home');
+                    setNewProjectSubView(null);
+                    setManualFormInitial(null);
+                  }}
+                  onChooseAI={() => setNewProjectSubView('ai')}
+                  onChooseManual={() => setNewProjectSubView('manual')}
+                />
+              ) : newProjectSubView === null ? (
                 <NewProjectView
                   onNavigateToAI={() => setNewProjectSubView('ai')}
                   onNavigateToManual={() => setNewProjectSubView('manual')}
+                  onBack={() => {
+                    setActiveTab('home');
+                    setNewProjectSubView(null);
+                    setHiringTechnician(null);
+                  }}
                   technician={hiringTechnician}
                 />
               ) : newProjectSubView === 'ai' ? (
                 <ConversationalAIForm
                   technician={hiringTechnician}
+                  initialCategoryId={manualFormInitial?.categoryId}
+                  initialCategoryName={i18n.language === 'ar' ? manualFormInitial?.categoryNameAr : manualFormInitial?.categoryNameEn}
+                  initialSubcategoryId={manualFormInitial?.subcategoryId}
+                  initialSubcategoryName={i18n.language === 'ar' ? manualFormInitial?.subcategoryNameAr : manualFormInitial?.subcategoryNameEn}
                   onBack={() => {
+                    setActiveTab('home');
                     setNewProjectSubView(null);
                     setHiringTechnician(null);
                   }}
@@ -2601,6 +2708,7 @@ export default function UserHomeScreen({
                 <ManualProjectForm
                   technician={hiringTechnician}
                   onBack={() => {
+                    setActiveTab('home');
                     setNewProjectSubView(null);
                     setHiringTechnician(null);
                     setManualFormInitial(null);

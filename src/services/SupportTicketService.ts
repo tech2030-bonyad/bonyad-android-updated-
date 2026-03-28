@@ -289,20 +289,24 @@ export function getStatusText(status: string, language: 'en' | 'ar' = 'en'): str
     IN_PROGRESS: { en: 'In Progress', ar: 'قيد التنفيذ' },
     WAITING_FOR_CUSTOMER: { en: 'Waiting for your reply', ar: 'في انتظار ردك' },
     ASSIGNED: { en: 'Assigned', ar: 'تم التعيين' },
+    ESCALATED: { en: 'Escalated', ar: 'مُصَعَّد' },
     RESOLVED: { en: 'Resolved', ar: 'تم الحل' },
     CLOSED: { en: 'Closed', ar: 'مغلق' },
     REJECTED: { en: 'Rejected', ar: 'مرفوض' },
   };
-  return statusMap[status]?.[language] || status;
+  const key = (status || '').toUpperCase().replace(/\s+/g, '_');
+  return statusMap[key]?.[language] || status;
 }
 
 export function getStatusColor(status: string): string {
-  switch (status) {
+  const s = (status || '').toUpperCase().replace(/\s+/g, '_');
+  switch (s) {
     case 'OPEN':
     case 'PENDING': return '#FFA500';
     case 'IN_PROGRESS':
     case 'ASSIGNED': return '#3498db';
     case 'WAITING_FOR_CUSTOMER': return '#9b59b6';
+    case 'ESCALATED': return '#e67e22';
     case 'RESOLVED': return '#2ecc71';
     case 'CLOSED': return '#95a5a6';
     case 'REJECTED': return '#e74c3c';
