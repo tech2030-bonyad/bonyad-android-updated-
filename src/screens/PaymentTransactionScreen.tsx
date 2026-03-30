@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
+import RialIcon from '../components/RialIcon';
 import {
   getMyTransactions,
   PaymentTransaction,
@@ -38,8 +39,10 @@ export default function PaymentTransactionScreen({
 }: PaymentTransactionScreenProps) {
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
-  const { colors } = useTheme();
+  const { colors, theme } = useTheme();
   const { scaledSize } = useFontFamily();
+  const isRTL = i18n.language === 'ar';
+  const isDarkMode = theme === 'dark';
 
   const [transactions, setTransactions] = useState<PaymentTransaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -121,11 +124,10 @@ export default function PaymentTransactionScreen({
     }
   };
 
-  const formatAmount = (amount: number, currency: string = 'SAR') => {
+  const formatAmount = (amount: number) => {
     return new Intl.NumberFormat(i18n.language === 'ar' ? 'ar-SA' : 'en-US', {
-      style: 'currency',
-      currency,
       minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
     }).format(amount);
   };
 
@@ -292,23 +294,31 @@ export default function PaymentTransactionScreen({
         onPress={() => onViewTransaction?.(transaction)}
       >
         <View style={styles.transactionHeader}>
-          <View style={styles.transactionHeaderLeft}>
-            <View style={[styles.statusIconContainer, { backgroundColor: statusColor + '20' }]}>
-              <Ionicons name={statusIcon as any} size={20} color={statusColor} />
-            </View>
-            <View style={styles.transactionInfo}>
-              <Text style={[styles.transactionAmount, { color: colors.text, fontSize: scaledSize(18) }]}>
-                {formatAmount(transaction.amount, transaction.currency)}
-              </Text>
-              <Text style={[styles.transactionType, { color: colors.textSecondary, fontSize: scaledSize(12) }]}>
-                {getPaymentTypeLabel(transaction.paymentType)}
-                {transaction.projectDescription && ` - ${transaction.projectDescription}`}
-              </Text>
-            </View>
+          <View style={[styles.statusIconContainer, { backgroundColor: statusColor + '20' }]}>
+            <Ionicons name={statusIcon as any} size={20} color={statusColor} />
           </View>
-          <View style={[styles.statusBadge, { backgroundColor: statusColor + '20' }]}>
-            <Text style={[styles.statusText, { color: statusColor, fontSize: scaledSize(11) }]}>
-              {getStatusLabel(transaction.status)}
+
+          <View style={styles.transactionInfo}>
+            <View style={styles.amountRow}>
+              <RialIcon
+                size={scaledSize(18)}
+                variant={isDarkMode ? 'light' : 'dark'}
+                style={isRTL ? { marginRight: 10 } : { marginLeft: 10 }}
+              />
+              <Text style={[styles.transactionAmount, { color: colors.text, fontSize: scaledSize(18) }]}>
+                {formatAmount(transaction.amount)}
+              </Text>
+              <View style={{ flex: 1 }} />
+              <View style={[styles.statusBadge, { backgroundColor: statusColor + '18', borderColor: statusColor + '30' }]}>
+                <Text style={[styles.statusText, { color: statusColor, fontSize: scaledSize(11) }]}>
+                  {getStatusLabel(transaction.status)}
+                </Text>
+              </View>
+            </View>
+
+            <Text style={[styles.transactionType, { color: colors.textSecondary, fontSize: scaledSize(12) }]}>
+              {getPaymentTypeLabel(transaction.paymentType)}
+              {transaction.projectDescription && ` • ${transaction.projectDescription}`}
             </Text>
           </View>
         </View>
@@ -330,8 +340,18 @@ export default function PaymentTransactionScreen({
             <View style={styles.detailRow}>
               <Ionicons name="receipt" size={14} color={colors.textSecondary} />
               <Text style={[styles.detailText, { color: colors.textSecondary, fontSize: scaledSize(12) }]}>
-                {t('payments.commission')}: {formatAmount(transaction.commissionAmount, transaction.currency)}
+                {t('payments.commission')}
               </Text>
+              <View style={styles.moneyInline}>
+                <RialIcon
+                  size={scaledSize(14)}
+                  variant={isDarkMode ? 'light' : 'dark'}
+                  style={isRTL ? { marginRight: 8 } : { marginLeft: 8 }}
+                />
+                <Text style={[styles.moneyText, { color: colors.textSecondary, fontSize: scaledSize(12) }]}>
+                  {formatAmount(transaction.commissionAmount)}
+                </Text>
+              </View>
             </View>
           )}
         </View>
@@ -342,7 +362,13 @@ export default function PaymentTransactionScreen({
             onPress={() => onRequestRefund?.(transaction)}
           >
             <Ionicons name="arrow-undo" size={16} color={colors.primary} />
-            <Text style={[styles.refundButtonText, { color: colors.primary, fontSize: scaledSize(12) }]}>
+            <Text
+              style={[
+                styles.refundButtonText,
+                { color: colors.primary, fontSize: scaledSize(12) },
+                isRTL ? { marginRight: 10 } : { marginLeft: 10 },
+              ]}
+            >
               {t('payments.requestRefund')}
             </Text>
           </TouchableOpacity>
@@ -351,7 +377,13 @@ export default function PaymentTransactionScreen({
         {transaction.hasRefundRequest && (
           <View style={[styles.refundRequestedBadge, { backgroundColor: colors.warning + '20' }]}>
             <Ionicons name="time" size={14} color={colors.warning} />
-            <Text style={[styles.refundRequestedText, { color: colors.warning, fontSize: scaledSize(11) }]}>
+            <Text
+              style={[
+                styles.refundRequestedText,
+                { color: colors.warning, fontSize: scaledSize(11) },
+                isRTL ? { marginRight: 10 } : { marginLeft: 10 },
+              ]}
+            >
               {t('payments.refundRequested')}
             </Text>
           </View>
@@ -362,7 +394,7 @@ export default function PaymentTransactionScreen({
 
   return (
     <Animated.View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top, opacity: screenOpacity, transform: [{ translateX: screenSlideX }] }]}>
-      {/* Header – LTR so back stays left, title center */}
+      {/* Header */}
       <View
         style={[
           styles.header,
@@ -370,8 +402,6 @@ export default function PaymentTransactionScreen({
             backgroundColor: colors.cardBackground,
             borderBottomColor: colors.border,
             paddingTop: 0,
-            direction: 'ltr',
-            flexDirection: 'row',
           },
         ]}
       >
@@ -408,7 +438,10 @@ export default function PaymentTransactionScreen({
       ) : (
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: Math.max(insets.bottom + 96, 140) },
+          ]}
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />}
           onScrollEndDrag={handleLoadMore}
         >
@@ -445,7 +478,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    direction: 'ltr',
   },
   backButton: {
     padding: 4,
@@ -492,9 +524,9 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   transactionCard: {
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
-    marginBottom: 12,
+    marginBottom: 14,
     borderWidth: 1,
     ...Platform.select({
       ios: {
@@ -510,13 +542,9 @@ const styles = StyleSheet.create({
   },
   transactionHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  transactionHeaderLeft: {
-    flexDirection: 'row',
-    flex: 1,
+    gap: 12,
+    marginBottom: 10,
   },
   statusIconContainer: {
     width: 40,
@@ -524,22 +552,25 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
   },
   transactionInfo: {
     flex: 1,
   },
+  amountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   transactionAmount: {
     fontWeight: '700',
-    marginBottom: 4,
   },
   transactionType: {
-    marginTop: 2,
+    marginTop: 4,
   },
   statusBadge: {
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
+    borderWidth: 1,
   },
   statusText: {
     fontWeight: '600',
@@ -557,6 +588,13 @@ const styles = StyleSheet.create({
   detailText: {
     flex: 1,
   },
+  moneyInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  moneyText: {
+    fontWeight: '600',
+  },
   refundButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -565,7 +603,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     borderRadius: 8,
     borderWidth: 1,
-    gap: 6,
+    gap: 10,
   },
   refundButtonText: {
     fontWeight: '600',
@@ -577,7 +615,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     marginTop: 12,
     borderRadius: 8,
-    gap: 6,
+    gap: 10,
   },
   refundRequestedText: {
     fontWeight: '600',

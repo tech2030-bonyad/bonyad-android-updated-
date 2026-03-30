@@ -22,10 +22,13 @@ import RialIcon from '../../components/RialIcon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { buildApiUrl, API_ENDPOINTS } from '../../config/api';
 import { storage } from '../../utils/storage';
+import { getAppTopBarPaddingTop } from '../../utils/statusBarHelper';
 import { getAvailableRequests } from '../../services/SmallTaskService';
 import type { SmallTaskRequest } from '../../types/smallTasks';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+/** Extra space below the status / safe area so the home top bar sits lower (technician home tab). */
+const TECH_HOME_TOP_BAR_EXTRA_INSET = 14;
 const H_PADDING = 20;
 const BANNER_PAGE_WIDTH = SCREEN_WIDTH - H_PADDING * 2;
 const SECTION_GAP = 16;
@@ -240,7 +243,7 @@ export default function TechnicalHomeScreen({
   const taskCards = smallTasks.slice(0, 2);
 
   const insets = useSafeAreaInsets();
-  const topSpacing = Platform.OS === 'android' ? Math.max(insets.top, 50) : Math.max(insets.top, 12);
+  const topSpacing = getAppTopBarPaddingTop(insets);
 
   const onBannerScroll = (e: { nativeEvent: { contentOffset: { x: number }; layoutMeasurement: { width: number } } }) => {
     const x = e.nativeEvent.contentOffset.x;
@@ -274,7 +277,7 @@ export default function TechnicalHomeScreen({
         nestedScrollEnabled={true}
       >
         {/* Top bar — first item in scroll (matches iOS TechnicianHomeContentView) */}
-        <View style={[styles.iosTopBar, { paddingTop: topSpacing, backgroundColor: isDarkMode ? themeColors.background : COLORS.background }]}>
+        <View style={[styles.iosTopBar, { paddingTop: topSpacing + TECH_HOME_TOP_BAR_EXTRA_INSET, backgroundColor: isDarkMode ? themeColors.background : COLORS.background }]}>
           <View style={styles.iosTopBarLogo}>
             <BonyadLogo size="small" responsive={false} variant={isDarkMode ? 'light' : 'dark'} />
           </View>
@@ -582,16 +585,16 @@ const styles = StyleSheet.create({
   scrollContentWrap: {},
   content: {
     paddingHorizontal: H_PADDING,
-    paddingTop: 8,
+    paddingTop: 16,
     paddingBottom: 24,
   },
   iosTopBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    height: 44,
+    minHeight: 44,
     paddingHorizontal: H_PADDING,
-    marginBottom: 8,
+    marginBottom: 16,
   },
   iosTopBarLogo: {},
   iosTopBarIcons: { flexDirection: 'row', alignItems: 'center', gap: 12 },

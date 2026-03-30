@@ -359,10 +359,14 @@ const CreateTicketScreen: React.FC<CreateTicketScreenProps> = ({
         style={styles.keyboardView}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-      {/* Header – LTR so back stays left, title center */}
+      {/* Header */}
       <View style={[styles.header, { backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+          <Ionicons
+            name="arrow-back"
+            size={24}
+            color={colors.text}
+          />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>
           {language === 'ar' ? 'تذكرة جديدة' : 'New Ticket'}
@@ -618,7 +622,7 @@ const CreateTicketScreen: React.FC<CreateTicketScreenProps> = ({
             ]}
             accessibilityRole="alert"
           >
-            <View style={[styles.submitHintHeader, isRTL && styles.rowReverse]}>
+            <View style={styles.submitHintHeader}>
               <Ionicons name="information-circle" size={22} color={isDarkMode ? '#FBBF24' : '#D97706'} />
               <Text
                 style={[
@@ -692,18 +696,20 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    direction: 'ltr',
+    justifyContent: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
   },
   backButton: {
     padding: 8,
+    position: 'absolute',
+    left: 8,
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
+    textAlign: 'center',
   },
   headerRight: {
     width: 40,
@@ -885,9 +891,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 8,
-  },
-  rowReverse: {
-    flexDirection: 'row-reverse',
   },
   submitHintTitle: {
     fontSize: 15,

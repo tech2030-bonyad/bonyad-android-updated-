@@ -15,6 +15,7 @@ import {
   FlatList,
   Animated,
   Dimensions,
+  Image,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,7 +24,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import { getActiveSpecializations, unsubscribeFromTaskType, subscribeToTaskType } from '../services/SmallTaskService';
 import type { TechnicianSpecializationApi } from '../services/SmallTaskService';
-import { getSmallTaskTypes, type SmallTaskType } from '../services/SmallTaskService';
+import { getSmallTaskTypes, getSmallTaskTypeImageUrl, type SmallTaskType } from '../services/SmallTaskService';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
 import ConfirmationPopup, { useConfirmationPopup } from '../components/ConfirmationPopup';
 
@@ -44,6 +45,7 @@ export default function SmallTaskTypesScreen({ onBack }: SmallTaskTypesScreenPro
   const { colors, theme } = useTheme();
   const { fontFamily, scaledSize } = useFontFamily();
   const isDarkMode = theme === 'dark';
+  const isRTL = i18n.language === 'ar';
 
   const [specializations, setSpecializations] = useState<TechnicianSpecializationApi[]>([]);
   const [taskTypesMap, setTaskTypesMap] = useState<Record<number, SmallTaskType>>({});
@@ -169,6 +171,12 @@ export default function SmallTaskTypesScreen({ onBack }: SmallTaskTypesScreenPro
     return i18n.language === 'ar' ? (tt.nameAr || tt.nameEn) : (tt.nameEn || tt.nameAr);
   };
 
+  const getIconUrl = (spec: TechnicianSpecializationApi): string | null => {
+    const tt = taskTypesMap[spec.taskTypeId];
+    if (!tt) return null;
+    return getSmallTaskTypeImageUrl(tt);
+  };
+
   if (isLoading) {
     return (
       <Animated.View style={[styles.loadingContainer, { paddingTop: insets.top, backgroundColor: bgColor, opacity: screenOpacity, transform: [{ translateX: screenSlideX }] }]}>
@@ -181,7 +189,12 @@ export default function SmallTaskTypesScreen({ onBack }: SmallTaskTypesScreenPro
     <Animated.View style={[styles.container, { paddingTop: insets.top, backgroundColor: bgColor, opacity: screenOpacity, transform: [{ translateX: screenSlideX }] }]}>
       <View style={styles.headerRow}>
         <TouchableOpacity onPress={handleBackScreen} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={24} color={textColor} />
+          <Ionicons
+            name="chevron-back"
+            size={24}
+            color={textColor}
+            style={isRTL ? { transform: [{ scaleX: -1 }] } : undefined}
+          />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: textColor, fontSize: scaledSize(18) }]}>
           {t('smallTasks.smallTaskTypes')}
@@ -197,7 +210,10 @@ export default function SmallTaskTypesScreen({ onBack }: SmallTaskTypesScreenPro
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: Math.max(insets.bottom + 96, 140) },
+        ]}
         showsVerticalScrollIndicator={true}
         keyboardShouldPersistTaps="handled"
       >
@@ -217,8 +233,22 @@ export default function SmallTaskTypesScreen({ onBack }: SmallTaskTypesScreenPro
         ) : (
           specializations.map((spec) => (
             <View key={spec.taskTypeId} style={[styles.card, { backgroundColor: cardBgColor, borderColor: colors.border }]}>
-              <View style={[styles.iconContainer, { backgroundColor: `${primaryColor}15` }]}>
-                <Ionicons name="list" size={24} color={primaryColor} />
+              <View
+                style={[
+                  styles.iconContainer,
+                  { backgroundColor: `${primaryColor}15` },
+                  isRTL ? { marginLeft: 14 } : { marginRight: 14 },
+                ]}
+              >
+                {getIconUrl(spec) ? (
+                  <Image
+                    source={{ uri: getIconUrl(spec)! }}
+                    style={styles.taskTypeIcon}
+                    resizeMode="contain"
+                  />
+                ) : (
+                  <Ionicons name="list" size={24} color={primaryColor} />
+                )}
               </View>
               <Text style={[styles.cardTitle, { color: textColor, fontSize: scaledSize(16) }]} numberOfLines={1}>
                 {getName(spec)}
@@ -338,13 +368,14 @@ const styles = StyleSheet.create({
   subscribeButtonText: { color: FIGMA_COLORS.white, fontWeight: '600', fontSize: 14 },
   modalEmpty: { alignItems: 'center', paddingVertical: 48, paddingHorizontal: 24 },
   modalEmptyText: { fontSize: 16, textAlign: 'center', marginTop: 12 },
-  content: { padding: 20, paddingBottom: 48, flexGrow: 1 },
+  content: { padding: 20, flexGrow: 1 },
   sectionTitle: { fontWeight: '600', marginBottom: 16 },
   emptyState: { alignItems: 'center', paddingVertical: 40 },
   emptyText: { fontWeight: '600', marginTop: 16, marginBottom: 8 },
   emptySubtext: { textAlign: 'center', paddingHorizontal: 24 },
   card: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 12, marginBottom: 12, borderWidth: 1 },
-  iconContainer: { width: 48, height: 48, borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  iconContainer: { width: 48, height: 48, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
+  taskTypeIcon: { width: 30, height: 30 },
   cardTitle: { flex: 1, fontWeight: '600' },
   removeButton: { padding: 8 },
 });

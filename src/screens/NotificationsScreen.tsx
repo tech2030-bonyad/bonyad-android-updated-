@@ -21,6 +21,7 @@ import { useFontFamily } from '../context/FontContext';
 import { useTranslation } from 'react-i18next';
 import { notificationService } from '../services/NotificationService';
 import type { Notification } from '../services/NotificationService';
+import { normalizeNotificationFromApi } from '../utils/normalizeNotificationPayload';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const FILTER_ANIMATION_DURATION = 280;
@@ -95,6 +96,8 @@ const FILTER_ORDER: NotificationFilter[] = ['all', 'unread', 'read'];
 
 interface NotificationsScreenProps {
   onBack?: () => void;
+  /** When set, taps use the same routing as web / FCM (and override legacy project-only handlers). */
+  onNavigateFromNotification?: (notification: Notification) => void | Promise<void>;
   onNavigateToProject?: (projectId: number) => void;
   onNavigateToPhase?: (projectId: number, phaseId?: number) => void;
   onNavigateToBid?: (projectId: number, bidId: number) => void;
@@ -103,6 +106,7 @@ interface NotificationsScreenProps {
 
 export default function NotificationsScreen({
   onBack,
+  onNavigateFromNotification,
   onNavigateToProject,
   onNavigateToPhase,
   onNavigateToBid,
@@ -125,13 +129,9 @@ export default function NotificationsScreen({
     try {
       if (!isRefreshing) setIsLoading(true);
       const data = await notificationService.fetchNotifications();
-      const normalizedData = data.map((n: any) => ({
-        ...n,
-        title: n.title ?? '',
-        message: n.message ?? '',
-        read: n.read !== undefined ? Boolean(n.read) : Boolean(n.isRead),
-        createdAt: n.createdAt ?? n.created_at ?? new Date().toISOString(),
-      }));
+      const normalizedData = (Array.isArray(data) ? data : []).map((notif: any) =>
+        normalizeNotificationFromApi(notif)
+      );
       setNotifications(normalizedData);
       const unreadCount = normalizedData.filter((n: Notification) => !n.read).length;
       onUnreadCountChange?.(unreadCount);
@@ -213,8 +213,21 @@ export default function NotificationsScreen({
     }
   };
 
-  const handleNotificationTap = (notification: Notification) => {
-    markAsRead(notification.id);
+  const handleNotificationTap = async (notification: Notification) => {
+    console.log('[NotificationsScreen] Tap:', notification.id, notification.notificationType);
+
+    // Fire and forget the read status update so UI doesn't block
+    void markAsRead(notification.id);
+    
+    if (onNavigateFromNotification) {
+      try {
+        await onNavigateFromNotification(notification);
+        console.log('[NotificationsScreen] Navigation completed for:', notification.notificationType);
+      } catch (e: any) {
+        console.warn('[NotificationsScreen] onNavigateFromNotification failed', e);
+      }
+      return;
+    }
     switch (notification.notificationType) {
       case 'BID_RECEIVED':
       case 'VISIT_REQUEST':

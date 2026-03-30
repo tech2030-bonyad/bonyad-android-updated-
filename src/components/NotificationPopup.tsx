@@ -34,7 +34,7 @@ interface Notification {
 interface NotificationPopupProps {
   notification: Notification | null;
   onClose: () => void;
-  onPress?: () => void;
+  onPress?: () => void | Promise<void>;
   visible: boolean;
 }
 
@@ -183,9 +183,9 @@ export default function NotificationPopup({
           },
         ]}
         activeOpacity={0.9}
-        onPress={() => {
+        onPress={async () => {
           if (onPress) {
-            onPress();
+            await onPress();
           }
           handleClose();
         }}
@@ -238,6 +238,7 @@ const styles = StyleSheet.create({
     top: Platform.OS === 'web' ? 80 : 60,
     right: 16,
     zIndex: 9999,
+    elevation: 9999, // Added for Android touch mapping
     maxWidth: 400,
     width: '90%',
   },

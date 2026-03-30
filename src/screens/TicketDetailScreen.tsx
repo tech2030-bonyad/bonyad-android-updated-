@@ -43,6 +43,17 @@ const TicketDetailScreen: React.FC<TicketDetailScreenProps> = ({ ticketId, onBac
   const language = i18n.language === 'ar' ? 'ar' : 'en';
   const isRTL = language === 'ar';
 
+  const formatDateLocalized = useCallback(
+    (iso: string) => {
+      if (!iso) return '';
+      const d = new Date(iso);
+      // Use an Arabic locale to translate month names / digits when in AR.
+      const locale = isRTL ? 'ar-SA' : 'en-US';
+      return d.toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short' });
+    },
+    [isRTL],
+  );
+
   const [ticket, setTicket] = useState<SupportTicket | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -196,7 +207,12 @@ const TicketDetailScreen: React.FC<TicketDetailScreenProps> = ({ ticketId, onBac
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+          <Ionicons
+            name="arrow-back"
+            size={24}
+            color={colors.text}
+            style={isRTL ? { transform: [{ scaleX: -1 }] } : undefined}
+          />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
           {ticket.subject}
@@ -212,21 +228,39 @@ const TicketDetailScreen: React.FC<TicketDetailScreenProps> = ({ ticketId, onBac
         keyboardShouldPersistTaps="handled"
       >
         {/* Meta */}
-        <View style={[styles.metaRow, { flexDirection: isRTL ? 'row-reverse' : 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }]}>
-          <View style={[styles.badge, { backgroundColor: statusColor + '20' }]}>
-            <Text style={[styles.badgeText, { color: statusColor }]}>{SupportTicketService.getStatusText(ticket.status, language)}</Text>
+        <View style={{ marginBottom: 12, gap: 8 }}>
+          {/* Date left + Status right (even in AR) */}
+          <View style={styles.metaTopRow}>
+            <Text style={[styles.metaText, styles.metaDate, { color: colors.textSecondary }]}>
+              {formatDateLocalized(ticket.createdAt)}
+            </Text>
+            <View style={{ flex: 1 }} />
+            <View style={[styles.badge, { backgroundColor: statusColor + '20' }]}>
+              <Text style={[styles.badgeText, { color: statusColor }]}>
+                {SupportTicketService.getStatusText(ticket.status, language)}
+              </Text>
+            </View>
           </View>
-          <Text style={[styles.metaText, { color: colors.textSecondary }]}>{SupportTicketService.getPriorityText(ticket.priority, language)}</Text>
-          {ticket.category && <Text style={[styles.metaText, { color: colors.textSecondary }]}>{String(ticket.category)}</Text>}
-          <Text style={[styles.metaText, { color: colors.textSecondary }]}>{formatDate(ticket.createdAt)}</Text>
+
+          {/* Priority / Category row */}
+          <View style={[styles.metaRow, { flexWrap: 'wrap', gap: 8 }]}>
+            <Text style={[styles.metaText, { color: colors.textSecondary }]}>
+              {SupportTicketService.getPriorityText(ticket.priority, language)}
+            </Text>
+            {ticket.category && (
+              <Text style={[styles.metaText, { color: colors.textSecondary }]}>
+                {String(ticket.category)}
+              </Text>
+            )}
+          </View>
         </View>
 
         {/* Description */}
         <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
           <Text style={[styles.cardLabel, { color: colors.textSecondary, marginBottom: 6 }]}>{t('support.description') || 'Description'}</Text>
-          <Text style={[styles.bodyText, { color: colors.text, lineHeight: 22, textAlign: isRTL ? 'right' : 'left' }]}>{ticket.description}</Text>
+          <Text style={[styles.bodyText, { color: colors.text, lineHeight: 22 }]}>{ticket.description}</Text>
           {ticket.attachmentUrls && ticket.attachmentUrls.length > 0 && (
-            <View style={[styles.attachmentsRow, { flexDirection: isRTL ? 'row-reverse' : 'row', flexWrap: 'wrap', marginTop: 12, gap: 8 }]}>
+            <View style={[styles.attachmentsRow, { flexWrap: 'wrap', marginTop: 12, gap: 8 }]}>
               {ticket.attachmentUrls.map((url, idx) => (
                 <TouchableOpacity key={idx} onPress={() => Linking.openURL(url)} style={[styles.attachLink, { backgroundColor: colors.background || 'rgba(0,0,0,0.06)' }]}>
                   <Ionicons name="document-attach-outline" size={16} color={colors.primary} />
@@ -250,13 +284,13 @@ const TicketDetailScreen: React.FC<TicketDetailScreenProps> = ({ ticketId, onBac
                 {
                   backgroundColor: colors.cardBackground,
                   borderColor: colors.border,
-                  alignSelf: alignRight ? (isRTL ? 'flex-start' : 'flex-end') : (isRTL ? 'flex-end' : 'flex-start'),
+                  alignSelf: alignRight ? 'flex-end' : 'flex-start',
                   maxWidth: '85%',
                 },
               ]}
             >
               <Text style={[styles.messageAuthor, { color: colors.textSecondary, marginBottom: 4 }]}>{msg.userName ?? msg.senderName ?? (isAdmin ? 'Support' : 'You')}</Text>
-              <Text style={[styles.messageContent, { color: colors.text, lineHeight: 20, textAlign: isRTL ? 'right' : 'left' }]}>
+              <Text style={[styles.messageContent, { color: colors.text, lineHeight: 20 }]}>
                 {msg.content?.trim() || (msg.fileUrl ? '' : (t('support.noMessageText') || '(No message text)'))}
               </Text>
               {msg.fileUrl && (
@@ -267,13 +301,13 @@ const TicketDetailScreen: React.FC<TicketDetailScreenProps> = ({ ticketId, onBac
                     </TouchableOpacity>
                   )}
                   {msg.fileType === 'document' && (
-                    <TouchableOpacity onPress={() => Linking.openURL(getFileUrl(msg.fileUrl)!)} style={[styles.docLink, { backgroundColor: colors.background, flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+                    <TouchableOpacity onPress={() => Linking.openURL(getFileUrl(msg.fileUrl)!)} style={[styles.docLink, { backgroundColor: colors.background }]}>
                       <Ionicons name="document-outline" size={22} color={colors.primary} />
                       <Text style={[styles.docLinkText, { color: colors.primary }]}>{t('support.document') || 'Document'}</Text>
                     </TouchableOpacity>
                   )}
                   {msg.fileType === 'voice' && (
-                    <View style={[styles.voiceRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+                    <View style={styles.voiceRow}>
                       <Ionicons name="mic-outline" size={24} color={colors.textSecondary} />
                       <TouchableOpacity onPress={() => Linking.openURL(getFileUrl(msg.fileUrl)!)}>
                         <Text style={[styles.voiceLink, { color: colors.primary }]}>{t('support.voiceNote') || 'Voice note'}{msg.duration != null ? ` (${msg.duration}s)` : ''}</Text>
@@ -281,7 +315,7 @@ const TicketDetailScreen: React.FC<TicketDetailScreenProps> = ({ ticketId, onBac
                     </View>
                   )}
                   {msg.fileUrl && !['image', 'document', 'voice'].includes(msg.fileType || '') && (
-                    <TouchableOpacity onPress={() => Linking.openURL(getFileUrl(msg.fileUrl)!)} style={[styles.docLink, { backgroundColor: colors.background, flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+                    <TouchableOpacity onPress={() => Linking.openURL(getFileUrl(msg.fileUrl)!)} style={[styles.docLink, { backgroundColor: colors.background }]}>
                       <Ionicons name="attach-outline" size={18} color={colors.primary} />
                       <Text style={[styles.docLinkText, { color: colors.primary }]}>{t('support.attachment') || 'Attachment'}</Text>
                     </TouchableOpacity>
@@ -289,7 +323,7 @@ const TicketDetailScreen: React.FC<TicketDetailScreenProps> = ({ ticketId, onBac
                 </View>
               )}
               {!msg.fileUrl && msg.attachmentUrls && msg.attachmentUrls.length > 0 && (
-                <View style={[styles.attachmentsRow, { flexDirection: isRTL ? 'row-reverse' : 'row', flexWrap: 'wrap', marginTop: 8, gap: 6 }]}>
+                <View style={[styles.attachmentsRow, { flexWrap: 'wrap', marginTop: 8, gap: 6 }]}>
                   {msg.attachmentUrls.map((url, idx) => (
                     <TouchableOpacity key={idx} onPress={() => Linking.openURL(url)} style={[styles.attachLink, { backgroundColor: colors.background }]}>
                       <Ionicons name="document-attach-outline" size={16} color={colors.primary} />
@@ -307,13 +341,13 @@ const TicketDetailScreen: React.FC<TicketDetailScreenProps> = ({ ticketId, onBac
         {canReply && (
           <>
             {fileError ? (
-              <View style={[styles.errorBanner, { flexDirection: isRTL ? 'row-reverse' : 'row', backgroundColor: 'rgba(220,38,38,0.12)' }]}>
+              <View style={[styles.errorBanner, { backgroundColor: 'rgba(220,38,38,0.12)' }]}>
                 <Ionicons name="alert-circle" size={20} color="#DC2626" />
                 <Text style={[styles.errorBannerText, { color: '#DC2626', marginLeft: 8 }]}>{fileError}</Text>
               </View>
             ) : null}
             {selectedFile && (
-              <View style={[styles.selectedFileRow, { flexDirection: isRTL ? 'row-reverse' : 'row', marginTop: 8 }]}>
+              <View style={[styles.selectedFileRow, { marginTop: 8 }]}>
                 <Ionicons name="document-attach" size={20} color={colors.primary} />
                 <Text style={[styles.selectedFileName, { color: colors.text, flex: 1 }]} numberOfLines={1}>{selectedFile.name}</Text>
                 <TouchableOpacity onPress={() => setSelectedFile(null)}>
@@ -324,7 +358,7 @@ const TicketDetailScreen: React.FC<TicketDetailScreenProps> = ({ ticketId, onBac
                 </TouchableOpacity>
               </View>
             )}
-            <View style={[styles.replyRow, { flexDirection: isRTL ? 'row-reverse' : 'row', marginTop: 20, gap: 10, alignItems: 'flex-end' }]}>
+            <View style={[styles.replyRow, { marginTop: 20, gap: 10, alignItems: 'flex-end' }]}>
               <TouchableOpacity
                 onPress={pickDocument}
                 style={[styles.attachBtn, { backgroundColor: colors.background || '#e2e8f0' }]}
@@ -377,6 +411,14 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   centered: { justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: 12 },
+  metaTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  metaDate: {
+    textAlign: 'left',
+  },
   errorTitle: { fontWeight: '600', marginTop: 12 },
   backLink: { marginTop: 16 },
   header: {

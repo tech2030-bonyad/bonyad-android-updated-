@@ -98,8 +98,8 @@ const STEPS: StepConfig[] = [
 ];
 
 // Step width constants for scrolling calculation (Android/small web)
-const INACTIVE_STEP_WIDTH = 50; // Width of inactive step (icon only)
-const ACTIVE_STEP_WIDTH = 100; // Estimated width of active step with text
+const INACTIVE_STEP_WIDTH = 64; // Icon + short label under (2 lines max)
+const ACTIVE_STEP_WIDTH = 108; // Active step with text + bar
 const CONNECTOR_WIDTH = 36; // Width of connector between steps
 
 export default function ProjectCreationFlow({
@@ -125,13 +125,16 @@ export default function ProjectCreationFlow({
   const completedColor = primaryColor;
   const activeStep = STEPS[activeIndex] || STEPS[0];
 
-  // Android requirement: show only current status icon
+  // Android: single current-status icon with label underneath
   if (Platform.OS === 'android') {
     return (
       <View style={[styles.singleStatusContainer, containerStyle]}>
         <View style={[styles.singleStatusIconCircle, { borderColor: primaryColor, backgroundColor: `${primaryColor}14` }]}>
           <StepSvgIcon icon={activeStep.icon} size={30} color={primaryColor} />
         </View>
+        <Text style={[styles.singleStatusLabel, { color: primaryColor }]} numberOfLines={2}>
+          {t(activeStep.labelKey)}
+        </Text>
       </View>
     );
   }
@@ -189,20 +192,18 @@ export default function ProjectCreationFlow({
               ]}>
                 <StepSvgIcon icon={step.icon} size={iconSize} color={iconColor} />
               </View>
-              
-              {/* Only show label for active step */}
-              {isActive && (
-                <Text
-                  style={[
-                    styles.label,
-                    { color: primaryColor },
-                  ]}
-                  numberOfLines={1}
-                >
-                  {t(step.labelKey)}
-                </Text>
-              )}
-              
+
+              <Text
+                style={[
+                  styles.label,
+                  !isActive && styles.labelInactive,
+                  { color: isActive ? primaryColor : inactiveColor },
+                ]}
+                numberOfLines={2}
+              >
+                {t(step.labelKey)}
+              </Text>
+
               {/* Active indicator bar */}
               {isActive && (
                 <View style={[styles.activeBar, { backgroundColor: primaryColor }]} />
@@ -317,6 +318,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 4,
     flexShrink: 0, // Prevent text from shrinking
+    width: '100%',
+    paddingHorizontal: 2,
+  },
+  labelInactive: {
+    fontSize: Platform.select({ ios: 10, default: 10 }),
+    fontWeight: '500',
   },
   activeBar: {
     marginTop: Platform.select({ android: 4, default: 5 }),
@@ -358,5 +365,13 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  singleStatusLabel: {
+    marginTop: 10,
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+    paddingHorizontal: 24,
+    lineHeight: 20,
   },
 });

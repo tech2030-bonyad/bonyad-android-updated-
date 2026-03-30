@@ -30,7 +30,7 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.bonyaddandroid.ahmed",
+      "package": "com.bonyadapp",
       "googleServicesFile": "./google-services.json",
       "config": {
         "googleMaps": {

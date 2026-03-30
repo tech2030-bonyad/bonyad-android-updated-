@@ -20,15 +20,18 @@ import { useFontFamily } from '../context/FontContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { API_ENDPOINTS, buildApiUrl, API_BASE_URL } from '../config/api';
 import { storage } from '../utils/storage';
+import { getAppTopBarPaddingTop } from '../utils/statusBarHelper';
 import { ChatRoom } from '../types/chat';
 import { formatRelativeTime } from '../utils/chatUtils';
 
 interface ChatRoomsListScreenProps {
   onBack?: () => void;
   onOpenChat?: (roomId: string, receiverId: number, receiverName: string, projectId?: number | null) => void;
+  /** When true, AppTopBar is already above this screen — skip extra header top inset. */
+  stackedUnderAppTopBar?: boolean;
 }
 
-export default function ChatRoomsListScreen({ onBack, onOpenChat }: ChatRoomsListScreenProps) {
+export default function ChatRoomsListScreen({ onBack, onOpenChat, stackedUnderAppTopBar = false }: ChatRoomsListScreenProps) {
   const { t, i18n } = useTranslation();
   const { colors } = useTheme();
   const { fontFamily, scaledSize } = useFontFamily();
@@ -59,6 +62,7 @@ export default function ChatRoomsListScreen({ onBack, onOpenChat }: ChatRoomsLis
   const shouldShowBackButton = onBack && !IS_LARGE_WEB;
   const isArabic = i18n.language?.startsWith('ar');
   const headerDirectionStyle = { direction: 'ltr' as const };
+  const headerTopPadding = stackedUnderAppTopBar ? 0 : getAppTopBarPaddingTop(insets);
 
   useEffect(() => {
     // Load chat rooms with error handling
@@ -273,7 +277,7 @@ export default function ChatRoomsListScreen({ onBack, onOpenChat }: ChatRoomsLis
           },
         ]}
       >
-        <View style={[styles.header, { borderBottomColor: colors.border }, headerDirectionStyle]}>
+        <View style={[styles.header, { borderBottomColor: colors.border, paddingTop: headerTopPadding }, headerDirectionStyle]}>
           {shouldShowBackButton ? (
             <TouchableOpacity onPress={onBack} accessibilityRole="button">
               <Ionicons name="arrow-back" size={24} color={colors.text} />
@@ -307,7 +311,7 @@ export default function ChatRoomsListScreen({ onBack, onOpenChat }: ChatRoomsLis
           },
         ]}
       >
-        <View style={[styles.header, { borderBottomColor: colors.border }, headerDirectionStyle]}>
+        <View style={[styles.header, { borderBottomColor: colors.border, paddingTop: headerTopPadding }, headerDirectionStyle]}>
           {shouldShowBackButton ? (
             <TouchableOpacity onPress={onBack} accessibilityRole="button">
               <Ionicons name="arrow-back" size={24} color={colors.text} />
@@ -344,7 +348,7 @@ export default function ChatRoomsListScreen({ onBack, onOpenChat }: ChatRoomsLis
       ]}
     >
       {/* Header */}
-      <View style={[styles.header, { borderBottomColor: colors.border }, headerDirectionStyle]}>
+      <View style={[styles.header, { borderBottomColor: colors.border, paddingTop: headerTopPadding }, headerDirectionStyle]}>
         {shouldShowBackButton ? (
           <TouchableOpacity onPress={onBack} accessibilityRole="button">
             <Ionicons name="arrow-back" size={24} color={colors.text} />
@@ -390,7 +394,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 0,
     paddingBottom: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },

@@ -263,14 +263,128 @@ export default function LoginScreen({
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
         <View style={[styles.mainContainer, { flex: 1, paddingTop: Platform.OS === 'web' ? 0 : insets.top, paddingBottom: Platform.OS === 'web' ? 0 : insets.bottom }]}>
-          <ScrollView 
-            style={[styles.container, { backgroundColor: isDarkMode ? colors.background : figmaMobileColors.background }]} 
-            contentContainerStyle={[styles.scrollContent, Platform.OS === 'web' && styles.webScrollContent]}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-            bounces={false}
-          >
-            <View style={[styles.contentWrapper, { backgroundColor: isDarkMode ? colors.cardBackground : figmaMobileColors.background }]}>
+          {Platform.OS === 'android' ? (
+            <View style={[styles.container, { backgroundColor: isDarkMode ? colors.background : figmaMobileColors.background }]}>
+              <View style={[styles.scrollContent, Platform.OS === 'web' && styles.webScrollContent]}>
+                <View style={[styles.contentWrapper, { backgroundColor: isDarkMode ? colors.cardBackground : figmaMobileColors.background }]}>
+                  {/* Language Toggle at Top */}
+                  <View style={styles.languageToggleTop}>
+                    <TouchableOpacity 
+                      onPress={() => i18n.changeLanguage(i18n.language === 'ar' ? 'en' : 'ar')} 
+                      style={styles.languageToggleButton}
+                    >
+                      <Ionicons 
+                        name="globe-outline" 
+                        size={18} 
+                        color={isDarkMode ? colors.primary : figmaMobileColors.buttonBlue} 
+                        style={{ marginRight: 6 }}
+                      />
+                      <Text style={[styles.langText, { color: isDarkMode ? colors.primary : figmaMobileColors.buttonBlue, fontWeight: '600', fontSize: scaledSize(18) }]}>
+                        {i18n.language === 'ar' ? 'AR' : 'EN'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                    {/* Logo Section - Figma Style: Cube + Text */}
+                  <View style={styles.mobileLogoSection}>
+                    <View style={styles.mobileLogoContainer}>
+                      <BonyadLogo size="medium" variant="dark" />
+                    </View>
+                  </View>
+
+                  {/* Welcome Section - Figma Style */}
+                  <View
+                    style={[
+                      styles.mobileWelcomeSection,
+                      i18n.language?.startsWith('ar') ? styles.mobileWelcomeSectionArabicSpacing : null,
+                    ]}
+                  >
+                    <Text style={[styles.mobileWelcomeTitle, { color: isDarkMode ? colors.text : figmaMobileColors.titleBlue, fontSize: scaledSize(UIFontSizes.welcomeTitle) }]}>
+                      {t('Welcome back')}
+                    </Text>
+                    <Text style={[styles.mobileWelcomeSubtitle, { color: isDarkMode ? colors.textSecondary : figmaMobileColors.textDark, fontSize: scaledSize(UIFontSizes.welcomeSubtitle) }]}>
+                      {t('Manage your properties and services.')}
+                    </Text>
+                  </View>
+
+                  {/* Role Toggle (User / Technician) */}
+                  <View style={styles.roleToggleWrapper}>
+                    <AnimatedRoleToggle
+                      selectedRole={selectedRole}
+                      onRoleChange={setSelectedRole}
+                    />
+                  </View>
+
+                  {/* Form Section */}
+                  <View style={styles.mobileFormSection}>
+                    {/* Phone Input */}
+                    <PhoneInput
+                      label={t('Mobile number')}
+                      value={phone}
+                      onChangeText={setPhone}
+                      placeholder={t('auth.placeholders.phone')}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+
+                    {/* Password Input */}
+                    <PasswordInput
+                      label={t('Password')}
+                      value={password}
+                      onChangeText={setPassword}
+                      placeholder={t('auth.placeholders.password')}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+
+                    {/* Login Button - Figma Style */}
+                    <TouchableOpacity
+                      onPress={handleLogin}
+                      disabled={isLoading}
+                      style={[
+                        styles.mobileLoginButton,
+                        { backgroundColor: isDarkMode ? colors.primary : figmaMobileColors.buttonBlue },
+                        isLoading && { opacity: 0.7 }
+                      ]}
+                      activeOpacity={0.8}
+                    >
+                      {isLoading ? (
+                        <ActivityIndicator color="#FFFFFF" size="small" />
+                      ) : (
+                        <Text style={[styles.mobileLoginButtonText, { fontSize: scaledSize(UIFontSizes.buttonMedium) }]}>
+                          {t('Login')}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+
+                    {/* Create Account Link - Figma Style */}
+                    <View style={styles.mobileCreateAccountContainer}>
+                      <Text style={[styles.mobileCreateAccountText, { color: isDarkMode ? colors.textSecondary : figmaMobileColors.linkNavy, fontSize: scaledSize(14) }]}>
+                        {t("Don't have an account?")}
+                      </Text>
+                      <TouchableOpacity onPress={onNavigateToSignup}>
+                        <Text style={[styles.mobileCreateAccountLink, { color: isDarkMode ? colors.primary : figmaMobileColors.linkNavy, fontSize: scaledSize(14) }]}>
+                          {t('Create an account')}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {/* Theme Toggle */}
+                  <ThemeToggle />
+                </View>
+              </View>
+            </View>
+          ) : (
+            <ScrollView 
+              style={[styles.container, { backgroundColor: isDarkMode ? colors.background : figmaMobileColors.background }]} 
+              contentContainerStyle={[styles.scrollContent, Platform.OS === 'web' && styles.webScrollContent]}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              bounces={false}
+              overScrollMode="never"
+            >
+              <View style={[styles.contentWrapper, { backgroundColor: isDarkMode ? colors.cardBackground : figmaMobileColors.background }]}>
               {/* Language Toggle at Top */}
               <View style={styles.languageToggleTop}>
                 <TouchableOpacity 
@@ -377,7 +491,8 @@ export default function LoginScreen({
               {/* Theme Toggle */}
               <ThemeToggle />
             </View>
-          </ScrollView>
+            </ScrollView>
+          )}
         </View>
           
         {/* Alert Popup */}

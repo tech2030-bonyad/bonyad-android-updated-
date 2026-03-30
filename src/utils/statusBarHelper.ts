@@ -6,6 +6,17 @@ import { Platform, StatusBar } from 'react-native';
 import { EdgeInsets } from 'react-native-safe-area-context';
 
 /**
+ * Top inset for {@link AppTopBar} and home inline header — matches notched / edge-to-edge safe areas.
+ */
+export function getAppTopBarPaddingTop(insets: EdgeInsets): number {
+  const statusBarHeight = StatusBar.currentHeight ?? 0;
+  if (Platform.OS === 'android') {
+    return Math.max(insets.top, statusBarHeight, 28) + 14;
+  }
+  return Math.max(insets.top, 10);
+}
+
+/**
  * Calculates the appropriate top padding for screens to avoid status bar overlap.
  * On Android, adds extra padding to account for status bar height.
  * On iOS, uses the safe area inset.

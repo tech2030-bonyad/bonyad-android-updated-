@@ -15,6 +15,13 @@ import { storage } from './src/utils/storage';
 import CoachMarkProvider from './src/components/CoachMarkProvider';
 import { coachMarksStorage } from './src/utils/coachMarks';
 import { useRouter, type Screen } from './src/utils/useRouter';
+import {
+  handleChatbotNavigationAndroid,
+  handleChatbotTabAndroid,
+  type ChatbotAndroidNavDeps,
+  type HomeShellFromChatbotPayload,
+  type ProfileSubviewForChatbot,
+} from './src/utils/chatbotNavigateAndroid';
 import * as SplashScreenNative from 'expo-splash-screen';
 import * as Font from 'expo-font';
 import { Asset } from 'expo-asset';
@@ -73,8 +80,29 @@ export default function App() {
   const [forgotPasswordRole, setForgotPasswordRole] = useState<'USER' | 'TECHNICIAN'>('USER');
   const [forgotPasswordOTP, setForgotPasswordOTP] = useState('');
   const [expoPushToken, setExpoPushToken] = useState('');
-  const [projectsFilter, setProjectsFilter] = useState<'available' | 'running' | 'completed'>('available');
-  
+  const [projectsFilter, setProjectsFilter] = useState<
+    'all' | 'available' | 'running' | 'approved' | 'completed' | 'bid_received' | 'direct_offers'
+  >('available');
+  const [projectsBootstrap, setProjectsBootstrap] = useState<{
+    initialSmallTask?: any;
+    initialProjectType?: 'large' | 'small';
+  } | null>(null);
+  const [projectsRemountKey, setProjectsRemountKey] = useState(0);
+  const [profileNavFromChatbot, setProfileNavFromChatbot] = useState<{
+    id: number;
+    subView: ProfileSubviewForChatbot;
+  } | null>(null);
+
+  const bumpProfileNavFromChatbot = useCallback((subView: ProfileSubviewForChatbot) => {
+    setProfileNavFromChatbot((prev) => ({ id: (prev?.id ?? 0) + 1, subView }));
+  }, []);
+
+  type HomeShellRequest = HomeShellFromChatbotPayload & { id: number };
+  const [homeShellFromChatbot, setHomeShellFromChatbot] = useState<HomeShellRequest | null>(null);
+  const openInHomeShell = useCallback((payload: HomeShellFromChatbotPayload) => {
+    setHomeShellFromChatbot((prev) => ({ ...payload, id: (prev?.id ?? 0) + 1 }));
+  }, []);
+
   // Chatbot & Live Agent state
   const [chatbotSubject, setChatbotSubject] = useState('');
   const [chatbotAIHistory, setChatbotAIHistory] = useState<any[]>([]);
@@ -882,6 +910,14 @@ export default function App() {
               handleLogout={handleLogout}
               projectsFilter={projectsFilter}
               setProjectsFilter={setProjectsFilter}
+              projectsBootstrap={projectsBootstrap}
+              setProjectsBootstrap={setProjectsBootstrap}
+              projectsRemountKey={projectsRemountKey}
+              setProjectsRemountKey={setProjectsRemountKey}
+              profileNavFromChatbot={profileNavFromChatbot}
+              bumpProfileNavFromChatbot={bumpProfileNavFromChatbot}
+              homeShellFromChatbot={homeShellFromChatbot}
+              openInHomeShell={openInHomeShell}
               chatRoomId={chatRoomId}
               setChatRoomId={setChatRoomId}
               chatReceiverId={chatReceiverId}
@@ -963,6 +999,14 @@ function AppContent({
   handleLogout,
   projectsFilter,
   setProjectsFilter,
+  projectsBootstrap,
+  setProjectsBootstrap,
+  projectsRemountKey,
+  setProjectsRemountKey,
+  profileNavFromChatbot,
+  bumpProfileNavFromChatbot,
+  homeShellFromChatbot,
+  openInHomeShell,
   chatRoomId,
   setChatRoomId,
   chatReceiverId,
@@ -1073,6 +1117,73 @@ function AppContent({
     setCurrentScreen(screen);
   };
 
+  const getChatbotAndroidDeps = useCallback((): ChatbotAndroidNavDeps => {
+    return {
+      navigate,
+      userRole,
+      setShowProfile,
+      setProjectsFilter,
+      setProjectsBootstrap,
+      setProjectsRemountKey,
+      setChatRoomId,
+      setChatReceiverId,
+      setChatReceiverName,
+      setViewTechnicianId,
+      setSelectedProjectForDetail,
+      setSelectedTicketId,
+      bumpProfileNavFromChatbot,
+      openHomeShellNav: openInHomeShell,
+      onOpenSmallTaskInProjects: async (args) => {
+        setShowProfile(false);
+        openInHomeShell({
+          tab: 'projects',
+          embeddedProjects: {
+            initialProjectType: 'small',
+            initialSmallTask: args.mergedProject,
+          },
+        });
+        navigate('home', { replaceCurrent: true });
+      },
+      setProjectsFilterState: (s) => {
+        if (String(s?.projectTypeFilter || '').toLowerCase() !== 'small') return;
+        const af = String(s?.activeFilter || 'all').toLowerCase().replace(/_/g, '-');
+        if (af === 'pending') setProjectsFilter('available');
+        else if (af === 'in-progress') setProjectsFilter('running');
+        else if (af === 'completed') setProjectsFilter('completed');
+        else setProjectsFilter('all');
+      },
+    };
+  }, [
+    navigate,
+    userRole,
+    setShowProfile,
+    setProjectsFilter,
+    setProjectsBootstrap,
+    setProjectsRemountKey,
+    setChatRoomId,
+    setChatReceiverId,
+    setChatReceiverName,
+    setViewTechnicianId,
+    setSelectedProjectForDetail,
+    setSelectedTicketId,
+    bumpProfileNavFromChatbot,
+    openInHomeShell,
+  ]);
+
+  const onChatbotNavigateToScreen = useCallback(
+    (screenName: string, params?: Record<string, unknown>) => {
+      void handleChatbotNavigationAndroid(screenName, params, getChatbotAndroidDeps());
+    },
+    [getChatbotAndroidDeps]
+  );
+
+  const onChatbotNavigateToTab = useCallback(
+    (tabName: string) => {
+      handleChatbotTabAndroid(tabName, getChatbotAndroidDeps());
+    },
+    [getChatbotAndroidDeps]
+  );
+
   // Pop stack so back goes to previous screen (e.g. Home → Create project → back → Home).
   const goBack = useCallback(() => {
     if (currentScreen === 'home' && showProfile) {
@@ -1090,6 +1201,7 @@ function AppContent({
     else if (current === 'categorySubcategories') setSelectedCategory(null);
     else if (current === 'creationMethod' && selectedSubcategory) setSelectedSubcategory(null);
     else if (current === 'ticketDetail') setSelectedTicketId(0);
+    else if (current === 'projects') setProjectsBootstrap(null);
     const newStack = screenStack.slice(0, -1);
     const prevScreen = newStack[newStack.length - 1];
     // Support Center is opened from Profile; header back sets showProfile — mirror that for hardware back.
@@ -1101,7 +1213,22 @@ function AppContent({
     if (Platform.OS === 'web' && router) {
       router.navigate(prevScreen);
     }
-  }, [currentScreen, showProfile, screenStack, selectedProjectForDetail, changeRequestProjectId, changeRequestId, previousScreenBeforeChangeRequests, bookingTechnician, serviceProvidersBookingTechnician, viewTechnicianId, selectedCategory, selectedSubcategory, router]);
+  }, [
+    currentScreen,
+    showProfile,
+    screenStack,
+    selectedProjectForDetail,
+    changeRequestProjectId,
+    changeRequestId,
+    previousScreenBeforeChangeRequests,
+    bookingTechnician,
+    serviceProvidersBookingTechnician,
+    viewTechnicianId,
+    selectedCategory,
+    selectedSubcategory,
+    router,
+    setProjectsBootstrap,
+  ]);
 
   // Android hardware back button: pop the navigation stack.
   useEffect(() => {
@@ -1269,6 +1396,10 @@ function AppContent({
           {currentScreen === 'chatbot' && (
             <ChatbotScreen
               onBack={goBack}
+              userId={userId}
+              userRole={userRole}
+              onNavigateToTab={onChatbotNavigateToTab}
+              onNavigateToScreen={onChatbotNavigateToScreen}
               onRequestLiveAgent={(subject, aiHistory) => {
                 setChatbotSubject(subject);
                 setChatbotAIHistory(aiHistory);
@@ -1546,6 +1677,8 @@ function AppContent({
                     onLogout={handleLogout}
                     onShowProfile={() => setShowProfile(true)}
                     openProfileOnMount={showProfile}
+                    profileNavFromChatbot={profileNavFromChatbot}
+                    homeShellFromChatbot={homeShellFromChatbot}
                     onProfileTabClosed={() => setShowProfile(false)}
                     onRequestProject={() => navigate('newProject')}
                     onShowProjects={(filter) => {
@@ -1587,7 +1720,13 @@ function AppContent({
                     }}
                     onNavigateToAIForm={() => navigate('aiForm')}
                     onNavigateToManualForm={() => navigate('manualForm')}
-                    onShowChatbot={() => navigate('chatbot')}
+                    onChatbotNavigateToTab={onChatbotNavigateToTab}
+                    onChatbotNavigateToScreen={onChatbotNavigateToScreen}
+                    onChatbotRequestLiveAgent={(subject, aiHistory) => {
+                      setChatbotSubject(subject);
+                      setChatbotAIHistory(aiHistory);
+                      navigate('supportChat');
+                    }}
                     onShowSupportTickets={() => navigate('ticketList')}
                     onShowServiceProviders={() => navigate('serviceProviders')}
                     onPressCategory={(category) => {
@@ -1602,20 +1741,29 @@ function AppContent({
                     onLogout={handleLogout}
                     onShowProfile={() => setShowProfile(true)}
                     openProfileOnMount={showProfile}
+                    profileNavFromChatbot={profileNavFromChatbot}
+                    homeShellFromChatbot={homeShellFromChatbot}
                     onProfileTabClosed={() => setShowProfile(false)}
                     onShowProjects={(filter) => {
                       setProjectsFilter(filter || 'available');
-                      navigate('projects');
+                      openInHomeShell({ tab: 'projects' });
+                      navigate('home', { replaceCurrent: true });
                     }}
                     onShowRunningProjects={() => navigate('runningProjects')}
                     onShowChat={() => navigate('chatRooms')}
                     onShowNotifications={() => navigate('notifications')}
                     onShowAppointments={() => navigate('appointments')}
-                      onShowChatbot={() => navigate('chatbot')}
-                      onShowSupportTickets={() => navigate('ticketList')}
-                      onShowServiceProviders={() => navigate('serviceProviders')}
-                      onShowCommissionPayment={() => navigate('commissionPayment')}
-                      userId={userId}
+                    onChatbotNavigateToTab={onChatbotNavigateToTab}
+                    onChatbotNavigateToScreen={onChatbotNavigateToScreen}
+                    onChatbotRequestLiveAgent={(subject, aiHistory) => {
+                      setChatbotSubject(subject);
+                      setChatbotAIHistory(aiHistory);
+                      navigate('supportChat');
+                    }}
+                    onShowSupportTickets={() => navigate('ticketList')}
+                    onShowServiceProviders={() => navigate('serviceProviders')}
+                    onShowCommissionPayment={() => navigate('commissionPayment')}
+                    userId={userId}
                     authToken={authToken}
                     projectsFilter={projectsFilter}
                   />
@@ -1682,8 +1830,14 @@ function AppContent({
 
           {currentScreen === 'projects' && (
             <ProjectsScreen
+              key={projectsRemountKey}
               filter={projectsFilter}
-              onBack={goBack}
+              initialProjectType={projectsBootstrap?.initialProjectType}
+              initialSmallTask={projectsBootstrap?.initialSmallTask}
+              onBack={() => {
+                setProjectsBootstrap(null);
+                goBack();
+              }}
               onOpenChat={(roomId, receiverId, receiverName) => {
                 setChatRoomId(roomId);
                 setChatReceiverId(receiverId);

@@ -65,6 +65,7 @@ interface Phase {
   id: number;
   phaseNumber: number;
   description: string;
+  title?: string;
   moneySpent: number;
   timeSpentDays: number;
 }
@@ -316,17 +317,25 @@ export default function PendingProjectScreen({
     }
   };
 
+  /** Same as web PendingProjectScreen: plain number format (currency icon shown separately in UI). */
   const formatBudget = (amount: number) => {
     return new Intl.NumberFormat(i18n.language === 'ar' ? 'ar-SA' : 'en-US', {
-      style: 'currency',
-      currency: 'SAR',
       minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
     }).format(amount);
   };
 
+  /** Same as web PendingProjectScreen: use timeRequiredDays with Week/weeks copy. */
   const formatDuration = () => {
-    const weeks = Math.ceil((project?.timeRequiredDays || 21) / 7);
-    return `${weeks}-${weeks + 1} ${t('weeks')}`;
+    if (!project?.timeRequiredDays) {
+      return t('projectsScreen.notSpecified');
+    }
+    const days = project.timeRequiredDays;
+    const weeks = Math.ceil(days / 7);
+    if (weeks === 1) {
+      return `1 ${t('Week')}`;
+    }
+    return `${weeks} ${t('weeks')}`;
   };
 
   const formatDate = (dateString?: string) => {

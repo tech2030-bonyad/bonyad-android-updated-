@@ -19,7 +19,9 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useChatbot } from '../hooks/useChatbot';
 import { ChatbotMessage } from '../types/chat';
-import StreamingMessage from '../components/StreamingMessage';
+import type { NavigationAction } from '../utils/navigationParser';
+import { isChatbotHomeTabTarget, resolveChatbotScreenToken } from '../utils/chatbotNavTargets';
+import { renderChatbotInlineText } from '../utils/chatbotAndroidRichText';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -31,16 +33,35 @@ interface ChatbotScreenProps {
     firstUserMessage: string
   ) => void;
   language?: 'en' | 'ar';
+  userRole?: 'user' | 'technician';
+  userId?: number;
+  onNavigateToTab?: (tabName: string) => void;
+  onNavigateToScreen?: (screenName: string, params?: Record<string, unknown>) => void;
 }
 
 // Chat Bubble Component
-const ChatBubble: React.FC<{ message: ChatbotMessage; isDarkMode: boolean; colors: any }> = ({
-  message,
-  isDarkMode,
-  colors,
-}) => {
+const ChatBubble: React.FC<{
+  message: ChatbotMessage;
+  isDarkMode: boolean;
+  colors: any;
+  onNavPress?: (action: NavigationAction) => void;
+}> = ({ message, isDarkMode, colors, onNavPress }) => {
   const isUser = message.isUser;
-  
+  const noopNav = () => {};
+  const botBody =
+    !isUser && message.displayText != null
+      ? renderChatbotInlineText(
+          message.displayText,
+          message.navigationActions as NavigationAction[] | undefined,
+          [
+            styles.bubbleText,
+            isUser ? styles.userText : { color: colors.text },
+          ],
+          { color: colors.primary, textDecorationLine: 'underline' as const, fontWeight: '600' as const },
+          onNavPress ?? noopNav
+        )
+      : null;
+
   return (
     <View
       style={[
@@ -64,14 +85,18 @@ const ChatBubble: React.FC<{ message: ChatbotMessage; isDarkMode: boolean; color
               }],
         ]}
       >
-        <Text
-          style={[
-            styles.bubbleText,
-            isUser ? styles.userText : [styles.botText, { color: colors.text }],
-          ]}
-        >
-          {message.text}
-        </Text>
+        {botBody ? (
+          botBody
+        ) : (
+          <Text
+            style={[
+              styles.bubbleText,
+              isUser ? styles.userText : [styles.botText, { color: colors.text }],
+            ]}
+          >
+            {message.displayText ?? message.text}
+          </Text>
+        )}
         <Text style={[styles.timestamp, { color: isUser ? 'rgba(255,255,255,0.7)' : colors.gray500 }]}>
           {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </Text>
@@ -123,6 +148,10 @@ const ChatbotScreen: React.FC<ChatbotScreenProps> = ({
   onBack,
   onRequestLiveAgent,
   language: propLanguage,
+  userRole = 'user',
+  userId = 0,
+  onNavigateToTab,
+  onNavigateToScreen,
 }) => {
   const { t, i18n } = useTranslation();
   const { colors, theme } = useTheme();
@@ -142,7 +171,7 @@ const ChatbotScreen: React.FC<ChatbotScreenProps> = ({
     getFirstUserMessage,
     resetChat,
     quickQuestions,
-  } = useChatbot({ language });
+  } = useChatbot({ language, userRole, userId });
 
   const [inputText, setInputText] = useState('');
   const flatListRef = useRef<FlatList>(null);
@@ -194,32 +223,37 @@ const ChatbotScreen: React.FC<ChatbotScreenProps> = ({
     );
   }, [getAIHistory, getFirstUserMessage, language, onRequestLiveAgent]);
 
-  // Find the last bot message index for streaming effect
-  const lastBotMessageIndex = messages.length - 1 - [...messages].reverse().findIndex(m => !m.isUser);
-  
-  const renderMessage = useCallback(({ item, index }: { item: ChatbotMessage; index: number }) => {
-    // Use streaming effect for the last bot message
-    const isLastBotMessage = index === lastBotMessageIndex && !item.isUser;
-    
-    if (isLastBotMessage) {
+  const runNavAction = useCallback(
+    (action: NavigationAction) => {
+      const t = action.type;
+      if (t === 'tab' && onNavigateToTab) {
+        const token = action.target;
+        const resolved = resolveChatbotScreenToken(String(token)) ?? String(token);
+        if (!isChatbotHomeTabTarget(String(token)) && onNavigateToScreen) {
+          void onNavigateToScreen(resolved, action.params);
+          return;
+        }
+        onNavigateToTab(token);
+        return;
+      }
+      onNavigateToScreen?.(action.target, action.params);
+    },
+    [onNavigateToTab, onNavigateToScreen]
+  );
+
+  const renderMessage = useCallback(
+    ({ item }: { item: ChatbotMessage; index: number }) => {
       return (
-        <StreamingMessage
-          text={item.text}
-          isUser={item.isUser}
-          timestamp={item.timestamp}
-          colors={colors}
+        <ChatBubble
+          message={item}
           isDarkMode={isDarkMode}
-          avatar={
-            <View style={[styles.botAvatar, { backgroundColor: colors.primary + '20' }]}>
-              <MaterialCommunityIcons name="robot" size={20} color={colors.primary} />
-            </View>
-          }
+          colors={colors}
+          onNavPress={runNavAction}
         />
       );
-    }
-    
-    return <ChatBubble message={item} isDarkMode={isDarkMode} colors={colors} />;
-  }, [isDarkMode, colors, lastBotMessageIndex]);
+    },
+    [isDarkMode, colors, runNavAction, onNavigateToScreen, onNavigateToTab]
+  );
 
   return (
     <KeyboardAvoidingView

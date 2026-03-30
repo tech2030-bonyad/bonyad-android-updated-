@@ -11,6 +11,8 @@ import {
   Platform,
   Animated,
   Dimensions,
+  LayoutAnimation,
+  UIManager,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,7 +20,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import { storage } from '../utils/storage';
-import { API_BASE_URL, API_ENDPOINTS, buildApiUrl, buildApiUrlWithParams } from '../config/api';
+import { API_ENDPOINTS, buildApiUrl, buildApiUrlWithParams } from '../config/api';
+import { getDisplayIconFullUrl } from '../services/ServiceService';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
 import ConfirmationPopup, { useConfirmationPopup } from '../components/ConfirmationPopup';
 
@@ -32,7 +35,29 @@ interface Service {
   nameEn: string;
   description: string;
   imageUrl?: string;
+  svgUrl?: string | null;
+  iconUrl?: string | null;
+  useSvg?: boolean;
+  icon?: string;
+  image?: string;
 }
+
+const getCategoryIcon = (nameEn: string): keyof typeof Ionicons.glyphMap => {
+  const name = (nameEn || '').toLowerCase();
+  if (name.includes('plumb')) return 'water-outline';
+  if (name.includes('electric')) return 'flash-outline';
+  if (name.includes('ac') || name.includes('hvac') || name.includes('air')) return 'snow-outline';
+  if (name.includes('paint')) return 'color-palette-outline';
+  if (name.includes('carpent') || name.includes('wood')) return 'hammer-outline';
+  if (name.includes('clean')) return 'sparkles-outline';
+  if (name.includes('construct') || name.includes('build')) return 'construct-outline';
+  if (name.includes('design')) return 'brush-outline';
+  if (name.includes('garden') || name.includes('landscape')) return 'leaf-outline';
+  if (name.includes('security')) return 'shield-checkmark-outline';
+  if (name.includes('move') || name.includes('transport')) return 'car-outline';
+  if (name.includes('repair')) return 'build-outline';
+  return 'grid-outline';
+};
 
 // One-row Service Card (compact list row)
 const ServiceCard: React.FC<{
@@ -54,12 +79,45 @@ const ServiceCard: React.FC<{
   scaledSize,
   language,
 }) => {
-  const imageUrl = service.imageUrl
-    ? (service.imageUrl.startsWith('http')
-        ? service.imageUrl
-        : `${API_BASE_URL.replace('/api', '')}${service.imageUrl}`)
-    : null;
+  const [imageFailed, setImageFailed] = useState(false);
+  const fullIconUrl = !imageFailed ? getDisplayIconFullUrl(service as any) : null;
   const serviceName = language === 'ar' ? service.nameAr : service.nameEn;
+  const isRTL = language === 'ar';
+  const layoutIsRTL = isRTL && !showCheckbox; // Keep add-modal layout consistent across languages
+
+  const Thumb = (
+    <View style={[styles.cardRowThumb, { backgroundColor: colors.primary + '10' }]}>
+      {fullIconUrl ? (
+        <Image
+          source={{ uri: fullIconUrl }}
+          style={styles.cardRowThumbImage}
+          resizeMode="contain"
+          onError={() => setImageFailed(true)}
+        />
+      ) : (
+        <Ionicons name={getCategoryIcon(service.nameEn)} size={24} color={colors.primary} />
+      )}
+      {showCheckbox && isSelected && (
+        <View style={[styles.cardRowCheck, { backgroundColor: colors.primary }]}>
+          <Ionicons name="checkmark" size={14} color="#fff" />
+        </View>
+      )}
+    </View>
+  );
+
+  const RemoveButton =
+    !showCheckbox && onRemove ? (
+      <TouchableOpacity
+        style={styles.removeBtnRow}
+        onPress={(e) => {
+          e.stopPropagation();
+          onRemove();
+        }}
+        accessibilityLabel="Remove service"
+      >
+        <Ionicons name="close" size={22} color={colors.error} />
+      </TouchableOpacity>
+    ) : null;
 
   return (
     <TouchableOpacity
@@ -74,39 +132,25 @@ const ServiceCard: React.FC<{
       onPress={onPress}
       activeOpacity={0.85}
     >
-      <View style={[styles.cardRowThumb, { backgroundColor: colors.primary + '15' }]}>
-        {imageUrl ? (
-          <Image source={{ uri: imageUrl }} style={styles.cardRowThumbImage} resizeMode="cover" />
-        ) : (
-          <Ionicons name="construct" size={24} color={colors.primary} />
-        )}
-        {showCheckbox && isSelected && (
-          <View style={[styles.cardRowCheck, { backgroundColor: colors.primary }]}>
-            <Ionicons name="checkmark" size={14} color="#fff" />
-          </View>
-        )}
-      </View>
-      <View style={styles.cardRowContent}>
-        <Text style={[styles.cardRowTitle, { color: colors.text, fontSize: scaledSize(15) }]} numberOfLines={1}>
-          {serviceName}
-        </Text>
-        {service.description ? (
-          <Text style={[styles.cardRowDesc, { color: colors.textSecondary, fontSize: scaledSize(12) }]} numberOfLines={1}>
-            {service.description}
+      <View
+        style={[
+          styles.cardRowBody,
+          showCheckbox && styles.modalRowLtrLayout,
+        ]}
+      >
+        {layoutIsRTL ? Thumb : RemoveButton}
+        <View style={[styles.cardRowInner, showCheckbox && isRTL && styles.modalTextNaturalRtl]}>
+          <Text style={[styles.cardRowTitle, { color: colors.text, fontSize: scaledSize(15) }]} numberOfLines={1}>
+            {serviceName}
           </Text>
-        ) : null}
+          {service.description ? (
+            <Text style={[styles.cardRowDesc, { color: colors.textSecondary, fontSize: scaledSize(12) }]} numberOfLines={1}>
+              {service.description}
+            </Text>
+          ) : null}
+        </View>
+        {layoutIsRTL ? RemoveButton : Thumb}
       </View>
-      {!showCheckbox && onRemove && (
-        <TouchableOpacity
-          style={[styles.removeBtnRow, { backgroundColor: colors.error }]}
-          onPress={(e) => {
-            e.stopPropagation();
-            onRemove();
-          }}
-        >
-          <Ionicons name="trash-outline" size={18} color="#fff" />
-        </TouchableOpacity>
-      )}
     </TouchableOpacity>
   );
 };
@@ -129,6 +173,7 @@ export default function ServiceManagementScreen({ onBack }: ServiceManagementScr
   const removeInProgressRef = useRef(false);
 
   const language = i18n.language === 'ar' ? 'ar' : 'en';
+  const isRTL = language === 'ar';
   const screenWidth = Dimensions.get('window').width;
 
   const screenSlideX = useRef(new Animated.Value(0)).current;
@@ -139,6 +184,23 @@ export default function ServiceManagementScreen({ onBack }: ServiceManagementScr
   useEffect(() => {
     fetchServices();
   }, []);
+
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      UIManager.setLayoutAnimationEnabledExperimental?.(true);
+    }
+  }, []);
+
+  const animateListNextLayout = () => {
+    // Smoothly animate insert/remove/reorder of service cards
+    LayoutAnimation.configureNext(
+      LayoutAnimation.create(
+        220,
+        LayoutAnimation.Types.easeInEaseOut,
+        LayoutAnimation.Properties.opacity,
+      ),
+    );
+  };
 
   useEffect(() => {
     screenSlideX.setValue(-screenWidth);
@@ -192,6 +254,7 @@ export default function ServiceManagementScreen({ onBack }: ServiceManagementScr
 
       if (myServicesRes.ok) {
         const data = await myServicesRes.json();
+        animateListNextLayout();
         setMyServices(data || []);
       }
 
@@ -445,6 +508,7 @@ export default function ServiceManagementScreen({ onBack }: ServiceManagementScr
                   style={[
                     styles.saveButton,
                     { backgroundColor: selectedServices.length > 0 ? colors.primary : colors.border },
+                    isRTL && styles.modalFooterButtonRowLtr,
                   ]}
                   onPress={handleSaveSelection}
                   disabled={isSaving || selectedServices.length === 0}
@@ -454,9 +518,11 @@ export default function ServiceManagementScreen({ onBack }: ServiceManagementScr
                   ) : (
                     <>
                       <Ionicons name="add" size={20} color="#fff" />
-                      <Text style={styles.saveButtonText}>
-                        {t('Add')} {selectedServices.length > 0 && `(${selectedServices.length})`}
-                      </Text>
+                      <View style={isRTL ? styles.modalTextNaturalRtl : undefined}>
+                        <Text style={styles.saveButtonText}>
+                          {t('Add')} {selectedServices.length > 0 && `(${selectedServices.length})`}
+                        </Text>
+                      </View>
                     </>
                   )}
                 </TouchableOpacity>
@@ -494,6 +560,17 @@ export default function ServiceManagementScreen({ onBack }: ServiceManagementScr
 }
 
 const styles = StyleSheet.create({
+  /** Keep checkbox row order; text direction reset in modalTextNaturalRtl */
+  modalRowLtrLayout: {
+    direction: 'ltr',
+  },
+  modalTextNaturalRtl: {
+    direction: 'rtl',
+    writingDirection: 'rtl',
+  },
+  modalFooterButtonRowLtr: {
+    direction: 'ltr',
+  },
   container: {
     flex: 1,
   },
@@ -565,7 +642,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 12,
     overflow: 'hidden',
-    paddingRight: 12,
+    paddingHorizontal: 14,
     paddingVertical: 10,
     marginBottom: 10,
     ...Platform.select({
@@ -580,12 +657,21 @@ const styles = StyleSheet.create({
       },
     }),
   },
+  cardRowBody: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  cardRowInner: {
+    flex: 1,
+    minWidth: 0,
+  },
   cardRowThumb: {
     position: 'relative',
-    width: 56,
-    height: 56,
+    width: 52,
+    height: 52,
     borderRadius: 10,
-    marginRight: 14,
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
@@ -593,10 +679,6 @@ const styles = StyleSheet.create({
   cardRowThumbImage: {
     width: '100%',
     height: '100%',
-  },
-  cardRowContent: {
-    flex: 1,
-    minWidth: 0,
   },
   cardRowTitle: {
     fontWeight: '600',
@@ -616,9 +698,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   removeBtnRow: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    padding: 6,
     justifyContent: 'center',
     alignItems: 'center',
   },

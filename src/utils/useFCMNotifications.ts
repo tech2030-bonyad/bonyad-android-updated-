@@ -1,264 +1,248 @@
-import { useEffect, useState } from 'react';
-import { Platform, Alert, Linking } from 'react-native';
-import messaging, { FirebaseMessagingTypes } from '@react-native-firebase/messaging';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { Platform, Alert, AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { remoteMessageDataToNotificationRaw } from './fcmNotificationPayload';
+import { normalizeNotificationFromApi } from './normalizeNotificationPayload';
+import type { Notification } from '../services/NotificationService';
 
 const FCM_TOKEN_KEY = '@fcm_token';
+const PENDING_NOTIFICATION_KEY = '@pending_notification';
+
+// Global state
+let isBackgroundHandlerRegistered = false;
+let globalPendingNotification: Notification | null = null;
+
+// Callbacks set by App component (like web's routeIncomingNotification)
+let onFCMNotificationReceived: ((notification: Notification) => void) | null = null;
+let onFCMNotificationTapped: ((notification: Notification) => void) | null = null;
 
 /**
- * 🔔 COMPREHENSIVE FCM NOTIFICATIONS HOOK
- * Handles all aspects of FCM:
- * - Request permissions
- * - Get FCM token
- * - Handle foreground notifications
- * - Handle background notifications
- * - Handle notification taps (app opened from notification)
+ * Set callback for when FCM notification is received (foreground)
+ * This is like web's WebSocket notification callback
+ */
+export function setFCMNotificationCallbacks(
+  onReceived: (notification: Notification) => void,
+  onTapped: (notification: Notification) => void
+) {
+  onFCMNotificationReceived = onReceived;
+  onFCMNotificationTapped = onTapped;
+}
+
+/**
+ * 🔥 BACKGROUND MESSAGE HANDLER
+ * This MUST be registered outside any component
+ */
+export const registerBackgroundMessageHandler = () => {
+  if (isBackgroundHandlerRegistered || Platform.OS === 'web') return;
+  
+  try {
+    import('@react-native-firebase/messaging').then((module) => {
+      const messaging = module.default;
+      
+      console.log('[🔔 FCM] Registering background message handler...');
+      
+      messaging().setBackgroundMessageHandler(async (remoteMessage: any) => {
+        console.log('[🔔 FCM] ========== BACKGROUND MESSAGE HANDLER ==========');
+        
+        try {
+          const rawData = remoteMessageDataToNotificationRaw(remoteMessage);
+          const notification = normalizeNotificationFromApi(rawData);
+          
+          await AsyncStorage.setItem(PENDING_NOTIFICATION_KEY, JSON.stringify(notification));
+          globalPendingNotification = notification;
+          
+          console.log('[🔔 FCM] Background notification saved:', notification.id);
+        } catch (e) {
+          console.error('[🔔 FCM] Error:', e);
+        }
+        
+        return Promise.resolve();
+      });
+      
+      isBackgroundHandlerRegistered = true;
+      console.log('[🔔 FCM] Background handler registered');
+    }).catch((err) => {
+      console.error('[🔔 FCM] Failed to register:', err);
+    });
+  } catch (error) {
+    console.error('[🔔 FCM] Error:', error);
+  }
+};
+
+let firebaseApp: any = null;
+let firebaseMessaging: any = null;
+
+const initializeFirebaseModules = async () => {
+  const { getApp, getApps, initializeApp } = await import('@react-native-firebase/app');
+  const { getMessaging } = await import('@react-native-firebase/messaging');
+  
+  const apps = getApps();
+  if (apps.length === 0) {
+    firebaseApp = initializeApp();
+  } else {
+    firebaseApp = apps[0];
+  }
+  
+  firebaseMessaging = getMessaging(firebaseApp);
+  return { app: firebaseApp, messaging: firebaseMessaging };
+};
+
+/**
+ * 🔥 FCM Hook - Works like WebSocket on web
  */
 export const useFCMNotifications = () => {
   const [fcmToken, setFcmToken] = useState<string | null>(null);
   const [hasPermission, setHasPermission] = useState<boolean>(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isInitialized, setIsInitialized] = useState(false);
+  
+  const unsubscribeRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
-    initializeFCM();
+    registerBackgroundMessageHandler();
+  }, []);
+
+  useEffect(() => {
+    let isCancelled = false;
     
-    // Cleanup
+    const init = async () => {
+      if (Platform.OS === 'web') return;
+      
+      if (isCancelled) return;
+
+      try {
+        const { messaging: messagingModule } = await initializeFirebaseModules();
+        
+        if (isCancelled) return;
+        
+        console.log('[🔔 FCM] Firebase initialized');
+        setIsInitialized(true);
+        
+        // Request permissions
+        const authStatus = await messagingModule.requestPermission();
+        const enabled = authStatus === messagingModule.AuthorizationStatus?.AUTHORIZED || 
+                       authStatus === 1 || authStatus === 2;
+        setHasPermission(enabled);
+        
+        if (enabled) {
+          console.log('[🔔 FCM] Permissions granted');
+          
+          // Get token
+          const token = await messagingModule.getToken();
+          if (token) {
+            console.log('[🔔 FCM] Token obtained');
+            setFcmToken(token);
+            await AsyncStorage.setItem(FCM_TOKEN_KEY, token);
+          }
+          
+          // Set up handlers
+          const unsubscribeForeground = messagingModule.onMessage(async (remoteMessage: any) => {
+            console.log('[🔔 FCM] ========== FOREGROUND MESSAGE ==========');
+            
+            const rawData = remoteMessageDataToNotificationRaw(remoteMessage);
+            const notification = normalizeNotificationFromApi(rawData);
+            
+            console.log('[🔔 FCM] Notification received:', notification.id, notification.notificationType);
+            
+            // Call callback like web's WebSocket handler
+            if (onFCMNotificationReceived) {
+              onFCMNotificationReceived(notification);
+            }
+          });
+          
+          // Handle notification tap (background)
+          const unsubscribeBackground = messagingModule.onNotificationOpenedApp(async (remoteMessage: any) => {
+            console.log('[🔔 FCM] ========== NOTIFICATION TAPPED (BACKGROUND) ==========');
+            
+            const rawData = remoteMessageDataToNotificationRaw(remoteMessage);
+            const notification = normalizeNotificationFromApi(rawData);
+            
+            console.log('[🔔 FCM] Notification tapped:', notification.id);
+            
+            // Call callback like web; if callback handles it, clear pending to avoid double navigation
+            if (onFCMNotificationTapped) {
+              onFCMNotificationTapped(notification);
+              // Clear pending since callback handled it
+              await AsyncStorage.removeItem(PENDING_NOTIFICATION_KEY);
+              globalPendingNotification = null;
+            } else {
+              // No callback yet — save for later pickup
+              await AsyncStorage.setItem(PENDING_NOTIFICATION_KEY, JSON.stringify(notification));
+              globalPendingNotification = notification;
+            }
+          });
+          
+          // Handle notification tap (quit state)
+          const remoteMessage = await messagingModule.getInitialNotification();
+          if (remoteMessage) {
+            console.log('[🔔 FCM] ========== NOTIFICATION TAPPED (QUIT STATE) ==========');
+            
+            const rawData = remoteMessageDataToNotificationRaw(remoteMessage);
+            const notification = normalizeNotificationFromApi(rawData);
+            
+            await AsyncStorage.setItem(PENDING_NOTIFICATION_KEY, JSON.stringify(notification));
+            globalPendingNotification = notification;
+            
+            console.log('[🔔 FCM] Initial notification:', notification.id);
+            
+            // Delay to let app initialize, then navigate
+            setTimeout(async () => {
+              if (onFCMNotificationTapped) {
+                onFCMNotificationTapped(notification);
+                // Clear pending since callback handled it
+                await AsyncStorage.removeItem(PENDING_NOTIFICATION_KEY);
+                globalPendingNotification = null;
+              }
+            }, 1500);
+          }
+          
+          unsubscribeRef.current = () => {
+            unsubscribeForeground();
+            unsubscribeBackground();
+          };
+        }
+      } catch (error) {
+        console.error('[🔔 FCM] Init error:', error);
+      }
+    };
+
+    init();
+    
     return () => {
-      // Unsubscribe listeners are handled automatically
+      isCancelled = true;
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+      }
     };
   }, []);
 
-  const initializeFCM = async () => {
-    try {
-      console.log('🔔 Initializing FCM...');
-      setIsLoading(true);
-
-      // Step 1: Check if platform is supported
-      if (Platform.OS === 'web') {
-        console.log('⚠️ Web platform - FCM not supported');
-        setIsLoading(false);
-        return;
-      }
-
-      // Wait for native modules to be ready
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // Check if messaging module is available
-      try {
-        const messagingModule = messaging();
-        if (!messagingModule) {
-          throw new Error('Messaging module not available');
+  // Check pending notifications when app becomes active
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', async (nextAppState) => {
+      if (nextAppState === 'active') {
+        console.log('[🔔 FCM] App active, checking pending...');
+        
+        const pending = await AsyncStorage.getItem(PENDING_NOTIFICATION_KEY);
+        if (pending) {
+          const notification: Notification = JSON.parse(pending);
+          console.log('[🔔 FCM] Found pending:', notification.id);
+          
+          if (onFCMNotificationTapped) {
+            onFCMNotificationTapped(notification);
+          }
+          
+          await AsyncStorage.removeItem(PENDING_NOTIFICATION_KEY);
         }
-      } catch (moduleError) {
-        console.log('⚠️ Firebase messaging module not ready, skipping FCM initialization');
-        setIsLoading(false);
-        return;
-      }
-
-      // Step 2: Request notification permissions
-      console.log('🔔 Step 1: Requesting notification permissions...');
-      const permissionGranted = await requestNotificationPermissions();
-      setHasPermission(permissionGranted);
-
-      if (!permissionGranted) {
-        console.log('❌ Notification permissions denied');
-        setIsLoading(false);
-        return;
-      }
-
-      console.log('✅ Notification permissions granted!');
-
-      // Step 3: Get FCM token
-      console.log('🔔 Step 2: Getting FCM token...');
-      const token = await getFCMToken();
-      
-      if (token) {
-        console.log('✅ FCM Token obtained:', token.substring(0, 50) + '...');
-        setFcmToken(token);
-        await saveTokenToStorage(token);
-      } else {
-        console.log('⚠️ No FCM token received');
-      }
-
-      // Step 4: Set up notification handlers
-      console.log('🔔 Step 3: Setting up notification handlers...');
-      setupNotificationHandlers();
-
-      // Step 5: Check if app was opened from notification
-      checkInitialNotification();
-
-      setIsLoading(false);
-      console.log('✅ FCM initialization complete!');
-
-    } catch (error: any) {
-      console.error('❌ Error initializing FCM:', error?.message);
-      setIsLoading(false);
-    }
-  };
-
-  /**
-   * Request notification permissions
-   */
-  const requestNotificationPermissions = async (): Promise<boolean> => {
-    try {
-      const authStatus = await messaging().requestPermission();
-      const enabled =
-        authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
-        authStatus === messaging.AuthorizationStatus.PROVISIONAL;
-
-      console.log('📱 Permission status:', {
-        status: authStatus,
-        enabled,
-        AUTHORIZED: messaging.AuthorizationStatus.AUTHORIZED,
-        PROVISIONAL: messaging.AuthorizationStatus.PROVISIONAL,
-        NOT_DETERMINED: messaging.AuthorizationStatus.NOT_DETERMINED,
-        DENIED: messaging.AuthorizationStatus.DENIED,
-      });
-
-      return enabled;
-    } catch (error: any) {
-      console.error('❌ Error requesting permissions:', error);
-      return false;
-    }
-  };
-
-  /**
-   * Get FCM token
-   */
-  const getFCMToken = async (): Promise<string | null> => {
-    try {
-      const token = await messaging().getToken();
-      
-      if (token) {
-        console.log('✅ FCM Token length:', token.length);
-        console.log('✅ FCM Token (first 100 chars):', token.substring(0, 100));
-        return token;
-      }
-      
-      return null;
-    } catch (error: any) {
-      console.error('❌ Error getting FCM token:', error);
-      return null;
-    }
-  };
-
-  /**
-   * Save token to AsyncStorage
-   */
-  const saveTokenToStorage = async (token: string) => {
-    try {
-      await AsyncStorage.setItem(FCM_TOKEN_KEY, token);
-      console.log('✅ Token saved to storage');
-    } catch (error) {
-      console.error('❌ Error saving token:', error);
-    }
-  };
-
-  /**
-   * Set up notification handlers
-   */
-  const setupNotificationHandlers = () => {
-    // 1. Foreground notifications (app is open)
-    const unsubscribeForeground = messaging().onMessage(async remoteMessage => {
-      console.log('🔔 FOREGROUND notification received!');
-      console.log('📦 Notification data:', remoteMessage);
-      
-      // Show alert
-      if (remoteMessage.notification) {
-        Alert.alert(
-          remoteMessage.notification.title || 'Notification',
-          remoteMessage.notification.body || '',
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                // Handle notification tap
-                handleNotificationPress(remoteMessage);
-              },
-            },
-          ]
-        );
       }
     });
 
-    // 2. Background/Quit notifications (app was closed or in background)
-    messaging().onNotificationOpenedApp(remoteMessage => {
-      console.log('🔔 APP OPENED FROM BACKGROUND NOTIFICATION!');
-      console.log('📦 Notification data:', remoteMessage);
-      handleNotificationPress(remoteMessage);
-    });
-
-    // 3. Token refresh
-    messaging().onTokenRefresh(newToken => {
-      console.log('🔄 FCM Token refreshed:', newToken);
-      setFcmToken(newToken);
-      saveTokenToStorage(newToken);
-    });
-
-    return () => {
-      unsubscribeForeground();
-    };
-  };
-
-  /**
-   * Check if app was opened from a notification
-   */
-  const checkInitialNotification = async () => {
-    try {
-      const remoteMessage = await messaging().getInitialNotification();
-      
-      if (remoteMessage) {
-        console.log('🔔 APP OPENED FROM QUIT STATE NOTIFICATION!');
-        console.log('📦 Notification data:', remoteMessage);
-        handleNotificationPress(remoteMessage);
-      }
-    } catch (error) {
-      console.error('❌ Error checking initial notification:', error);
-    }
-  };
-
-  /**
-   * Handle notification press/tap
-   */
-  const handleNotificationPress = (remoteMessage: FirebaseMessagingTypes.RemoteMessage) => {
-    console.log('👆 Notification tapped!');
-    
-    // Extract notification data
-    const data = remoteMessage.data;
-    const notification = remoteMessage.notification;
-
-    // Example: Navigate to a specific screen based on notification data
-    if (data?.screen) {
-      console.log('📱 Navigate to screen:', data.screen);
-      // You can implement navigation here using React Navigation or your navigation system
-    }
-
-    // Example: Open a URL if provided
-    if (data?.url) {
-      console.log('🔗 Opening URL:', data.url);
-      Linking.openURL(data.url).catch(err => console.error('Error opening URL:', err));
-    }
-
-    // Example: Show alert with notification content
-    if (notification?.title || notification?.body) {
-      Alert.alert(
-        notification.title || 'Notification',
-        notification.body || '',
-        [{ text: 'OK' }]
-      );
-    }
-  };
+    return () => subscription.remove();
+  }, []);
 
   return {
     fcmToken,
     hasPermission,
-    isLoading,
-    refreshToken: async () => {
-      const token = await getFCMToken();
-      if (token) {
-        setFcmToken(token);
-        await saveTokenToStorage(token);
-      }
-    },
+    isInitialized,
   };
 };
+
+export default useFCMNotifications;

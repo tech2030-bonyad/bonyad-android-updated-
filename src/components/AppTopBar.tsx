@@ -3,10 +3,11 @@
  * Logo left, Chat | Info | Notifications right (primary color icons, no blue bar).
  */
 import React from 'react';
-import { View, TouchableOpacity, StyleSheet, I18nManager, Platform, StatusBar } from 'react-native';
+import { View, TouchableOpacity, StyleSheet, I18nManager } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BonyadLogo from './BonyadLogo';
+import { getAppTopBarPaddingTop } from '../utils/statusBarHelper';
 
 const H_PADDING = 16;
 
@@ -68,13 +69,7 @@ export default function AppTopBar({
     </>
   );
 
-  // Push the bar below the system status area (clock, Wi‑Fi, battery). On Android,
-  // safe inset can be 0 with edge‑to‑edge; combine with StatusBar.currentHeight + extra gap.
-  const statusBarHeight = StatusBar.currentHeight ?? 0;
-  const topInset =
-    Platform.OS === 'android'
-      ? Math.max(insets.top, statusBarHeight, 28) + 14
-      : Math.max(insets.top, 10);
+  const topInset = getAppTopBarPaddingTop(insets);
 
   return (
     <View style={[styles.safeWrap, backgroundColor != null && { backgroundColor }, { paddingTop: topInset }]}>

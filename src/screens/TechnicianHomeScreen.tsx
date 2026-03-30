@@ -51,7 +51,9 @@ import { buildApiUrl, API_ENDPOINTS, getServerBaseUrl } from '../config/api';
 import { storage } from '../utils/storage';
 import { checkHasPortfolio } from '../services/PortfolioService';
 import TechnicalHomeScreenContent from './home/TechnicalHomeScreen';
+import ChatbotScreen from './ChatbotScreen';
 import { SmallTaskRequest } from '../types/smallTasks';
+import type { HomeShellFromChatbotPayload } from '../utils/chatbotNavigateAndroid';
 
 interface TechnicianHomeScreenProps {
   onShowProfile: () => void;
@@ -65,7 +67,9 @@ interface TechnicianHomeScreenProps {
   onShowRunningProjects?: () => void;
   onShowNotifications?: () => void;
   onShowAppointments?: () => void;
-  onShowChatbot?: () => void;
+  onChatbotNavigateToTab?: (tabName: string) => void;
+  onChatbotNavigateToScreen?: (screenName: string, params?: Record<string, unknown>) => void;
+  onChatbotRequestLiveAgent?: (subject: string, aiHistory: any[], firstUserMessage: string) => void;
   onShowSupportTickets?: () => void;
   onShowServiceProviders?: () => void;
   onShowCommissionPayment?: () => void;
@@ -79,6 +83,11 @@ interface TechnicianHomeScreenProps {
   onNavigateToServices?: () => void;
   onNavigateToAvailability?: () => void;
   projectsFilter?: 'available' | 'running' | 'completed' | 'bid_received' | 'direct_offers';
+  onNavigateFromNotification?: (notification: any) => void | Promise<void>;
+  initialProjectToOpen?: any;
+  initialSmallTaskToOpen?: any;
+  profileNavFromChatbot?: { id: number; subView: 'myData' | 'paymentHistory' | 'smallTaskTypes' | 'regions' } | null;
+  homeShellFromChatbot?: (HomeShellFromChatbotPayload & { id: number }) | null;
 }
 
 export default function TechnicianHomeScreen({
@@ -104,6 +113,11 @@ export default function TechnicianHomeScreen({
   onNavigateToServices,
   onNavigateToAvailability,
   projectsFilter = 'available',
+  onNavigateFromNotification,
+  initialProjectToOpen,
+  initialSmallTaskToOpen,
+  profileNavFromChatbot,
+  homeShellFromChatbot,
 }: TechnicianHomeScreenProps) {
   const { t, i18n } = useTranslation();
   const { colors, theme } = useTheme();
@@ -114,6 +128,52 @@ export default function TechnicianHomeScreen({
   const [activeTab, setActiveTab] = useState(openProfileOnMount ? 'profile' : 'home');
   const [currentProjectsFilter, setCurrentProjectsFilter] = useState<'available' | 'running' | 'completed' | 'bid_received' | 'direct_offers'>(projectsFilter || 'available');
   const [profileSubView, setProfileSubView] = useState<'myData' | 'editProfile' | 'portfolio' | 'subscription' | 'services' | 'availability' | 'regions' | 'smallTaskTypes' | 'paymentHistory' | 'changePassword' | 'changePhone' | 'verifyPhoneChange' | 'serviceSuggestions' | null>(null);
+
+  useEffect(() => {
+    if (!profileNavFromChatbot) return;
+    setActiveTab('profile');
+    onShowProfile();
+    setProfileSubView(profileNavFromChatbot.subView);
+  }, [profileNavFromChatbot?.id, profileNavFromChatbot, onShowProfile]);
+
+  useEffect(() => {
+    if (!homeShellFromChatbot) return;
+    const { tab, embeddedProjects, technicianAppointments } = homeShellFromChatbot;
+    if (technicianAppointments) {
+      setShowAppointmentsView(true);
+      setActiveTab('home');
+      setShowCommissionPayment(false);
+      setCommissionCheckoutRequest(null);
+      return;
+    }
+
+    const shellTabs = ['home', 'projects', 'chat', 'profile', 'notifications', 'wallet', 'chatbot'] as const;
+    if (shellTabs.includes(tab as (typeof shellTabs)[number])) {
+      setActiveTab(tab as 'home' | 'projects' | 'chat' | 'profile' | 'notifications' | 'wallet' | 'chatbot');
+    }
+
+    if (tab === 'projects') {
+      if (embeddedProjects?.initialSmallTask != null) {
+        setSelectedSmallTask(embeddedProjects.initialSmallTask);
+        setProjectsInitialProjectType('small');
+      } else if (embeddedProjects?.initialProjectType != null) {
+        setSelectedSmallTask(null);
+        setProjectsInitialProjectType(embeddedProjects.initialProjectType);
+      } else {
+        setSelectedSmallTask(null);
+        setProjectsInitialProjectType(null);
+      }
+      setInitialProjectForDetail(null);
+    } else {
+      setSelectedSmallTask(null);
+      setProjectsInitialProjectType(null);
+    }
+
+    if (!(tab === 'home' && technicianAppointments)) {
+      setShowAppointmentsView(false);
+    }
+  }, [homeShellFromChatbot?.id, homeShellFromChatbot]);
+
   /** When portfolio opened from home (Business gallery), back goes to home; from profile, back goes to profile */
   const [portfolioSource, setPortfolioSource] = useState<'home' | 'profile' | null>(null);
   /** When true, show AppointmentsScreen within home tab so nav bar stays visible */
@@ -211,6 +271,22 @@ export default function TechnicianHomeScreen({
       setInitialProjectForDetail(null);
     }
   }, [activeTab]);
+
+  // Handle auto-opening projects from props (e.g. notifications)
+  useEffect(() => {
+    if (initialProjectToOpen) {
+      setInitialProjectForDetail(initialProjectToOpen);
+      setActiveTab('projects');
+    }
+  }, [initialProjectToOpen]);
+
+  useEffect(() => {
+    if (initialSmallTaskToOpen) {
+      setSelectedSmallTask(initialSmallTaskToOpen);
+      setProjectsInitialProjectType('small');
+      setActiveTab('projects');
+    }
+  }, [initialSmallTaskToOpen]);
 
   // Tab content transition animation
   useEffect(() => {
@@ -461,7 +537,8 @@ export default function TechnicianHomeScreen({
               setActiveTab('chat');
             }}
             onPressInfo={startCoachTour}
-            onPressNotifications={() => onShowNotifications?.()}
+            // Open notifications INSIDE technician tabs so top/bottom nav stay visible.
+            onPressNotifications={() => setActiveTab('notifications')}
           />
         )}
 
@@ -477,7 +554,8 @@ export default function TechnicianHomeScreen({
               setShowChatList(true);
               setActiveTab('chat');
             }}
-            onPressNotifications={onShowNotifications}
+            // Open notifications INSIDE technician tabs so top/bottom nav stay visible.
+            onPressNotifications={() => setActiveTab('notifications')}
             onPressInfo={startCoachTour}
             onPressAvailableProject={(status) => {
               if (status === 'small_tasks') {
@@ -658,6 +736,7 @@ export default function TechnicianHomeScreen({
                 ]}
               >
                 <ChatRoomsListScreen
+                  stackedUnderAppTopBar={!IS_LARGE_WEB}
                   onOpenChat={(roomId, receiverId, receiverName, projectId) => {
                     setSelectedChat({ roomId, receiverId, receiverName, projectId: projectId ?? undefined });
                     setShowChatList(IS_LARGE_WEB);
@@ -714,6 +793,7 @@ export default function TechnicianHomeScreen({
           <View style={{ flex: 1 }}>
             <NotificationsScreen
               onUnreadCountChange={setUnreadNotificationCount}
+              onNavigateFromNotification={onNavigateFromNotification}
             />
           </View>
         )}
@@ -828,12 +908,31 @@ export default function TechnicianHomeScreen({
             ) : null}
           </View>
         )}
+
+        {activeTab === 'chatbot' && (
+          <View style={{ flex: 1 }}>
+            <ChatbotScreen
+              onBack={() => setActiveTab('home')}
+              userId={userId}
+              userRole="technician"
+              onNavigateToTab={onChatbotNavigateToTab}
+              onNavigateToScreen={onChatbotNavigateToScreen}
+              onRequestLiveAgent={onChatbotRequestLiveAgent}
+            />
+          </View>
+        )}
         </Animated.View>
 
         {/* Glass tab bar — iOS-style with water-drop press */}
         <View style={styles.glassTabBarContainer}>
           <GlassTabBar
-            activeTab={['home', 'projects', 'wallet', 'profile'].includes(activeTab) ? activeTab : 'home'}
+            activeTab={
+              activeTab === 'chatbot'
+                ? 'home'
+                : ['home', 'projects', 'wallet', 'profile'].includes(activeTab)
+                  ? activeTab
+                  : 'home'
+            }
             onTabPress={(tab) => {
               if (activeTab === 'profile' && tab !== 'profile') {
                 onProfileTabClosed?.();
@@ -1198,6 +1297,7 @@ export default function TechnicianHomeScreen({
             <View style={styles.mainContentWrapper}>
               <NotificationsScreen
                 onUnreadCountChange={setUnreadNotificationCount}
+                onNavigateFromNotification={onNavigateFromNotification}
               />
             </View>
             <Footer />
@@ -1328,18 +1428,29 @@ export default function TechnicianHomeScreen({
             <Footer />
           </ScrollView>
         )}
+
+        {activeTab === 'chatbot' && (
+          <View style={[styles.desktopMainContent, { flex: 1 }]}>
+            <ChatbotScreen
+              onBack={() => setActiveTab('home')}
+              userId={userId}
+              userRole="technician"
+              onNavigateToTab={onChatbotNavigateToTab}
+              onNavigateToScreen={onChatbotNavigateToScreen}
+              onRequestLiveAgent={onChatbotRequestLiveAgent}
+            />
+          </View>
+        )}
       </View>
 
       {/* Floating Chatbot Button */}
-      {onShowChatbot && (
-        <TouchableOpacity
-          style={[styles.chatbotFab, { backgroundColor: colors.primary }]}
-          onPress={onShowChatbot}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="chatbubbles" size={28} color="#fff" />
-        </TouchableOpacity>
-      )}
+      <TouchableOpacity
+        style={[styles.chatbotFab, { backgroundColor: colors.primary }]}
+        onPress={() => setActiveTab('chatbot')}
+        activeOpacity={0.8}
+      >
+        <Ionicons name="chatbubbles" size={28} color="#fff" />
+      </TouchableOpacity>
     </View>
   );
 }

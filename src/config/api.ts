@@ -23,10 +23,38 @@ if (__DEV__) {
   console.log('✅ [API] API_BASE_URL (small tasks use this):', API_BASE_URL);
 }
 
-// Chatbot API - Local development server (Python chatbot on port 7860)
-// For Android emulator: use 10.0.2.2 which maps to host's localhost
-// For physical device: use your machine's actual IP (e.g., http://192.168.1.xxx:7860)
-export const CHATBOT_BASE_URL = 'http://10.0.2.2:7860';
+/**
+ * Bonyad AI chatbot (bonyad-chat): POST /api/chat on the configured host.
+ * Configure via app.json extra.chatbotApiUrl or EXPO_PUBLIC_CHATBOT_API_URL.
+ */
+export function getChatbotBaseUrl(): string {
+  const raw = (ENV.CHATBOT_API_URL || '').trim();
+  if (!raw) {
+    return Platform.OS === 'android' ? 'http://10.0.2.2:7860' : 'http://localhost:7860';
+  }
+  return raw
+    .replace(/\/$/, '')
+    .replace(/\/api\/chat\/?$/i, '')
+    .replace(/\/api\/?$/i, '')
+    .replace(/\/chat\/?$/i, '');
+}
+
+export function getChatbotChatUrl(): string {
+  const base = getChatbotBaseUrl();
+  const p = (ENV.CHATBOT_API_CHAT_PATH || '').trim();
+  if (p) {
+    const path = p.startsWith('/') ? p : `/${p}`;
+    return `${base}${path}`;
+  }
+  return `${base}/api/chat`;
+}
+
+export function getChatbotHistoryUrl(conversationId: string): string {
+  return `${getChatbotBaseUrl()}/api/chat/history/${encodeURIComponent(conversationId)}`;
+}
+
+/** @deprecated Prefer getChatbotBaseUrl() / getChatbotChatUrl() */
+export const CHATBOT_BASE_URL = getChatbotBaseUrl();
 
 export const API_ENDPOINTS = {
   // Authentication

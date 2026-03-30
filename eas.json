@@ -1,29 +1,15 @@
 {
   "cli": {
-    "version": ">= 7.9.0",
-    "appVersionSource": "remote"
+    "version": ">= 3.0.0"
   },
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal",
-      "android": {
-        "buildType": "apk"
-      }
+      "distribution": "internal"
     },
     "preview": {
-      "distribution": "internal",
-      "android": {
-        "buildType": "apk"
-      }
+      "distribution": "internal"
     },
-    "production": {
-      "android": {
-        "buildType": "app-bundle"
-      }
-    }
-  },
-  "submit": {
     "production": {}
   }
 }

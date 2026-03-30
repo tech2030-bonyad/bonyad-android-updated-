@@ -127,11 +127,7 @@ export default function ManualProjectForm({
   // Form state
   const [projectName, setProjectName] = useState('');
   const [description, setDescription] = useState('');
-  const [targetScope, setTargetScope] = useState('');
-  const [timeline, setTimeline] = useState('');
-  const [requirements, setRequirements] = useState('');
-  const [projectPurpose, setProjectPurpose] = useState('');
-  const [deliverables, setDeliverables] = useState('');
+  // Cleaned up redundant AI generation fields
   const [projectPhases, setProjectPhases] = useState<PhaseInput[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<number>(initialCategoryId || 0);
   const [categoryDisplay, setCategoryDisplay] = useState(initialCategoryName || '');
@@ -474,11 +470,6 @@ export default function ManualProjectForm({
       const projectData: CreateProjectRequest = {
         title: projectName.trim() || undefined,
         description: description.trim(),
-        targetScope: targetScope.trim() || undefined,
-        timeline: timeline.trim() || undefined,
-        requirements: requirements.trim() || undefined,
-        projectPurpose: projectPurpose.trim() || undefined,
-        deliverables: deliverables.trim() || undefined,
         projectPhases: projectPhases.map((phase) => phase.title.trim()).filter(Boolean),
         serviceCategoryId: selectedCategoryId,
         serviceSubcategoryId: selectedSubcategoryId || undefined,
@@ -555,7 +546,7 @@ export default function ManualProjectForm({
         contentContainerStyle={[
           styles.scrollContent, 
           { 
-            paddingBottom: insets.bottom + 32,
+            paddingBottom: insets.bottom + 100,
             width: '100%',
           },
           isLargeWeb && styles.scrollContentLargeWeb,
@@ -569,7 +560,7 @@ export default function ManualProjectForm({
             onPress={closeScreenAnimated} 
             style={[styles.breadcrumbBack, isLargeWeb && styles.breadcrumbBackLargeWeb]}
           >
-            <Ionicons name="chevron-back" size={isLargeWeb ? 40 : 20} color={textPrimary} />
+            <Ionicons name={isRTL ? "chevron-forward" : "chevron-back"} size={isLargeWeb ? 40 : 20} color={textPrimary} />
           </TouchableOpacity>
           <View style={[styles.breadcrumbTextContainer, isLargeWeb && styles.breadcrumbTextContainerLargeWeb]}>
             <Text style={[styles.breadcrumbTitle, { color: textPrimary }, isLargeWeb && styles.breadcrumbTitleLargeWeb]}>
@@ -587,16 +578,16 @@ export default function ManualProjectForm({
           <View style={styles.titleSectionLargeWeb}>
             <TouchableOpacity onPress={closeScreenAnimated} style={styles.titleBackButton}>
               <Ionicons 
-                name="chevron-back" 
+                name={isRTL ? "chevron-forward" : "chevron-back"}
                 size={24} 
                 color={textPrimary} 
               />
             </TouchableOpacity>
             <View style={styles.titleContainer}>
-              <Text style={[styles.titleMainText, isRTL && { textAlign: 'right' }]}>
+              <Text style={styles.titleMainText}>
                 {t('Project Creation')}
               </Text>
-              <Text style={[styles.titleSubtext, isRTL && { textAlign: 'right' }]}>
+              <Text style={styles.titleSubtext}>
                 {t('Manual Project Form')}
               </Text>
             </View>
@@ -826,125 +817,7 @@ export default function ManualProjectForm({
           </View>
         </View>
 
-        {/* Budget Range & Timeline */}
-        <View style={[styles.cardsRow, !isSmallScreen && styles.cardsRowWeb]}>
-          <View style={[
-            styles.statCard,
-            {
-              backgroundColor: cardBg,
-              borderColor: borderColor,
-              flex: isSmallScreen ? 1 : undefined,
-              width: isSmallScreen ? undefined : '48%',
-            }
-          ]}>
-            <View style={styles.statCardHeader}>
-              <Ionicons name="wallet-outline" size={14} color={FIGMA_COLORS.bluePrimary80} />
-              <Text style={[styles.statCardLabel, { color: FIGMA_COLORS.bluePrimary80 }]}>
-                {t('Budget Range')}
-              </Text>
-            </View>
-            <View style={[styles.budgetInputWrapper, { backgroundColor: lightBlueBg, borderColor: borderColor }]}>
-              <TextInput
-                style={[styles.budgetInput, { color: textBody }]}
-                value={targetScope}
-                onChangeText={setTargetScope}
-                placeholder={t('Avg. $30,000 - $50,000')}
-                placeholderTextColor={textSecondary}
-              />
-            </View>
-          </View>
-          <View style={[
-            styles.statCard,
-            {
-              backgroundColor: cardBg,
-              borderColor: borderColor,
-              flex: isSmallScreen ? 1 : undefined,
-              width: isSmallScreen ? undefined : '48%',
-            }
-          ]}>
-            <View style={styles.statCardHeader}>
-              <Ionicons name="calendar-outline" size={14} color={FIGMA_COLORS.bluePrimary80} />
-              <Text style={[styles.statCardLabel, { color: FIGMA_COLORS.bluePrimary80 }]}>
-                {t('Timeline')}
-              </Text>
-            </View>
-            <View style={[styles.budgetInputWrapper, { backgroundColor: lightBlueBg, borderColor: borderColor }]}>
-              <TextInput
-                style={[styles.budgetInput, { color: textBody }]}
-                value={timeline}
-                onChangeText={setTimeline}
-                placeholder={t('Avg. 9-12 weeks')}
-                placeholderTextColor={textSecondary}
-              />
-            </View>
-          </View>
-        </View>
-
-        {/* Requirements */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="list-outline" size={14} color={FIGMA_COLORS.bluePrimary80} />
-            <Text style={[styles.sectionLabel, { color: FIGMA_COLORS.bluePrimary80 }]}>
-              {t('Requirements')}
-            </Text>
-          </View>
-          <View style={[styles.inputContainer, styles.editableInput, { backgroundColor: cardBg, borderColor: borderColor }]}>
-            <TextInput
-              style={[styles.textArea, { color: textBody, backgroundColor: cardBg }]}
-              multiline
-              numberOfLines={4}
-              value={requirements}
-              onChangeText={setRequirements}
-              placeholder={t('Enter requirements')}
-              placeholderTextColor={textSecondary}
-              textAlignVertical="top"
-            />
-          </View>
-        </View>
-
-        {/* Project Purpose */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="flag-outline" size={14} color={FIGMA_COLORS.bluePrimary80} />
-            <Text style={[styles.sectionLabel, { color: FIGMA_COLORS.bluePrimary80 }]}>
-              {t('Project Purpose')}
-            </Text>
-          </View>
-          <View style={[styles.inputContainer, styles.editableInput, { backgroundColor: cardBg, borderColor: borderColor }]}>
-            <TextInput
-              style={[styles.textArea, { color: textBody, backgroundColor: cardBg }]}
-              multiline
-              numberOfLines={3}
-              value={projectPurpose}
-              onChangeText={setProjectPurpose}
-              placeholder={t('Enter project purpose')}
-              placeholderTextColor={textSecondary}
-              textAlignVertical="top"
-            />
-          </View>
-        </View>
-
-        {/* Deliverables */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="checkmark-done-outline" size={14} color={FIGMA_COLORS.bluePrimary80} />
-            <Text style={[styles.sectionLabel, { color: FIGMA_COLORS.bluePrimary80 }]}>
-              {t('Deliverables')}
-            </Text>
-          </View>
-          <View style={[styles.inputContainer, styles.editableInput, { backgroundColor: cardBg, borderColor: borderColor }]}>
-            <TextInput
-              style={[styles.textArea, { color: textBody, backgroundColor: cardBg }]}
-              multiline
-              numberOfLines={3}
-              value={deliverables}
-              onChangeText={setDeliverables}
-              placeholder={t('Enter deliverables')}
-              placeholderTextColor={textSecondary}
-              textAlignVertical="top"
-            />
-          </View>
-        </View>
+        {/* Extra Fields Removed for Simplicity */}
 
         {/* Project Phases */}
         <View style={styles.section}>
@@ -1113,7 +986,7 @@ export default function ManualProjectForm({
             >
               {address || t('Select location on map')}
             </Text>
-            <Ionicons name="chevron-forward" size={18} color={textSecondary} />
+            <Ionicons name={isRTL ? "chevron-back" : "chevron-forward"} size={18} color={textSecondary} />
           </TouchableOpacity>
         </View>
 
@@ -1262,7 +1135,7 @@ export default function ManualProjectForm({
             <View style={styles.phaseModalHeader}>
               <Text style={[styles.phaseModalTitle, { color: textPrimary }]}>{t('Project Phases')}</Text>
               <TouchableOpacity onPress={closePhasesModal} style={styles.phaseModalCloseBtn} hitSlop={10}>
-                <Text style={[styles.phaseModalCloseText, { color: textSecondary }]}>x</Text>
+                <Ionicons name="close" size={24} color={textSecondary} />
               </TouchableOpacity>
             </View>
             <Text style={[styles.phaseModalSubtitle, { color: textSecondary }]}>

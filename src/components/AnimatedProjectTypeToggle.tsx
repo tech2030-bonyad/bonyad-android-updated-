@@ -1,7 +1,7 @@
 /**
  * Animated Project Type Toggle Component
  * 
- * A professional animated toggle for switching between Large and Small projects
+ * Animated toggle for switching between Projects and Small tasks lists
  * with smooth animations - Similar to AnimatedRoleToggle
  */
 
@@ -98,7 +98,7 @@ export default function AnimatedProjectTypeToggle({
         flexDirection: 'row',
         overflow: 'hidden',
         height: 52, // Increased for larger font
-        direction: 'ltr', // Keep toggle order consistent (Large left, Small right), no RTL mirroring
+        direction: 'ltr', // Keep toggle order consistent (Projects left, Small tasks right), no RTL mirroring
       }}
       onLayout={handleLayout}
     >
@@ -135,7 +135,7 @@ export default function AnimatedProjectTypeToggle({
         </Text>
       </Animated.View>
 
-      {/* Large Button - Shows text when not selected */}
+      {/* Projects Button - Shows text when not selected */}
       <TouchableOpacity
         onPress={() => onTypeChange('large')}
         style={{
@@ -166,7 +166,7 @@ export default function AnimatedProjectTypeToggle({
         )}
       </TouchableOpacity>
 
-      {/* Small Button - Shows text when not selected */}
+      {/* Small tasks Button - Shows text when not selected */}
       <TouchableOpacity
         onPress={() => onTypeChange('small')}
         style={{

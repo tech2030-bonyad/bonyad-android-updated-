@@ -36,9 +36,10 @@ export default function CommissionPaymentScreen({
   onBack,
   onNavigateToCheckout,
 }: CommissionPaymentScreenProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { colors } = useTheme();
   const { fontFamily, scaledSize } = useFontFamily();
+  const isRTL = i18n.language === 'ar';
   const screenWidth = Dimensions.get('window').width;
   const screenSlideX = useRef(new Animated.Value(0)).current;
   const screenOpacity = useRef(new Animated.Value(0)).current;
@@ -259,7 +260,11 @@ export default function CommissionPaymentScreen({
                     },
                   })}
                 />
-                <RialIcon size={scaledSize(18)} variant="dark" />
+                <RialIcon
+                  size={scaledSize(18)}
+                  variant="dark"
+                  style={isRTL ? { marginRight: 10 } : { marginLeft: 10 }}
+                />
               </View>
             </View>
 

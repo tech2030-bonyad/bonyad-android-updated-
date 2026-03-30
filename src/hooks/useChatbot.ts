@@ -2,13 +2,16 @@
 import { useState, useCallback, useRef } from 'react';
 import ChatbotService from '../services/ChatbotService';
 import { ChatbotMessage, AIConversationMessage } from '../types/chat';
+import { parseNavigationFromResponse } from '../utils/navigationParser';
 
 interface UseChatbotOptions {
   language?: 'en' | 'ar';
+  userRole?: 'user' | 'technician';
+  userId?: number;
 }
 
 export const useChatbot = (options: UseChatbotOptions = {}) => {
-  const { language = 'en' } = options;
+  const { language = 'en', userRole = 'user', userId = 0 } = options;
   
   const [messages, setMessages] = useState<ChatbotMessage[]>([
     {
@@ -48,7 +51,11 @@ export const useChatbot = (options: UseChatbotOptions = {}) => {
     setError(null);
 
     try {
-      const response = await ChatbotService.sendMessage(text, conversationId);
+      const response = await ChatbotService.sendMessage(text, conversationId, {
+        userType: userRole === 'technician' ? 'TECHNICIAN' : 'USER',
+        language: language === 'ar' ? 'ar' : 'en',
+        userId: userId > 0 ? userId : null,
+      });
       console.log('📥 useChatbot response:', response);
       
       if (!response || !response.response) {
@@ -57,9 +64,12 @@ export const useChatbot = (options: UseChatbotOptions = {}) => {
       
       setConversationId(response.conversationId);
 
+      const parsed = parseNavigationFromResponse(response.response || '');
       const botMessage: ChatbotMessage = {
         id: `bot-${Date.now()}`,
         text: response.response,
+        displayText: parsed.text,
+        navigationActions: parsed.actions.length > 0 ? parsed.actions : undefined,
         isUser: false,
         timestamp: response.timestamp ? new Date(response.timestamp) : new Date(),
       };
@@ -90,7 +100,7 @@ export const useChatbot = (options: UseChatbotOptions = {}) => {
     } finally {
       setLoading(false);
     }
-  }, [conversationId, language]);
+  }, [conversationId, language, userRole, userId]);
 
   /**
    * Send a quick question

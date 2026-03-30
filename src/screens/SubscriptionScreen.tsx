@@ -69,6 +69,7 @@ export default function SubscriptionScreen({ onBack }: SubscriptionScreenProps) 
   const { fontFamily, scaledSize } = useFontFamily();
   const { backIcon } = useRTL();
   const isDarkMode = theme === 'dark';
+  const isRTL = i18n.language === 'ar';
   
   const [subscription, setSubscription] = useState<CurrentSubscription | null>(null);
   const [bidQuota, setBidQuota] = useState<BidQuotaInfo | null>(null);
@@ -359,14 +360,25 @@ export default function SubscriptionScreen({ onBack }: SubscriptionScreenProps) 
   const daysRemaining = subscription?.daysRemaining;
 
   return (
-    <Animated.View style={[styles.container, { paddingTop: getTopPadding(insets), backgroundColor: colors.background, opacity: screenOpacity, transform: [{ translateX: screenSlideX }] }]}>
+    <Animated.View
+      style={[
+        styles.container,
+        {
+          paddingTop: Platform.OS === 'android' ? 0 : getTopPadding(insets),
+          backgroundColor: colors.background,
+          opacity: screenOpacity,
+          transform: [{ translateX: screenSlideX }],
+        },
+      ]}
+    >
       {/* Header */}
       <View style={[styles.headerContainer, { borderBottomWidth: 1, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={handleBackScreen} style={styles.backButton}>
           <Ionicons name={backIcon} size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { fontSize: scaledSize(18), color: colors.text }]}>{t('Active Subscription') || 'Active Subscription'}</Text>
-        <View style={{ width: 40 }} />
+        <Text style={[styles.headerTitle, { fontSize: scaledSize(18), color: colors.text }]}>
+          {t('My Subscription')}
+        </Text>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollView}>
@@ -381,7 +393,18 @@ export default function SubscriptionScreen({ onBack }: SubscriptionScreenProps) 
                   {subscriptionPrice !== undefined && (
                     <View style={styles.priceRow}>
                       <RialIcon size={scaledSize(16)} variant={isDarkMode ? 'light' : 'dark'} />
-                      <Text style={[styles.cardPrice, { fontSize: scaledSize(18), marginLeft: 4, color: colors.primary }]}>{subscriptionPrice.toFixed(0)}</Text>
+                      <Text
+                        style={[
+                          styles.cardPrice,
+                          {
+                            fontSize: scaledSize(18),
+                            ...(isRTL ? { marginRight: 8 } : { marginLeft: 8 }),
+                            color: colors.primary,
+                          },
+                        ]}
+                      >
+                        {subscriptionPrice.toFixed(0)}
+                      </Text>
                     </View>
                   )}
                 </View>
@@ -521,7 +544,9 @@ export default function SubscriptionScreen({ onBack }: SubscriptionScreenProps) 
                         <View style={[styles.priceBadge, { backgroundColor: colors.primary }]}>
                           <View style={styles.priceRow}>
                             <RialIcon size={14} variant="light" />
-                            <Text style={[styles.priceText, { marginLeft: 4 }]}>{priceValue.toFixed(2)}</Text>
+                            <Text style={[styles.priceText, isRTL ? { marginRight: 8 } : { marginLeft: 8 }]}>
+                              {priceValue.toFixed(2)}
+                            </Text>
                           </View>
                           <Text style={styles.pricePeriod}>/month</Text>
                         </View>
@@ -606,7 +631,9 @@ const styles = StyleSheet.create({
   headerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
+    direction: 'ltr',
+    writingDirection: 'ltr',
     paddingHorizontal: 16,
     paddingVertical: 12,
     gap: 8,
@@ -616,6 +643,8 @@ const styles = StyleSheet.create({
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'absolute',
+    left: 8,
   },
   headerTitle: {
     fontSize: 20,

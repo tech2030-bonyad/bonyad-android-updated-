@@ -20,6 +20,10 @@ export interface Notification {
   relatedAppointmentId?: number;
   relatedTimeRequestId?: number;
   relatedReviewId?: number;
+  relatedSmallTaskRequestId?: number;
+  relatedSupportTicketId?: number;
+  /** MESSAGE / chat deep links */
+  relatedChatRoomId?: string;
   read: boolean;
   readAt?: string;
   createdAt: string;

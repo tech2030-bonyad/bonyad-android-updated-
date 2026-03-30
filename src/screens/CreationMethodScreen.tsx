@@ -61,7 +61,7 @@ export default function CreationMethodScreen({
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
+      <View style={[styles.header, { borderBottomColor: colors.border, direction: 'ltr' }]}>
         <TouchableOpacity
           onPress={onBack}
           style={styles.backBtn}

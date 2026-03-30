@@ -60,20 +60,25 @@ import ManualProjectForm from './ManualProjectForm';
 import CreationMethodScreen from './CreationMethodScreen';
 import ServiceTechniciansScreen from './ServiceTechniciansScreen';
 import TechnicianProfileView from './TechnicianProfileView';
-import ProjectCards from '../components/ProjectCards';
 import Footer from '../components/Footer';
 import { buildApiUrl, API_ENDPOINTS, getApiUrl, getServerBaseUrl } from '../config/api';
 import { storage } from '../utils/storage';
 import { FontFamily, FontWeights } from '../constants/Fonts';
-import UserHomeScreenContent from './home/UserHomeScreen';
+import UserHomeScreenContent from './home/UserHomeScreenContent';
+import ChatbotScreen from './ChatbotScreen';
 import type { CategoryInfo } from './CategorySubcategoryScreen';
 import CategorySubcategoryScreen from './CategorySubcategoryScreen';
+import type { ProfileSubviewForChatbot, HomeShellFromChatbotPayload } from '../utils/chatbotNavigateAndroid';
 
 interface UserHomeScreenProps {
   onShowProfile: () => void;
   onLogout: () => void;
   /** When true, open profile tab on mount so nav bar stays visible */
   openProfileOnMount?: boolean;
+  /** Deep-link profile subview from chatbot (id bumps on each request) */
+  profileNavFromChatbot?: { id: number; subView: ProfileSubviewForChatbot } | null;
+  /** Open a main tab / embedded flow from chatbot while keeping home chrome */
+  homeShellFromChatbot?: (HomeShellFromChatbotPayload & { id: number }) | null;
   /** Called when user switches away from profile tab */
   onProfileTabClosed?: () => void;
   onRequestProject?: () => void;
@@ -82,7 +87,9 @@ interface UserHomeScreenProps {
   onShowNotifications?: () => void;
   onShowAppointments?: () => void;
   onShowBooking?: (technicianId: number, technicianName: string, projectId?: number) => void;
-  onShowChatbot?: () => void;
+  onChatbotNavigateToTab?: (tabName: string) => void;
+  onChatbotNavigateToScreen?: (screenName: string, params?: Record<string, unknown>) => void;
+  onChatbotRequestLiveAgent?: (subject: string, aiHistory: any[], firstUserMessage: string) => void;
   onShowSupportTickets?: () => void;
   onShowServiceProviders?: () => void;
   userName?: string;
@@ -106,6 +113,8 @@ export default function UserHomeScreen({
   onLogout,
   onShowProfile,
   openProfileOnMount = false,
+  profileNavFromChatbot,
+  homeShellFromChatbot,
   onProfileTabClosed,
   onRequestProject,
   onShowProjects,
@@ -113,7 +122,9 @@ export default function UserHomeScreen({
   onShowNotifications,
   onShowAppointments,
   onShowBooking,
-  onShowChatbot,
+  onChatbotNavigateToTab,
+  onChatbotNavigateToScreen,
+  onChatbotRequestLiveAgent,
   onShowSupportTickets,
   onShowServiceProviders,
   userName,
@@ -150,9 +161,19 @@ export default function UserHomeScreen({
   const { fontFamily, scaledSize } = useFontFamily();
   const isDarkMode = theme === 'dark';
   const [showProjectsDropdown, setShowProjectsDropdown] = useState(false);
-  const [activeTab, setActiveTab] = useState<'home' | 'projects' | 'chat' | 'profile' | 'notifications' | 'appointments' | 'new' | 'service-technicians' | 'technician-profile' | 'services-list'>(
-    openProfileOnMount ? 'profile' : 'home'
-  );
+  const [activeTab, setActiveTab] = useState<
+    | 'home'
+    | 'projects'
+    | 'chat'
+    | 'profile'
+    | 'notifications'
+    | 'appointments'
+    | 'new'
+    | 'service-technicians'
+    | 'technician-profile'
+    | 'services-list'
+    | 'chatbot'
+  >(openProfileOnMount ? 'profile' : 'home');
 
   // Animation values for dropdowns and tab content transition
   const mobileDropdownAnim = useRef(new Animated.Value(0)).current;
@@ -191,6 +212,7 @@ export default function UserHomeScreen({
   const [projectsScreenCategoryId, setProjectsScreenCategoryId] = useState<number | null>(null);
   const [pendingOpenProject, setPendingOpenProject] = useState<any>(null);
   const [pendingOpenSmallTask, setPendingOpenSmallTask] = useState<any>(null);
+  const [projectsTabEmbeddedType, setProjectsTabEmbeddedType] = useState<'large' | 'small' | null>(null);
   const [manualFormInitial, setManualFormInitial] = useState<{
     categoryId: number;
     categoryNameEn: string;
@@ -241,6 +263,7 @@ export default function UserHomeScreen({
       setProjectsScreenCategoryId(null);
       setPendingOpenProject(null);
       setPendingOpenSmallTask(null);
+      setProjectsTabEmbeddedType(null);
     }
   }, [activeTab, chatReturnContext]);
 
@@ -276,7 +299,11 @@ export default function UserHomeScreen({
 
   // Sync currentProjectsFilter when projectsFilter prop changes
   useEffect(() => {
-    if (projectsFilter) {
+    if (
+      projectsFilter === 'available' ||
+      projectsFilter === 'running' ||
+      projectsFilter === 'completed'
+    ) {
       setCurrentProjectsFilter(projectsFilter);
     }
   }, [projectsFilter]);
@@ -287,6 +314,54 @@ export default function UserHomeScreen({
       setActiveTab('profile');
     }
   }, [openProfileOnMount]);
+
+  useEffect(() => {
+    if (!profileNavFromChatbot) return;
+    setActiveTab('profile');
+    onShowProfile();
+    setProfileSubView(profileNavFromChatbot.subView);
+  }, [profileNavFromChatbot?.id, profileNavFromChatbot, onShowProfile]);
+
+  useEffect(() => {
+    if (!homeShellFromChatbot) return;
+    const { tab, newProjectSubView, embeddedProjects, technicianAppointments } = homeShellFromChatbot;
+    if (technicianAppointments) return;
+    if (tab === 'wallet') return;
+
+    const userTabs = ['home', 'projects', 'chat', 'profile', 'notifications', 'appointments', 'new', 'chatbot'] as const;
+    if (userTabs.includes(tab as (typeof userTabs)[number])) {
+      setActiveTab(tab as (typeof activeTab));
+    }
+
+    if (tab === 'projects') {
+      if (embeddedProjects?.initialSmallTask != null) {
+        setPendingOpenSmallTask(embeddedProjects.initialSmallTask);
+        setPendingOpenProject(null);
+        setProjectsTabEmbeddedType('small');
+      } else if (embeddedProjects?.initialProjectType != null) {
+        setPendingOpenSmallTask(null);
+        setPendingOpenProject(null);
+        setProjectsTabEmbeddedType(embeddedProjects.initialProjectType);
+      } else {
+        setPendingOpenSmallTask(null);
+        setPendingOpenProject(null);
+        setProjectsTabEmbeddedType(null);
+      }
+    } else {
+      setProjectsTabEmbeddedType(null);
+    }
+
+    if (tab === 'new' && newProjectSubView !== undefined) {
+      if (newProjectSubView === null) {
+        setNewProjectSubView(null);
+        setManualFormInitial(null);
+        setSelectedTaskType(null);
+        setHiringTechnician(null);
+      } else {
+        setNewProjectSubView(newProjectSubView);
+      }
+    }
+  }, [homeShellFromChatbot?.id, homeShellFromChatbot]);
 
   // Animate mobile dropdown
   useEffect(() => {
@@ -948,7 +1023,7 @@ export default function UserHomeScreen({
                 setActiveTab('new');
                 setNewProjectSubView('creation-method');
               }}
-              onPressChatbot={onShowChatbot}
+              onPressChatbot={() => setActiveTab('chatbot')}
               onPressProject={(project) => {
                 setPendingOpenProject(project);
                 setActiveTab('projects');
@@ -976,420 +1051,6 @@ export default function UserHomeScreen({
           )}
         </View>
 
-        {/* Keep search results modal for backward compatibility */}
-        {false && activeTab === 'home' && (
-          <View style={{ flex: 1 }}>
-            {/* Search Bar - Only visible on home tab */}
-            <View style={[styles.searchBarContainer, { backgroundColor: colors.background }]}>
-              <View style={[styles.searchBar, { backgroundColor: colors.cardBackground }]}>
-                <Ionicons name="search" size={20} color={colors.textSecondary} style={styles.searchIcon} />
-                <TextInput
-                  style={[styles.searchInput, { color: colors.text }]}
-                  placeholder={t('Search services...')}
-                  placeholderTextColor={colors.textSecondary}
-                  value={searchText}
-                  onChangeText={setSearchText}
-                  onFocus={() => {
-                    if (searchText.length > 0) {
-                      setShowSearchResults(true);
-                    }
-                  }}
-                />
-                {searchText.length > 0 && (
-                  <TouchableOpacity
-                    onPress={() => {
-                      setSearchText('');
-                      setShowSearchResults(false);
-                    }}
-                  >
-                    <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
-
-            {/* Search Results - Positioned below search bar */}
-            {showSearchResults && (
-              <View style={styles.searchResultsWrapper} pointerEvents="box-none">
-                <View
-                  style={[
-                    styles.resultsContainer,
-                    {
-                      backgroundColor: colors.cardBackground,
-                    },
-                  ]}
-                  pointerEvents="auto"
-                >
-                  {/* Results Header */}
-                  <View style={[styles.resultsHeader, { borderBottomColor: colors.border }]}>
-                    <Text style={[styles.resultsTitle, { color: colors.text }]}>
-                      {t('Search Results')}
-                    </Text>
-                    <View style={[styles.resultsCount, { flexDirection: 'row', alignItems: 'center' }]}>
-                      <Text style={{ color: colors.textSecondary }}>{filteredServices.length}</Text>
-                      <Text style={{ color: colors.textSecondary }}> {t('found')}</Text>
-                    </View>
-                    <TouchableOpacity
-                      onPress={() => {
-                        setShowSearchResults(false);
-                        setSearchText('');
-                      }}
-                      style={styles.closeButton}
-                    >
-                      <Ionicons name="close-circle" size={24} color={colors.textSecondary} />
-                    </TouchableOpacity>
-                  </View>
-
-                  {/* AI Status Banner */}
-                  {(isAISearching || aiMessage) && (
-                    <View style={[styles.aiStatusBanner, { backgroundColor: colors.primary + '15' }]}>
-                      {isAISearching ? (
-                        <ActivityIndicator size="small" color={colors.primary} />
-                      ) : (
-                        <Ionicons name="sparkles" size={16} color={colors.primary} />
-                      )}
-                      <Text
-                        style={[
-                          styles.aiMessage,
-                          {
-                            color: isAISearching ? colors.textSecondary : colors.primary,
-                          },
-                        ]}
-                      >
-                        {isAISearching ? t('Using AI to find best matches...') : aiMessage}
-                      </Text>
-                    </View>
-                  )}
-
-                  {/* Results Content */}
-                  {isSearching ? (
-                    <View style={styles.loadingContainer}>
-                      <ActivityIndicator size="large" color={colors.primary} />
-                      <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-                        {t('Loading services...')}
-                      </Text>
-                    </View>
-                  ) : filteredServices.length === 0 ? (
-                    <View style={styles.emptyContainer}>
-                      <Ionicons name="search" size={48} color={colors.textSecondary} />
-                      <Text style={[styles.emptyTitle, { color: colors.text }]}>
-                        {t('No services found')}
-                      </Text>
-                      <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-                        {t('Try a different search term')}
-                      </Text>
-                    </View>
-                  ) : (
-                    <View style={{ maxHeight: 300 }}>
-                      <FlatList
-                        data={filteredServices}
-                        renderItem={({ item }) => (
-                          <TouchableOpacity
-                            activeOpacity={0.7}
-                            onPress={() => {
-                              console.log('🔵 [UserHomeScreen] Mobile TouchableOpacity pressed for service:', item);
-                              handleSelectService(item);
-                            }}
-                            style={[
-                              styles.serviceRow,
-                              { backgroundColor: colors.cardBackground, borderBottomColor: colors.border },
-                            ]}
-                          >
-                            {(() => {
-                              const serviceImageSource = resolveServiceImageSource(item);
-                              return (
-                                <View
-                                  style={[
-                                    styles.searchServiceImageWrapper,
-                                    serviceImageSource
-                                      ? styles.searchServiceImageBorder
-                                      : styles.searchServiceImageFallback,
-                                  ]}
-                                >
-                                  {serviceImageSource ? (
-                                    <Image
-                                      source={serviceImageSource}
-                                      style={styles.searchServiceImage}
-                                      resizeMode="cover"
-                                    />
-                                  ) : (
-                                    <Ionicons name="image-outline" size={24} color={colors.textSecondary} />
-                                  )}
-                                </View>
-                              );
-                            })()}
-                            <View style={styles.serviceInfo}>
-                              <Text style={[styles.serviceName, { color: colors.text }]} numberOfLines={1}>
-                                {item.nameEn || item.nameAr || t('Service')}
-                              </Text>
-                              <Text
-                                style={[styles.serviceDescription, { color: colors.textSecondary }]}
-                                numberOfLines={2}
-                              >
-                                {item.description || ''}
-                              </Text>
-                            </View>
-                            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-                          </TouchableOpacity>
-                        )}
-                        keyExtractor={item => item.id?.toString() || Math.random().toString()}
-                        style={styles.servicesList}
-                        showsVerticalScrollIndicator={true}
-                        nestedScrollEnabled={true}
-                      />
-                    </View>
-                  )}
-                </View>
-              </View>
-            )}
-
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              style={[styles.scrollView, { backgroundColor: colors.background }]}
-              contentContainerStyle={{ paddingBottom: 120 }}
-            >
-              {/* Fixed Buttons - iOS Style Design */}
-              <View style={styles.fixedButtons}>
-                {/* Look for Bonyaders Button */}
-                <TouchableOpacity
-                  style={[styles.iosButton, { backgroundColor: colors.cardBackground, borderColor: isDarkMode ? colors.border : 'rgba(0, 0, 0, 0.05)' }]}
-                  onPress={() => setShowServicesList(true)}
-                >
-                  <View style={[styles.iosButtonIconContainer, { backgroundColor: isDarkMode ? colors.primary + '30' : 'rgba(0, 128, 224, 0.1)' }]}>
-                    <Ionicons name="people-outline" size={24} color={colors.primary} />
-                  </View>
-                  <Text style={[styles.iosButtonText, { color: colors.text, fontSize: scaledSize(16) }]}>{t('Look for Bonyaders')}</Text>
-                </TouchableOpacity>
-
-                {/* Project Request Button */}
-                <TouchableOpacity
-                  style={[styles.iosButton, { backgroundColor: colors.cardBackground, borderColor: isDarkMode ? colors.border : 'rgba(0, 0, 0, 0.05)' }]}
-                  onPress={() => setActiveTab('new')}
-                >
-                  <View style={[styles.iosButtonIconContainer, { backgroundColor: isDarkMode ? colors.primary + '30' : 'rgba(0, 128, 224, 0.1)' }]}>
-                    <Ionicons name="calendar-outline" size={24} color={colors.primary} />
-                  </View>
-                  <Text style={[styles.iosButtonText, { color: colors.text, fontSize: scaledSize(16) }]}>{t('Project request')}</Text>
-                </TouchableOpacity>
-
-                {/* My Projects Button with Sub-navigation */}
-                <TouchableOpacity
-                  style={[styles.iosButton, { backgroundColor: colors.cardBackground, borderColor: isDarkMode ? colors.border : 'rgba(0, 0, 0, 0.05)' }]}
-                  onPress={() => setShowProjectsDropdown(!showProjectsDropdown)}
-                >
-                  <View style={[styles.iosButtonIconContainer, { backgroundColor: isDarkMode ? colors.primary + '30' : 'rgba(0, 128, 224, 0.1)' }]}>
-                    <Ionicons name="folder-outline" size={24} color={colors.primary} />
-                  </View>
-                  <View style={styles.iosButtonTextContainer}>
-                    <Text style={[styles.iosButtonText, { color: colors.text, fontSize: scaledSize(16) }]}>{t('My Projects')}</Text>
-                    <Text style={[styles.iosButtonSubtext, { color: colors.textSecondary, fontSize: scaledSize(12) }]}>{t('View all project statuses')}</Text>
-                  </View>
-                  <Ionicons
-                    name={showProjectsDropdown ? "chevron-up" : "chevron-down"}
-                    size={20}
-                    color={colors.textSecondary}
-                  />
-                </TouchableOpacity>
-
-                {/* Sub-navigation for My Projects - Animated */}
-                <Animated.View
-                  style={[
-                    styles.iosDropdown,
-                    {
-                      backgroundColor: colors.cardBackground,
-                      borderColor: isDarkMode ? colors.border : 'rgba(0, 0, 0, 0.05)',
-                      maxHeight: mobileDropdownAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [0, 300],
-                      }),
-                      opacity: mobileDropdownAnim,
-                      overflow: 'hidden',
-                    },
-                  ]}
-                >
-                  <TouchableOpacity
-                    style={[styles.iosDropdownItem, { borderBottomColor: colors.border }]}
-                    onPress={() => {
-                      setShowProjectsDropdown(false);
-                      setActiveTab('projects');
-                      setCurrentProjectsFilter('available');
-                    }}
-                  >
-                    <View style={[styles.iosDropdownIconContainer, { backgroundColor: isDarkMode ? colors.primary + '30' : 'rgba(0, 128, 224, 0.1)' }]}>
-                      <Ionicons name="list-outline" size={22} color={colors.primary} />
-                    </View>
-                    <Text style={[styles.iosDropdownText, { color: colors.text, fontSize: scaledSize(14) }]}>{t('Available Projects')}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.iosDropdownItem, { borderBottomColor: colors.border }]}
-                    onPress={() => {
-                      setShowProjectsDropdown(false);
-                      setActiveTab('projects');
-                      setCurrentProjectsFilter('running');
-                    }}
-                  >
-                    <View style={[styles.iosDropdownIconContainer, { backgroundColor: isDarkMode ? colors.primary + '30' : 'rgba(0, 128, 224, 0.1)' }]}>
-                      <Ionicons name="trending-up-outline" size={22} color={colors.primary} />
-                    </View>
-                    <Text style={[styles.iosDropdownText, { color: colors.text, fontSize: scaledSize(14) }]}>{t('My Running Projects')}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.iosDropdownItem}
-                    onPress={() => {
-                      setShowProjectsDropdown(false);
-                      setActiveTab('projects');
-                      setCurrentProjectsFilter('completed');
-                    }}
-                  >
-                    <View style={[styles.iosDropdownIconContainer, { backgroundColor: isDarkMode ? colors.primary + '30' : 'rgba(0, 128, 224, 0.1)' }]}>
-                      <Ionicons name="checkmark-circle-outline" size={22} color={colors.primary} />
-                    </View>
-                    <Text style={[styles.iosDropdownText, { color: colors.text, fontSize: scaledSize(14) }]}>{t('Completed Projects')}</Text>
-                  </TouchableOpacity>
-                </Animated.View>
-
-                {/* Appointments Button */}
-                <TouchableOpacity
-                  style={[styles.iosButton, { backgroundColor: colors.cardBackground, borderColor: isDarkMode ? colors.border : 'rgba(0, 0, 0, 0.05)' }]}
-                  onPress={() => setActiveTab('appointments')}
-                >
-                  <View style={[styles.iosButtonIconContainer, { backgroundColor: isDarkMode ? colors.primary + '30' : 'rgba(0, 128, 224, 0.1)' }]}>
-                    <Ionicons name="calendar-outline" size={24} color={colors.primary} />
-                  </View>
-                  <Text style={[styles.iosButtonText, { color: colors.text, fontSize: scaledSize(16) }]}>{t('Appointments')}</Text>
-                </TouchableOpacity>
-
-                {/* My Data Button */}
-                <TouchableOpacity
-                  style={[styles.iosButton, { backgroundColor: colors.cardBackground, borderColor: isDarkMode ? colors.border : 'rgba(0, 0, 0, 0.05)' }]}
-                  onPress={() => {
-                    setActiveTab('profile');
-                    setProfileSubView('myData');
-                  }}
-                >
-                  <View style={[styles.iosButtonIconContainer, { backgroundColor: isDarkMode ? colors.primary + '30' : 'rgba(0, 128, 224, 0.1)' }]}>
-                    <Ionicons name="person-circle-outline" size={24} color={colors.primary} />
-                  </View>
-                  <View style={styles.iosButtonTextContainer}>
-                    <Text style={[styles.iosButtonText, { color: colors.text, fontSize: scaledSize(16) }]}>{t('My Data')}</Text>
-                    <Text style={[styles.iosButtonSubtext, { color: colors.textSecondary, fontSize: scaledSize(12) }]}>{t('Edit profile, phone & password')}</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-                </TouchableOpacity>
-
-                {/* Messages Button */}
-                <TouchableOpacity
-                  style={[styles.iosButton, { backgroundColor: colors.cardBackground, borderColor: isDarkMode ? colors.border : 'rgba(0, 0, 0, 0.05)' }]}
-                  onPress={() => setActiveTab('chat')}
-                >
-                  <View style={[styles.iosButtonIconContainer, { backgroundColor: isDarkMode ? colors.primary + '30' : 'rgba(0, 128, 224, 0.1)' }]}>
-                    <Ionicons name="chatbubbles-outline" size={24} color={colors.primary} />
-                  </View>
-                  <Text style={[styles.iosButtonText, { color: colors.text, fontSize: scaledSize(16) }]}>{t('Messages')}</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Project Cards Component */}
-              <ProjectCards authToken={authToken} />
-
-
-            </ScrollView>
-
-            {/* Services List Modal - Mobile */}
-            {showServicesList && (
-              <Modal
-                visible={showServicesList}
-                transparent={true}
-                animationType="fade"
-                onRequestClose={() => setShowServicesList(false)}
-              >
-                <View style={styles.mobileServicesListModal}>
-                  <TouchableOpacity
-                    style={StyleSheet.absoluteFill}
-                    activeOpacity={1}
-                    onPress={() => setShowServicesList(false)}
-                  />
-                  <View
-                    style={[styles.mobileServicesListContainer, { backgroundColor: colors.cardBackground }]}
-                    onStartShouldSetResponder={() => true}
-                    onResponderGrant={() => { }}
-                  >
-                    <View style={[styles.mobileServicesListHeader, { borderBottomColor: colors.border }]}>
-                      <Text style={[styles.mobileServicesListTitle, { color: colors.text }]}>{t('All Services')}</Text>
-                      <TouchableOpacity
-                        onPress={() => setShowServicesList(false)}
-                        style={styles.closeButton}
-                      >
-                        <Ionicons name="close-circle" size={28} color={colors.textSecondary} />
-                      </TouchableOpacity>
-                    </View>
-                    <FlatList
-                      data={allServices}
-                      keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
-                      renderItem={({ item }) => (
-                        <TouchableOpacity
-                          style={[styles.mobileServiceListItem, { borderBottomColor: colors.border }]}
-                          onPress={() => {
-                            setShowServicesList(false);
-                            const serviceName = i18n.language === 'ar' && item.nameAr ? item.nameAr : (item.nameEn || 'Service');
-                            setServiceTechniciansView({ serviceId: item.id, serviceName: serviceName, source: 'lookForBonyaders' });
-                            setActiveTab('service-technicians');
-                          }}
-                        >
-                          {(() => {
-                            const serviceImageSource = resolveServiceImageSource(item);
-                            return (
-                              <View
-                                style={[
-                                  styles.mobileServiceListIconContainer,
-                                  serviceImageSource ? styles.serviceListImageWrapper : styles.serviceListIconFallback,
-                                ]}
-                              >
-                                {serviceImageSource ? (
-                                  <Image
-                                    source={serviceImageSource}
-                                    style={styles.serviceListImage}
-                                    resizeMode="cover"
-                                  />
-                                ) : (
-                                  <Ionicons
-                                    name="briefcase-outline"
-                                    size={24}
-                                    color={colors.primary || '#0080E0'}
-                                  />
-                                )}
-                              </View>
-                            );
-                          })()}
-                          <View style={styles.mobileServiceListTextContainer}>
-                            <Text style={[styles.mobileServiceListName, { color: colors.text }]}>
-                              {i18n.language === 'ar' ? item.nameAr : item.nameEn}
-                            </Text>
-                            {item.description && (
-                              <Text style={[styles.mobileServiceListDescription, { color: colors.textSecondary }]} numberOfLines={2}>
-                                {item.description}
-                              </Text>
-                            )}
-                          </View>
-                          <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-                        </TouchableOpacity>
-                      )}
-                      ListEmptyComponent={
-                        <View style={styles.mobileEmptyContainer}>
-                          <Ionicons name="briefcase-outline" size={48} color={colors.textSecondary} />
-                          <Text style={[styles.mobileEmptyTitle, { color: colors.text }]}>{t('No services available')}</Text>
-                        </View>
-                      }
-                      style={styles.mobileServicesListScroll}
-                      showsVerticalScrollIndicator={true}
-                    />
-                  </View>
-                </View>
-              </Modal>
-            )}
-          </View>
-        )}
-
         {activeTab === 'projects' && (
           <View style={{ flex: 1 }}>
             <ProjectsScreen
@@ -1397,6 +1058,7 @@ export default function UserHomeScreen({
               initialServiceCategoryId={projectsScreenCategoryId}
               initialProject={pendingOpenProject}
               initialSmallTask={pendingOpenSmallTask}
+              initialProjectType={projectsTabEmbeddedType ?? undefined}
               onBack={() => {
                 setActiveTab('home');
                 setProjectsScreenCategoryId(null);
@@ -1748,19 +1410,34 @@ export default function UserHomeScreen({
             ) : null}
           </View>
         )}
+
+        {activeTab === 'chatbot' && (
+          <View style={{ flex: 1 }}>
+            <ChatbotScreen
+              onBack={() => setActiveTab('home')}
+              userId={userId}
+              userRole="user"
+              onNavigateToTab={onChatbotNavigateToTab}
+              onNavigateToScreen={onChatbotNavigateToScreen}
+              onRequestLiveAgent={onChatbotRequestLiveAgent}
+            />
+          </View>
+        )}
         </Animated.View>
 
         {/* Glass tab bar — iOS-style with water-drop press */}
         <View style={styles.glassTabBarContainer}>
           <GlassTabBar
             activeTab={
-              ['home', 'projects', 'new', 'chat', 'profile'].includes(activeTab)
-                ? (activeTab as UserTabId)
-                : activeTab === 'notifications'
-                  ? 'profile'
-                  : activeTab === 'appointments'
-                    ? 'home'
-                    : 'home'
+              activeTab === 'chatbot'
+                ? 'home'
+                : ['home', 'projects', 'new', 'chat', 'profile'].includes(activeTab)
+                  ? (activeTab as UserTabId)
+                  : activeTab === 'notifications'
+                    ? 'profile'
+                    : activeTab === 'appointments'
+                      ? 'home'
+                      : 'home'
             }
             onTabPress={(tab) => {
               if (activeTab === 'profile' && tab !== 'profile') {
@@ -1779,6 +1456,92 @@ export default function UserHomeScreen({
             t={t}
           />
         </View>
+
+        <Modal
+          visible={showServicesList}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowServicesList(false)}
+        >
+          <View style={styles.mobileServicesListModal}>
+            <TouchableOpacity
+              style={StyleSheet.absoluteFill}
+              activeOpacity={1}
+              onPress={() => setShowServicesList(false)}
+            />
+            <View
+              style={[styles.mobileServicesListContainer, { backgroundColor: colors.cardBackground }]}
+              onStartShouldSetResponder={() => true}
+            >
+              <View style={[styles.mobileServicesListHeader, { borderBottomColor: colors.border }]}>
+                <Text style={[styles.mobileServicesListTitle, { color: colors.text }]}>{t('All Services')}</Text>
+                <TouchableOpacity onPress={() => setShowServicesList(false)} style={styles.closeButton}>
+                  <Ionicons name="close-circle" size={28} color={colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
+              <FlatList
+                data={allServices}
+                keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={[styles.mobileServiceListItem, { borderBottomColor: colors.border }]}
+                    onPress={() => {
+                      setShowServicesList(false);
+                      const serviceName =
+                        i18n.language === 'ar' && item.nameAr ? item.nameAr : item.nameEn || 'Service';
+                      setServiceTechniciansView({
+                        serviceId: item.id,
+                        serviceName,
+                        source: 'lookForBonyaders',
+                      });
+                      setActiveTab('service-technicians');
+                    }}
+                  >
+                    {(() => {
+                      const serviceImageSource = resolveServiceImageSource(item);
+                      return (
+                        <View
+                          style={[
+                            styles.mobileServiceListIconContainer,
+                            serviceImageSource ? styles.serviceListImageWrapper : styles.serviceListIconFallback,
+                          ]}
+                        >
+                          {serviceImageSource ? (
+                            <Image source={serviceImageSource} style={styles.serviceListImage} resizeMode="cover" />
+                          ) : (
+                            <Ionicons name="briefcase-outline" size={24} color={colors.primary || '#0080E0'} />
+                          )}
+                        </View>
+                      );
+                    })()}
+                    <View style={styles.mobileServiceListTextContainer}>
+                      <Text style={[styles.mobileServiceListName, { color: colors.text }]}>
+                        {i18n.language === 'ar' ? item.nameAr : item.nameEn}
+                      </Text>
+                      {item.description ? (
+                        <Text
+                          style={[styles.mobileServiceListDescription, { color: colors.textSecondary }]}
+                          numberOfLines={2}
+                        >
+                          {item.description}
+                        </Text>
+                      ) : null}
+                    </View>
+                    <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                )}
+                ListEmptyComponent={
+                  <View style={styles.mobileEmptyContainer}>
+                    <Ionicons name="briefcase-outline" size={48} color={colors.textSecondary} />
+                    <Text style={[styles.mobileEmptyTitle, { color: colors.text }]}>{t('No services available')}</Text>
+                  </View>
+                }
+                style={styles.mobileServicesListScroll}
+                showsVerticalScrollIndicator
+              />
+            </View>
+          </View>
+        </Modal>
       </View>
     );
   }
@@ -2068,7 +1831,7 @@ export default function UserHomeScreen({
                 setActiveTab('new');
                 setNewProjectSubView('creation-method');
               }}
-              onPressChatbot={onShowChatbot}
+              onPressChatbot={() => setActiveTab('chatbot')}
               onPressProject={(project) => {
                 setPendingOpenProject(project);
                 setActiveTab('projects');
@@ -2096,282 +1859,6 @@ export default function UserHomeScreen({
           )}
         </View>
 
-        {/* Keep old desktop content for reference - disabled */}
-        {false && activeTab === 'home' && (
-          <ScrollView
-            style={[styles.desktopMainContent, { backgroundColor: colors.background }]}
-            contentContainerStyle={styles.scrollContentWithFooter}
-            showsVerticalScrollIndicator={true}
-          >
-            <View style={styles.mainContentWrapper}>
-              {/* Search Bar - Only visible on home tab */}
-              <View style={[styles.desktopSearchBarContainer, { backgroundColor: colors.background }]}>
-                <View style={[styles.desktopSearchBar, { backgroundColor: colors.cardBackground }]}>
-                  <Ionicons name="search" size={22} color={colors.textSecondary} style={styles.searchIcon} />
-                  <TextInput
-                    style={[styles.desktopSearchInput, { color: colors.text }]}
-                    placeholder={t('Search services...')}
-                    placeholderTextColor={colors.textSecondary}
-                    value={searchText}
-                    onChangeText={setSearchText}
-                    onFocus={() => {
-                      if (searchText.length > 0) {
-                        setShowSearchResults(true);
-                      }
-                    }}
-                  />
-                  {searchText.length > 0 && (
-                    <TouchableOpacity
-                      onPress={() => {
-                        setSearchText('');
-                        setShowSearchResults(false);
-                      }}
-                    >
-                      <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
-                    </TouchableOpacity>
-                  )}
-                </View>
-              </View>
-
-              {/* Look for Bonyaders Button - iOS Style */}
-              <View style={styles.desktopButtonsContainer}>
-                <TouchableOpacity
-                  style={[styles.iosButton, { backgroundColor: colors.cardBackground, borderColor: isDarkMode ? colors.border : 'rgba(0, 0, 0, 0.05)' }]}
-                  onPress={() => setShowServicesList(true)}
-                >
-                  <View style={[styles.iosButtonIconContainer, { backgroundColor: isDarkMode ? colors.primary + '30' : 'rgba(0, 128, 224, 0.1)' }]}>
-                    <Ionicons name="people-outline" size={24} color={colors.primary} />
-                  </View>
-                  <Text style={[styles.iosButtonText, { color: colors.text }]}>{t('Look for Bonyaders')}</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Project Cards Component - Desktop */}
-              <ProjectCards authToken={authToken} />
-
-              {/* Services List Modal */}
-              {showServicesList && (
-                <View style={styles.servicesListModal}>
-                  <TouchableOpacity
-                    style={StyleSheet.absoluteFill}
-                    activeOpacity={1}
-                    onPress={() => setShowServicesList(false)}
-                  />
-                  <View
-                    style={[styles.servicesListContainer, { backgroundColor: colors.cardBackground }]}
-                  >
-                    <View style={[styles.servicesListHeader, { borderBottomColor: colors.border }]}>
-                      <Text style={[styles.servicesListTitle, { color: colors.text }]}>{t('All Services')}</Text>
-                      <TouchableOpacity
-                        onPress={() => setShowServicesList(false)}
-                        style={styles.closeButton}
-                      >
-                        <Ionicons name="close-circle" size={24} color={colors.textSecondary} />
-                      </TouchableOpacity>
-                    </View>
-                    <ScrollView style={styles.servicesListScroll}>
-                      {allServices.length === 0 ? (
-                        <View style={styles.emptyContainer}>
-                          <Ionicons name="briefcase-outline" size={48} color={colors.textSecondary} />
-                          <Text style={[styles.emptyTitle, { color: colors.text }]}>{t('No services available')}</Text>
-                        </View>
-                      ) : (
-                        allServices.map((service: any) => (
-                          <TouchableOpacity
-                            key={service.id}
-                            style={[styles.serviceListItem, { borderBottomColor: colors.border }]}
-                            onPress={() => {
-                              setShowServicesList(false);
-                              setServiceTechniciansView({
-                                serviceId: service.id,
-                                serviceName: i18n.language === 'ar' ? service.nameAr : service.nameEn,
-                                source: 'lookForBonyaders',
-                              });
-                              setActiveTab('service-technicians');
-                            }}
-                          >
-                            {(() => {
-                              const serviceImageSource = resolveServiceImageSource(service);
-                              return (
-                                <View
-                                  style={[
-                                    styles.serviceListIconContainer,
-                                    serviceImageSource ? styles.serviceListImageWrapper : styles.serviceListIconFallback,
-                                  ]}
-                                >
-                                  {serviceImageSource ? (
-                                    <Image
-                                      source={serviceImageSource}
-                                      style={styles.serviceListImage}
-                                      resizeMode="cover"
-                                    />
-                                  ) : (
-                                    <Ionicons
-                                      name="briefcase-outline"
-                                      size={24}
-                                      color={colors.primary || '#0080E0'}
-                                    />
-                                  )}
-                                </View>
-                              );
-                            })()}
-                            <View style={styles.serviceListTextContainer}>
-                              <Text style={[styles.serviceListName, { color: colors.text }]}>
-                                {i18n.language === 'ar' ? service.nameAr : service.nameEn}
-                              </Text>
-                              {service.description && (
-                                <Text style={[styles.serviceListDescription, { color: colors.textSecondary }]} numberOfLines={2}>
-                                  {service.description}
-                                </Text>
-                              )}
-                            </View>
-                            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-                          </TouchableOpacity>
-                        ))
-                      )}
-                    </ScrollView>
-                  </View>
-                </View>
-              )}
-
-              {/* Search Results - Positioned below search bar for Desktop */}
-              {showSearchResults && (
-                <View style={styles.desktopSearchResultsWrapper}>
-                  <View
-                    style={[
-                      styles.resultsContainer,
-                      styles.desktopResultsContainer,
-                      {
-                        backgroundColor: colors.cardBackground,
-                      },
-                    ]}
-                  >
-                    {/* Results Header */}
-                    <View style={[styles.resultsHeader, { borderBottomColor: colors.border }]}>
-                      <Text style={[styles.resultsTitle, { color: colors.text }]}>
-                        {t('Search Results')}
-                      </Text>
-                      <Text style={[styles.resultsCount, { color: colors.textSecondary }]}>
-                        <Text>{filteredServices.length}</Text>
-                        <Text> {t('found')}</Text>
-                      </Text>
-                      <TouchableOpacity
-                        onPress={() => {
-                          setShowSearchResults(false);
-                          setSearchText('');
-                        }}
-                        style={styles.closeButton}
-                      >
-                        <Ionicons name="close-circle" size={24} color={colors.textSecondary} />
-                      </TouchableOpacity>
-                    </View>
-
-                    {/* AI Status Banner */}
-                    {(isAISearching || aiMessage) && (
-                      <View style={[styles.aiStatusBanner, { backgroundColor: colors.primary + '15' }]}>
-                        {isAISearching ? (
-                          <ActivityIndicator size="small" color={colors.primary} />
-                        ) : (
-                          <Ionicons name="sparkles" size={16} color={colors.primary} />
-                        )}
-                        <Text
-                          style={[
-                            styles.aiMessage,
-                            {
-                              color: isAISearching ? colors.textSecondary : colors.primary,
-                            },
-                          ]}
-                        >
-                          {isAISearching ? t('Using AI to find best matches...') : aiMessage}
-                        </Text>
-                      </View>
-                    )}
-
-                    {/* Results Content */}
-                    {isSearching ? (
-                      <View style={styles.loadingContainer}>
-                        <ActivityIndicator size="large" color={colors.primary} />
-                        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-                          {t('Loading services...')}
-                        </Text>
-                      </View>
-                    ) : filteredServices.length === 0 ? (
-                      <View style={styles.emptyContainer}>
-                        <Ionicons name="search" size={48} color={colors.textSecondary} />
-                        <Text style={[styles.emptyTitle, { color: colors.text }]}>
-                          {t('No services found')}
-                        </Text>
-                        <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-                          {t('Try a different search term')}
-                        </Text>
-                      </View>
-                    ) : (
-                      <FlatList
-                        data={filteredServices}
-                        renderItem={({ item }) => (
-                          <TouchableOpacity
-                            activeOpacity={0.7}
-                            onPress={() => {
-                              console.log('🔵 [UserHomeScreen] Desktop TouchableOpacity pressed for service:', item);
-                              handleSelectService(item);
-                            }}
-                            style={[
-                              styles.serviceRow,
-                              { backgroundColor: colors.cardBackground, borderBottomColor: colors.border },
-                            ]}
-                          >
-                            {(() => {
-                              const serviceImageSource = resolveServiceImageSource(item);
-                              return (
-                                <View
-                                  style={[
-                                    styles.searchServiceImageWrapper,
-                                    serviceImageSource
-                                      ? styles.searchServiceImageBorder
-                                      : styles.searchServiceImageFallback,
-                                  ]}
-                                >
-                                  {serviceImageSource ? (
-                                    <Image
-                                      source={serviceImageSource}
-                                      style={styles.searchServiceImage}
-                                      resizeMode="cover"
-                                    />
-                                  ) : (
-                                    <Ionicons name="image-outline" size={24} color={colors.textSecondary} />
-                                  )}
-                                </View>
-                              );
-                            })()}
-                            <View style={styles.serviceInfo}>
-                              <Text style={[styles.serviceName, { color: colors.text }]} numberOfLines={1}>
-                                {item.nameEn || item.nameAr || t('Service')}
-                              </Text>
-                              <Text
-                                style={[styles.serviceDescription, { color: colors.textSecondary }]}
-                                numberOfLines={2}
-                              >
-                                {item.description}
-                              </Text>
-                            </View>
-                            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-                          </TouchableOpacity>
-                        )}
-                        keyExtractor={item => item.id.toString()}
-                        style={styles.servicesList}
-                        showsVerticalScrollIndicator={true}
-                      />
-                    )}
-                  </View>
-                </View>
-              )}
-
-            </View>
-            {/* Footer - Inside ScrollView for home tab */}
-            <Footer />
-          </ScrollView>
-        )}
-
         {activeTab === 'projects' && (
           <ScrollView
             style={styles.desktopMainContent}
@@ -2384,6 +1871,7 @@ export default function UserHomeScreen({
                 initialServiceCategoryId={projectsScreenCategoryId}
                 initialProject={pendingOpenProject}
                 initialSmallTask={pendingOpenSmallTask}
+                initialProjectType={projectsTabEmbeddedType ?? undefined}
                 onBack={() => {
                   setActiveTab('home');
                   setProjectsScreenCategoryId(null);
@@ -2728,18 +2216,115 @@ export default function UserHomeScreen({
             <Footer />
           </ScrollView>
         )}
+
+        {activeTab === 'chatbot' && (
+          <View style={[styles.desktopMainContent, { flex: 1 }]}>
+            <ChatbotScreen
+              onBack={() => setActiveTab('home')}
+              userId={userId}
+              userRole="user"
+              onNavigateToTab={onChatbotNavigateToTab}
+              onNavigateToScreen={onChatbotNavigateToScreen}
+              onRequestLiveAgent={onChatbotRequestLiveAgent}
+            />
+          </View>
+        )}
       </View>
 
-      {/* Floating Chatbot Button */}
-      {onShowChatbot && (
-        <TouchableOpacity
-          style={[styles.chatbotFab, { backgroundColor: colors.primary }]}
-          onPress={onShowChatbot}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="chatbubbles" size={28} color="#fff" />
-        </TouchableOpacity>
-      )}
+      <Modal
+        visible={showServicesList}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowServicesList(false)}
+      >
+        <View style={styles.mobileServicesListModal}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setShowServicesList(false)}
+          />
+          <View
+            style={[styles.mobileServicesListContainer, { backgroundColor: colors.cardBackground }]}
+            onStartShouldSetResponder={() => true}
+          >
+            <View style={[styles.mobileServicesListHeader, { borderBottomColor: colors.border }]}>
+              <Text style={[styles.mobileServicesListTitle, { color: colors.text }]}>{t('All Services')}</Text>
+              <TouchableOpacity onPress={() => setShowServicesList(false)} style={styles.closeButton}>
+                <Ionicons name="close-circle" size={28} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={allServices}
+              keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[styles.mobileServiceListItem, { borderBottomColor: colors.border }]}
+                  onPress={() => {
+                    setShowServicesList(false);
+                    const serviceName =
+                      i18n.language === 'ar' && item.nameAr ? item.nameAr : item.nameEn || 'Service';
+                    setServiceTechniciansView({
+                      serviceId: item.id,
+                      serviceName,
+                      source: 'lookForBonyaders',
+                    });
+                    setActiveTab('service-technicians');
+                  }}
+                >
+                  {(() => {
+                    const serviceImageSource = resolveServiceImageSource(item);
+                    return (
+                      <View
+                        style={[
+                          styles.mobileServiceListIconContainer,
+                          serviceImageSource ? styles.serviceListImageWrapper : styles.serviceListIconFallback,
+                        ]}
+                      >
+                        {serviceImageSource ? (
+                          <Image source={serviceImageSource} style={styles.serviceListImage} resizeMode="cover" />
+                        ) : (
+                          <Ionicons name="briefcase-outline" size={24} color={colors.primary || '#0080E0'} />
+                        )}
+                      </View>
+                    );
+                  })()}
+                  <View style={styles.mobileServiceListTextContainer}>
+                    <Text style={[styles.mobileServiceListName, { color: colors.text }]}>
+                      {i18n.language === 'ar' ? item.nameAr : item.nameEn}
+                    </Text>
+                    {item.description ? (
+                      <Text
+                        style={[styles.mobileServiceListDescription, { color: colors.textSecondary }]}
+                        numberOfLines={2}
+                      >
+                        {item.description}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+                </TouchableOpacity>
+              )}
+              ListEmptyComponent={
+                <View style={styles.mobileEmptyContainer}>
+                  <Ionicons name="briefcase-outline" size={48} color={colors.textSecondary} />
+                  <Text style={[styles.mobileEmptyTitle, { color: colors.text }]}>{t('No services available')}</Text>
+                </View>
+              }
+              style={styles.mobileServicesListScroll}
+              showsVerticalScrollIndicator
+            />
+          </View>
+        </View>
+      </Modal>
+
+      {/* Floating Chatbot Button (desktop web — same assistant as mobile FAB in home content) */}
+      <TouchableOpacity
+        style={[styles.chatbotFab, { backgroundColor: colors.primary }]}
+        onPress={() => setActiveTab('chatbot')}
+        activeOpacity={0.8}
+      >
+        <Ionicons name="chatbubbles" size={28} color="#fff" />
+      </TouchableOpacity>
     </View>
   );
 }

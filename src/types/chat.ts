@@ -10,6 +10,15 @@ export interface ChatbotMessage {
   text: string;
   isUser: boolean;
   timestamp: Date;
+  /** Parsed assistant text (NAV tags → **labels**) */
+  displayText?: string;
+  navigationActions?: Array<{
+    type: 'tab' | 'screen' | 'link';
+    target: string;
+    label: string;
+    params?: Record<string, unknown>;
+    description?: string;
+  }>;
 }
 
 export interface ChatbotResponse {

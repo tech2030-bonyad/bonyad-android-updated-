@@ -1020,7 +1020,46 @@ export default function BidReceivedProjectScreen({
         
         // If technician, find their bid
         if (isTech && userId) {
-          const techBid = data.find((bid: Bid) => bid.technicianId === userId);
+          const uid = Number(userId);
+          const matchBidToUser = (bid: any): boolean => {
+            const candidates = [
+              bid?.technicianId,
+              bid?.technician_id,
+              bid?.technician?.id,
+              bid?.technician?.userId,
+              bid?.technician?.user_id,
+              bid?.userId,
+              bid?.user_id,
+            ];
+            return candidates.some((v) => Number(v) === uid);
+          };
+
+          let techBid = (Array.isArray(data) ? data : []).find(matchBidToUser) as Bid | undefined;
+
+          // Fallback: some backends do not include technician's own bid in the public project bids list.
+          if (!techBid) {
+            try {
+              const myUrl = buildApiUrl(API_ENDPOINTS.BIDS.MY_BIDS);
+              const myRes = await fetch(myUrl, {
+                method: 'GET',
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  'Content-Type': 'application/json',
+                },
+              });
+              if (myRes.ok) {
+                const myData = await myRes.json();
+                const myList = Array.isArray(myData) ? myData : (myData?.bids ?? myData?.data ?? []);
+                techBid = (Array.isArray(myList) ? myList : []).find((b: any) => {
+                  const pid = Number(b?.projectId ?? b?.project_id ?? b?.project?.id);
+                  return pid === Number(project.id);
+                }) as Bid | undefined;
+              }
+            } catch (e) {
+              // ignore fallback errors; we'll just show "no bid" state
+            }
+          }
+
           setMyBid(techBid || null);
         }
       }

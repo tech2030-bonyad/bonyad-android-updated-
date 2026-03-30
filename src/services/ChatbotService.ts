@@ -1,5 +1,5 @@
 // 🤖 Chatbot Service - AI Support Chat API Integration
-import { CHATBOT_BASE_URL } from '../config/api';
+import { getChatbotChatUrl, getChatbotHistoryUrl } from '../config/api';
 import { storage } from '../utils/storage';
 import { ChatbotResponse, AIConversationMessage, ChatbotMessage } from '../types/chat';
 
@@ -21,12 +21,13 @@ class ChatbotService {
    */
   async sendMessage(
     message: string,
-    conversationId?: string
+    conversationId?: string,
+    options?: { userType?: 'USER' | 'TECHNICIAN'; language?: string; userId?: number | null }
   ): Promise<ChatbotResponse> {
     try {
       const headers = await this.getAuthHeaders();
       const response = await fetch(
-        `${CHATBOT_BASE_URL}/api/chat`,
+        getChatbotChatUrl(),
         {
           method: 'POST',
           headers: {
@@ -37,6 +38,9 @@ class ChatbotService {
           body: JSON.stringify({
             message: message.trim(),
             conversationId: conversationId || undefined,
+            userType: options?.userType ?? 'USER',
+            language: options?.language ?? 'en',
+            ...(options?.userId != null && options.userId > 0 ? { userId: String(options.userId) } : {}),
           }),
         }
       );
@@ -72,7 +76,7 @@ class ChatbotService {
     try {
       const headers = await this.getAuthHeaders();
       const response = await fetch(
-        `${CHATBOT_BASE_URL}/api/chat/history/${conversationId}`,
+        getChatbotHistoryUrl(conversationId),
         {
           method: 'GET',
           headers,

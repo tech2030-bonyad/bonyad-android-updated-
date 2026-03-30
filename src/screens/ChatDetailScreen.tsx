@@ -38,7 +38,7 @@ interface ChatDetailScreenProps {
   receiverName: string;
   onBack?: () => void;
   projectId?: number | null;
-  /** Set when chat sits above the absolute GlassTabBar — avoids double bottom inset / huge gap */
+  /** Technician layout: chat stacks above `GlassTabBar` in App.tsx — extra bottom inset clears the pill. */
   hasBottomTabBar?: boolean;
 }
 
@@ -107,13 +107,14 @@ export default function ChatDetailScreen({
     }
     const inset = Math.max(insets.bottom, 0);
     if (tabBarChrome) {
-      // GlassTabBar (~74px row + outer padding) + home indicator; tighter than standalone chat (no double inset)
-      const aboveTabBar = 72 + Math.max(inset, 10);
+      // Tab bar is a sibling; FlatList uses flex:1 so the composer stays in this column. Extra inset
+      // clears the pill / system nav so the bar is not covered on Android.
+      const safe = Math.max(inset, 10) + 60;
       return {
-        kavPad: aboveTabBar,
-        listPad: 10 + Math.max(inset, 6),
-        inputPad: 6,
-        loadingPad: aboveTabBar,
+        kavPad: safe,
+        listPad: 16,
+        inputPad: 8,
+        loadingPad: safe,
       };
     }
     return {
@@ -768,6 +769,7 @@ export default function ChatDetailScreen({
       {/* Messages List */}
       <FlatList
         ref={flatListRef}
+        style={styles.messagesListFlex}
         data={messages}
         renderItem={renderMessage}
         keyExtractor={(item) => item.id.toString()}
@@ -775,6 +777,7 @@ export default function ChatDetailScreen({
           styles.messagesList,
           {
             paddingBottom: bottomLayout.listPad,
+            flexGrow: 1,
           },
         ]}
         onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
@@ -925,6 +928,10 @@ const styles = StyleSheet.create({
   },
   messagesList: {
     padding: 16,
+  },
+  messagesListFlex: {
+    flex: 1,
+    minHeight: 0,
   },
   inputContainer: {
     flexDirection: 'row',

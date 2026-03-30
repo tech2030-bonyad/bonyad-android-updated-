@@ -24,6 +24,14 @@ import { useFontFamily } from '../context/FontContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { API_ENDPOINTS, buildApiUrl } from '../config/api';
 import { storage } from '../utils/storage';
+import {
+  getAvailableProjects,
+  getMyProjects,
+  getMyAssignedProjects,
+  getTechnicianMyBidsAsProjectRows,
+  mergeUserHasBidFlag,
+  fetchProjectById,
+} from '../services/ProjectService';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
 import ConfirmationPopup, { useConfirmationPopup } from '../components/ConfirmationPopup';
 import ProjectDetailModal from './ProjectDetailModal';
@@ -60,7 +68,7 @@ import AnimatedProjectTypeToggle from '../components/AnimatedProjectTypeToggle';
 
 interface ProjectsScreenProps {
   onBack?: () => void;
-  filter?: 'all' | 'available' | 'running' | 'completed' | 'bid_received' | 'direct_offers';
+  filter?: 'all' | 'available' | 'running' | 'approved' | 'completed' | 'bid_received' | 'direct_offers';
   /** When set, filter available projects by this service category id (e.g. from Home → Category → View available projects) */
   initialServiceCategoryId?: number | null;
   /** When set, auto-open this project's detail screen on first mount (pass the full project object) */
@@ -73,7 +81,7 @@ interface ProjectsScreenProps {
   onViewTechnician?: (technicianId: number) => void;
   onBookAppointment?: (technicianId: number, technicianName: string, projectId?: number) => void;
   onRequestVisit?: (userId: number, userName: string, projectId?: number) => void;
-  onFilterChange?: (filter: 'all' | 'available' | 'running' | 'completed' | 'bid_received' | 'direct_offers') => void;
+  onFilterChange?: (filter: 'all' | 'available' | 'running' | 'approved' | 'completed' | 'bid_received' | 'direct_offers') => void;
 }
 
 interface Project {
@@ -85,6 +93,8 @@ interface Project {
   serviceNameEn: string;
   serviceNameAr: string;
   serviceId: number;
+  /** Normalized from API for region filtering (same as web) */
+  regionId?: number;
   /** Category (main service group) when using category/subcategory API */
   serviceCategory?: { id: number; nameEn?: string; nameAr?: string } | null;
   createdAt: string;
@@ -92,6 +102,8 @@ interface Project {
   requirements?: string[];
   needsVisit?: boolean;
   needsBooking?: boolean;
+  /** Open market: hide projects the technician already bid on (same as web) */
+  userHasBid?: boolean;
   /** Bids count (when from API) - same as web card */
   bidCount?: number;
   /** Visit requests count (when from API) - same as web card */
@@ -115,6 +127,14 @@ interface Service {
   nameAr: string;
   description: string;
   imageUrl: string;
+}
+
+/** Region from GET /api/regions (aligned with web ProjectsScreen) */
+interface Region {
+  id: number;
+  nameAr: string;
+  nameEn: string;
+  techniciansCount?: number;
 }
 
 const CONTAINER_PADDING = 16; // Padding from Figma design
@@ -189,7 +209,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
   const [showBidForm, setShowBidForm] = useState(false);
   const [showVisitRequest, setShowVisitRequest] = useState(false);
   const [screenWidth, setScreenWidth] = useState(Dimensions.get('window').width);
-  const [localFilter, setLocalFilter] = useState<'all' | 'available' | 'running' | 'completed' | 'bid_received' | 'direct_offers'>(filter || 'available');
+  const [localFilter, setLocalFilter] = useState<'all' | 'available' | 'running' | 'approved' | 'completed' | 'bid_received' | 'direct_offers'>(filter || 'available');
   // When initialSmallTask is provided, start on the status screen to avoid flash of list/loading
   const getInitialSmallTaskPage = (): 'list' | 'contract-signing' | 'progress' | 'user-phase-view' | 'user-contract-signing' | 'user-progress' | 'completed-project' | 'technician-profile' | 'project-detail' | 'owner-edit' | 'project-detail-screen' | 'pending-project' | 'bid-received-project' | 'technician-pending-project' | 'technician-bid-received' | 'approved-project' | 'technician-approved-project' | 'new-project' | 'project-type-selection' | 'small-task-type-selection' | 'small-task-request-form' | 'ai-form' | 'manual-form' | 'small-tasks-list' | 'small-task-detail' | 'pending-small-task' | 'assigned-small-task' | 'small-task-payment' | 'in-progress-small-task' | 'completed-small-task' => {
     if (!initialSmallTask) return 'list';
@@ -214,25 +234,18 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
   const [selectedProject, setSelectedProject] = useState<Project | null>(() => initialSmallTask ?? null);
   const [selectedTechnicianId, setSelectedTechnicianId] = useState<number | null>(null);
   const [smallTaskPaymentAmount, setSmallTaskPaymentAmount] = useState<number>(0);
-  
-  // Android Filter Dropdown State
-  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
-  const dropdownAnimation = useRef(new Animated.Value(0)).current;
-  const rotateAnimation = useRef(new Animated.Value(0)).current;
+  const [showAndroidPhaseFilterModal, setShowAndroidPhaseFilterModal] = useState(false);
+  const [regions, setRegions] = useState<Region[]>([]);
+  const [isLoadingRegions, setIsLoadingRegions] = useState(false);
+  const [selectedRegionId, setSelectedRegionId] = useState<'all' | number>('all');
+  const [showRegionFilterModal, setShowRegionFilterModal] = useState(false);
+
+  const phaseAllowsRunningFlows =
+    localFilter === 'running' || localFilter === 'all' || localFilter === 'approved';
 
   // Animate list content when switching between Small and Large (slide from left)
   const listContentOpacity = useRef(new Animated.Value(1)).current;
   const listContentTranslateX = useRef(new Animated.Value(0)).current;
-  
-  // Calculate fixed dropdown height for ScrollView
-  const getFixedDropdownHeight = () => {
-    const uniqueStatuses = getUniqueStatuses();
-    const optionCount = 1 + uniqueStatuses.length; // "All" + statuses
-    const screenHeight = Dimensions.get('window').height;
-    const maxVisibleHeight = Math.min(screenHeight * 0.5, 300);
-    const totalHeight = optionCount * 48; // 48px per option
-    return totalHeight > maxVisibleHeight ? maxVisibleHeight : totalHeight;
-  };
   
   // Custom popup hooks
   const { alertState, showError, showSuccess, hideAlert } = useAlertPopup();
@@ -371,12 +384,46 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
   }, [screenWidth]);
 
   // Handle filter change
-  const handleFilterChange = (newFilter: 'all' | 'available' | 'running' | 'completed' | 'bid_received' | 'direct_offers') => {
+  const handleFilterChange = (newFilter: 'all' | 'available' | 'running' | 'approved' | 'completed' | 'bid_received' | 'direct_offers') => {
     setLocalFilter(newFilter);
+    if (Platform.OS === 'android') {
+      setShowAndroidPhaseFilterModal(false);
+    }
     if (onFilterChange) {
       onFilterChange(newFilter);
     }
   };
+
+  const androidPhaseFilterOptions = React.useMemo(() => {
+    const isTechnician = userRole?.toUpperCase() === 'TECHNICIAN';
+    const opts: { key: 'all' | 'available' | 'running' | 'approved' | 'completed' | 'bid_received' | 'direct_offers'; label: string }[] = [
+      { key: 'all', label: t('projectsScreen.all') },
+      { key: 'available', label: isTechnician ? t('projectsScreen.available') : t('projectsScreen.availableProjects') },
+      { key: 'running', label: isTechnician ? t('projectsScreen.inProgress') : t('projectsScreen.running') },
+      { key: 'approved', label: t('projectsScreen.approvedFilter') },
+    ];
+    if (isTechnician) {
+      opts.push({ key: 'direct_offers', label: t('projectsScreen.directAssigned') });
+      opts.push({ key: 'bid_received', label: t('projectsScreen.bidding') });
+    }
+    opts.push({
+      key: 'completed',
+      label: isTechnician ? t('projectsScreen.completed') : t('projectsScreen.completedProjects'),
+    });
+    return opts;
+  }, [userRole, t, i18n.language]);
+
+  const androidPhaseFilterButtonLabel = React.useMemo(() => {
+    const hit = androidPhaseFilterOptions.find((o) => o.key === localFilter);
+    return hit?.label ?? t('projectsScreen.projects');
+  }, [androidPhaseFilterOptions, localFilter, t]);
+
+  const regionFilterButtonLabel = React.useMemo(() => {
+    if (selectedRegionId === 'all') return t('projectsScreen.all');
+    const r = regions.find((x) => x.id === selectedRegionId);
+    if (!r) return t('projectsScreen.all');
+    return i18n.language === 'ar' ? r.nameAr : r.nameEn;
+  }, [selectedRegionId, regions, i18n.language, t]);
 
   const handleEditProject = (project: Project) => {
     setSelectedProject(project);
@@ -434,108 +481,19 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
   useEffect(() => {
     loadUserRole();
     loadServices();
+    loadRegions();
   }, []);
 
-  // Android Filter Dropdown Animation
-  useEffect(() => {
-    if (showFilterDropdown) {
-      Animated.parallel([
-        Animated.timing(dropdownAnimation, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: false,
-        }),
-        Animated.timing(rotateAnimation, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    } else {
-      Animated.parallel([
-        Animated.timing(dropdownAnimation, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: false,
-        }),
-        Animated.timing(rotateAnimation, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }
-  }, [showFilterDropdown]);
-
-  const toggleFilterDropdown = () => {
-    setShowFilterDropdown(!showFilterDropdown);
-  };
-
-  // Get unique project statuses from projects
-  const getUniqueStatuses = () => {
-    const statuses = new Set<string>();
-    projects.forEach(project => {
-      const status = (project.status || '').trim().toUpperCase();
-      if (status) {
-        statuses.add(status);
-      }
-    });
-    return Array.from(statuses).sort();
-  };
-
-  const handleStatusSelect = (statusValue: string) => {
-    // Create a filter state for status
-    if (statusValue === 'All') {
-      setSelectedCategory('All');
-    } else {
-      setSelectedCategory(statusValue);
-    }
-    setShowFilterDropdown(false);
-  };
-
-  const getStatusFilterLabel = (statusValue: string) => {
-    if (statusValue === 'All') {
-      return t('projectsScreen.all');
-    }
-    return getStatusLabel(statusValue);
-  };
-
-  // Calculate dropdown height based on number of status options
-  const getDropdownHeight = () => {
-    const uniqueStatuses = getUniqueStatuses();
-    const optionCount = 1 + uniqueStatuses.length; // "All" + statuses
-    const screenHeight = Dimensions.get('window').height;
-    // Show up to 6 items visible (288px), then enable scrolling
-    // Max 50% of screen height to ensure it doesn't take too much space
-    const maxVisibleHeight = Math.min(screenHeight * 0.5, 300);
-    const totalHeight = optionCount * 48; // 48px per option
-    
-    // If we have more than 6 items, use maxVisibleHeight to enable scrolling
-    if (totalHeight > maxVisibleHeight) {
-      return maxVisibleHeight;
-    }
-    return totalHeight;
-  };
-
-  const dropdownHeight = dropdownAnimation.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, getDropdownHeight()],
-  });
-
-  const dropdownOpacity = dropdownAnimation.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 1],
-  });
-
-  const rotateInterpolate = rotateAnimation.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '180deg'],
-  });
-
-  // Load projects on mount and when filter changes
+  // Load projects on mount and when filter / technician region changes (same as web)
   useEffect(() => {
     loadProjects();
-  }, [localFilter]);
+  }, [localFilter, selectedRegionId]);
+
+  useEffect(() => {
+    if (userRole?.toUpperCase() !== 'TECHNICIAN' || localFilter !== 'available') {
+      setShowRegionFilterModal(false);
+    }
+  }, [localFilter, userRole]);
 
   const loadUserRole = async () => {
     const role = await storage.getUserRole();
@@ -544,7 +502,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
 
   useEffect(() => {
     filterProjects();
-  }, [selectedCategory, projects, userRole, localFilter, searchQuery, serviceCategoryFilterId]);
+  }, [selectedCategory, projects, userRole, localFilter, searchQuery, serviceCategoryFilterId, selectedRegionId, regions]);
 
   const loadServices = async () => {
     try {
@@ -575,111 +533,69 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
     }
   };
 
+  const loadRegions = async () => {
+    try {
+      setIsLoadingRegions(true);
+      const url = buildApiUrl(API_ENDPOINTS.ZONES.LIST);
+      const response = await fetch(url, { method: 'GET', headers: { 'Content-Type': 'application/json' } });
+      if (response.ok) {
+        const data = await response.json();
+        setRegions(Array.isArray(data) ? data : []);
+      }
+    } catch (error) {
+      console.error('❌ Error loading regions:', error);
+    } finally {
+      setIsLoadingRegions(false);
+    }
+  };
+
   const loadProjects = async () => {
     try {
-      // Get user role to determine which endpoint to use
       const role = await storage.getUserRole();
       const token = await storage.getAuthToken();
       const isTechnician = role?.toUpperCase() === 'TECHNICIAN';
       const currentFilter = localFilter;
-      
-      console.log('👤 User role:', role);
-      console.log('🔍 Current filter:', currentFilter);
 
-      let url: string;
-      const headers: { [key: string]: string } = {
-        'Content-Type': 'application/json',
-      };
+      let rawList: any[] = [];
 
-      // Add auth token for all authenticated endpoints
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-
-      // Determine API endpoint based on role and filter
       if (isTechnician) {
-        // TECHNICIAN ENDPOINTS (same as web: use auth for available projects)
-        if (currentFilter === 'available') {
-          // Available projects to bid on - same as web getAvailableProjects (with auth)
-          url = buildApiUrl(API_ENDPOINTS.PROJECTS.LIST);
-          // Keep Authorization - web uses it for GET /projects
-        } else if (currentFilter === 'direct_offers') {
-          // Direct Offers - Projects directly assigned to technician
-          url = buildApiUrl(`${API_ENDPOINTS.PROJECTS.MY_ASSIGNED}?type=DIRECT_ASSIGNMENT`);
-        } else if (currentFilter === 'running') {
-          // My Assigned Projects - Projects where bid was accepted
-          url = buildApiUrl(API_ENDPOINTS.PROJECTS.MY_ASSIGNED);
+        if (currentFilter === 'available' || currentFilter === 'all') {
+          try {
+            const regionId =
+              currentFilter === 'available' && selectedRegionId !== 'all'
+                ? Number(selectedRegionId)
+                : undefined;
+            rawList = await getAvailableProjects(regionId);
+            rawList = await mergeUserHasBidFlag(rawList);
+          } catch (e) {
+            console.error('❌ Available projects failed:', e);
+            setProjects([]);
+            return;
+          }
         } else if (currentFilter === 'bid_received') {
-          // My Bids - This uses bids API, not projects API
-          url = buildApiUrl(API_ENDPOINTS.BIDS.MY_BIDS);
-        } else if (currentFilter === 'completed') {
-          // Completed Projects - Filter from my-assigned
-          url = buildApiUrl(API_ENDPOINTS.PROJECTS.MY_ASSIGNED);
+          rawList = await getTechnicianMyBidsAsProjectRows();
         } else {
-          // Default to available projects (with auth)
-          url = buildApiUrl(API_ENDPOINTS.PROJECTS.LIST);
+          rawList = await getMyAssignedProjects(
+            currentFilter === 'direct_offers' ? { type: 'DIRECT_ASSIGNMENT' } : undefined
+          );
         }
       } else {
-        // USER ENDPOINTS - All use /projects/my
-        url = buildApiUrl(API_ENDPOINTS.PROJECTS.MY_PROJECTS);
         if (!token) {
-          console.error('❌ No auth token found for /projects/my');
+          console.error('❌ No auth token for MY_PROJECTS');
           setIsLoading(false);
           setRefreshing(false);
           return;
         }
-      }
-
-      console.log('🔍 Fetching from:', url);
-      console.log('🎯 Filter:', currentFilter);
-      console.log('🎯 Role:', role);
-
-      const response = await fetch(url, {
-        method: 'GET',
-        headers,
-      });
-
-      console.log('📥 API Response Status:', response.status);
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log('✅ Loaded data:', data);
-        const rawList = Array.isArray(data)
-          ? data
-          : (data && typeof data === 'object' && Array.isArray((data as any).projects))
-            ? (data as any).projects
-            : (data && typeof data === 'object' && Array.isArray((data as any).data))
-              ? (data as any).data
-              : [];
-        console.log('📊 Number of items:', rawList.length);
-
-        // For bid_received filter, we get bids, not projects
-        if (currentFilter === 'bid_received' && isTechnician) {
-          const bidsAsProjects = rawList.map((bid: any) => ({
-            id: bid.projectId,
-            description: bid.projectDescription || bid.comment || 'Project',
-            budget: bid.projectBudget || bid.proposedBudget || 0,
-            status: bid.status,
-            address: '',
-            serviceNameEn: 'Bid',
-            serviceNameAr: 'عرض',
-            serviceId: 0,
-            bidId: bid.id,
-            proposedBudget: bid.proposedBudget,
-            comment: bid.comment,
-            estimatedDurationDays: bid.estimatedDurationDays,
-            createdAt: bid.createdAt,
-          }));
-          setProjects(bidsAsProjects);
-        } else {
-          setProjects(rawList);
+        try {
+          rawList = await getMyProjects();
+        } catch (e) {
+          console.error('❌ MY_PROJECTS failed:', e);
+          rawList = [];
         }
-      } else {
-        const errorText = await response.text();
-        console.error('❌ Failed to load - Status:', response.status);
-        console.error('❌ Error response:', errorText);
-        setProjects([]);
       }
+
+      console.log('📊 Loaded projects count:', rawList.length, 'filter:', currentFilter, 'technician:', isTechnician);
+      setProjects(rawList);
     } catch (error) {
       console.error('❌ Error loading projects:', error);
       setProjects([]);
@@ -704,71 +620,47 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
   const filterProjects = () => {
     let filtered = [...projects];
     const isTechnician = userRole?.toUpperCase() === 'TECHNICIAN';
-    const isAndroid = Platform.OS === 'android';
 
-    // Step 1: Apply localFilter status filtering (available/running/completed/etc.)
-    // On Android we skip this so all projects show; user filters via the status dropdown only.
-    if (!isAndroid) {
-      if (localFilter === 'available') {
-        if (isTechnician) {
-          filtered = filtered.filter(p => (p.status || '').toUpperCase() === 'PENDING');
-        } else {
-          filtered = filtered.filter(p => {
-            const status = (p.status || '').toUpperCase();
-            return status === 'PENDING' || status === 'BID_RECEIVED';
-          });
-        }
-      } else if (localFilter === 'running') {
-        if (userRole?.toUpperCase() === 'TECHNICIAN') {
-          filtered = filtered.filter(p => {
-            const status = (p.status || '').toUpperCase();
-            return status !== 'PENDING' && status !== 'COMPLETED';
-          });
-        } else {
-          const runningStatuses = [
-            'APPROVED',
-            'PHASE_PLANNING',
-            'PHASE_PLANNING_APPROVED',
-            'CONTRACT_SIGNING',
-            'IN_PROGRESS'
-          ];
-          filtered = filtered.filter(p => {
-            const status = (p.status || '').toUpperCase();
-            return runningStatuses.includes(status);
-          });
-        }
-      } else if (localFilter === 'completed') {
-        filtered = filtered.filter(p => 
-          (p.status || '').toUpperCase() === 'COMPLETED'
+    // Status filtering (same rules as web ProjectsScreen; 'all' = no status filter)
+    if (localFilter === 'all') {
+      // keep full list from API
+    } else if (localFilter === 'available') {
+      if (isTechnician) {
+        filtered = filtered.filter((p) => !(p as { userHasBid?: boolean }).userHasBid);
+      } else {
+        filtered = filtered.filter(
+          (p) => p.status === 'PENDING' || p.status === 'BID_RECEIVED'
         );
-      } else if (localFilter === 'bid_received') {
-        filtered = filtered;
-      } else if (localFilter === 'direct_offers') {
-        filtered = filtered;
       }
+    } else if (localFilter === 'running') {
+      if (isTechnician) {
+        filtered = filtered.filter((p) => {
+          const status = (p.status || '').toUpperCase();
+          return status !== 'PENDING' && status !== 'COMPLETED';
+        });
+      } else {
+        const runningStatuses = [
+          'APPROVED',
+          'PHASE_PLANNING',
+          'PHASE_PLANNING_APPROVED',
+          'CONTRACT_SIGNING',
+          'IN_PROGRESS',
+        ];
+        filtered = filtered.filter((p) => runningStatuses.includes((p.status || '').toUpperCase()));
+      }
+    } else if (localFilter === 'approved') {
+      filtered = filtered.filter((p) => (p.status || '').toUpperCase().trim() === 'APPROVED');
+    } else if (localFilter === 'completed') {
+      filtered = filtered.filter((p) => (p.status || '').toUpperCase() === 'COMPLETED');
+    } else if (localFilter === 'bid_received' || localFilter === 'direct_offers') {
+      // API already scopes list; no extra status filter
     }
 
-    // Step 2: Apply additional filters based on platform
-    if (isAndroid) {
-      // Android: Filter by project status from dropdown (if a specific status is selected)
-      console.log('🔍 [filterProjects] Android - selectedCategory:', selectedCategory, 'projects count:', filtered.length);
-      if (selectedCategory !== 'All') {
-        filtered = filtered.filter(p => {
-          const projectStatus = (p.status || '').toUpperCase().trim();
-          const selectedStatus = selectedCategory.toUpperCase().trim();
-          const matches = projectStatus === selectedStatus;
-          console.log('🔍 [filterProjects] Comparing:', projectStatus, 'vs', selectedStatus, '=', matches);
-          return matches;
-        });
-      }
-      console.log('🔍 [filterProjects] After filter:', filtered.length, 'projects');
-    } else {
-      // Non-Android: Filter by service category (dropdown)
-      if (selectedCategory !== 'All') {
-        const serviceId = parseInt(selectedCategory);
-        if (!isNaN(serviceId)) {
-          filtered = filtered.filter(p => p.serviceId === serviceId);
-        }
+    // Service category (same as web: selectedCategory is service id or "All")
+    if (selectedCategory !== 'All') {
+      const serviceId = parseInt(selectedCategory, 10);
+      if (!Number.isNaN(serviceId)) {
+        filtered = filtered.filter((p) => p.serviceId === serviceId);
       }
     }
 
@@ -777,6 +669,25 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
       filtered = filtered.filter(p => {
         const categoryId = (p as Project).serviceCategory?.id;
         return categoryId === serviceCategoryFilterId;
+      });
+    }
+
+    // Technician Available: region filter (same rules as web ProjectsScreen)
+    if (isTechnician && localFilter === 'available' && selectedRegionId !== 'all') {
+      const selectedRegion = regions.find((r) => r.id === selectedRegionId);
+      const selectedIdNum = Number(selectedRegionId);
+      filtered = filtered.filter((p) => {
+        const projectRegionId = p.regionId != null ? Number(p.regionId) : undefined;
+        if (projectRegionId !== undefined && Number(projectRegionId) === selectedIdNum) return true;
+        if (!selectedRegion) return false;
+        const nameEn = (p as any).regionNameEn ?? (p as any).region_name_en ?? (p as any).region?.nameEn ?? '';
+        const nameAr = (p as any).regionNameAr ?? (p as any).region_name_ar ?? (p as any).region?.nameAr ?? '';
+        if (nameEn && nameEn === selectedRegion.nameEn) return true;
+        if (nameAr && nameAr === selectedRegion.nameAr) return true;
+        const address = (p.address || '').toLowerCase();
+        if (address && selectedRegion.nameEn && address.includes(selectedRegion.nameEn.toLowerCase())) return true;
+        if (address && selectedRegion.nameAr && address.includes(selectedRegion.nameAr.trim())) return true;
+        return false;
       });
     }
 
@@ -875,62 +786,45 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
     };
   };
 
-  // Handler for project card press
+  /** Same as web ProjectsScreen: GET /projects/:id then merge list row (keeps userHasBid, bidCount, etc.). */
   const handleProjectCardPress = (item: Project) => {
-    const status = item.status?.toUpperCase();
-    const isTechnician = userRole?.toUpperCase() === 'TECHNICIAN';
-    const isAndroid = Platform.OS === 'android';
-    
-    console.log('🔵 [ProjectsScreen] Card pressed - Status:', status, 'isTechnician:', isTechnician, 'isAndroid:', isAndroid);
-    setSelectedProject(item);
+    void openProjectFromList(item);
+  };
 
-    // On Android: Route purely by project status (no localFilter tabs)
-    if (isAndroid) {
+  const openProjectFromList = async (item: Project) => {
+    const isTechnician = userRole?.toUpperCase() === 'TECHNICIAN';
+    const full = await fetchProjectById(item.id);
+    const merged = (full ? { ...item, ...full, id: Number(item.id) } : item) as Project;
+    const status = (merged.status || item.status || '').toUpperCase();
+
+    console.log('🔵 [ProjectsScreen] Card pressed - Status:', status, 'isTechnician:', isTechnician, 'detail:', !!full);
+    setSelectedProject(merged);
+
+    if (localFilter === 'all') {
       if (status === 'PENDING') {
-        if (isTechnician) {
-          setCurrentPage('technician-pending-project');
-        } else {
-          setCurrentPage('pending-project');
-        }
-      } else if (status === 'BID_RECEIVED') {
-        if (isTechnician) {
-          setCurrentPage('technician-bid-received');
-        } else {
-          setCurrentPage('bid-received-project');
-        }
+        setCurrentPage(isTechnician ? 'technician-pending-project' : 'pending-project');
+      } else if (status === 'BID_RECEIVED' || (status.includes('BID') && status.includes('RECEIVED'))) {
+        if (isTechnician) setCurrentPage('technician-bid-received');
+        else setCurrentPage('bid-received-project');
       } else if (status === 'APPROVED' || status === 'PHASE_PLANNING' || status === 'PHASE_PLANNING_APPROVED') {
-        if (isTechnician) {
-          setCurrentPage('technician-approved-project');
-        } else {
-          setCurrentPage('approved-project');
-        }
+        setCurrentPage(isTechnician ? 'technician-approved-project' : 'approved-project');
       } else if (status === 'CONTRACT_SIGNING') {
-        if (isTechnician) {
-          setCurrentPage('contract-signing');
-        } else {
-          setCurrentPage('user-contract-signing');
-        }
+        setCurrentPage(isTechnician ? 'contract-signing' : 'user-contract-signing');
       } else if (status === 'IN_PROGRESS') {
-        if (isTechnician) {
-          setCurrentPage('progress');
-        } else {
-          setCurrentPage('user-progress');
-        }
+        setCurrentPage(isTechnician ? 'progress' : 'user-progress');
       } else if (status === 'COMPLETED') {
         setCurrentPage('completed-project');
       } else {
-        // Fallback to ProjectDetailModal for unknown statuses
         setShowProjectDetail(true);
       }
       return;
     }
-    
-    // Non-Android: Route based on localFilter + status (original logic)
-    if (isTechnician && localFilter === 'running') {
+
+    if (isTechnician && (localFilter === 'running' || localFilter === 'approved')) {
       console.log('🔵 [ProjectsScreen] Technician clicked on running project');
       if (status === 'APPROVED') {
         setCurrentPage('technician-approved-project');
-      } else if (status === 'PHASE_PLANNING') {
+      } else if (status === 'PHASE_PLANNING' || status === 'PHASE_PLANNING_APPROVED') {
         setCurrentPage('technician-approved-project');
       } else if (status === 'CONTRACT_SIGNING') {
         setCurrentPage('contract-signing');
@@ -939,12 +833,11 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
       } else {
         setShowProjectDetail(true);
       }
-    } 
-    else if (!isTechnician && localFilter === 'running') {
+    } else if (!isTechnician && (localFilter === 'running' || localFilter === 'approved')) {
       console.log('🔵 [ProjectsScreen] User clicked on running project');
       if (status === 'APPROVED') {
         setCurrentPage('approved-project');
-      } else if (status === 'PHASE_PLANNING') {
+      } else if (status === 'PHASE_PLANNING' || status === 'PHASE_PLANNING_APPROVED') {
         setCurrentPage('approved-project');
       } else if (status === 'CONTRACT_SIGNING') {
         setCurrentPage('user-contract-signing');
@@ -953,23 +846,17 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
       } else {
         setShowProjectDetail(true);
       }
-    }
-    else if (localFilter === 'completed' || status === 'COMPLETED') {
+    } else if (localFilter === 'completed' || status === 'COMPLETED') {
       setCurrentPage('completed-project');
-    }
-    else if (isTechnician && localFilter === 'available') {
+    } else if (isTechnician && localFilter === 'available') {
       setCurrentPage('technician-pending-project');
-    }
-    else if (isTechnician && localFilter === 'bid_received') {
+    } else if (isTechnician && localFilter === 'bid_received') {
       setCurrentPage('technician-bid-received');
-    }
-    else if (!isTechnician && localFilter === 'available' && status === 'PENDING') {
+    } else if (!isTechnician && localFilter === 'available' && status === 'PENDING') {
       setCurrentPage('pending-project');
-    }
-    else if (!isTechnician && localFilter === 'available' && status === 'BID_RECEIVED') {
+    } else if (!isTechnician && localFilter === 'available' && (status === 'BID_RECEIVED' || (status.includes('BID') && status.includes('RECEIVED')))) {
       setCurrentPage('bid-received-project');
-    }
-    else {
+    } else {
       setShowProjectDetail(true);
     }
   };
@@ -1151,8 +1038,10 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
             <View style={{ width: 24 }} />
           )}
           <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(18) }]}>
-            {localFilter === 'available' ? (isTechnician ? t('projectsScreen.available') : t('projectsScreen.availableProjects')) :
+            {localFilter === 'all' ? t('projectsScreen.all') :
+             localFilter === 'available' ? (isTechnician ? t('projectsScreen.available') : t('projectsScreen.availableProjects')) :
              localFilter === 'running' ? (isTechnician ? t('projectsScreen.inProgress') : t('projectsScreen.runningProjects')) :
+             localFilter === 'approved' ? t('projectsScreen.approvedFilter') :
              localFilter === 'bid_received' ? t('projectsScreen.bidding') :
              localFilter === 'direct_offers' ? t('projectsScreen.directAssigned') :
              localFilter === 'completed' ? (isTechnician ? t('projectsScreen.completed') : t('projectsScreen.completedProjects')) :
@@ -1189,7 +1078,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
       
       {/* Approved Project Screen - Technician View (handles both APPROVED and PHASE_PLANNING) */}
       {userRole?.toUpperCase() === 'TECHNICIAN' && 
-       (Platform.OS === 'android' || localFilter === 'running') && 
+       phaseAllowsRunningFlows && 
        selectedProject && 
        currentPage === 'technician-approved-project' && (
         <ApprovedProjectScreen
@@ -1205,7 +1094,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
       )}
 
       {userRole?.toUpperCase() === 'TECHNICIAN' && 
-       (Platform.OS === 'android' || localFilter === 'running') && 
+       phaseAllowsRunningFlows && 
        selectedProject && 
        currentPage === 'contract-signing' && (
         <ContractSigningProjectScreen
@@ -1222,7 +1111,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
       )}
 
       {userRole?.toUpperCase() === 'TECHNICIAN' && 
-       (Platform.OS === 'android' || localFilter === 'running') && 
+       phaseAllowsRunningFlows && 
        selectedProject && 
        currentPage === 'progress' && (
         <InProgressProjectScreen
@@ -1243,7 +1132,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
       
       {/* Approved Project Screen - User View */}
       {userRole?.toUpperCase() !== 'TECHNICIAN' && 
-       (Platform.OS === 'android' || localFilter === 'running') && 
+       phaseAllowsRunningFlows && 
        selectedProject && 
        currentPage === 'approved-project' && (
         <ApprovedProjectScreen
@@ -1265,7 +1154,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
 
       {/* Legacy UserPhaseViewPage - kept for backwards compatibility */}
       {userRole?.toUpperCase() !== 'TECHNICIAN' && 
-       (Platform.OS === 'android' || localFilter === 'running') && 
+       phaseAllowsRunningFlows && 
        selectedProject && 
        currentPage === 'user-phase-view' && (
         <UserPhaseViewPage
@@ -1283,7 +1172,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
       {/* UserPhaseReviewPage removed - PHASE_PLANNING now uses ApprovedProjectScreen */}
 
       {userRole?.toUpperCase() !== 'TECHNICIAN' && 
-       (Platform.OS === 'android' || localFilter === 'running') && 
+       phaseAllowsRunningFlows && 
        selectedProject && 
        currentPage === 'user-contract-signing' && (
         <ContractSigningProjectScreen
@@ -1300,7 +1189,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
       )}
 
       {userRole?.toUpperCase() !== 'TECHNICIAN' && 
-       (Platform.OS === 'android' || localFilter === 'running') && 
+       phaseAllowsRunningFlows && 
        selectedProject && 
        currentPage === 'user-progress' && (
         <InProgressProjectScreen
@@ -1458,6 +1347,85 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
       {/* Projects List - Only show if not on a specific page */}
       {currentPage === 'list' && (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <Modal
+        visible={showRegionFilterModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowRegionFilterModal(false)}
+      >
+        <View style={{ flex: 1 }}>
+          <TouchableOpacity
+            style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.45)' }]}
+            activeOpacity={1}
+            onPress={() => setShowRegionFilterModal(false)}
+          />
+          <View style={[styles.androidPhaseFilterModalRoot, { pointerEvents: 'box-none' }]} pointerEvents="box-none">
+            <View style={[styles.androidPhaseFilterModalSheet, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+              <ScrollView bounces={false} keyboardShouldPersistTaps="handled" style={{ maxHeight: 360 }}>
+                <TouchableOpacity
+                  style={[
+                    styles.androidFilterOption,
+                    { borderBottomColor: colors.border },
+                    selectedRegionId === 'all' && { backgroundColor: colors.primary + '18' },
+                  ]}
+                  onPress={() => {
+                    setSelectedRegionId('all');
+                    setShowRegionFilterModal(false);
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.androidFilterOptionText,
+                      {
+                        color: selectedRegionId === 'all' ? colors.primary : colors.textSecondary,
+                        fontWeight: selectedRegionId === 'all' ? '600' : '400',
+                      },
+                    ]}
+                  >
+                    {t('projectsScreen.all')}
+                  </Text>
+                  {selectedRegionId === 'all' ? <Feather name="check" size={18} color={colors.primary} /> : null}
+                </TouchableOpacity>
+                {isLoadingRegions ? (
+                  <View style={{ padding: 16 }}>
+                    <Text style={{ color: colors.textSecondary }}>{t('projectsScreen.loadingRegions')}</Text>
+                  </View>
+                ) : (
+                  regions.map((region) => (
+                    <TouchableOpacity
+                      key={region.id}
+                      style={[
+                        styles.androidFilterOption,
+                        { borderBottomColor: colors.border },
+                        selectedRegionId === region.id && { backgroundColor: colors.primary + '18' },
+                      ]}
+                      onPress={() => {
+                        setSelectedRegionId(region.id);
+                        setShowRegionFilterModal(false);
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.androidFilterOptionText,
+                          {
+                            color: selectedRegionId === region.id ? colors.primary : colors.textSecondary,
+                            fontWeight: selectedRegionId === region.id ? '600' : '400',
+                          },
+                        ]}
+                        numberOfLines={2}
+                      >
+                        {i18n.language === 'ar' ? region.nameAr : region.nameEn}
+                      </Text>
+                      {selectedRegionId === region.id ? <Feather name="check" size={18} color={colors.primary} /> : null}
+                    </TouchableOpacity>
+                  ))
+                )}
+              </ScrollView>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* Android Design - New Redesign */}
       {Platform.OS === 'android' ? (
         <View style={[styles.androidContainer, { backgroundColor: colors.background }]}>
@@ -1530,14 +1498,155 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
             </ScrollView>
           ) : (
             <View style={{ flex: 1 }}>
-              {/* Header Section - Outside FlatList (dark mode supported) */}
+              {/* Header: title, phase tabs (same as web), service category, search */}
               <View style={[styles.androidHeaderSection, { backgroundColor: colors.cardBackground }]}>
                 <View style={styles.androidTitleSection}>
-                  <Text style={[styles.androidPageTitle, { color: colors.text }]}>{t('projectsScreen.myProjects')}</Text>
+                  <Text style={[styles.androidPageTitle, { color: colors.text }]}>
+                    {(() => {
+                      const isTechnician = userRole?.toUpperCase() === 'TECHNICIAN';
+                      return localFilter === 'all'
+                        ? t('projectsScreen.all')
+                        : localFilter === 'available'
+                          ? (isTechnician ? t('projectsScreen.available') : t('projectsScreen.availableProjects'))
+                          : localFilter === 'running'
+                            ? (isTechnician ? t('projectsScreen.inProgress') : t('projectsScreen.runningProjects'))
+                            : localFilter === 'approved'
+                              ? t('projectsScreen.approvedFilter')
+                            : localFilter === 'bid_received'
+                              ? t('projectsScreen.bidding')
+                              : localFilter === 'direct_offers'
+                                ? t('projectsScreen.directAssigned')
+                                : localFilter === 'completed'
+                                  ? (isTechnician ? t('projectsScreen.completed') : t('projectsScreen.completedProjects'))
+                                  : t('projectsScreen.myProjects');
+                    })()}
+                  </Text>
                   <Text style={[styles.androidProjectCount, { color: colors.textSecondary }]}>
                     {filteredProjects.length} {t('projectsScreen.totalProjects')}
                   </Text>
                 </View>
+
+                <View style={styles.androidFilterContainer}>
+                  <TouchableOpacity
+                    style={[styles.androidFilterButton, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
+                    onPress={() => setShowAndroidPhaseFilterModal(true)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.androidFilterButtonText, { color: colors.text }]} numberOfLines={1}>
+                      {androidPhaseFilterButtonLabel}
+                    </Text>
+                    <Feather name="chevron-down" size={20} color={colors.primary} />
+                  </TouchableOpacity>
+                </View>
+
+                {userRole?.toUpperCase() === 'TECHNICIAN' && localFilter === 'available' && (
+                  <View style={{ marginBottom: 12 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textSecondary, marginBottom: 6 }}>
+                      {t('Select Region')}
+                    </Text>
+                    <TouchableOpacity
+                      style={[styles.androidFilterButton, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
+                      onPress={() => setShowRegionFilterModal(true)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.androidFilterButtonText, { color: colors.text }]} numberOfLines={1}>
+                        {regionFilterButtonLabel}
+                      </Text>
+                      <Feather name="chevron-down" size={20} color={colors.primary} />
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                <Modal
+                  visible={showAndroidPhaseFilterModal}
+                  transparent
+                  animationType="fade"
+                  onRequestClose={() => setShowAndroidPhaseFilterModal(false)}
+                >
+                  <View style={{ flex: 1 }}>
+                    <TouchableOpacity
+                      style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.45)' }]}
+                      activeOpacity={1}
+                      onPress={() => setShowAndroidPhaseFilterModal(false)}
+                    />
+                    <View style={[styles.androidPhaseFilterModalRoot, { pointerEvents: 'box-none' }]} pointerEvents="box-none">
+                      <View style={[styles.androidPhaseFilterModalSheet, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+                        <ScrollView bounces={false} keyboardShouldPersistTaps="handled" style={{ maxHeight: 360 }}>
+                          {androidPhaseFilterOptions.map((opt) => (
+                            <TouchableOpacity
+                              key={opt.key}
+                              style={[
+                                styles.androidFilterOption,
+                                { borderBottomColor: colors.border },
+                                localFilter === opt.key && { backgroundColor: colors.primary + '18' },
+                              ]}
+                              onPress={() => handleFilterChange(opt.key)}
+                            >
+                              <Text
+                                style={[
+                                  styles.androidFilterOptionText,
+                                  { color: localFilter === opt.key ? colors.primary : colors.textSecondary, fontWeight: localFilter === opt.key ? '600' : '400' },
+                                ]}
+                                numberOfLines={2}
+                              >
+                                {opt.label}
+                              </Text>
+                              {localFilter === opt.key ? <Feather name="check" size={18} color={colors.primary} /> : null}
+                            </TouchableOpacity>
+                          ))}
+                        </ScrollView>
+                      </View>
+                    </View>
+                  </View>
+                </Modal>
+
+                <View style={[styles.categoryFilterWrapper, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll} contentContainerStyle={styles.categoryContainer}>
+                    <TouchableOpacity
+                      style={[
+                        styles.categoryButton,
+                        { backgroundColor: selectedCategory === 'All' ? colors.primary : colors.border, borderWidth: 0 },
+                      ]}
+                      onPress={() => setSelectedCategory('All')}
+                    >
+                      <Text
+                        style={[
+                          styles.categoryButtonText,
+                          {
+                            color: selectedCategory === 'All' ? '#FFFFFF' : colors.text,
+                            fontWeight: selectedCategory === 'All' ? 'bold' : 'normal',
+                          },
+                        ]}
+                      >
+                        {t('projectsScreen.all')}
+                      </Text>
+                    </TouchableOpacity>
+                    {services.map((service) => (
+                      <TouchableOpacity
+                        key={service.id}
+                        style={[
+                          styles.categoryButton,
+                          { backgroundColor: selectedCategory === service.id.toString() ? colors.primary : colors.border, borderWidth: 0 },
+                        ]}
+                        onPress={() => setSelectedCategory(service.id.toString())}
+                      >
+                        <Text
+                          style={[
+                            styles.categoryButtonText,
+                            {
+                              color: selectedCategory === service.id.toString() ? '#FFFFFF' : colors.text,
+                              fontWeight: selectedCategory === service.id.toString() ? 'bold' : 'normal',
+                            },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {i18n.language === 'ar' ? service.nameAr : service.nameEn}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+
                 <View style={[styles.androidSearchContainer, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
                   <Feather name="search" size={20} color={colors.textSecondary} />
                   <TextInput
@@ -1548,26 +1657,12 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
                     onChangeText={setSearchQuery}
                   />
                 </View>
-                <View style={styles.androidFilterContainer}>
-                  <TouchableOpacity
-                    style={[styles.androidFilterButton, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
-                    onPress={toggleFilterDropdown}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.androidFilterButtonText, { color: colors.text }]}>
-                      {getStatusFilterLabel(selectedCategory)}
-                    </Text>
-                    <Animated.View style={{ transform: [{ rotate: rotateInterpolate }] }}>
-                      <Feather name="chevron-down" size={20} color={colors.primary} />
-                    </Animated.View>
-                  </TouchableOpacity>
-                </View>
               </View>
 
               {/* Project Cards List */}
               <FlatList
                 data={filteredProjects}
-                extraData={[selectedCategory, searchQuery]}
+                extraData={[localFilter, selectedCategory, searchQuery]}
                 keyExtractor={(item) => item.id.toString()}
                 renderItem={({ item: project }) => {
                   const truncateDescription = (text: string): string => {
@@ -1687,76 +1782,6 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
                   />
                 }
               />
-
-              {/* Filter Dropdown Overlay - Rendered at container level for proper z-index */}
-              {showFilterDropdown && (
-                <View style={styles.androidDropdownOverlay}>
-                  <TouchableOpacity 
-                    style={styles.androidDropdownBackdrop} 
-                    activeOpacity={1} 
-                    onPress={() => setShowFilterDropdown(false)}
-                  />
-                  <Animated.View
-                    style={[
-                      styles.androidFilterDropdownOverlay,
-                      { opacity: dropdownOpacity, backgroundColor: colors.cardBackground, borderColor: colors.border },
-                    ]}
-                  >
-                    <ScrollView
-                      style={{ maxHeight: getFixedDropdownHeight() }}
-                      contentContainerStyle={styles.androidFilterDropdownContentContainer}
-                      nestedScrollEnabled={true}
-                      showsVerticalScrollIndicator={true}
-                      bounces={false}
-                    >
-                      <TouchableOpacity
-                        style={[
-                          styles.androidFilterOption,
-                          { borderBottomColor: colors.border },
-                          selectedCategory === 'All' && { backgroundColor: colors.primary + '20' },
-                        ]}
-                        onPress={() => handleStatusSelect('All')}
-                      >
-                        <Text
-                          style={[
-                            styles.androidFilterOptionText,
-                            { color: selectedCategory === 'All' ? colors.primary : colors.textSecondary, fontWeight: selectedCategory === 'All' ? '600' : '400' },
-                          ]}
-                        >
-                          {t('projectsScreen.all')}
-                        </Text>
-                        {selectedCategory === 'All' && (
-                          <Feather name="check" size={16} color={colors.primary} />
-                        )}
-                      </TouchableOpacity>
-                      {getUniqueStatuses().map((status) => (
-                        <TouchableOpacity
-                          key={status}
-                          style={[
-                            styles.androidFilterOption,
-                            { borderBottomColor: colors.border },
-                            selectedCategory === status && { backgroundColor: colors.primary + '20' },
-                          ]}
-                          onPress={() => handleStatusSelect(status)}
-                        >
-                          <Text
-                            style={[
-                              styles.androidFilterOptionText,
-                              { color: selectedCategory === status ? colors.primary : colors.textSecondary, fontWeight: selectedCategory === status ? '600' : '400' },
-                            ]}
-                            numberOfLines={1}
-                          >
-                            {getStatusLabel(status)}
-                          </Text>
-                          {selectedCategory === status && (
-                            <Feather name="check" size={16} color={colors.primary} />
-                          )}
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  </Animated.View>
-                </View>
-              )}
             </View>
             )}
           </Animated.View>
@@ -1787,8 +1812,10 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
               <View style={{ width: 24 }} />
             )}
             <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(18) }]}>
-              {localFilter === 'available' ? (isTechnician ? t('projectsScreen.available') : t('projectsScreen.availableProjects')) :
+              {localFilter === 'all' ? t('projectsScreen.all') :
+               localFilter === 'available' ? (isTechnician ? t('projectsScreen.available') : t('projectsScreen.availableProjects')) :
                localFilter === 'running' ? (isTechnician ? t('projectsScreen.inProgress') : t('projectsScreen.runningProjects')) :
+               localFilter === 'approved' ? t('projectsScreen.approvedFilter') :
                localFilter === 'bid_received' ? t('projectsScreen.bidding') :
                localFilter === 'direct_offers' ? t('projectsScreen.directAssigned') :
                localFilter === 'completed' ? (isTechnician ? t('projectsScreen.completed') : t('projectsScreen.completedProjects')) :
@@ -1894,6 +1921,40 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
           </View>
         );
       })()}
+
+          {(Platform.OS !== 'android' as any) &&
+            userRole?.toUpperCase() === 'TECHNICIAN' &&
+            localFilter === 'available' && (
+              <View
+                style={[
+                  styles.categoryFilterWrapper,
+                  { backgroundColor: colors.background, borderBottomColor: colors.border, flexDirection: 'row', alignItems: 'center', paddingVertical: 10 },
+                ]}
+              >
+                <Text style={[styles.categoryButtonText, { color: colors.textSecondary, flexShrink: 0, marginRight: 8 }]}>{t('Select Region')}:</Text>
+                <TouchableOpacity
+                  style={{
+                    flex: 1,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingVertical: 10,
+                    paddingHorizontal: 12,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    backgroundColor: colors.cardBackground,
+                  }}
+                  onPress={() => setShowRegionFilterModal(true)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.categoryButtonText, { color: colors.text, flex: 1 }]} numberOfLines={1}>
+                    {regionFilterButtonLabel}
+                  </Text>
+                  <Feather name="chevron-down" size={18} color={colors.primary} />
+                </TouchableOpacity>
+              </View>
+            )}
 
           {/* Category Filter - Only for non-Android */}
           {(Platform.OS !== 'android' as any) && (
@@ -2847,6 +2908,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#3b82f6',
+  },
+  androidPhaseFilterModalRoot: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  androidPhaseFilterModalSheet: {
+    borderRadius: 12,
+    borderWidth: 1,
+    overflow: 'hidden',
+    maxHeight: 400,
   },
   androidFilterContainer: {
     marginBottom: 16,

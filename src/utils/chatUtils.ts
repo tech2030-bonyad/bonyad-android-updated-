@@ -1,5 +1,9 @@
 // Chat utility functions
 
+import { API_ENDPOINTS, buildApiUrl } from '../config/api';
+import { storage } from './storage';
+import type { ChatRoom } from '../types/chat';
+
 /**
  * Generate a consistent room ID for two users
  * Format: room-{smallerId}-{largerId}
@@ -10,6 +14,94 @@ export const generateRoomId = (userId: number, otherUserId: number): string => {
   const largerId = Math.max(userId, otherUserId);
   
   return `room-${smallerId}-${largerId}`;
+};
+
+/** Sorted pair fallback when backend has not created a room yet (aligned with web chatUtils). */
+function deterministicPairRoomId(a: number, b: number): string {
+  const id1 = String(a);
+  const id2 = String(b);
+  const sorted = [id1, id2].sort();
+  return `${sorted[0]}_${sorted[1]}`;
+}
+
+/**
+ * Extract a chat room id from notification deep links (full URL, path-only, or query).
+ */
+export function tryParseChatRoomIdFromActionUrl(url: string | undefined | null): string | null {
+  if (!url || typeof url !== 'string') return null;
+  const t = url.trim();
+  if (!t) return null;
+
+  const fromQueryString = (s: string): string | null => {
+    const m = s.match(/[?&](?:roomId|room_id)=([^&#]+)/i);
+    return m ? decodeURIComponent(m[1].replace(/\+/g, ' ')) : null;
+  };
+
+  const fromPath = (s: string): string | null => {
+    const m = s.match(/\/(?:chat|chat-detail|messages)\/([^/?#]+)/i);
+    return m ? decodeURIComponent(m[1]) : null;
+  };
+
+  try {
+    const withBase = t.startsWith('http') ? t : `https://placeholder.invalid${t.startsWith('/') ? '' : '/'}${t}`;
+    const u = new URL(withBase);
+    const q = u.searchParams.get('roomId') ?? u.searchParams.get('room_id');
+    if (q) return q;
+    const p = fromPath(u.pathname);
+    if (p) return p;
+  } catch {
+    /* relative or malformed */
+  }
+
+  const q = fromQueryString(t);
+  if (q) return q;
+  return fromPath(t);
+}
+
+export const getOrCreateRoomId = async (otherUserId: number): Promise<string> => {
+  try {
+    const token = await storage.getAuthToken();
+    const currentUserId = await storage.getUserId();
+
+    if (!token || currentUserId == null) {
+      return deterministicPairRoomId(currentUserId ?? 0, otherUserId);
+    }
+
+    const url = buildApiUrl(API_ENDPOINTS.CHAT.MY_CHATS);
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (response.ok) {
+      const responseText = await response.text();
+      if (responseText && responseText.trim() !== '') {
+        const responseData = JSON.parse(responseText);
+        let chatRooms: ChatRoom[] = [];
+        if (Array.isArray(responseData)) {
+          chatRooms = responseData;
+        } else if (responseData?.data) {
+          chatRooms = responseData.data;
+        } else if (responseData?.rooms) {
+          chatRooms = responseData.rooms;
+        } else if (responseData?.chatRooms) {
+          chatRooms = responseData.chatRooms;
+        }
+        const existingRoom = chatRooms.find((room) => room.otherUserId === otherUserId);
+        if (existingRoom) {
+          return existingRoom.roomId;
+        }
+      }
+    }
+
+    return deterministicPairRoomId(currentUserId, otherUserId);
+  } catch {
+    const currentUserId = await storage.getUserId();
+    return deterministicPairRoomId(currentUserId ?? 0, otherUserId);
+  }
 };
 
 /**
