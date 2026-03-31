@@ -18,6 +18,7 @@ import { useRTL } from '../hooks/useRTL';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { API_ENDPOINTS, buildApiUrl, API_BASE_URL } from '../config/api';
 import { storage } from '../utils/storage';
+import { mergeUserHasBidFlag } from '../services/ProjectService';
 import PhaseApprovalModal from './PhaseApprovalModal';
 import ContractViewerModal from './ContractViewerModal';
 
@@ -57,6 +58,8 @@ interface RunningProject {
   phases?: Phase[];
   createdAt: string;
   updatedAt: string;
+  /** Set via MY_BIDS merge for technicians (same as ProjectsScreen / web). */
+  userHasBid?: boolean;
 }
 
 export default function RunningProjectsScreen({ 
@@ -130,9 +133,10 @@ export default function RunningProjectsScreen({
           console.log('📊 Filtered running projects (user):', runningProjects.length);
           setProjects(runningProjects);
         } else {
-          // Technician: show all assigned projects
+          // Technician: show all assigned projects; MY_BIDS flags for correct PENDING vs bid-received routing
           console.log('📊 All assigned projects (technician):', data.length);
-          setProjects(data);
+          const withBidFlags = await mergeUserHasBidFlag<RunningProject>(data as RunningProject[]);
+          setProjects(withBidFlags);
         }
       } else {
         const errorText = await response.text();
@@ -160,6 +164,10 @@ export default function RunningProjectsScreen({
 
   const getStatusColor = (status: string) => {
     switch (status.toUpperCase()) {
+      case 'PENDING':
+        return '#FFA500';
+      case 'BID_RECEIVED':
+        return '#F59E0B';
       case 'ACCEPTED':
       case 'BID_ACCEPTED':
         return '#10B981';
@@ -178,6 +186,10 @@ export default function RunningProjectsScreen({
 
   const getStatusLabel = (status: string) => {
     switch (status.toUpperCase()) {
+      case 'PENDING':
+        return t('projectsScreen.statusPending');
+      case 'BID_RECEIVED':
+        return t('projectsScreen.statusBidReceived');
       case 'ACCEPTED':
       case 'BID_ACCEPTED':
         return t('Bid Accepted');
@@ -223,6 +235,12 @@ export default function RunningProjectsScreen({
                 {getStatusLabel(item.status)}
               </Text>
             </View>
+            {isTechnician && item.userHasBid && (
+              <View style={[styles.bidSentBadge, { backgroundColor: colors.success + '25' }]}>
+                <Ionicons name="checkmark-circle" size={12} color={colors.success} />
+                <Text style={[styles.bidSentText, { color: colors.success }]}>{t('Bid Sent')}</Text>
+              </View>
+            )}
           </View>
           <View style={styles.metaItem}>
             <Image source={riyalLogo} style={styles.riyalLogo} resizeMode="contain" />
@@ -470,9 +488,6 @@ export default function RunningProjectsScreen({
             setShowContractModal(false);
             setSelectedProject(null);
           }}
-          onSign={() => {
-            loadProjects(); // Reload after signing
-          }}
         />
       )}
     </View>
@@ -536,6 +551,20 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 12,
+    fontWeight: '600',
+  },
+  bidSentBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    marginTop: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    gap: 4,
+  },
+  bidSentText: {
+    fontSize: 11,
     fontWeight: '600',
   },
   budget: {

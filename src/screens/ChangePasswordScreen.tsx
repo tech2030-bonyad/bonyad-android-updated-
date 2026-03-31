@@ -22,6 +22,7 @@ import { changePassword } from '../services/ProfileService';
 import { getTopPadding } from '../utils/statusBarHelper';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
 import { evaluatePassword } from '../validation/passwordPolicy';
+import AnimatedLoadingScreen from '../components/AnimatedLoadingScreen';
 
 // Figma Design Colors
 const FIGMA_COLORS = {
@@ -247,7 +248,7 @@ export default function ChangePasswordScreen({ onBack }: ChangePasswordScreenPro
   if (isFetching) {
     return (
       <Animated.View style={[styles.loadingContainer, { backgroundColor: bgColor, paddingTop: insets.top, opacity: screenOpacity, transform: [{ translateX: screenSlideX }] }]}>
-        <ActivityIndicator size="large" color={primaryColor} />
+        <AnimatedLoadingScreen showMessage={false} />
       </Animated.View>
     );
   }

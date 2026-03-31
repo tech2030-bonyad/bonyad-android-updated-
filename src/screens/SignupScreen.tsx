@@ -113,6 +113,14 @@ export default function SignupScreen({
 
   const [isLoading, setIsLoading] = useState(false);
 
+  // If technician is selected, email is not required/used.
+  useEffect(() => {
+    if (selectedRole === 'technician') {
+      setEmail('');
+      setFocusedField((prev) => (prev === 'email' ? null : prev));
+    }
+  }, [selectedRole]);
+
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
@@ -231,7 +239,7 @@ export default function SignupScreen({
       return;
     }
 
-    if (!flags.emailValid) {
+    if (selectedRole === 'user' && !flags.emailValid) {
       showError(t('signup.validation.email'), t('validation_failed'));
       return;
     }
@@ -404,16 +412,20 @@ export default function SignupScreen({
                 <ValidationHintItem passed={flags.nameValid} label={t('signup.validation.name')} isFirst />
               )}
 
-              <EmailInput
-                label={t('Email')}
-                value={email}
-                onChangeText={handleEmailChange}
-                placeholder={t('Enter your email')}
-                onFocus={handleFieldFocus('email')}
-                onBlur={handleFieldBlur('email')}
-              />
-              {focusedField === 'email' && (
-                <ValidationHintItem passed={flags.emailValid} label={t('signup.validation.email')} isFirst />
+              {selectedRole === 'user' && (
+                <>
+                  <EmailInput
+                    label={t('Email')}
+                    value={email}
+                    onChangeText={handleEmailChange}
+                    placeholder={t('Enter your email')}
+                    onFocus={handleFieldFocus('email')}
+                    onBlur={handleFieldBlur('email')}
+                  />
+                  {focusedField === 'email' && (
+                    <ValidationHintItem passed={flags.emailValid} label={t('signup.validation.email')} isFirst />
+                  )}
+                </>
               )}
 
               <PasswordInput

@@ -18,7 +18,9 @@ import {
   ActivityIndicator,
   Dimensions,
   Platform,
+  TextStyle,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -30,7 +32,7 @@ import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
 import ConfirmationPopup, { useConfirmationPopup } from '../components/ConfirmationPopup';
 import ProjectCreationFlow from '../components/ProjectCreationFlow';
 import BookAppointmentModal from '../components/BookAppointmentModal';
-import AppBottomSheetModal, { RiyalAmount } from '../components/AppBottomSheetModal';
+import AppBottomSheetModal from '../components/AppBottomSheetModal';
 
 // ===== DESIGN TOKENS FROM FIGMA =====
 const COLORS = {
@@ -64,6 +66,9 @@ const COLORS = {
   // Backgrounds
   bgWhite: '#FFFFFF',
 };
+
+const SCREEN_RIYAL_LIGHT = require('../../assets/saudi_riyal_logo.svg');
+const SCREEN_RIYAL_DARK = require('../../assets/saudi_riyal_logo_dark.svg');
 
 interface Bid {
   id: number;
@@ -110,6 +115,7 @@ interface Phase {
   id: number;
   phaseNumber: number;
   description: string;
+  title?: string;
   moneySpent: number;
   timeSpentDays: number;
   status?: string;
@@ -141,6 +147,76 @@ interface BidReceivedProjectScreenProps {
 }
 
 type UserTab = 'bids' | 'visits';
+
+function generatePhaseTitle(phase: Phase, tr: (k: string) => string): string {
+  if (phase.title && phase.title.trim()) return phase.title;
+  return `${tr('Phase')} ${phase.phaseNumber}`;
+}
+
+function normalizePhasesPayload(raw: unknown): Phase[] {
+  const asArray = ((): unknown[] => {
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw;
+    if (typeof raw === 'object') {
+      const o = raw as Record<string, unknown>;
+      if (Array.isArray(o.content)) return o.content;
+      if (Array.isArray(o.phases)) return o.phases;
+      if (Array.isArray(o.data)) return o.data;
+    }
+    return [];
+  })();
+
+  return asArray
+    .map((item, index) => {
+      if (!item || typeof item !== 'object') return null;
+      const p = item as Record<string, unknown>;
+      let id = Number(p.id);
+      if (!Number.isFinite(id)) id = -(index + 1);
+      let phaseNumber = Number(p.phaseNumber);
+      if (!Number.isFinite(phaseNumber)) phaseNumber = index + 1;
+      const title = p.title != null && String(p.title).trim() ? String(p.title) : undefined;
+      const status = p.status != null ? String(p.status) : undefined;
+      return {
+        id,
+        phaseNumber,
+        description: String(p.description ?? ''),
+        title,
+        moneySpent: Number(p.moneySpent) || 0,
+        timeSpentDays: Number(p.timeSpentDays) || 0,
+        status,
+      } as Phase;
+    })
+    .filter((x): x is Phase => x !== null);
+}
+
+function sortPhasesByNumber(list: Phase[]): Phase[] {
+  return [...list].sort((a, b) => (a.phaseNumber || 0) - (b.phaseNumber || 0));
+}
+
+/** Plain number + riyal SVG (no SAR text). */
+function FormattedAmountWithRiyal({
+  amount,
+  textStyle,
+  iconSize = 18,
+}: {
+  amount: number;
+  textStyle?: TextStyle | TextStyle[];
+  iconSize?: number;
+}) {
+  const { theme } = useTheme();
+  const { i18n } = useTranslation();
+  const src = theme === 'dark' ? SCREEN_RIYAL_DARK : SCREEN_RIYAL_LIGHT;
+  const formatted = new Intl.NumberFormat(i18n.language === 'ar' ? 'ar-SA' : 'en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount);
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+      <Text style={textStyle}>{formatted}</Text>
+      <ExpoImage source={src} style={{ width: iconSize, height: iconSize * 0.9 }} contentFit="contain" />
+    </View>
+  );
+}
 
 function makeBidStyles(c: typeof COLORS) {
   return StyleSheet.create({
@@ -325,14 +401,12 @@ const BidCard = ({
   onAccept,
   onDecline,
   onViewTechnician,
-  formatBudget,
 }: {
   bid: Bid;
   index: number;
   onAccept: () => void;
   onDecline: () => void;
   onViewTechnician?: () => void;
-  formatBudget: (amount: number) => string;
 }) => {
   const { t } = useTranslation();
   const { colors } = useTheme();
@@ -405,7 +479,9 @@ const BidCard = ({
       {/* Bid Amount */}
       <View style={bidStyles.amountRow}>
         <Text style={bidStyles.amountLabel}>{t('Bid Amount')}</Text>
-        <Text style={bidStyles.amountValue}>{formatBudget(bid.proposedBudget)}</Text>
+        <View style={{ flex: 1, alignItems: 'flex-end' }}>
+          <FormattedAmountWithRiyal amount={bid.proposedBudget} textStyle={bidStyles.amountValue} iconSize={16} />
+        </View>
       </View>
       
       {/* Proposal */}
@@ -525,6 +601,17 @@ function makeVisitStyles(c: typeof COLORS) {
 }
 
 // ===== VISIT REQUEST CARD COMPONENT (USER VIEW) =====
+function formatDate(dateString: string | undefined, t: (key: string) => string): string {
+  if (!dateString) return t('Flexible');
+  try {
+    const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) return t('Flexible');
+    return date.toLocaleDateString();
+  } catch {
+    return t('Flexible');
+  }
+}
+
 const VisitRequestCard = ({
   visitRequest,
   index,
@@ -563,16 +650,6 @@ const VisitRequestCard = ({
   }), [colors]);
   const visitStyles = useMemo(() => makeVisitStyles(c), [c]);
   
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return t('Flexible');
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString();
-    } catch {
-      return t('Flexible');
-    }
-  };
-  
   return (
     <View style={visitStyles.card}>
       {/* Header */}
@@ -609,7 +686,7 @@ const VisitRequestCard = ({
           <Text style={visitStyles.statLabel}>{t('Projects')}</Text>
         </View>
         <View style={visitStyles.statBox}>
-          <Text style={visitStyles.statValue}>{formatDate(visitRequest.requestedDate)}</Text>
+          <Text style={visitStyles.statValue}>{formatDate(visitRequest.requestedDate, t)}</Text>
           <Text style={visitStyles.statLabel}>{t('Requested Date')}</Text>
         </View>
         <View style={visitStyles.statBox}>
@@ -671,47 +748,7 @@ const VisitRequestCard = ({
   );
 };
 
-function makePhaseStyles(c: typeof COLORS) {
-  return StyleSheet.create({
-  card: {
-    borderWidth: 1,
-    borderColor: c.primary10,
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 10,
-    gap: 16,
-    backgroundColor: c.bgWhite,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: 6,
-  },
-  headerLeft: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  numberBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    backgroundColor: c.primary10,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  numberText: { fontSize: 12, fontWeight: '400', color: c.primary80 },
-  title: { fontSize: 12, fontWeight: '400', color: c.textBody, flex: 1 },
-  price: { fontSize: 10, fontWeight: '600', color: c.green80 },
-  description: { fontSize: 12, fontWeight: '400', color: c.textBody, lineHeight: 18 },
-  durationRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  durationText: { fontSize: 12, fontWeight: '400', color: c.textSecondary },
-  });
-}
-
-// ===== PHASE CARD COMPONENT (TECHNICIAN VIEW) =====
+// ===== PHASE CARD — same layout as PendingProjectScreen =====
 const PhaseCard = ({
   phase,
   formatBudget,
@@ -720,42 +757,121 @@ const PhaseCard = ({
   formatBudget: (amount: number) => string;
 }) => {
   const { t } = useTranslation();
-  const { colors } = useTheme();
-  const c = useMemo(() => ({
-    ...COLORS,
-    bgWhite: colors.cardBackground,
-    textBody: colors.text,
-    textSecondary: colors.textSecondary,
-    primary10: colors.primary + '20',
-    primary80: colors.primary,
-    green80: colors.success,
-  }), [colors]);
-  const phaseStyles = useMemo(() => makePhaseStyles(c), [c]);
-  
+  const { colors, theme } = useTheme();
+  const riyalSource = theme === 'dark' ? SCREEN_RIYAL_DARK : SCREEN_RIYAL_LIGHT;
+
+  const formatPhaseDuration = (days: number) => {
+    if (days < 7) return `${days} ${t('day_unit') || 'days'}`;
+    const w = Math.ceil(days / 7);
+    return `${w} ${w === 1 ? t('Week') : t('weeks')}`;
+  };
+
+  const pcs = useMemo(
+    () =>
+      StyleSheet.create({
+        wrap: {
+          borderRadius: 16,
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: colors.border,
+          backgroundColor: colors.cardBackground,
+          padding: 14,
+          marginBottom: 12,
+          gap: 10,
+        },
+        top: {
+          flexDirection: 'row',
+          alignItems: 'flex-start',
+          gap: 10,
+        },
+        badge: {
+          minWidth: 32,
+          height: 32,
+          borderRadius: 10,
+          backgroundColor: colors.primary + '18',
+          alignItems: 'center',
+          justifyContent: 'center',
+          paddingHorizontal: 8,
+        },
+        badgeText: {
+          fontSize: 13,
+          fontWeight: '800',
+          color: colors.primary,
+        },
+        title: {
+          flex: 1,
+          fontSize: 14,
+          fontWeight: '600',
+          color: colors.text,
+          lineHeight: 19,
+        },
+        desc: {
+          fontSize: 12,
+          lineHeight: 18,
+          color: colors.textSecondary,
+        },
+        bottom: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          paddingTop: 10,
+          marginTop: 2,
+          borderTopWidth: StyleSheet.hairlineWidth,
+          borderTopColor: colors.border,
+        },
+        durationRow: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 6,
+          flex: 1,
+          marginRight: 8,
+        },
+        durationText: {
+          fontSize: 12,
+          color: colors.textSecondary,
+          fontWeight: '500',
+          flexShrink: 1,
+        },
+        priceRow: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 6,
+        },
+        priceText: {
+          fontSize: 14,
+          fontWeight: '700',
+          color: colors.text,
+        },
+        riyal: { width: 20, height: 18 },
+      }),
+    [colors]
+  );
+
   return (
-    <View style={phaseStyles.card}>
-      <View style={phaseStyles.header}>
-        <View style={phaseStyles.headerLeft}>
-          <View style={phaseStyles.numberBadge}>
-            <Text style={phaseStyles.numberText}>{phase.phaseNumber}</Text>
-          </View>
-          <Text style={phaseStyles.title}>{phase.description}</Text>
+    <View style={pcs.wrap}>
+      <View style={pcs.top}>
+        <View style={pcs.badge}>
+          <Text style={pcs.badgeText}>{phase.phaseNumber}</Text>
         </View>
-        <Text style={phaseStyles.price}>{formatBudget(phase.moneySpent)}</Text>
-      </View>
-      
-      <Text style={phaseStyles.description}>
-        {phase.description}
-      </Text>
-      
-      <View style={phaseStyles.durationRow}>
-        <Ionicons name="time-outline" size={12} color={c.textSecondary} />
-        <Text style={phaseStyles.durationText}>
-          {phase.timeSpentDays >= 7 
-            ? `${Math.ceil(phase.timeSpentDays / 7)} ${t('Week')}`
-            : `${phase.timeSpentDays} ${t('day_unit')}`
-          }
+        <Text style={pcs.title} numberOfLines={2}>
+          {generatePhaseTitle(phase, t)}
         </Text>
+      </View>
+      {phase.description?.trim() ? (
+        <Text style={pcs.desc} numberOfLines={4}>
+          {phase.description}
+        </Text>
+      ) : null}
+      <View style={pcs.bottom}>
+        <View style={pcs.durationRow}>
+          <Ionicons name="time-outline" size={15} color={colors.textSecondary} />
+          <Text style={pcs.durationText} numberOfLines={1}>
+            {formatPhaseDuration(phase.timeSpentDays)}
+          </Text>
+        </View>
+        <View style={pcs.priceRow}>
+          <Text style={pcs.priceText}>{formatBudget(phase.moneySpent)}</Text>
+          <ExpoImage source={riyalSource} style={pcs.riyal} contentFit="contain" />
+        </View>
       </View>
     </View>
   );
@@ -816,12 +932,10 @@ function makeMyBidStyles(c: typeof COLORS) {
 // ===== MY BID CARD COMPONENT (TECHNICIAN VIEW) =====
 const MyBidCard = ({
   bid,
-  formatBudget,
   onViewBid,
   onWithdrawBid,
 }: {
   bid: Bid;
-  formatBudget: (amount: number) => string;
   onViewBid: () => void;
   onWithdrawBid: () => void;
 }) => {
@@ -862,9 +976,11 @@ const MyBidCard = ({
         </View>
         <View style={[myBidStyles.detailColumn, { alignItems: 'flex-end' }]}>
           <Text style={myBidStyles.detailLabel}>{t('Price')}</Text>
-          <Text style={[myBidStyles.detailValue, { color: c.green60 }]}>
-            {formatBudget(bid.proposedBudget)}
-          </Text>
+          <FormattedAmountWithRiyal
+            amount={bid.proposedBudget}
+            textStyle={[myBidStyles.detailValue, { color: c.green60 }]}
+            iconSize={14}
+          />
         </View>
       </View>
       
@@ -1070,23 +1186,30 @@ export default function BidReceivedProjectScreen({
 
   const loadPhases = async () => {
     if (!project?.id) return;
-    
+
     try {
       const token = await storage.getAuthToken();
-      const url = buildApiUrlWithParams(API_ENDPOINTS.PHASES.LIST, { projectId: project.id });
-      
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      
-      if (response.ok) {
+      const headers = {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      } as const;
+
+      const fetchList = async (url: string): Promise<Phase[]> => {
+        const response = await fetch(url, { method: 'GET', headers });
+        if (!response.ok) return [];
         const data = await response.json();
-        setPhases(data);
+        return sortPhasesByNumber(normalizePhasesPayload(data));
+      };
+
+      let list = await fetchList(
+        buildApiUrlWithParams(API_ENDPOINTS.PHASES.LIST, { projectId: project.id }),
+      );
+      if (list.length === 0) {
+        list = await fetchList(
+          buildApiUrlWithParams(API_ENDPOINTS.PROJECTS.PROJECT_PHASES, { id: project.id }),
+        );
       }
+      setPhases(list);
     } catch (error) {
       console.error('Error loading phases:', error);
     }
@@ -1192,13 +1315,19 @@ export default function BidReceivedProjectScreen({
     );
   };
 
+  /** Plain number only (riyal glyph shown separately, same as PendingProjectScreen). */
   const formatBudget = (amount: number) => {
     return new Intl.NumberFormat(i18n.language === 'ar' ? 'ar-SA' : 'en-US', {
-      style: 'currency',
-      currency: 'SAR',
       minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
     }).format(amount);
   };
+
+  const displayPhases = useMemo(() => {
+    const fromFetch = sortPhasesByNumber(normalizePhasesPayload(phases));
+    if (fromFetch.length > 0) return fromFetch;
+    return sortPhasesByNumber(normalizePhasesPayload(project?.phases));
+  }, [phases, project?.phases, project?.id]);
 
   const formatDuration = () => {
     const weeks = Math.ceil((project?.timeRequiredDays || 21) / 7);
@@ -1327,7 +1456,7 @@ export default function BidReceivedProjectScreen({
           <Text style={[styles.requestIdText, { color: c.textSecondary }]}>#{project.id}</Text>
           {project.createdAt ? (
             <Text style={[styles.createdText, { color: c.textSecondary }]}>
-              {t('Created')}: {formatDate(project.createdAt)}
+              {t('Created')}: {formatDate(project.createdAt, t)}
             </Text>
           ) : null}
         </View>
@@ -1344,9 +1473,11 @@ export default function BidReceivedProjectScreen({
                 {t('Total Budget')}
               </Text>
             </View>
-            <Text style={[styles.statValueText, IS_LARGE_WEB && styles.statValueTextLargeWeb]}>
-              {formatBudget(project.budget)}
-            </Text>
+            <FormattedAmountWithRiyal
+              amount={project.budget}
+              textStyle={[styles.statValueText, IS_LARGE_WEB && styles.statValueTextLargeWeb]}
+              iconSize={IS_LARGE_WEB ? 20 : 16}
+            />
           </View>
           <View style={[styles.statCard, styles.durationCard, IS_LARGE_WEB && styles.statCardLargeWeb]}>
             <View style={[styles.statHeader, IS_LARGE_WEB && styles.statHeaderLargeWeb]}>
@@ -1409,13 +1540,13 @@ export default function BidReceivedProjectScreen({
       )}
 
       {/* Work Phases Section */}
-      {phases.length > 0 && (
+      {displayPhases.length > 0 && (
         <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="document-text-outline" size={12} color={c.primary80} />
-            <Text style={styles.sectionLabel}>{t('Work Phases')}</Text>
+          <View style={[styles.sectionHeader, IS_LARGE_WEB && styles.sectionHeaderLargeWeb]}>
+            <Ionicons name="layers-outline" size={IS_LARGE_WEB ? 22 : 12} color={c.primary80} />
+            <Text style={[styles.sectionLabel, IS_LARGE_WEB && styles.sectionLabelLargeWeb]}>{t('Work Phases')}</Text>
           </View>
-          {phases.map((phase) => (
+          {displayPhases.map((phase) => (
             <PhaseCard
               key={phase.id}
               phase={phase}
@@ -1519,7 +1650,6 @@ export default function BidReceivedProjectScreen({
                 onAccept={() => handleAcceptBid(bid.id)}
                 onDecline={() => handleDeclineBid(bid.id)}
                 onViewTechnician={() => onViewTechnician?.(bid.technicianId)}
-                formatBudget={formatBudget}
               />
             ))
           )}
@@ -1566,7 +1696,7 @@ export default function BidReceivedProjectScreen({
           <Text style={[styles.requestIdText, { color: c.textSecondary }]}>#{project.id}</Text>
           {project.createdAt ? (
             <Text style={[styles.createdText, { color: c.textSecondary }]}>
-              {t('Created')}: {formatDate(project.createdAt)}
+              {t('Created')}: {formatDate(project.createdAt, t)}
             </Text>
           ) : null}
         </View>
@@ -1583,9 +1713,11 @@ export default function BidReceivedProjectScreen({
                 {t('Total Budget')}
               </Text>
             </View>
-            <Text style={[styles.statValueText, IS_LARGE_WEB && styles.statValueTextLargeWeb]}>
-              {formatBudget(project.budget)}
-            </Text>
+            <FormattedAmountWithRiyal
+              amount={project.budget}
+              textStyle={[styles.statValueText, IS_LARGE_WEB && styles.statValueTextLargeWeb]}
+              iconSize={IS_LARGE_WEB ? 20 : 16}
+            />
           </View>
           <View style={[styles.statCard, styles.durationCard, IS_LARGE_WEB && styles.statCardLargeWeb]}>
             <View style={[styles.statHeader, IS_LARGE_WEB && styles.statHeaderLargeWeb]}>
@@ -1635,13 +1767,13 @@ export default function BidReceivedProjectScreen({
       )}
       
       {/* Work Phases Section */}
-      {phases.length > 0 && (
+      {displayPhases.length > 0 && (
         <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="document-text-outline" size={12} color={c.primary80} />
-            <Text style={styles.sectionLabel}>{t('Work Phases')}</Text>
+          <View style={[styles.sectionHeader, IS_LARGE_WEB && styles.sectionHeaderLargeWeb]}>
+            <Ionicons name="layers-outline" size={IS_LARGE_WEB ? 22 : 12} color={c.primary80} />
+            <Text style={[styles.sectionLabel, IS_LARGE_WEB && styles.sectionLabelLargeWeb]}>{t('Work Phases')}</Text>
           </View>
-          {phases.map((phase) => (
+          {displayPhases.map((phase) => (
             <PhaseCard
               key={phase.id}
               phase={phase}
@@ -1658,7 +1790,6 @@ export default function BidReceivedProjectScreen({
       {myBid ? (
         <MyBidCard
           bid={myBid}
-          formatBudget={formatBudget}
           onViewBid={handleViewMyBid}
           onWithdrawBid={handleWithdrawBid}
         />
@@ -1755,7 +1886,11 @@ export default function BidReceivedProjectScreen({
         </View>
         <View style={modalStyles.row}>
           <Text style={modalStyles.label}>{t('Bid Amount')}</Text>
-          {myBid ? <RiyalAmount amount={myBid.proposedBudget} locale={i18n.language === 'ar' ? 'ar-SA' : 'en-US'} /> : <Text style={modalStyles.value}>-</Text>}
+          {myBid ? (
+            <FormattedAmountWithRiyal amount={myBid.proposedBudget} textStyle={modalStyles.value} iconSize={18} />
+          ) : (
+            <Text style={modalStyles.value}>-</Text>
+          )}
         </View>
         <View style={modalStyles.row}>
           <Text style={modalStyles.label}>{t('Status')}</Text>

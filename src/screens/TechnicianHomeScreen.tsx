@@ -21,6 +21,7 @@ import { Image as ExpoImage } from 'expo-image';
 import BonyadLogo from '../components/BonyadLogo';
 import AppTopBar from '../components/AppTopBar';
 import GlassTabBar, { TECHNICIAN_TABS } from '../components/GlassTabBar';
+import AnimatedLoadingScreen from '../components/AnimatedLoadingScreen';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import ProjectsScreen from './ProjectsScreen';
@@ -138,7 +139,7 @@ export default function TechnicianHomeScreen({
 
   useEffect(() => {
     if (!homeShellFromChatbot) return;
-    const { tab, embeddedProjects, technicianAppointments } = homeShellFromChatbot;
+    const { tab, returnTabOnBack, embeddedChat, embeddedProjects, technicianAppointments } = homeShellFromChatbot;
     if (technicianAppointments) {
       setShowAppointmentsView(true);
       setActiveTab('home');
@@ -152,10 +153,27 @@ export default function TechnicianHomeScreen({
       setActiveTab(tab as 'home' | 'projects' | 'chat' | 'profile' | 'notifications' | 'wallet' | 'chatbot');
     }
 
+    if (returnTabOnBack && shellTabs.includes(returnTabOnBack as any)) {
+      setProjectsReturnTabOnBack(returnTabOnBack as any);
+    }
+
+    if (tab === 'chat' && embeddedChat?.roomId) {
+      openEmbeddedChatFromProjects(
+        embeddedChat.roomId,
+        embeddedChat.receiverId,
+        embeddedChat.receiverName,
+        embeddedChat.projectId ?? null
+      );
+    }
+
     if (tab === 'projects') {
       if (embeddedProjects?.initialSmallTask != null) {
         setSelectedSmallTask(embeddedProjects.initialSmallTask);
         setProjectsInitialProjectType('small');
+      } else if (embeddedProjects?.initialProject != null) {
+        setSelectedSmallTask(null);
+        setProjectsInitialProjectType('large');
+        setInitialProjectForDetail(embeddedProjects.initialProject);
       } else if (embeddedProjects?.initialProjectType != null) {
         setSelectedSmallTask(null);
         setProjectsInitialProjectType(embeddedProjects.initialProjectType);
@@ -163,7 +181,7 @@ export default function TechnicianHomeScreen({
         setSelectedSmallTask(null);
         setProjectsInitialProjectType(null);
       }
-      setInitialProjectForDetail(null);
+      if (embeddedProjects?.initialProject == null) setInitialProjectForDetail(null);
     } else {
       setSelectedSmallTask(null);
       setProjectsInitialProjectType(null);
@@ -172,7 +190,7 @@ export default function TechnicianHomeScreen({
     if (!(tab === 'home' && technicianAppointments)) {
       setShowAppointmentsView(false);
     }
-  }, [homeShellFromChatbot?.id, homeShellFromChatbot]);
+  }, [homeShellFromChatbot?.id, homeShellFromChatbot, openEmbeddedChatFromProjects]);
 
   /** When portfolio opened from home (Business gallery), back goes to home; from profile, back goes to profile */
   const [portfolioSource, setPortfolioSource] = useState<'home' | 'profile' | null>(null);
@@ -183,6 +201,12 @@ export default function TechnicianHomeScreen({
   const [showChatList, setShowChatList] = useState(true);
   const insets = useSafeAreaInsets();
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+  const [isInHomeTransitionLoading, setIsInHomeTransitionLoading] = useState(false);
+  const homeTransitionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevProfileSubViewRef = useRef<typeof profileSubView>(profileSubView);
+  const [projectsReturnTabOnBack, setProjectsReturnTabOnBack] = useState<
+    'home' | 'projects' | 'chat' | 'profile' | 'notifications' | 'wallet' | 'chatbot' | null
+  >(null);
   const [hasPortfolio, setHasPortfolio] = useState<boolean | null>(null);
   const [userProfile, setUserProfile] = useState<{ name?: string; avatar?: string; profileImage?: string } | null>(null);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
@@ -204,6 +228,27 @@ export default function TechnicianHomeScreen({
 
   // Copilot coach guide
   const { start: startCoachTour } = useCopilot();
+
+  // Auto-start the coach tour ONLY on the Home tab (prevents tour showing on other tabs/screens).
+  useEffect(() => {
+    if (activeTab !== 'home') return;
+    let cancelled = false;
+    let timer: any = null;
+    (async () => {
+      const hasSeen = await coachMarksStorage.hasSeenHomeCoachMarks();
+      if (cancelled) return;
+      if (!hasSeen) {
+        timer = setTimeout(() => {
+          console.log('🎯 Starting coach tour (home tab)...');
+          startCoachTour();
+        }, 2500);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [activeTab, startCoachTour]);
 
   // Animation values for dropdowns and tab transition
   const mobileDropdownAnim = useRef(new Animated.Value(0)).current;
@@ -292,6 +337,9 @@ export default function TechnicianHomeScreen({
   useEffect(() => {
     if (prevActiveTabRef.current === activeTab) return;
     prevActiveTabRef.current = activeTab;
+    setIsInHomeTransitionLoading(true);
+    if (homeTransitionTimerRef.current) clearTimeout(homeTransitionTimerRef.current);
+    homeTransitionTimerRef.current = setTimeout(() => setIsInHomeTransitionLoading(false), 240);
     tabContentOpacity.setValue(0);
     tabContentTranslateY.setValue(18);
     Animated.parallel([
@@ -308,6 +356,16 @@ export default function TechnicianHomeScreen({
       }),
     ]).start();
   }, [activeTab]);
+
+  // Show loader when switching profile subviews (top nav actions inside Profile tab)
+  useEffect(() => {
+    if (prevProfileSubViewRef.current === profileSubView) return;
+    prevProfileSubViewRef.current = profileSubView;
+    if (activeTab !== 'profile') return;
+    setIsInHomeTransitionLoading(true);
+    if (homeTransitionTimerRef.current) clearTimeout(homeTransitionTimerRef.current);
+    homeTransitionTimerRef.current = setTimeout(() => setIsInHomeTransitionLoading(false), 240);
+  }, [activeTab, profileSubView]);
 
   // Responsive state - updates on window resize
   const [screenWidth, setScreenWidth] = useState(Dimensions.get('window').width);
@@ -688,7 +746,12 @@ export default function TechnicianHomeScreen({
           <View style={{ flex: 1 }}>
             <ProjectsScreen
               onBack={() => {
-                setActiveTab('home');
+                if (projectsReturnTabOnBack) {
+                  setActiveTab(projectsReturnTabOnBack);
+                  setProjectsReturnTabOnBack(null);
+                } else {
+                  setActiveTab('home');
+                }
                 setProjectsInitialProjectType(null);
                 setSelectedSmallTask(null);
               }}
@@ -1202,7 +1265,12 @@ export default function TechnicianHomeScreen({
             <View style={styles.mainContentWrapper}>
               <ProjectsScreen
                 onBack={() => {
-                  setActiveTab('home');
+                  if (projectsReturnTabOnBack) {
+                    setActiveTab(projectsReturnTabOnBack);
+                    setProjectsReturnTabOnBack(null);
+                  } else {
+                    setActiveTab('home');
+                  }
                   setProjectsInitialProjectType(null);
                   setSelectedSmallTask(null);
                 }}
@@ -1451,6 +1519,13 @@ export default function TechnicianHomeScreen({
       >
         <Ionicons name="chatbubbles" size={28} color="#fff" />
       </TouchableOpacity>
+
+      {/* Local transition loader for tab/subview switches (bottom nav / top nav / profile subviews) */}
+      {isInHomeTransitionLoading && (
+        <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, { zIndex: 9999 }]}>
+          <AnimatedLoadingScreen showMessage={false} />
+        </View>
+      )}
     </View>
   );
 }

@@ -34,7 +34,6 @@ import {
 } from '../services/ProjectService';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
 import ConfirmationPopup, { useConfirmationPopup } from '../components/ConfirmationPopup';
-import ProjectDetailModal from './ProjectDetailModal';
 import ProjectDetailScreen from './ProjectDetailScreen';
 import PendingProjectScreen from './PendingProjectScreen';
 import BidReceivedProjectScreen from './BidReceivedProjectScreen';
@@ -65,6 +64,7 @@ import SmallTaskPaymentScreen from './SmallTaskPaymentScreen';
 import InProgressSmallTaskScreen from './InProgressSmallTaskScreen';
 import CompletedSmallTaskScreen from './CompletedSmallTaskScreen';
 import AnimatedProjectTypeToggle from '../components/AnimatedProjectTypeToggle';
+import AnimatedLoadingScreen from '../components/AnimatedLoadingScreen';
 
 interface ProjectsScreenProps {
   onBack?: () => void;
@@ -204,7 +204,6 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
   /** When set, list is filtered by this category id (from Home → Category → View available projects) */
   const [serviceCategoryFilterId, setServiceCategoryFilterId] = useState<number | null>(initialServiceCategoryId ?? null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [showProjectDetail, setShowProjectDetail] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [showBidForm, setShowBidForm] = useState(false);
   const [showVisitRequest, setShowVisitRequest] = useState(false);
@@ -234,7 +233,9 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
   const [selectedProject, setSelectedProject] = useState<Project | null>(() => initialSmallTask ?? null);
   const [selectedTechnicianId, setSelectedTechnicianId] = useState<number | null>(null);
   const [smallTaskPaymentAmount, setSmallTaskPaymentAmount] = useState<number>(0);
-  const [showAndroidPhaseFilterModal, setShowAndroidPhaseFilterModal] = useState(false);
+  const [showAndroidFiltersModal, setShowAndroidFiltersModal] = useState(false);
+  /** Android filter sheet: choose list vs region, then drill into options (technician + available only). */
+  const [androidFilterMenuStep, setAndroidFilterMenuStep] = useState<'pick' | 'list' | 'region'>('pick');
   const [regions, setRegions] = useState<Region[]>([]);
   const [isLoadingRegions, setIsLoadingRegions] = useState(false);
   const [selectedRegionId, setSelectedRegionId] = useState<'all' | number>('all');
@@ -387,7 +388,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
   const handleFilterChange = (newFilter: 'all' | 'available' | 'running' | 'approved' | 'completed' | 'bid_received' | 'direct_offers') => {
     setLocalFilter(newFilter);
     if (Platform.OS === 'android') {
-      setShowAndroidPhaseFilterModal(false);
+      setShowAndroidFiltersModal(false);
     }
     if (onFilterChange) {
       onFilterChange(newFilter);
@@ -413,11 +414,6 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
     return opts;
   }, [userRole, t, i18n.language]);
 
-  const androidPhaseFilterButtonLabel = React.useMemo(() => {
-    const hit = androidPhaseFilterOptions.find((o) => o.key === localFilter);
-    return hit?.label ?? t('projectsScreen.projects');
-  }, [androidPhaseFilterOptions, localFilter, t]);
-
   const regionFilterButtonLabel = React.useMemo(() => {
     if (selectedRegionId === 'all') return t('projectsScreen.all');
     const r = regions.find((x) => x.id === selectedRegionId);
@@ -425,9 +421,13 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
     return i18n.language === 'ar' ? r.nameAr : r.nameEn;
   }, [selectedRegionId, regions, i18n.language, t]);
 
+  const currentAndroidListFilterLabel = React.useMemo(() => {
+    const hit = androidPhaseFilterOptions.find((o) => o.key === localFilter);
+    return hit?.label ?? t('projectsScreen.projects');
+  }, [androidPhaseFilterOptions, localFilter, t]);
+
   const handleEditProject = (project: Project) => {
     setSelectedProject(project);
-    setShowProjectDetail(false);
     setCurrentPage('owner-edit');
   };
 
@@ -794,17 +794,30 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
   const openProjectFromList = async (item: Project) => {
     const isTechnician = userRole?.toUpperCase() === 'TECHNICIAN';
     const full = await fetchProjectById(item.id);
-    const merged = (full ? { ...item, ...full, id: Number(item.id) } : item) as Project;
+    let merged = (full ? { ...item, ...full, id: Number(item.id) } : item) as Project;
+    if (typeof item.userHasBid === 'boolean') {
+      merged = { ...merged, userHasBid: item.userHasBid };
+    }
     const status = (merged.status || item.status || '').toUpperCase();
+    const userHasBid = !!merged.userHasBid;
+    const isBiddingPhase =
+      status === 'PENDING' ||
+      status === 'BID_RECEIVED' ||
+      (status.includes('BID') && status.includes('RECEIVED'));
+    /** Web parity: BID_RECEIVED is project-level (owner has bids), not "this tech bid". */
+    const technicianBiddingPage = ():
+      | 'technician-pending-project'
+      | 'technician-bid-received' =>
+      userHasBid ? 'technician-bid-received' : 'technician-pending-project';
 
-    console.log('🔵 [ProjectsScreen] Card pressed - Status:', status, 'isTechnician:', isTechnician, 'detail:', !!full);
+    console.log('🔵 [ProjectsScreen] Card pressed - Status:', status, 'isTechnician:', isTechnician, 'userHasBid:', userHasBid, 'detail:', !!full);
     setSelectedProject(merged);
 
     if (localFilter === 'all') {
       if (status === 'PENDING') {
-        setCurrentPage(isTechnician ? 'technician-pending-project' : 'pending-project');
+        setCurrentPage(isTechnician ? technicianBiddingPage() : 'pending-project');
       } else if (status === 'BID_RECEIVED' || (status.includes('BID') && status.includes('RECEIVED'))) {
-        if (isTechnician) setCurrentPage('technician-bid-received');
+        if (isTechnician) setCurrentPage(technicianBiddingPage());
         else setCurrentPage('bid-received-project');
       } else if (status === 'APPROVED' || status === 'PHASE_PLANNING' || status === 'PHASE_PLANNING_APPROVED') {
         setCurrentPage(isTechnician ? 'technician-approved-project' : 'approved-project');
@@ -815,7 +828,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
       } else if (status === 'COMPLETED') {
         setCurrentPage('completed-project');
       } else {
-        setShowProjectDetail(true);
+        setCurrentPage(isTechnician ? (isBiddingPhase ? technicianBiddingPage() : 'technician-pending-project') : 'bid-received-project');
       }
       return;
     }
@@ -830,8 +843,10 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
         setCurrentPage('contract-signing');
       } else if (status === 'IN_PROGRESS') {
         setCurrentPage('progress');
+      } else if (isBiddingPhase) {
+        setCurrentPage(technicianBiddingPage());
       } else {
-        setShowProjectDetail(true);
+        setCurrentPage('technician-pending-project');
       }
     } else if (!isTechnician && (localFilter === 'running' || localFilter === 'approved')) {
       console.log('🔵 [ProjectsScreen] User clicked on running project');
@@ -844,12 +859,12 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
       } else if (status === 'IN_PROGRESS') {
         setCurrentPage('user-progress');
       } else {
-        setShowProjectDetail(true);
+        setCurrentPage('bid-received-project');
       }
     } else if (localFilter === 'completed' || status === 'COMPLETED') {
       setCurrentPage('completed-project');
     } else if (isTechnician && localFilter === 'available') {
-      setCurrentPage('technician-pending-project');
+      setCurrentPage(technicianBiddingPage());
     } else if (isTechnician && localFilter === 'bid_received') {
       setCurrentPage('technician-bid-received');
     } else if (!isTechnician && localFilter === 'available' && status === 'PENDING') {
@@ -857,13 +872,18 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
     } else if (!isTechnician && localFilter === 'available' && (status === 'BID_RECEIVED' || (status.includes('BID') && status.includes('RECEIVED')))) {
       setCurrentPage('bid-received-project');
     } else {
-      setShowProjectDetail(true);
+      if (isTechnician) {
+        setCurrentPage(isBiddingPhase ? technicianBiddingPage() : 'technician-pending-project');
+      } else {
+        setCurrentPage('bid-received-project');
+      }
     }
   };
 
   // Figma-styled project card for grid layout (theme-aware)
   const renderFigmaProjectCard = ({ item, index }: { item: Project; index: number }) => {
     const serviceName = i18n.language === 'ar' ? item.serviceNameAr : item.serviceNameEn;
+    const isTechnician = userRole?.toUpperCase() === 'TECHNICIAN';
     return (
       <TouchableOpacity
         style={[
@@ -876,6 +896,14 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
         <Text style={[styles.figmaProjectTitle, { color: colors.text }]} numberOfLines={1}>
           {serviceName || t('projectsScreen.project')}
         </Text>
+        {isTechnician && item.userHasBid && (
+          <View style={[styles.bidSentBadgeFigma, { backgroundColor: colors.success + '25' }]}>
+            <Ionicons name="checkmark-circle" size={11} color={colors.success} />
+            <Text style={[styles.bidSentTextFigma, { color: colors.success }]} numberOfLines={1}>
+              {t('Bid Sent')}
+            </Text>
+          </View>
+        )}
         <Text style={[styles.figmaProjectDescription, { color: colors.textSecondary }]} numberOfLines={2}>
           {item.description || t('projectsScreen.projectDescription')}
         </Text>
@@ -916,6 +944,12 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
                   <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
                     {statusLabel}
                   </Text>
+                </View>
+              )}
+              {isTechnician && item.userHasBid && (
+                <View style={[styles.bidSentBadge, { backgroundColor: colors.success + '25' }]}>
+                  <Ionicons name="checkmark-circle" size={12} color={colors.success} />
+                  <Text style={[styles.bidSentText, { color: colors.success }]}>{t('Bid Sent')}</Text>
                 </View>
               )}
             </View>
@@ -1049,9 +1083,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
           </Text>
           <View style={{ width: 24 }} />
         </View>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
+        <AnimatedLoadingScreen showMessage={false} />
       </Animated.View>
     );
   }
@@ -1348,7 +1380,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
       {currentPage === 'list' && (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Modal
-        visible={showRegionFilterModal}
+        visible={showRegionFilterModal && Platform.OS !== 'android'}
         transparent
         animationType="fade"
         onRequestClose={() => setShowRegionFilterModal(false)}
@@ -1526,126 +1558,205 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
                   </Text>
                 </View>
 
-                <View style={styles.androidFilterContainer}>
-                  <TouchableOpacity
-                    style={[styles.androidFilterButton, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
-                    onPress={() => setShowAndroidPhaseFilterModal(true)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.androidFilterButtonText, { color: colors.text }]} numberOfLines={1}>
-                      {androidPhaseFilterButtonLabel}
-                    </Text>
-                    <Feather name="chevron-down" size={20} color={colors.primary} />
-                  </TouchableOpacity>
-                </View>
-
-                {userRole?.toUpperCase() === 'TECHNICIAN' && localFilter === 'available' && (
-                  <View style={{ marginBottom: 12 }}>
-                    <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textSecondary, marginBottom: 6 }}>
-                      {t('Select Region')}
-                    </Text>
-                    <TouchableOpacity
-                      style={[styles.androidFilterButton, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
-                      onPress={() => setShowRegionFilterModal(true)}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[styles.androidFilterButtonText, { color: colors.text }]} numberOfLines={1}>
-                        {regionFilterButtonLabel}
-                      </Text>
-                      <Feather name="chevron-down" size={20} color={colors.primary} />
-                    </TouchableOpacity>
-                  </View>
-                )}
-
                 <Modal
-                  visible={showAndroidPhaseFilterModal}
+                  visible={showAndroidFiltersModal}
                   transparent
                   animationType="fade"
-                  onRequestClose={() => setShowAndroidPhaseFilterModal(false)}
+                  onRequestClose={() => setShowAndroidFiltersModal(false)}
                 >
                   <View style={{ flex: 1 }}>
                     <TouchableOpacity
                       style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.45)' }]}
                       activeOpacity={1}
-                      onPress={() => setShowAndroidPhaseFilterModal(false)}
+                      onPress={() => setShowAndroidFiltersModal(false)}
                     />
                     <View style={[styles.androidPhaseFilterModalRoot, { pointerEvents: 'box-none' }]} pointerEvents="box-none">
                       <View style={[styles.androidPhaseFilterModalSheet, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
-                        <ScrollView bounces={false} keyboardShouldPersistTaps="handled" style={{ maxHeight: 360 }}>
-                          {androidPhaseFilterOptions.map((opt) => (
-                            <TouchableOpacity
-                              key={opt.key}
-                              style={[
-                                styles.androidFilterOption,
-                                { borderBottomColor: colors.border },
-                                localFilter === opt.key && { backgroundColor: colors.primary + '18' },
-                              ]}
-                              onPress={() => handleFilterChange(opt.key)}
-                            >
-                              <Text
-                                style={[
-                                  styles.androidFilterOptionText,
-                                  { color: localFilter === opt.key ? colors.primary : colors.textSecondary, fontWeight: localFilter === opt.key ? '600' : '400' },
-                                ]}
-                                numberOfLines={2}
+                        {(() => {
+                          const showAndroidFilterTypePicker =
+                            userRole?.toUpperCase() === 'TECHNICIAN' && localFilter === 'available';
+                          const showFilterSubBack = showAndroidFilterTypePicker && androidFilterMenuStep !== 'pick';
+                          return (
+                            <>
+                              {showFilterSubBack ? (
+                                <TouchableOpacity
+                                  style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    paddingHorizontal: 12,
+                                    paddingVertical: 14,
+                                    borderBottomWidth: StyleSheet.hairlineWidth,
+                                    borderBottomColor: colors.border,
+                                  }}
+                                  onPress={() => setAndroidFilterMenuStep('pick')}
+                                  activeOpacity={0.7}
+                                >
+                                  <Feather name="chevron-left" size={22} color={colors.primary} />
+                                  <Text style={{ marginLeft: 6, fontSize: 16, fontWeight: '600', color: colors.text }}>
+                                    {androidFilterMenuStep === 'list'
+                                      ? t('projectsScreen.projects')
+                                      : t('Select Region')}
+                                  </Text>
+                                </TouchableOpacity>
+                              ) : null}
+                              <ScrollView
+                                bounces={false}
+                                keyboardShouldPersistTaps="handled"
+                                style={{ maxHeight: 480 }}
+                                contentContainerStyle={{ paddingBottom: 12, paddingTop: showFilterSubBack ? 0 : 6 }}
                               >
-                                {opt.label}
-                              </Text>
-                              {localFilter === opt.key ? <Feather name="check" size={18} color={colors.primary} /> : null}
-                            </TouchableOpacity>
-                          ))}
-                        </ScrollView>
+                                {showAndroidFilterTypePicker && androidFilterMenuStep === 'pick' ? (
+                                  <>
+                                    <TouchableOpacity
+                                      style={[styles.androidFilterOption, { borderBottomColor: colors.border }]}
+                                      onPress={() => setAndroidFilterMenuStep('list')}
+                                      activeOpacity={0.7}
+                                    >
+                                      <View style={{ flex: 1, paddingRight: 8 }}>
+                                        <Text
+                                          style={[styles.androidFilterOptionText, { color: colors.text, fontWeight: '600' }]}
+                                        >
+                                          {t('projectsScreen.projects')}
+                                        </Text>
+                                        <Text
+                                          style={{ fontSize: 13, color: colors.textSecondary, marginTop: 4 }}
+                                          numberOfLines={2}
+                                        >
+                                          {currentAndroidListFilterLabel}
+                                        </Text>
+                                      </View>
+                                      <Feather name="chevron-right" size={20} color={colors.textSecondary} />
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                      style={[styles.androidFilterOption, { borderBottomColor: colors.border }]}
+                                      onPress={() => setAndroidFilterMenuStep('region')}
+                                      activeOpacity={0.7}
+                                    >
+                                      <View style={{ flex: 1, paddingRight: 8 }}>
+                                        <Text
+                                          style={[styles.androidFilterOptionText, { color: colors.text, fontWeight: '600' }]}
+                                        >
+                                          {t('Select Region')}
+                                        </Text>
+                                        <Text
+                                          style={{ fontSize: 13, color: colors.textSecondary, marginTop: 4 }}
+                                          numberOfLines={2}
+                                        >
+                                          {regionFilterButtonLabel}
+                                        </Text>
+                                      </View>
+                                      <Feather name="chevron-right" size={20} color={colors.textSecondary} />
+                                    </TouchableOpacity>
+                                  </>
+                                ) : null}
+                                {!showAndroidFilterTypePicker || androidFilterMenuStep === 'list'
+                                  ? androidPhaseFilterOptions.map((opt) => (
+                                      <TouchableOpacity
+                                        key={opt.key}
+                                        style={[
+                                          styles.androidFilterOption,
+                                          { borderBottomColor: colors.border },
+                                          localFilter === opt.key && { backgroundColor: colors.primary + '18' },
+                                        ]}
+                                        onPress={() => handleFilterChange(opt.key)}
+                                      >
+                                        <Text
+                                          style={[
+                                            styles.androidFilterOptionText,
+                                            {
+                                              color: localFilter === opt.key ? colors.primary : colors.textSecondary,
+                                              fontWeight: localFilter === opt.key ? '600' : '400',
+                                            },
+                                          ]}
+                                          numberOfLines={2}
+                                        >
+                                          {opt.label}
+                                        </Text>
+                                        {localFilter === opt.key ? (
+                                          <Feather name="check" size={18} color={colors.primary} />
+                                        ) : null}
+                                      </TouchableOpacity>
+                                    ))
+                                  : null}
+                                {showAndroidFilterTypePicker && androidFilterMenuStep === 'region' ? (
+                                  <>
+                                    <TouchableOpacity
+                                      style={[
+                                        styles.androidFilterOption,
+                                        { borderBottomColor: colors.border },
+                                        selectedRegionId === 'all' && { backgroundColor: colors.primary + '18' },
+                                      ]}
+                                      onPress={() => {
+                                        setSelectedRegionId('all');
+                                        setShowAndroidFiltersModal(false);
+                                      }}
+                                    >
+                                      <Text
+                                        style={[
+                                          styles.androidFilterOptionText,
+                                          {
+                                            color: selectedRegionId === 'all' ? colors.primary : colors.textSecondary,
+                                            fontWeight: selectedRegionId === 'all' ? '600' : '400',
+                                          },
+                                        ]}
+                                      >
+                                        {t('projectsScreen.all')}
+                                      </Text>
+                                      {selectedRegionId === 'all' ? (
+                                        <Feather name="check" size={18} color={colors.primary} />
+                                      ) : null}
+                                    </TouchableOpacity>
+                                    {isLoadingRegions ? (
+                                      <View style={{ padding: 16 }}>
+                                        <Text style={{ color: colors.textSecondary }}>
+                                          {t('projectsScreen.loadingRegions')}
+                                        </Text>
+                                      </View>
+                                    ) : (
+                                      regions.map((region) => (
+                                        <TouchableOpacity
+                                          key={region.id}
+                                          style={[
+                                            styles.androidFilterOption,
+                                            { borderBottomColor: colors.border },
+                                            selectedRegionId === region.id && { backgroundColor: colors.primary + '18' },
+                                          ]}
+                                          onPress={() => {
+                                            setSelectedRegionId(region.id);
+                                            setShowAndroidFiltersModal(false);
+                                          }}
+                                        >
+                                          <Text
+                                            style={[
+                                              styles.androidFilterOptionText,
+                                              {
+                                                color:
+                                                  selectedRegionId === region.id
+                                                    ? colors.primary
+                                                    : colors.textSecondary,
+                                                fontWeight: selectedRegionId === region.id ? '600' : '400',
+                                              },
+                                            ]}
+                                            numberOfLines={2}
+                                          >
+                                            {i18n.language === 'ar' ? region.nameAr : region.nameEn}
+                                          </Text>
+                                          {selectedRegionId === region.id ? (
+                                            <Feather name="check" size={18} color={colors.primary} />
+                                          ) : null}
+                                        </TouchableOpacity>
+                                      ))
+                                    )}
+                                  </>
+                                ) : null}
+                              </ScrollView>
+                            </>
+                          );
+                        })()}
                       </View>
                     </View>
                   </View>
                 </Modal>
-
-                <View style={[styles.categoryFilterWrapper, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll} contentContainerStyle={styles.categoryContainer}>
-                    <TouchableOpacity
-                      style={[
-                        styles.categoryButton,
-                        { backgroundColor: selectedCategory === 'All' ? colors.primary : colors.border, borderWidth: 0 },
-                      ]}
-                      onPress={() => setSelectedCategory('All')}
-                    >
-                      <Text
-                        style={[
-                          styles.categoryButtonText,
-                          {
-                            color: selectedCategory === 'All' ? '#FFFFFF' : colors.text,
-                            fontWeight: selectedCategory === 'All' ? 'bold' : 'normal',
-                          },
-                        ]}
-                      >
-                        {t('projectsScreen.all')}
-                      </Text>
-                    </TouchableOpacity>
-                    {services.map((service) => (
-                      <TouchableOpacity
-                        key={service.id}
-                        style={[
-                          styles.categoryButton,
-                          { backgroundColor: selectedCategory === service.id.toString() ? colors.primary : colors.border, borderWidth: 0 },
-                        ]}
-                        onPress={() => setSelectedCategory(service.id.toString())}
-                      >
-                        <Text
-                          style={[
-                            styles.categoryButtonText,
-                            {
-                              color: selectedCategory === service.id.toString() ? '#FFFFFF' : colors.text,
-                              fontWeight: selectedCategory === service.id.toString() ? 'bold' : 'normal',
-                            },
-                          ]}
-                          numberOfLines={1}
-                        >
-                          {i18n.language === 'ar' ? service.nameAr : service.nameEn}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
 
                 <View style={[styles.androidSearchContainer, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
                   <Feather name="search" size={20} color={colors.textSecondary} />
@@ -1656,6 +1767,20 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
                     value={searchQuery}
                     onChangeText={setSearchQuery}
                   />
+                  <TouchableOpacity
+                    onPress={() => {
+                      const showPicker =
+                        userRole?.toUpperCase() === 'TECHNICIAN' && localFilter === 'available';
+                      setAndroidFilterMenuStep(showPicker ? 'pick' : 'list');
+                      setShowAndroidFiltersModal(true);
+                    }}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('projectsScreen.projects')}
+                  >
+                    <Feather name="filter" size={20} color={colors.primary} />
+                  </TouchableOpacity>
                 </View>
               </View>
 
@@ -2066,25 +2191,6 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
           )}
         </>
       )}
-
-      {/* Project Detail Modal - Show ProjectDetailModal for general project details */}
-      {/* Note: Specific screens like PendingProjectScreen and BidReceivedProjectScreen are now 
-          used for specific statuses via currentPage navigation */}
-        <ProjectDetailModal
-          visible={showProjectDetail && currentPage === 'list'}
-          project={selectedProject}
-          onClose={() => {
-            setShowProjectDetail(false);
-            setSelectedProject(null);
-          }}
-          onOpenChat={onOpenChat}
-          onViewTechnician={handleViewTechnician}
-          onBookAppointment={onBookAppointment}
-          onSuccess={() => {
-            // Reload projects after phase approval, contract signing, or any update
-            loadProjects();
-          }}
-        />
 
           </View>
       )}
@@ -2500,6 +2606,37 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  bidSentBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    marginTop: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    gap: 4,
+  },
+  bidSentText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  bidSentBadgeFigma: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    marginTop: 6,
+    marginBottom: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 999,
+    gap: 4,
+    maxWidth: '100%',
+  },
+  bidSentTextFigma: {
+    fontSize: 10,
+    fontWeight: '600',
+    flexShrink: 1,
   },
   description: {
     fontSize: 13,
@@ -2919,11 +3056,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     overflow: 'hidden',
     maxHeight: 400,
-  },
-  androidFilterContainer: {
-    marginBottom: 16,
-    position: 'relative',
-    zIndex: 10,
   },
   androidFilterButton: {
     backgroundColor: '#ffffff',

@@ -27,6 +27,7 @@ import { storage } from '../utils/storage';
 import { API_ENDPOINTS, buildApiUrl, buildApiUrlWithParams } from '../config/api';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
 import ConfirmationPopup, { useConfirmationPopup } from '../components/ConfirmationPopup';
+import AnimatedLoadingScreen from '../components/AnimatedLoadingScreen';
 
 interface AvailabilityScreenProps {
   onBack: () => void;
@@ -609,7 +610,7 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
     return (
       <Animated.View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background, opacity: screenOpacity, transform: [{ translateX: screenSlideX }] }]}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
+          <AnimatedLoadingScreen showMessage={false} />
         </View>
       </Animated.View>
     );

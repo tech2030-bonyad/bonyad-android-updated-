@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import { getUserProfile } from '../services/ProfileService';
+import AnimatedLoadingScreen from '../components/AnimatedLoadingScreen';
 
 // Figma Design Colors
 const FIGMA_COLORS = {
@@ -115,7 +116,7 @@ export default function MyDataScreen({
   if (isLoading) {
     return (
       <Animated.View style={[styles.loadingContainer, { backgroundColor: bgColor, paddingTop: insets.top, opacity: screenOpacity, transform: [{ translateX: screenSlideX }] }]}>
-        <ActivityIndicator size="large" color={primaryColor} />
+        <AnimatedLoadingScreen showMessage={false} />
       </Animated.View>
     );
   }

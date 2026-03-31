@@ -29,7 +29,6 @@ export { default as NewProjectView } from './NewProjectView';
 export { default as ManualProjectForm } from './ManualProjectForm';
 export { default as ConversationalAIForm } from './ConversationalAIForm';
 export { default as ProjectsScreen } from './ProjectsScreen';
-export { default as ProjectDetailModal } from './ProjectDetailModal';
 export { default as BidFormModal } from './BidFormModal';
 export { default as VisitRequestModal } from './VisitRequestModal';
 export { default as AcceptBidModal } from './AcceptBidModal';

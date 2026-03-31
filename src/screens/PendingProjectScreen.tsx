@@ -1,6 +1,6 @@
 /**
  * PendingProjectScreen
- * 
+ *
  * Screen for displaying project details when status is PENDING.
  * Supports two personas:
  * - User: Can view project overview, description, requirements, phases,
@@ -9,7 +9,7 @@
  *               or submit a bid.
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -19,12 +19,15 @@ import {
   ActivityIndicator,
   Dimensions,
   Platform,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
-import { API_ENDPOINTS, buildApiUrl, buildApiUrlWithParams } from '../config/api';
+import { API_ENDPOINTS, buildApiUrl, buildApiUrlWithParams, buildAssetUrl } from '../config/api';
 import { storage } from '../utils/storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ProjectCreationFlow from '../components/ProjectCreationFlow';
@@ -84,7 +87,62 @@ interface Project {
   timeRequiredDays?: number;
   needsVisit?: boolean;
   needsBooking?: boolean;
+  // image fields (same as web)
+  images?: string[];
+  photos?: string[];
+  files?: string[];
 }
+
+/** Generates "Phase 1", "Phase 2" etc. – same logic as web */
+function generatePhaseTitle(phase: Phase, t: (k: string) => string): string {
+  if (phase.title && phase.title.trim()) return phase.title;
+  return `${t('Phase')} ${phase.phaseNumber}`;
+}
+
+/** Unwrap array from common API shapes (raw array, Spring `content`, nested `phases` / `data`). */
+function normalizePhasesPayload(raw: unknown): Phase[] {
+  const asArray = ((): unknown[] => {
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw;
+    if (typeof raw === 'object') {
+      const o = raw as Record<string, unknown>;
+      if (Array.isArray(o.content)) return o.content;
+      if (Array.isArray(o.phases)) return o.phases;
+      if (Array.isArray(o.data)) return o.data;
+    }
+    return [];
+  })();
+
+  return asArray
+    .map((item, index) => {
+      if (!item || typeof item !== 'object') return null;
+      const p = item as Record<string, unknown>;
+      let id = Number(p.id);
+      if (!Number.isFinite(id)) id = -(index + 1);
+      let phaseNumber = Number(p.phaseNumber);
+      if (!Number.isFinite(phaseNumber)) phaseNumber = index + 1;
+      const title = p.title != null && String(p.title).trim() ? String(p.title) : undefined;
+      return {
+        id,
+        phaseNumber,
+        description: String(p.description ?? ''),
+        title,
+        moneySpent: Number(p.moneySpent) || 0,
+        timeSpentDays: Number(p.timeSpentDays) || 0,
+      } as Phase;
+    })
+    .filter((x): x is Phase => x !== null);
+}
+
+function sortPhasesByNumber(list: Phase[]): Phase[] {
+  return [...list].sort((a, b) => (a.phaseNumber || 0) - (b.phaseNumber || 0));
+}
+
+const { width: SCREEN_W } = Dimensions.get('window');
+const IMAGE_HEIGHT = 220;
+
+const PHASE_RIYAL_LIGHT = require('../../assets/saudi_riyal_logo.svg');
+const PHASE_RIYAL_DARK = require('../../assets/saudi_riyal_logo_dark.svg');
 
 interface VisitRequest {
   id: number;
@@ -110,7 +168,7 @@ interface PendingProjectScreenProps {
   onBidNow?: () => void;
 }
 
-// ===== PHASE CARD COMPONENT (theme-aware) =====
+// ===== PHASE CARD — simple layout, SAR via riyal SVG =====
 const PhaseCard = ({
   phase,
   formatBudget,
@@ -119,58 +177,259 @@ const PhaseCard = ({
   formatBudget: (amount: number) => string;
 }) => {
   const { t } = useTranslation();
-  const { colors } = useTheme();
-  const c = useMemo(() => ({
-    ...COLORS,
-    bgWhite: colors.cardBackground,
-    textBody: colors.text,
-    textSecondary: colors.textSecondary,
-    primary10: colors.primary + '20',
-    primary80: colors.primary,
-    green80: colors.success,
-  }), [colors]);
-  const phaseStyles = useMemo(() => StyleSheet.create({
-    card: {
-      borderWidth: 1,
-      borderColor: c.primary10,
-      borderRadius: 8,
-      padding: 16,
-      marginBottom: 10,
-      gap: 16,
-      backgroundColor: c.bgWhite,
-    },
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 6 },
-    headerLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
-    numberBadge: {
-      width: 24, height: 24, borderRadius: 6, backgroundColor: c.primary10, justifyContent: 'center', alignItems: 'center',
-    },
-    numberText: { fontSize: 12, fontWeight: '400', color: c.primary80 },
-    title: { fontSize: 12, fontWeight: '400', color: c.textBody, flex: 1 },
-    price: { fontSize: 10, fontWeight: '600', color: c.green80 },
-    description: { fontSize: 12, fontWeight: '400', color: c.textBody, lineHeight: 18 },
-    durationRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    durationText: { fontSize: 12, fontWeight: '400', color: c.textSecondary },
-  }), [c]);
+  const { colors, theme } = useTheme();
+  const riyalSource = theme === 'dark' ? PHASE_RIYAL_DARK : PHASE_RIYAL_LIGHT;
+
+  const formatPhaseDuration = (days: number) => {
+    if (days < 7) return `${days} ${t('day_unit') || 'days'}`;
+    const w = Math.ceil(days / 7);
+    return `${w} ${w === 1 ? t('Week') : t('weeks')}`;
+  };
+
+  const pcs = useMemo(
+    () =>
+      StyleSheet.create({
+        wrap: {
+          borderRadius: 16,
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: colors.border,
+          backgroundColor: colors.cardBackground,
+          padding: 14,
+          marginBottom: 12,
+          gap: 10,
+        },
+        top: {
+          flexDirection: 'row',
+          alignItems: 'flex-start',
+          gap: 10,
+        },
+        badge: {
+          minWidth: 32,
+          height: 32,
+          borderRadius: 10,
+          backgroundColor: colors.primary + '18',
+          alignItems: 'center',
+          justifyContent: 'center',
+          paddingHorizontal: 8,
+        },
+        badgeText: {
+          fontSize: 13,
+          fontWeight: '800',
+          color: colors.primary,
+        },
+        title: {
+          flex: 1,
+          fontSize: 14,
+          fontWeight: '600',
+          color: colors.text,
+          lineHeight: 19,
+        },
+        desc: {
+          fontSize: 12,
+          lineHeight: 18,
+          color: colors.textSecondary,
+        },
+        bottom: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          paddingTop: 10,
+          marginTop: 2,
+          borderTopWidth: StyleSheet.hairlineWidth,
+          borderTopColor: colors.border,
+        },
+        durationRow: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 6,
+          flex: 1,
+          marginRight: 8,
+        },
+        durationText: {
+          fontSize: 12,
+          color: colors.textSecondary,
+          fontWeight: '500',
+          flexShrink: 1,
+        },
+        priceRow: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 6,
+        },
+        priceText: {
+          fontSize: 14,
+          fontWeight: '700',
+          color: colors.text,
+        },
+        riyal: { width: 20, height: 18 },
+      }),
+    [colors]
+  );
 
   return (
-    <View style={phaseStyles.card}>
-      <View style={phaseStyles.header}>
-        <View style={phaseStyles.headerLeft}>
-          <View style={phaseStyles.numberBadge}>
-            <Text style={phaseStyles.numberText}>{phase.phaseNumber}</Text>
-          </View>
-          <Text style={phaseStyles.title} numberOfLines={1}>{phase.description}</Text>
+    <View style={pcs.wrap}>
+      <View style={pcs.top}>
+        <View style={pcs.badge}>
+          <Text style={pcs.badgeText}>{phase.phaseNumber}</Text>
         </View>
-        <Text style={phaseStyles.price}>{formatBudget(phase.moneySpent)}</Text>
+        <Text style={pcs.title} numberOfLines={2}>
+          {generatePhaseTitle(phase, t)}
+        </Text>
       </View>
-      <Text style={phaseStyles.description} numberOfLines={3}>{phase.description}</Text>
-      <View style={phaseStyles.durationRow}>
-        <Ionicons name="time-outline" size={12} color={c.textSecondary} />
-        <Text style={phaseStyles.durationText}>{Math.ceil(phase.timeSpentDays / 7)} {t('Week')}</Text>
+      {phase.description?.trim() ? (
+        <Text style={pcs.desc} numberOfLines={4}>
+          {phase.description}
+        </Text>
+      ) : null}
+      <View style={pcs.bottom}>
+        <View style={pcs.durationRow}>
+          <Ionicons name="time-outline" size={15} color={colors.textSecondary} />
+          <Text style={pcs.durationText} numberOfLines={1}>
+            {formatPhaseDuration(phase.timeSpentDays)}
+          </Text>
+        </View>
+        <View style={pcs.priceRow}>
+          <Text style={pcs.priceText}>{formatBudget(phase.moneySpent)}</Text>
+          <ExpoImage source={riyalSource} style={pcs.riyal} contentFit="contain" />
+        </View>
       </View>
     </View>
   );
 };
+
+// ===== IMAGE GALLERY COMPONENT =====
+const ImageGallery = ({ images, c }: { images: string[]; c: typeof COLORS }) => {
+  const [activeIdx, setActiveIdx] = useState(0);
+  const scrollRef = useRef<ScrollView>(null);
+
+  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_W);
+    setActiveIdx(idx);
+  };
+
+  if (images.length === 0) {
+    return (
+      <View style={[igStyles.placeholder, { backgroundColor: c.primary10 }]}>
+        <View style={[igStyles.placeholderIcon, { backgroundColor: c.primary80 + '18' }]}>
+          <Ionicons name="image-outline" size={40} color={c.primary80} />
+        </View>
+        <Text style={[igStyles.placeholderText, { color: c.textSecondary }]}>No photos yet</Text>
+        <Text style={[igStyles.placeholderSub, { color: c.textSecondary + 'aa' }]}>
+          Photos will appear here once added
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={igStyles.container}>
+      <ScrollView
+        ref={scrollRef}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+      >
+        {images.map((uri, idx) => (
+          <ExpoImage
+            key={idx}
+            source={{ uri }}
+            style={igStyles.image}
+            contentFit="cover"
+            transition={300}
+            placeholderContentFit="cover"
+          />
+        ))}
+      </ScrollView>
+      {/* Dot indicators */}
+      {images.length > 1 && (
+        <View style={igStyles.dotsRow}>
+          {images.map((_, idx) => (
+            <View
+              key={idx}
+              style={[
+                igStyles.dot,
+                {
+                  backgroundColor: idx === activeIdx ? COLORS.textWhite : COLORS.textWhite + '60',
+                  width: idx === activeIdx ? 16 : 6,
+                },
+              ]}
+            />
+          ))}
+        </View>
+      )}
+      {/* Counter badge */}
+      {images.length > 1 && (
+        <View style={igStyles.counter}>
+          <Text style={igStyles.counterText}>{activeIdx + 1} / {images.length}</Text>
+        </View>
+      )}
+    </View>
+  );
+};
+
+const igStyles = StyleSheet.create({
+  container: {
+    width: '100%',
+    height: IMAGE_HEIGHT,
+    position: 'relative',
+  },
+  image: {
+    width: SCREEN_W,
+    height: IMAGE_HEIGHT,
+  },
+  placeholder: {
+    height: IMAGE_HEIGHT,
+    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+  },
+  placeholderIcon: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  placeholderText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  placeholderSub: {
+    fontSize: 12,
+    textAlign: 'center',
+    paddingHorizontal: 32,
+  },
+  dotsRow: {
+    position: 'absolute',
+    bottom: 12,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    gap: 5,
+    alignItems: 'center',
+  },
+  dot: {
+    height: 6,
+    borderRadius: 3,
+  },
+  counter: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  counterText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+});
 
 // ===== MAIN COMPONENT =====
 export default function PendingProjectScreen({
@@ -218,6 +477,16 @@ export default function PendingProjectScreen({
   const screenWidth = Dimensions.get('window').width;
   const IS_WEB = Platform.OS === 'web';
   const IS_LARGE_WEB = IS_WEB && screenWidth >= 1024;
+
+  // Image helpers (mirrors web version)
+  const normalizeImageUrl = (url: string | undefined | null): string => {
+    if (!url) return '';
+    return buildAssetUrl(url);
+  };
+  const projectImages = useMemo(() => {
+    const raw = project?.images || project?.photos || (project as any)?.files || [];
+    return (raw as string[]).map(normalizeImageUrl).filter(Boolean);
+  }, [project]);
   // Normalize booleans that might arrive as strings/numbers from API
   // API sometimes uses different field names; support all
   const needsVisitRaw =
@@ -234,6 +503,14 @@ export default function PendingProjectScreen({
     needsBookingRaw === true || needsBookingRaw === 'true' || needsBookingRaw === 1;
 
   const serviceName = i18n.language === 'ar' ? project?.serviceNameAr : project?.serviceNameEn;
+
+  /** Prefer fetched phases; fall back to phases embedded on `project` (e.g. from Projects list). */
+  const displayPhases = useMemo(() => {
+    const fromFetch = sortPhasesByNumber(normalizePhasesPayload(phases));
+    if (fromFetch.length > 0) return fromFetch;
+    const embedded = normalizePhasesPayload((project as any)?.phases);
+    return sortPhasesByNumber(embedded);
+  }, [phases, project]);
   
   // Custom popup hooks
   const { alertState, showError, showSuccess, showInfo, hideAlert } = useAlertPopup();
@@ -264,20 +541,27 @@ export default function PendingProjectScreen({
 
     try {
       const token = await storage.getAuthToken();
-      const url = buildApiUrlWithParams(API_ENDPOINTS.PHASES.LIST, { projectId: project.id });
-      
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      
-      if (response.ok) {
+      const headers = {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      } as const;
+
+      const fetchList = async (url: string): Promise<Phase[]> => {
+        const response = await fetch(url, { method: 'GET', headers });
+        if (!response.ok) return [];
         const data = await response.json();
-        setPhases(data);
+        return sortPhasesByNumber(normalizePhasesPayload(data));
+      };
+
+      let list = await fetchList(
+        buildApiUrlWithParams(API_ENDPOINTS.PHASES.LIST, { projectId: project.id }),
+      );
+      if (list.length === 0) {
+        list = await fetchList(
+          buildApiUrlWithParams(API_ENDPOINTS.PROJECTS.PROJECT_PHASES, { id: project.id }),
+        );
       }
+      setPhases(list);
     } catch (error) {
       console.error('Error loading phases:', error);
     }
@@ -429,25 +713,25 @@ export default function PendingProjectScreen({
 
   return (
     <View style={[styles.container, { backgroundColor: c.bgWhite, paddingTop: IS_LARGE_WEB ? 0 : insets.top }]}>
-      {/* Header - Hidden on large web */}
+      {/* ── Header ── */}
       {!IS_LARGE_WEB && (
         <View style={[styles.header, styles.headerLTR]}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={24} color={c.textBody} />
-        </TouchableOpacity>
-        <View style={styles.headerTitleContainer}>
-            <Text style={[styles.headerTitle, { fontSize: scaledSize(16) }]}>
+          <TouchableOpacity onPress={onBack} style={styles.backButton}>
+            <Ionicons name="chevron-back" size={24} color={c.textBody} />
+          </TouchableOpacity>
+          <View style={styles.headerTitleContainer}>
+            <Text style={[styles.headerTitle, { fontSize: scaledSize(15) }]} numberOfLines={1}>
               {serviceName || t('Project')}
             </Text>
             <Text style={[styles.headerSubtitle, { fontSize: scaledSize(10) }]}>
               {t('Pending Project')}
             </Text>
+          </View>
         </View>
-      </View>
       )}
-      
+
       {/* Content */}
-      <ScrollView 
+      <ScrollView
         style={styles.content}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
@@ -455,6 +739,13 @@ export default function PendingProjectScreen({
           IS_LARGE_WEB && styles.webContentFullWidth,
         ]}
       >
+        {/* ── Hero Image Gallery ── */}
+        {!IS_LARGE_WEB && (
+          <View style={styles.heroWrapper}>
+            <ImageGallery images={projectImages} c={c} />
+          </View>
+        )}
+
         {/* Title Section - Large Web */}
         {IS_LARGE_WEB && (
           <View style={styles.titleSectionLargeWeb}>
@@ -471,12 +762,12 @@ export default function PendingProjectScreen({
             </View>
           </View>
         )}
-        
+
         {/* Status Stepper */}
         <View style={[styles.stepperContainer, IS_LARGE_WEB && styles.stepperContainerLargeWeb]}>
           <ProjectCreationFlow currentStep="PENDING" />
         </View>
-        
+
         {/* Divider */}
         <View style={[styles.divider, IS_LARGE_WEB && styles.dividerLargeWeb]} />
         {/* Project Overview Section */}
@@ -522,6 +813,25 @@ export default function PendingProjectScreen({
               </Text>
             </View>
           </View>
+
+          {/* Work phases (inside overview — matches list data + API) */}
+          {displayPhases.length > 0 && (
+            <>
+              <View style={[styles.overviewPhasesHeader, IS_LARGE_WEB && styles.overviewPhasesHeaderLargeWeb]}>
+                <Ionicons name="layers-outline" size={IS_LARGE_WEB ? 22 : 12} color={c.primary80} />
+                <Text style={[styles.sectionLabel, IS_LARGE_WEB && styles.sectionLabelLargeWeb]}>
+                  {t('Work Phases')}
+                </Text>
+              </View>
+              {displayPhases.map((phase) => (
+                <PhaseCard
+                  key={phase.id}
+                  phase={phase}
+                  formatBudget={formatBudget}
+                />
+              ))}
+            </>
+          )}
         </View>
         
         {/* Description Section */}
@@ -736,23 +1046,6 @@ export default function PendingProjectScreen({
           </View>
         )}
         
-        {/* Work Phases Section */}
-        {phases.length > 0 && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Ionicons name="document-text-outline" size={12} color={c.primary80} />
-              <Text style={styles.sectionLabel}>{t('Work Phases')}</Text>
-            </View>
-            {phases.map((phase) => (
-              <PhaseCard
-                key={phase.id}
-                phase={phase}
-                formatBudget={formatBudget}
-              />
-            ))}
-          </View>
-        )}
-        
         {/* Action Buttons - Different for User vs Technician */}
         <View style={[styles.actionButtons, IS_LARGE_WEB && styles.actionButtonsLargeWeb]}>
           {isTechnician ? (
@@ -856,8 +1149,8 @@ function makeStyles(c: typeof COLORS) {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 16,
-    gap: 24,
+    paddingVertical: 12,
+    gap: 12,
   },
   headerLTR: {
     direction: 'ltr',
@@ -900,6 +1193,13 @@ function makeStyles(c: typeof COLORS) {
   },
   headerSubtitleLargeWeb: {
     fontSize: 16,
+  },
+  heroWrapper: {
+    position: 'relative',
+    marginHorizontal: -16,
+    marginTop: -16,
+    marginBottom: 16,
+    overflow: 'hidden',
   },
   stepperContainer: {
     paddingHorizontal: 16,
@@ -1019,6 +1319,18 @@ function makeStyles(c: typeof COLORS) {
     fontSize: 12,
     fontWeight: '400',
     color: c.textSecondary,
+  },
+  overviewPhasesHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 20,
+    marginBottom: 10,
+  },
+  overviewPhasesHeaderLargeWeb: {
+    gap: 14,
+    marginTop: 28,
+    marginBottom: 16,
   },
   sectionHeader: {
     flexDirection: 'row',

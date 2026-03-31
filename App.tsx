@@ -13,6 +13,7 @@ import OnlineStatusService from './src/services/OnlineStatusService';
 import { presenceService } from './src/services/PresenceService';
 import { storage } from './src/utils/storage';
 import CoachMarkProvider from './src/components/CoachMarkProvider';
+import AnimatedLoadingScreen from './src/components/AnimatedLoadingScreen';
 import { coachMarksStorage } from './src/utils/coachMarks';
 import { useRouter, type Screen } from './src/utils/useRouter';
 import {
@@ -22,6 +23,7 @@ import {
   type HomeShellFromChatbotPayload,
   type ProfileSubviewForChatbot,
 } from './src/utils/chatbotNavigateAndroid';
+import { getOrCreateRoomId, tryParseChatRoomIdFromActionUrl } from './src/utils/chatUtils';
 import * as SplashScreenNative from 'expo-splash-screen';
 import * as Font from 'expo-font';
 import { Asset } from 'expo-asset';
@@ -59,6 +61,14 @@ import { globalAlertManager } from './src/utils/globalAlertManager';
 import { CreateCheckoutRequest } from './src/services/PaymentService';
 // import * as Notifications from 'expo-notifications';
 // import { registerForPushNotificationsAsync } from './src/utils/useFCMToken';
+
+// Lazy import Firebase Messaging (native push notification taps)
+let messaging: any = null;
+try {
+  messaging = require('@react-native-firebase/messaging').default;
+} catch (error) {
+  console.warn('⚠️ React Native Firebase Messaging not available:', error);
+}
 
 // Keep native splash screen visible while we show custom splash
 SplashScreenNative.preventAutoHideAsync();
@@ -122,6 +132,8 @@ export default function App() {
   const [showOTPPopup, setShowOTPPopup] = useState(false); // OTP verification popup state
   const [currentNotification, setCurrentNotification] = useState<any | null>(null);
   const [showNotificationPopup, setShowNotificationPopup] = useState(false);
+  const [isRouteTransitionLoading, setIsRouteTransitionLoading] = useState(false);
+  const routeTransitionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastCheckedNotificationId = useRef<number | null>(null); // Track last checked notification ID
   const notificationCheckInterval = useRef<NodeJS.Timeout | null>(null); // Store interval reference
   const [isAppReady, setAppReady] = useState(false);
@@ -247,9 +259,6 @@ export default function App() {
           } else if (!authResult.onboarded) {
             console.log('📍 Technician not onboarded - redirecting to onboarding');
             setScreen('technicianOnboarding');
-          } else if (!hasSeenTour && Platform.OS !== 'web') {
-            console.log('📍 Technician fully onboarded but hasn\'t seen product tour - showing tour');
-            setScreen('onboarding');
           } else {
             console.log('📍 Technician fully onboarded - going to home');
             setScreen('home');
@@ -374,6 +383,22 @@ export default function App() {
 
   // Check for new notifications from API
   const checkForNewNotifications = async () => {
+    const isAuthScreen =
+      currentScreen === 'welcome' ||
+      currentScreen === 'overview' ||
+      currentScreen === 'introToApp' ||
+      currentScreen === 'onboarding' ||
+      currentScreen === 'login' ||
+      currentScreen === 'signup' ||
+      currentScreen === 'otpVerification' ||
+      currentScreen === 'forgotPassword' ||
+      currentScreen === 'resetPassword';
+
+    // Never show popups / run notification polling while user is on auth screens.
+    if (isAuthScreen) {
+      return;
+    }
+
     if (!authToken || !userId) {
       return;
     }
@@ -416,6 +441,7 @@ export default function App() {
           // Only show popup if we haven't shown it for this notification yet
           if (currentNotification?.id !== latestNotification.id) {
             setCurrentNotification(latestNotification);
+            // Avoid showing notification popups on auth screens (extra safety).
             setShowNotificationPopup(true);
 
             // Request browser notification permission and show notification (web only)
@@ -485,7 +511,7 @@ export default function App() {
       }
       lastCheckedNotificationId.current = null;
     }
-  }, [authToken, userId]);
+  }, [authToken, userId, currentScreen]);
 
   // Track screen changes
   useEffect(() => {
@@ -892,6 +918,7 @@ export default function App() {
               screenStack={screenStack}
               setScreenStack={setScreenStack}
               router={router}
+              checkSession={checkSession}
               showProfile={showProfile}
               setShowProfile={setShowProfile}
               portfolioReturnTo={portfolioReturnTo}
@@ -969,6 +996,9 @@ export default function App() {
               bundleLoadError={bundleLoadError}
               setBundleLoadError={setBundleLoadError}
               postOnboardingScreenRef={postOnboardingScreenRef}
+              setIsRouteTransitionLoading={setIsRouteTransitionLoading}
+              isRouteTransitionLoading={isRouteTransitionLoading}
+              routeTransitionTimerRef={routeTransitionTimerRef}
             />
           </View>
         </GlobalAlertProvider>
@@ -983,6 +1013,7 @@ function AppContent({
   screenStack,
   setScreenStack,
   router,
+  checkSession,
   showProfile,
   setShowProfile,
   portfolioReturnTo,
@@ -1062,6 +1093,9 @@ function AppContent({
   bundleLoadError,
   setBundleLoadError,
   postOnboardingScreenRef,
+  setIsRouteTransitionLoading,
+  isRouteTransitionLoading,
+  routeTransitionTimerRef,
 }: any) {
   const { colors } = useTheme();
 
@@ -1096,6 +1130,19 @@ function AppContent({
   // Navigate: push to stack so back always goes to the previous screen.
   // replaceCurrent: swap the top screen (e.g. after create ticket → list, back must not return to create).
   const navigate = (screen: Screen, options?: { replace?: boolean; replaceCurrent?: boolean }) => {
+    // Global transition loader (brief) for navigation.
+    // On native, this loader feels like an unnecessary "loading screen" at app start,
+    // so keep it web-only.
+    if (Platform.OS === 'web') {
+      setIsRouteTransitionLoading(true);
+      if (routeTransitionTimerRef.current) {
+        clearTimeout(routeTransitionTimerRef.current);
+      }
+      routeTransitionTimerRef.current = setTimeout(() => {
+        setIsRouteTransitionLoading(false);
+      }, 280);
+    }
+
     if (Platform.OS === 'web' && router) {
       router.navigate(screen, undefined, !!(options?.replace || options?.replaceCurrent));
     }
@@ -1116,6 +1163,358 @@ function AppContent({
     }
     setCurrentScreen(screen);
   };
+
+  // Show the same transition loader for async notification routing (before navigate() happens).
+  const showTransitionLoader = useCallback(() => {
+    if (Platform.OS !== 'web') return;
+    setIsRouteTransitionLoading(true);
+    if (routeTransitionTimerRef.current) {
+      clearTimeout(routeTransitionTimerRef.current);
+    }
+    routeTransitionTimerRef.current = setTimeout(() => {
+      setIsRouteTransitionLoading(false);
+    }, 280);
+  }, [setIsRouteTransitionLoading, routeTransitionTimerRef]);
+
+  const pendingNotificationTapRef = useRef<any | null>(null);
+  const returnHomeTabOnBackRef = useRef<
+    'home' | 'projects' | 'chat' | 'profile' | 'new' | 'appointments' | 'notifications' | 'wallet' | 'chatbot' | null
+  >(null);
+
+  const tryParseSmallTaskRequestId = (actionUrl: unknown): number | null => {
+    if (typeof actionUrl !== 'string') return null;
+    const m = actionUrl.trim().match(/^smalltask:\/\/request\/(\d+)(?:\/bid\/(\d+))?$/i);
+    if (!m) return null;
+    const id = Number(m[1]);
+    return Number.isFinite(id) && id > 0 ? id : null;
+  };
+
+  const openHomeShellFromNotification = useCallback(
+    (args: {
+      tab: 'home' | 'projects' | 'chat' | 'profile' | 'notifications' | 'appointments' | 'wallet' | 'chatbot';
+      embeddedProjects?: { initialSmallTask?: any; initialProject?: any; initialProjectType?: 'large' | 'small' };
+      embeddedChat?: { roomId: string; receiverId: number; receiverName: string; projectId?: number | null };
+      returnTabOnBack?: 'home' | 'projects' | 'chat' | 'profile' | 'new' | 'appointments' | 'notifications' | 'wallet' | 'chatbot';
+    }) => {
+      setShowProfile(false);
+      openInHomeShell({
+        tab: args.tab,
+        returnTabOnBack: args.returnTabOnBack,
+        embeddedChat: args.embeddedChat,
+        embeddedProjects: args.embeddedProjects,
+      });
+      navigate('home', { replaceCurrent: true });
+    },
+    [navigate, openInHomeShell, setShowProfile]
+  );
+
+  const handleNotificationTap = useCallback(
+    async (raw: any) => {
+      // Ensure notification-triggered routing uses the new loader too.
+      showTransitionLoader();
+
+      const data = raw?.data ?? raw ?? {};
+      console.log('🔔 [handleNotificationTap] called with data:', JSON.stringify(data, null, 2));
+
+      if (!authToken) {
+        console.log('🔔 [handleNotificationTap] No auth token — storing for later replay');
+        pendingNotificationTapRef.current = data;
+        navigate('login', { replace: true });
+        return;
+      }
+
+      // ── Normalize every ID the backend may send ──────────────────────────
+      // Backend NotificationService.java FCM data keys:
+      //   notificationType, projectId, phaseId, bidId/offerId,
+      //   appointmentId, timeRequestId, ticketId, requestId,
+      //   roomId, otherUserId/otherUserName, fromUserId/fromUserName
+      // The REST /notifications/my-notifications response uses:
+      //   relatedProjectId, relatedPhaseId, relatedBidId, relatedAppointmentId,
+      //   relatedTimeRequestId, relatedSupportTicketId, relatedChatRoomId, actionUrl
+
+      const typeUpper = String(
+        data?.notificationType ?? data?.type ?? data?.notification_type ?? data?.category ?? ''
+      ).toUpperCase().trim();
+
+      const actionUrl: string | undefined =
+        data?.actionUrl ?? data?.action_url ?? data?.url ?? data?.link;
+
+      const num = (v: unknown): number | null => {
+        const n = Number(v);
+        return Number.isFinite(n) && n > 0 ? n : null;
+      };
+      const str = (v: unknown): string | null => {
+        if (v == null) return null;
+        const s = String(v).trim();
+        return s.length > 0 ? s : null;
+      };
+
+      const projectId =
+        num(data?.projectId) ?? num(data?.project_id) ??
+        num(data?.relatedProjectId) ?? num(data?.related_project_id);
+
+      const phaseId =
+        num(data?.phaseId) ?? num(data?.phase_id) ??
+        num(data?.relatedPhaseId) ?? num(data?.related_phase_id);
+
+      const bidId =
+        num(data?.bidId) ?? num(data?.bid_id) ??
+        num(data?.offerId) ?? num(data?.offer_id) ??
+        num(data?.relatedBidId) ?? num(data?.related_bid_id);
+
+      const appointmentId =
+        num(data?.appointmentId) ?? num(data?.appointment_id) ??
+        num(data?.relatedAppointmentId) ?? num(data?.related_appointment_id);
+
+      const timeRequestId =
+        num(data?.timeRequestId) ?? num(data?.time_request_id) ??
+        num(data?.relatedTimeRequestId) ?? num(data?.related_time_request_id);
+
+      // Backend Notification entity has NO `relatedSupportTicketId` column. For ticket
+      // notifications (SLA, escalation, etc.), the ticket id exists only in the FCM push
+      // payload (`ticketId`) or embedded in the text ("Ticket #5 …" / "تذكرة #5 …").
+      // When the notification comes from the REST list, we fall back to parsing the text.
+      const parseTicketIdFromText = (text: unknown): number | null => {
+        if (typeof text !== 'string') return null;
+        const m = text.match(/(?:ticket|تذكرة)\s*#(\d+)/i);
+        if (!m) return null;
+        const id = Number(m[1]);
+        return Number.isFinite(id) && id > 0 ? id : null;
+      };
+
+      const isTicketType = typeUpper.includes('TICKET') || typeUpper.includes('SLA_') || typeUpper === 'LOW_CSAT_ALERT' || typeUpper === 'CSAT_SURVEY';
+
+      const ticketId =
+        num(data?.ticketId) ?? num(data?.ticket_id) ??
+        num(data?.relatedSupportTicketId) ?? num(data?.related_support_ticket_id) ??
+        num(data?.supportTicketId) ?? num(data?.support_ticket_id) ??
+        (isTicketType
+          ? (parseTicketIdFromText(data?.title) ?? parseTicketIdFromText(data?.titleEn) ??
+             parseTicketIdFromText(data?.message) ?? parseTicketIdFromText(data?.messageEn))
+          : null);
+
+      const requestId =
+        num(data?.requestId) ?? num(data?.request_id) ??
+        num(data?.relatedSmallTaskRequestId) ?? num(data?.related_small_task_request_id);
+
+      const roomId: string | null =
+        str(data?.roomId) ?? str(data?.room_id) ??
+        str(data?.relatedChatRoomId) ?? str(data?.related_chat_room_id) ??
+        str(data?.chatRoomId) ?? str(data?.chat_room_id) ??
+        str(data?.chatRoomRoomId);
+
+      const fromUserId = num(data?.fromUserId) ?? num(data?.from_user_id) ?? num(data?.otherUserId) ?? num(data?.other_user_id) ?? num(data?.senderId) ?? num(data?.sender_id);
+      const fromUserName = str(data?.fromUserName) ?? str(data?.from_user_name) ?? str(data?.otherUserName) ?? str(data?.other_user_name) ?? str(data?.senderName) ?? str(data?.sender_name) ?? '';
+
+      const smallTaskRequestId = tryParseSmallTaskRequestId(actionUrl) ?? (
+        (typeUpper.includes('SMALL_TASK') || (typeof actionUrl === 'string' && actionUrl.startsWith('smalltask://')))
+          ? requestId
+          : null
+      );
+
+      console.log('🔔 [handleNotificationTap] typeUpper:', typeUpper, 'projectId:', projectId, 'ticketId:', ticketId, 'smallTaskRequestId:', smallTaskRequestId, 'requestId:', requestId, 'roomId:', roomId, 'actionUrl:', actionUrl);
+
+      // ── 1. CHAT MESSAGE → open exact chat thread ────────────────────────
+      if (typeUpper === 'MESSAGE' || typeUpper === 'CHAT_MESSAGE' || typeUpper === 'CHATMESSAGE') {
+        console.log('🔔 → open exact chat thread');
+        let resolvedRoomId = roomId;
+        let receiverId = fromUserId ?? 0;
+        let receiverName = fromUserName;
+        let projectIdClean: number | null = projectId;
+
+        if (!resolvedRoomId) resolvedRoomId = tryParseChatRoomIdFromActionUrl(actionUrl);
+        if (!resolvedRoomId && receiverId > 0) {
+          resolvedRoomId = await getOrCreateRoomId(receiverId);
+        }
+
+        if (!resolvedRoomId) {
+          openHomeShellFromNotification({ tab: 'chat' });
+          return;
+        }
+
+        if (receiverId <= 0 || !receiverName || projectIdClean == null) {
+          try {
+            const token = await storage.getAuthToken();
+            if (token) {
+              const { API_ENDPOINTS, buildApiUrl } = await import('./src/config/api');
+              const url = buildApiUrl(API_ENDPOINTS.CHAT.MY_CHATS);
+              const res = await fetch(url, { method: 'GET', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
+              if (res.ok) {
+                const text = await res.text();
+                const json = text && text.trim() !== '' ? JSON.parse(text) : null;
+                const rooms = Array.isArray(json) ? json : (Array.isArray(json?.data) ? json.data : (Array.isArray(json?.rooms) ? json.rooms : (Array.isArray(json?.chatRooms) ? json.chatRooms : [])));
+                const hit = rooms.find((r: any) => String(r?.roomId ?? r?.room_id ?? '') === String(resolvedRoomId));
+                if (hit) {
+                  const rid = num(hit.otherUserId) ?? num(hit.other_user_id) ?? num(hit.receiverId) ?? num(hit.receiver_id);
+                  if (rid) receiverId = rid;
+                  const rn = str(hit.otherUserName) ?? str(hit.other_user_name) ?? str(hit.receiverName) ?? str(hit.receiver_name);
+                  if (rn) receiverName = rn;
+                  const pid = num(hit.projectId) ?? num(hit.project_id);
+                  if (pid) projectIdClean = pid;
+                }
+              }
+            }
+          } catch (e) {
+            console.warn('⚠️ resolve chat room meta failed:', (e as any)?.message ?? e);
+          }
+        }
+
+        openHomeShellFromNotification({
+          tab: 'chat',
+          embeddedChat: { roomId: resolvedRoomId, receiverId, receiverName, projectId: projectIdClean },
+        });
+        return;
+      }
+
+      // ── 2. SUPPORT TICKET → open TicketDetailScreen ─────────────────────
+      // Backend sends `ticketId` for: SLA_BREACH, SLA_WARNING, TICKET_ESCALATED,
+      // TICKET_CREATED, TICKET_MESSAGE_RECEIVED, TICKET_STATUS_CHANGED,
+      // TICKET_ASSIGNED, TICKET_CLOSED, TICKET_REOPENED, LOW_CSAT_ALERT, etc.
+      if (ticketId) {
+        console.log('🔔 → open ticket detail', ticketId);
+        setSelectedTicketId(ticketId);
+        returnHomeTabOnBackRef.current = 'notifications';
+        navigate('ticketDetail');
+        return;
+      }
+      if (isTicketType) {
+        console.log('🔔 → ticket-related notification without id → ticket list');
+        returnHomeTabOnBackRef.current = 'notifications';
+        navigate('ticketList');
+        return;
+      }
+
+      // ── 3. SUPPORT CHAT REQUEST → open SupportChatScreen ────────────────
+      // Backend sends `requestId` + `notificationType: SUPPORT_REQUEST_CREATED/ASSIGNED`
+      // and `actionUrl: support://request/<id>`.
+      if (typeUpper === 'SUPPORT_REQUEST_CREATED' || typeUpper === 'SUPPORT_REQUEST_ASSIGNED' ||
+          (typeof actionUrl === 'string' && actionUrl.startsWith('support://request/'))) {
+        console.log('🔔 → support chat request', requestId);
+        navigate('supportChat');
+        return;
+      }
+
+      // ── 4. SMALL TASK → open small task detail inside Projects tab ──────
+      // Backend sends `requestId` + `actionUrl: smalltask://request/<id>` for
+      // SMALL_TASK_REQUEST, bid notifications, assignment, completion, payment, etc.
+      if (smallTaskRequestId) {
+        console.log('🔔 → small task', smallTaskRequestId);
+        openHomeShellFromNotification({
+          tab: 'projects',
+          returnTabOnBack: 'notifications',
+          embeddedProjects: {
+            initialSmallTask: { id: smallTaskRequestId },
+            initialProjectType: 'small',
+          },
+        });
+        return;
+      }
+
+      // ── 5. APPOINTMENT / TIME REQUEST → open appointments tab ───────────
+      if (typeUpper.includes('APPOINTMENT') || typeUpper.includes('TIME_REQUEST')) {
+        console.log('🔔 → appointments tab');
+        openHomeShellFromNotification({ tab: 'appointments' });
+        return;
+      }
+
+      // ── 5b. PROFILE-RELATED NOTIFICATIONS → open Profile tab ─────────────
+      // Examples from backend NotificationType: ACCOUNT_*, PASSWORD_RESET_SUCCESS,
+      // SUBSCRIPTION_*, SUGGESTION_*, ADMIN_REQUEST.
+      if (
+        typeUpper.includes('ACCOUNT_') ||
+        typeUpper.includes('PASSWORD') ||
+        typeUpper.includes('SUBSCRIPTION_') ||
+        typeUpper.includes('SUGGESTION_') ||
+        typeUpper === 'ADMIN_REQUEST'
+      ) {
+        // Deep-link to the most relevant profile sub-screen.
+        // Note: backend doesn't always send an explicit actionUrl for these types.
+        let subView: ProfileSubviewForChatbot = 'myData';
+        if (typeUpper.includes('SUBSCRIPTION_')) subView = 'subscription';
+        else if (typeUpper.includes('SUGGESTION_')) subView = 'services';
+        else if (typeUpper.includes('PASSWORD')) subView = 'changePassword';
+        else if (typeUpper === 'ADMIN_REQUEST') subView = 'myData';
+        else if (typeUpper.includes('ACCOUNT_')) subView = 'myData';
+
+        console.log('🔔 → profile-related notification → profile subview', subView);
+        bumpProfileNavFromChatbot(subView);
+        openHomeShellFromNotification({ tab: 'profile', returnTabOnBack: 'notifications' });
+        return;
+      }
+
+      // ── 6. PROJECT-RELATED → open project detail inside Projects tab ────
+      // Handles: PROJECT_CREATED, PROJECT_ASSIGNED, BID_RECEIVED, BID_ACCEPTED,
+      // BID_REJECTED, PROJECT_APPROVED, PHASE_*, PROJECT_COMPLETED, etc.
+      if (projectId) {
+        console.log('🔔 → fetching project', projectId);
+        try {
+          const { fetchProjectById } = await import('./src/services/ProjectService');
+          const project = await fetchProjectById(projectId);
+          console.log('🔔 fetchProjectById result:', project ? `id=${project.id} status=${project.status}` : 'null');
+          if (project) {
+            openHomeShellFromNotification({
+              tab: 'projects',
+              returnTabOnBack: 'notifications',
+              embeddedProjects: { initialProject: project, initialProjectType: 'large' },
+            });
+            return;
+          }
+        } catch (e) {
+          console.warn('⚠️ fetchProjectById failed:', (e as any)?.message ?? e);
+        }
+        openHomeShellFromNotification({
+          tab: 'projects',
+          returnTabOnBack: 'notifications',
+          embeddedProjects: { initialProject: { id: projectId }, initialProjectType: 'large' },
+        });
+        return;
+      }
+
+      // ── 7. Fallback → notifications tab ─────────────────────────────────
+      console.log('🔔 → fallback notifications tab');
+      openHomeShellFromNotification({ tab: 'notifications' });
+    },
+    [authToken, navigate, openHomeShellFromNotification, showTransitionLoader]
+  );
+
+  // Replay a notification tap that happened before auth/session restore
+  useEffect(() => {
+    if (!authToken) return;
+    if (!pendingNotificationTapRef.current) return;
+    const pending = pendingNotificationTapRef.current;
+    pendingNotificationTapRef.current = null;
+    void handleNotificationTap({ data: pending });
+  }, [authToken, handleNotificationTap]);
+
+  // Native: navigate on notification tap (background/quit → open app)
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    if (!messaging) return;
+
+    const unsub = messaging().onNotificationOpenedApp((remoteMessage: any) => {
+      console.log('🔔 [Android] App opened from notification (background)');
+      void handleNotificationTap(remoteMessage);
+    });
+
+    messaging()
+      .getInitialNotification()
+      .then((remoteMessage: any) => {
+        if (!remoteMessage) return;
+        console.log('🔔 [Android] App opened from notification (quit)');
+        void handleNotificationTap(remoteMessage);
+      })
+      .catch((e: any) => {
+        console.warn('⚠️ [Android] getInitialNotification failed:', e?.message ?? e);
+      });
+
+    return () => {
+      try {
+        unsub?.();
+      } catch {
+        // ignore
+      }
+    };
+  }, [handleNotificationTap]);
 
   const getChatbotAndroidDeps = useCallback((): ChatbotAndroidNavDeps => {
     return {
@@ -1186,6 +1585,14 @@ function AppContent({
 
   // Pop stack so back goes to previous screen (e.g. Home → Create project → back → Home).
   const goBack = useCallback(() => {
+    if (currentScreen === 'ticketDetail' && returnHomeTabOnBackRef.current) {
+      const tab = returnHomeTabOnBackRef.current;
+      returnHomeTabOnBackRef.current = null;
+      setShowProfile(false);
+      openInHomeShell({ tab });
+      navigate('home', { replaceCurrent: true });
+      return;
+    }
     if (currentScreen === 'home' && showProfile) {
       setShowProfile(false);
       return;
@@ -1287,20 +1694,9 @@ function AppContent({
             <SplashScreen
               onComplete={async () => {
                 console.log('✅ SplashScreen onComplete called - checking session');
-                // Check if user has ever logged in before
-                const loginCount = await storage.getLoginCount();
-                const hasSeenOnboarding = await storage.hasSeenOnboarding();
-
-                // Only show onboarding for brand new users who have NEVER logged in or signed up
-                if (loginCount === 0 && !hasSeenOnboarding) {
-                  console.log('📍 Brand new user - showing onboarding');
-                  setCurrentScreen('onboarding');
-                  if (Platform.OS === 'android') setScreenStack(['onboarding']);
-                } else {
-                  // User has logged in before or seen onboarding, go to login
-                  setCurrentScreen('login');
-                  if (Platform.OS === 'android') setScreenStack(['login']);
-                }
+                // Onboarding/product-tour should NOT show just by opening the app.
+                // Session restoration decides the correct next screen (login/home/tech flows).
+                await checkSession();
               }}
               onNavigateToOverview={() => {
                 console.log('🌐 SplashScreen onNavigateToOverview called - navigating to welcome');
@@ -1733,6 +2129,9 @@ function AppContent({
                       setSelectedCategory(category);
                       navigate('categorySubcategories');
                     }}
+                    onNavigateFromNotification={async (n) => {
+                      await handleNotificationTap({ data: n });
+                    }}
                   />
                 </CoachMarkProvider>
               ) : (
@@ -1766,6 +2165,9 @@ function AppContent({
                     userId={userId}
                     authToken={authToken}
                     projectsFilter={projectsFilter}
+                    onNavigateFromNotification={async (n) => {
+                      await handleNotificationTap({ data: n });
+                    }}
                   />
                 </CoachMarkProvider>
               )}
@@ -1858,14 +2260,30 @@ function AppContent({
               onShowProjectDetails={(project) => {
                 if (!project) return;
                 const status = (project.status || '').toUpperCase().trim();
+                const isTech = userRole === 'technician';
+                const userHasBid = !!(project as { userHasBid?: boolean }).userHasBid;
+                const isBiddingPhase =
+                  status === 'PENDING' ||
+                  status === 'BID_RECEIVED' ||
+                  (status.includes('BID') && status.includes('RECEIVED'));
                 setSelectedProjectForDetail(project);
-                if (status === 'PENDING') setCurrentScreen('pendingProject');
-                else if (status === 'BID_RECEIVED' || (status.includes('BID') && status.includes('RECEIVED'))) setCurrentScreen('bidReceivedProject');
-                else if (status === 'APPROVED' || status === 'PHASE_PLANNING' || status === 'PHASE_PLANNING_APPROVED') setCurrentScreen('approvedProject');
-                else if (status === 'CONTRACT_SIGNING') setCurrentScreen('contractSigningProject');
-                else if (status === 'IN_PROGRESS') setCurrentScreen('inProgressProject');
-                else if (status === 'COMPLETED') setCurrentScreen('completedProject');
-                else setCurrentScreen('inProgressProject');
+                if (isTech && isBiddingPhase) {
+                  setCurrentScreen(userHasBid ? 'bidReceivedProject' : 'pendingProject');
+                } else if (status === 'PENDING') {
+                  setCurrentScreen('pendingProject');
+                } else if (status === 'BID_RECEIVED' || (status.includes('BID') && status.includes('RECEIVED'))) {
+                  setCurrentScreen('bidReceivedProject');
+                } else if (status === 'APPROVED' || status === 'PHASE_PLANNING' || status === 'PHASE_PLANNING_APPROVED') {
+                  setCurrentScreen('approvedProject');
+                } else if (status === 'CONTRACT_SIGNING') {
+                  setCurrentScreen('contractSigningProject');
+                } else if (status === 'IN_PROGRESS') {
+                  setCurrentScreen('inProgressProject');
+                } else if (status === 'COMPLETED') {
+                  setCurrentScreen('completedProject');
+                } else {
+                  setCurrentScreen('inProgressProject');
+                }
               }}
               onOpenChat={(roomId, receiverId, receiverName) => {
                 setChatRoomId(roomId);
@@ -1880,6 +2298,7 @@ function AppContent({
           {currentScreen === 'pendingProject' && selectedProjectForDetail && (
             <PendingProjectScreen
               project={selectedProjectForDetail}
+              isTechnician={userRole === 'technician'}
               onBack={goBack}
               onSuccess={() => { setSelectedProjectForDetail(null); setCurrentScreen('runningProjects'); }}
             />
@@ -1887,6 +2306,7 @@ function AppContent({
           {currentScreen === 'bidReceivedProject' && selectedProjectForDetail && (
             <BidReceivedProjectScreen
               project={selectedProjectForDetail}
+              isTechnician={userRole === 'technician'}
               onBack={goBack}
               onSuccess={() => { setSelectedProjectForDetail(null); setCurrentScreen('runningProjects'); }}
               onOpenChat={(roomId, receiverId, receiverName) => {
@@ -2084,6 +2504,9 @@ function AppContent({
           {currentScreen === 'notifications' && (
             <NotificationsScreen
               onBack={goBack}
+              onNavigateFromNotification={async (n) => {
+                await handleNotificationTap({ data: n });
+              }}
             />
           )}
 
@@ -2128,7 +2551,18 @@ function AppContent({
       </PaperProvider>
 
       {/* Notification Popup - Web only */}
-      {Platform.OS === 'web' && (
+      {Platform.OS === 'web' &&
+        !(
+          currentScreen === 'welcome' ||
+          currentScreen === 'overview' ||
+          currentScreen === 'introToApp' ||
+          currentScreen === 'onboarding' ||
+          currentScreen === 'login' ||
+          currentScreen === 'signup' ||
+          currentScreen === 'otpVerification' ||
+          currentScreen === 'forgotPassword' ||
+          currentScreen === 'resetPassword'
+        ) && (
         <NotificationPopup
           notification={currentNotification}
           visible={showNotificationPopup}
@@ -2147,6 +2581,19 @@ function AppContent({
             }
           }}
         />
+      )}
+
+      {/* Global transition loader overlay (web-only) */}
+      {Platform.OS === 'web' && isRouteTransitionLoading && (
+        <View
+          pointerEvents="none"
+          style={[
+            StyleSheet.absoluteFillObject,
+            { zIndex: 9999 },
+          ]}
+        >
+          <AnimatedLoadingScreen showMessage={false} />
+        </View>
       )}
     </SafeAreaProvider>
   );

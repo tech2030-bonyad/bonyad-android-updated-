@@ -23,6 +23,7 @@ import { storage } from '../utils/storage';
 import { getAppTopBarPaddingTop } from '../utils/statusBarHelper';
 import { ChatRoom } from '../types/chat';
 import { formatRelativeTime } from '../utils/chatUtils';
+import AnimatedLoadingScreen from '../components/AnimatedLoadingScreen';
 
 interface ChatRoomsListScreenProps {
   onBack?: () => void;
@@ -267,37 +268,7 @@ export default function ChatRoomsListScreen({ onBack, onOpenChat, stackedUnderAp
   };
 
   if (isLoading) {
-    return (
-      <View
-        style={[
-          styles.container,
-          {
-            backgroundColor: colors.background,
-            paddingBottom: Math.max(insets.bottom + 96, 140),
-          },
-        ]}
-      >
-        <View style={[styles.header, { borderBottomColor: colors.border, paddingTop: headerTopPadding }, headerDirectionStyle]}>
-          {shouldShowBackButton ? (
-            <TouchableOpacity onPress={onBack} accessibilityRole="button">
-              <Ionicons name="arrow-back" size={24} color={colors.text} />
-            </TouchableOpacity>
-          ) : (
-            <View style={{ width: 24 }} />
-          )}
-          <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(17) }]}>
-            {t('Chat')}
-          </Text>
-          <View style={{ width: 24 }} />
-        </View>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, { color: colors.textSecondary, fontSize: scaledSize(14) }]}>
-            {t('Loading chats...')}
-          </Text>
-        </View>
-      </View>
-    );
+    return <AnimatedLoadingScreen message={t('Loading chats...')} />;
   }
 
   if (chatRooms.length === 0) {

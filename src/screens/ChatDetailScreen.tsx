@@ -27,6 +27,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import VoiceNoteService from '../services/VoiceNoteService';
+import AnimatedLoadingScreen from '../components/AnimatedLoadingScreen';
 
 const ATTACHMENT_PLACEHOLDER = '[Attachment]';
 const getDraftStorageKey = (roomId: string, receiverId: number) =>
@@ -109,11 +110,13 @@ export default function ChatDetailScreen({
     if (tabBarChrome) {
       // Tab bar is a sibling; FlatList uses flex:1 so the composer stays in this column. Extra inset
       // clears the pill / system nav so the bar is not covered on Android.
-      const safe = Math.max(inset, 10) + 60;
+      // `GlassTabBar` is relatively tall (pill + outer padding + bottom inset), so we reserve
+      // a bit more space to keep the composer clearly above it.
+      const safe = Math.max(inset, 10) + 96;
       return {
         kavPad: safe,
         listPad: 16,
-        inputPad: 8,
+        inputPad: 14,
         loadingPad: safe,
       };
     }
@@ -706,37 +709,7 @@ export default function ChatDetailScreen({
   );
 
   if (isLoading) {
-    return (
-      <View
-        style={[
-          styles.container,
-          {
-            backgroundColor: colors.background,
-            paddingBottom: bottomLayout.loadingPad,
-          },
-        ]}
-      >
-        <View style={[styles.header, { borderBottomColor: colors.border }, headerDirectionStyle]}>
-          {shouldShowBackButton ? (
-            <TouchableOpacity onPress={onBack} accessibilityRole="button">
-              <Ionicons name="arrow-back" size={24} color={colors.text} />
-            </TouchableOpacity>
-          ) : (
-            <View style={{ width: 24 }} />
-          )}
-          <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(17) }]}>
-            {receiverName}
-          </Text>
-          <View style={{ width: 24 }} />
-        </View>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, { color: colors.textSecondary, fontSize: scaledSize(14) }]}>
-            {t('Loading messages...')}
-          </Text>
-        </View>
-      </View>
-    );
+    return <AnimatedLoadingScreen message={t('Loading messages...')} />;
   }
 
   return (

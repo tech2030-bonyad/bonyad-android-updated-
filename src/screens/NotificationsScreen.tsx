@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next';
 import { notificationService } from '../services/NotificationService';
 import type { Notification } from '../services/NotificationService';
 import { normalizeNotificationFromApi } from '../utils/normalizeNotificationPayload';
+import AnimatedLoadingScreen from '../components/AnimatedLoadingScreen';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const FILTER_ANIMATION_DURATION = 280;
@@ -315,8 +316,7 @@ export default function NotificationsScreen({
   if (isLoading) {
     return (
       <Animated.View style={screenStyle}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>{t('Loading notifications...')}</Text>
+        <AnimatedLoadingScreen message={t('Loading notifications...')} />
       </Animated.View>
     );
   }

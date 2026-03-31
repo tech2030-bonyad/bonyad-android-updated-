@@ -21,6 +21,7 @@ import { getUserProfile, uploadProfileImage, deleteAccount } from '../services/P
 import { storage } from '../utils/storage';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
 import ConfirmationPopup, { useConfirmationPopup } from '../components/ConfirmationPopup';
+import AnimatedLoadingScreen from '../components/AnimatedLoadingScreen';
 
 // Figma Design Colors
 const FIGMA_COLORS = {
@@ -256,11 +257,7 @@ export default function ProfileScreen({
   }, [userDetails?.certificates]);
 
   if (isLoading) {
-    return (
-      <View style={[styles.loadingContainer, { paddingTop: insets.top, backgroundColor: bgColor }]}>
-        <ActivityIndicator size="large" color={primaryColor} />
-      </View>
-    );
+    return <AnimatedLoadingScreen showMessage={false} />;
   }
 
   const user = userDetails;

@@ -25,6 +25,7 @@ import { CopilotStep, walkthroughable, useCopilot } from 'react-native-copilot';
 import BonyadLogo from '../components/BonyadLogo';
 import AppTopBar from '../components/AppTopBar';
 import GlassTabBar, { type UserTabId } from '../components/GlassTabBar';
+import AnimatedLoadingScreen from '../components/AnimatedLoadingScreen';
 import { coachMarksStorage } from '../utils/coachMarks';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
@@ -107,6 +108,7 @@ interface UserHomeScreenProps {
   onNavigateToAIForm?: () => void;
   onNavigateToManualForm?: () => void;
   onPressCategory?: (category: CategoryInfo) => void;
+  onNavigateFromNotification?: (notification: any) => void | Promise<void>;
 }
 
 export default function UserHomeScreen({
@@ -141,6 +143,7 @@ export default function UserHomeScreen({
   onNavigateToAIForm,
   onNavigateToManualForm,
   onPressCategory,
+  onNavigateFromNotification,
 }: UserHomeScreenProps) {
   // Responsive state - updates on window resize
   const [screenWidth, setScreenWidth] = useState(Dimensions.get('window').width);
@@ -211,6 +214,7 @@ export default function UserHomeScreen({
   const [selectedCategory, setSelectedCategory] = useState<CategoryInfo | null>(null);
   const [projectsScreenCategoryId, setProjectsScreenCategoryId] = useState<number | null>(null);
   const [pendingOpenProject, setPendingOpenProject] = useState<any>(null);
+  const [projectsReturnTabOnBack, setProjectsReturnTabOnBack] = useState<UserTabId | null>(null);
   const [pendingOpenSmallTask, setPendingOpenSmallTask] = useState<any>(null);
   const [projectsTabEmbeddedType, setProjectsTabEmbeddedType] = useState<'large' | 'small' | null>(null);
   const [manualFormInitial, setManualFormInitial] = useState<{
@@ -225,6 +229,31 @@ export default function UserHomeScreen({
   const { start: startCoachTour } = useCopilot();
   const [userProfile, setUserProfile] = useState<{ name?: string; avatar?: string; profileImage?: string } | null>(null);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
+  const [isInHomeTransitionLoading, setIsInHomeTransitionLoading] = useState(false);
+  const homeTransitionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevProfileSubViewRef = useRef<typeof profileSubView>(profileSubView);
+  const prevNewProjectSubViewRef = useRef<typeof newProjectSubView>(newProjectSubView);
+
+  // Auto-start the coach tour ONLY on the Home tab (prevents tour showing on Notifications tab).
+  useEffect(() => {
+    if (activeTab !== 'home') return;
+    let cancelled = false;
+    let timer: any = null;
+    (async () => {
+      const hasSeen = await coachMarksStorage.hasSeenHomeCoachMarks();
+      if (cancelled) return;
+      if (!hasSeen) {
+        timer = setTimeout(() => {
+          console.log('🎯 Starting coach tour (home tab)...');
+          startCoachTour();
+        }, 2500);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [activeTab, startCoachTour]);
 
   // Reset sub-views when switching tabs and sync tab bar scroll
   useEffect(() => {
@@ -271,6 +300,9 @@ export default function UserHomeScreen({
   useEffect(() => {
     if (prevActiveTabRef.current === activeTab) return;
     prevActiveTabRef.current = activeTab;
+    setIsInHomeTransitionLoading(true);
+    if (homeTransitionTimerRef.current) clearTimeout(homeTransitionTimerRef.current);
+    homeTransitionTimerRef.current = setTimeout(() => setIsInHomeTransitionLoading(false), 240);
     tabContentOpacity.setValue(0);
     tabContentTranslateY.setValue(18);
     Animated.parallel([
@@ -287,6 +319,26 @@ export default function UserHomeScreen({
       }),
     ]).start();
   }, [activeTab]);
+
+  // Show the same loader when switching profile subviews (top nav actions inside Profile tab)
+  useEffect(() => {
+    if (prevProfileSubViewRef.current === profileSubView) return;
+    prevProfileSubViewRef.current = profileSubView;
+    if (activeTab !== 'profile') return;
+    setIsInHomeTransitionLoading(true);
+    if (homeTransitionTimerRef.current) clearTimeout(homeTransitionTimerRef.current);
+    homeTransitionTimerRef.current = setTimeout(() => setIsInHomeTransitionLoading(false), 240);
+  }, [activeTab, profileSubView]);
+
+  // Show loader when stepping through new-project subviews inside the New tab
+  useEffect(() => {
+    if (prevNewProjectSubViewRef.current === newProjectSubView) return;
+    prevNewProjectSubViewRef.current = newProjectSubView;
+    if (activeTab !== 'new') return;
+    setIsInHomeTransitionLoading(true);
+    if (homeTransitionTimerRef.current) clearTimeout(homeTransitionTimerRef.current);
+    homeTransitionTimerRef.current = setTimeout(() => setIsInHomeTransitionLoading(false), 240);
+  }, [activeTab, newProjectSubView]);
 
   // Function to restart coach tour
   const handleRestartCoachTour = async () => {
@@ -324,7 +376,7 @@ export default function UserHomeScreen({
 
   useEffect(() => {
     if (!homeShellFromChatbot) return;
-    const { tab, newProjectSubView, embeddedProjects, technicianAppointments } = homeShellFromChatbot;
+    const { tab, returnTabOnBack, embeddedChat, newProjectSubView, embeddedProjects, technicianAppointments } = homeShellFromChatbot;
     if (technicianAppointments) return;
     if (tab === 'wallet') return;
 
@@ -333,11 +385,33 @@ export default function UserHomeScreen({
       setActiveTab(tab as (typeof activeTab));
     }
 
+    // If this navigation came from notifications (or another tab) and wants a custom back target.
+    if (returnTabOnBack && userTabs.includes(returnTabOnBack as any)) {
+      setProjectsReturnTabOnBack(returnTabOnBack as any);
+    }
+
+    if (tab === 'chat' && embeddedChat?.roomId) {
+      // Open the exact chat thread inside the Chat tab (inline behavior, keeps top/bottom chrome).
+      setActiveTab('chat');
+      setSelectedChat({
+        roomId: embeddedChat.roomId,
+        receiverId: embeddedChat.receiverId,
+        receiverName: embeddedChat.receiverName,
+        projectId: embeddedChat.projectId ?? undefined,
+      });
+      setChatReturnContext(null);
+      setShowChatList(false);
+    }
+
     if (tab === 'projects') {
       if (embeddedProjects?.initialSmallTask != null) {
         setPendingOpenSmallTask(embeddedProjects.initialSmallTask);
         setPendingOpenProject(null);
         setProjectsTabEmbeddedType('small');
+      } else if (embeddedProjects?.initialProject != null) {
+        setPendingOpenSmallTask(null);
+        setPendingOpenProject(embeddedProjects.initialProject);
+        setProjectsTabEmbeddedType('large');
       } else if (embeddedProjects?.initialProjectType != null) {
         setPendingOpenSmallTask(null);
         setPendingOpenProject(null);
@@ -1060,7 +1134,12 @@ export default function UserHomeScreen({
               initialSmallTask={pendingOpenSmallTask}
               initialProjectType={projectsTabEmbeddedType ?? undefined}
               onBack={() => {
-                setActiveTab('home');
+                if (projectsReturnTabOnBack) {
+                  setActiveTab(projectsReturnTabOnBack as any);
+                  setProjectsReturnTabOnBack(null);
+                } else {
+                  setActiveTab('home');
+                }
                 setProjectsScreenCategoryId(null);
               }}
               onFilterChange={(newFilter) => {
@@ -1204,6 +1283,7 @@ export default function UserHomeScreen({
           <View style={{ flex: 1 }}>
             <NotificationsScreen
               onUnreadCountChange={setUnreadNotificationCount}
+              onNavigateFromNotification={onNavigateFromNotification}
             />
           </View>
         )}
@@ -2036,6 +2116,7 @@ export default function UserHomeScreen({
             <View style={styles.mainContentWrapper}>
               <NotificationsScreen
                 onUnreadCountChange={setUnreadNotificationCount}
+                onNavigateFromNotification={onNavigateFromNotification}
               />
             </View>
             <Footer />
@@ -2325,6 +2406,13 @@ export default function UserHomeScreen({
       >
         <Ionicons name="chatbubbles" size={28} color="#fff" />
       </TouchableOpacity>
+
+      {/* Local transition loader for tab/subview switches (bottom nav / top nav / profile subviews) */}
+      {isInHomeTransitionLoading && (
+        <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, { zIndex: 9999 }]}>
+          <AnimatedLoadingScreen showMessage={false} />
+        </View>
+      )}
     </View>
   );
 }

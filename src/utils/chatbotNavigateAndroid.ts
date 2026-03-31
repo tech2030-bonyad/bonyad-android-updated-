@@ -18,6 +18,13 @@ export type ProjectsFilterAndroid =
 
 export type ProfileSubviewForChatbot =
   | 'myData'
+  | 'editProfile'
+  | 'portfolio'
+  | 'subscription'
+  | 'services'
+  | 'availability'
+  | 'changePassword'
+  | 'changePhone'
   | 'paymentHistory'
   | 'smallTaskTypes'
   | 'regions';
@@ -45,9 +52,20 @@ export type HomeShellNewProjectSubView =
 
 export type HomeShellFromChatbotPayload = {
   tab: HomeShellTab;
+  /** When provided, `Projects` tab back should return to this tab (e.g. notification → project → back → notifications). */
+  returnTabOnBack?: HomeShellTab;
+  /** When set, open an exact chat thread inside the Chat tab. */
+  embeddedChat?: {
+    roomId: string;
+    receiverId: number;
+    receiverName: string;
+    projectId?: number | null;
+  };
   newProjectSubView?: HomeShellNewProjectSubView;
   embeddedProjects?: {
     initialSmallTask?: any;
+    /** Optional: open a specific (large) project in Projects tab while keeping home chrome. */
+    initialProject?: any;
     initialProjectType?: 'large' | 'small';
   };
   /** Technician: open Appointments embedded on home */

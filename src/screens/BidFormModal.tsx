@@ -1,11 +1,8 @@
 /**
- * BidFormModal
- * 
- * Popup modal for technicians to submit a bid for a project.
- * Styled to match the app's Figma design system.
+ * BidFormModal — Technician bid submission (simple, theme-aligned layout).
  */
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -27,36 +24,8 @@ import { showSuccess, showError } from '../utils/alert';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
 import AppBottomSheetModal from '../components/AppBottomSheetModal';
 
-// ===== DESIGN TOKENS FROM FIGMA =====
-const COLORS = {
-  // Primary Blues
-  primary100: '#003867',
-  primary80: '#004A8A',
-  primary70: '#00549B',
-  primary60: '#005DAC',
-  primary50: '#1A6DB4',
-  primary10: '#E6EFF7',
-  // Greens
-  green90: '#007B36',
-  green80: '#008B3E',
-  green60: '#00AC4F',
-  green10: '#E6F5EC',
-  // Purple
-  purple100: '#3C076D',
-  purple10: '#EFE6F5',
-  // Amber
-  amber60: '#FFB703',
-  amber10: '#FFF8E6',
-  // Text
-  textHeader: '#003867',
-  textBody: '#383838',
-  textSecondary: '#A3A3A3',
-  textDividers: '#D9D9D9',
-  textWhite: '#FFFFFF',
-  // Backgrounds
-  bgWhite: '#FFFFFF',
-  bgOverlay: 'rgba(0, 56, 103, 0.5)',
-};
+const RIYAL_LIGHT = require('../../assets/saudi_riyal_logo.svg');
+const RIYAL_DARK = require('../../assets/saudi_riyal_logo_dark.svg');
 
 interface BidFormModalProps {
   visible: boolean;
@@ -68,40 +37,197 @@ interface BidFormModalProps {
 export default function BidFormModal({ visible, project, onClose, onSuccess }: BidFormModalProps) {
   const { t, i18n } = useTranslation();
   const { colors, theme } = useTheme();
-  const { fontFamily, scaledSize } = useFontFamily();
+  const { scaledSize } = useFontFamily();
   const [bidPrice, setBidPrice] = useState('');
   const [bidDescription, setBidDescription] = useState('');
   const [estimatedDays, setEstimatedDays] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-
   const { alertState, showError: showErrorAlert, hideAlert } = useAlertPopup();
+
+  const isDark = theme === 'dark';
+  const riyalSource = isDark ? RIYAL_DARK : RIYAL_LIGHT;
+
+  const s = useMemo(
+    () =>
+      StyleSheet.create({
+        root: {
+          width: '100%',
+          gap: 16,
+          paddingBottom: 8,
+        },
+        context: {
+          borderRadius: 14,
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: colors.border,
+          backgroundColor: colors.cardBackground,
+          padding: 14,
+          gap: 10,
+        },
+        contextTop: {
+          flexDirection: 'row',
+          alignItems: 'flex-start',
+          gap: 10,
+        },
+        contextIconWrap: {
+          width: 36,
+          height: 36,
+          borderRadius: 10,
+          backgroundColor: colors.primary + '14',
+          alignItems: 'center',
+          justifyContent: 'center',
+        },
+        contextMain: { flex: 1, gap: 4 },
+        contextTitle: {
+          fontSize: 13,
+          fontWeight: '600',
+          color: colors.text,
+        },
+        contextDesc: {
+          fontSize: 12,
+          lineHeight: 17,
+          color: colors.textSecondary,
+        },
+        budgetLine: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 6,
+          marginTop: 2,
+        },
+        budgetLabel: {
+          fontSize: 11,
+          fontWeight: '500',
+          color: colors.textSecondary,
+        },
+        field: { gap: 6 },
+        labelRow: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 6,
+        },
+        label: {
+          fontSize: 12,
+          fontWeight: '600',
+          color: colors.textSecondary,
+        },
+        star: { fontSize: 12, color: '#EF4444', fontWeight: '700' },
+        inputShell: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          borderRadius: 12,
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: colors.border,
+          backgroundColor: colors.cardBackground,
+          paddingHorizontal: 12,
+          minHeight: 48,
+        },
+        input: {
+          flex: 1,
+          fontSize: 17,
+          fontWeight: '600',
+          color: colors.text,
+          paddingVertical: Platform.OS === 'android' ? 10 : 12,
+        },
+        inputMuted: {
+          fontSize: 16,
+          fontWeight: '500',
+          color: colors.text,
+        },
+        inputSuffix: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 6,
+          paddingLeft: 8,
+          borderLeftWidth: StyleSheet.hairlineWidth,
+          borderLeftColor: colors.border,
+          marginVertical: 8,
+        },
+        riyalInField: { width: 22, height: 20 },
+        daysHint: {
+          fontSize: 13,
+          fontWeight: '600',
+          color: colors.primary,
+        },
+        textAreaShell: {
+          borderRadius: 12,
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: colors.border,
+          backgroundColor: colors.cardBackground,
+          paddingHorizontal: 12,
+          paddingVertical: 10,
+          minHeight: 120,
+        },
+        textArea: {
+          fontSize: 15,
+          lineHeight: 22,
+          color: colors.text,
+          textAlignVertical: 'top',
+          minHeight: 100,
+        },
+        charCount: {
+          fontSize: 11,
+          color: colors.textSecondary,
+          textAlign: 'right',
+          marginTop: 4,
+        },
+        actions: {
+          flexDirection: 'row',
+          gap: 10,
+          marginTop: 4,
+        },
+        btnGhost: {
+          flex: 1,
+          borderRadius: 12,
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: colors.border,
+          backgroundColor: 'transparent',
+          paddingVertical: 14,
+          alignItems: 'center',
+          justifyContent: 'center',
+        },
+        btnGhostText: {
+          fontSize: 15,
+          fontWeight: '600',
+          color: colors.text,
+        },
+        btnPrimary: {
+          flex: 1,
+          flexDirection: 'row',
+          borderRadius: 12,
+          backgroundColor: colors.primary,
+          paddingVertical: 14,
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 8,
+        },
+        btnPrimaryDisabled: { opacity: 0.45 },
+        btnPrimaryText: {
+          fontSize: 15,
+          fontWeight: '600',
+          color: colors.white ?? '#fff',
+        },
+      }),
+    [colors]
+  );
 
   const getServiceName = () => {
     if (!project) return '';
-    if (i18n.language === 'ar') {
-      return project.serviceNameAr || '';
-    }
-    return project.serviceNameEn || '';
+    return i18n.language === 'ar' ? project.serviceNameAr || '' : project.serviceNameEn || '';
   };
 
   const submitBid = async () => {
-    // Validation
     if (!bidPrice || parseFloat(bidPrice) <= 0) {
       showErrorAlert(t('Please enter a valid price'), t('Error'));
       return;
     }
-
     if (!bidDescription.trim()) {
       showErrorAlert(t('Please enter bid description'), t('Error'));
       return;
     }
-
-    if (!estimatedDays || parseInt(estimatedDays) <= 0) {
+    if (!estimatedDays || parseInt(estimatedDays, 10) <= 0) {
       showErrorAlert(t('Please enter valid duration'), t('Error'));
       return;
     }
-
-    if (!project || !project.id) {
+    if (!project?.id) {
       showErrorAlert('Invalid project ID', t('Error'));
       return;
     }
@@ -113,26 +239,20 @@ export default function BidFormModal({ visible, project, onClose, onSuccess }: B
     }
 
     setIsSubmitting(true);
-
     try {
-      const url = buildApiUrl(API_ENDPOINTS.BIDS.CREATE);
-      console.log('🔍 Creating bid on:', url);
-
-      const response = await fetch(url, {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.BIDS.CREATE), {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           projectId: project.id,
           proposedBudget: parseFloat(bidPrice),
-          estimatedDurationDays: parseInt(estimatedDays),
+          estimatedDurationDays: parseInt(estimatedDays, 10),
           comment: bidDescription.trim(),
         }),
       });
-
-      console.log('📥 Create Bid Response:', response.status);
 
       if (response.ok) {
         showSuccess(t('Bid submitted successfully'));
@@ -142,14 +262,12 @@ export default function BidFormModal({ visible, project, onClose, onSuccess }: B
           setEstimatedDays('');
           onClose();
           onSuccess?.();
-        }, 1000);
+        }, 600);
       } else {
-        const errorText = await response.text();
-        console.error('❌ Failed to create bid:', errorText);
+        await response.text();
         showError(t('Failed to submit bid'));
       }
-    } catch (error) {
-      console.error('❌ Error submitting bid:', error);
+    } catch {
       showError(t('Error submitting bid'));
     } finally {
       setIsSubmitting(false);
@@ -166,10 +284,10 @@ export default function BidFormModal({ visible, project, onClose, onSuccess }: B
   };
 
   const isSubmitDisabled = isSubmitting || !bidPrice || !bidDescription || !estimatedDays;
-  const isDark = theme === 'dark';
-  const riyalLogo = isDark
-    ? require('../../assets/saudi_riyal_logo_dark.svg')
-    : require('../../assets/saudi_riyal_logo.svg');
+  const budgetFmt =
+    project?.budget != null
+      ? new Intl.NumberFormat(i18n.language === 'ar' ? 'ar-SA' : 'en-US').format(project.budget)
+      : null;
 
   return (
     <>
@@ -179,115 +297,107 @@ export default function BidFormModal({ visible, project, onClose, onSuccess }: B
         title={t('Place Bid')}
         subtitle={getServiceName() || undefined}
       >
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardView}>
-          {/* Project Info Card */}
-          <View style={styles.projectCard}>
-            <View style={styles.projectCardHeader}>
-              <Ionicons name="briefcase-outline" size={16} color={COLORS.primary80} />
-              <Text style={styles.projectCardLabel}>{t('Project')}</Text>
-            </View>
-            <Text style={styles.projectDescription} numberOfLines={3}>
-              {project?.description || t('No description')}
-            </Text>
-            <View style={styles.projectMeta}>
-              {getServiceName() && (
-                <View style={styles.serviceBadge}>
-                  <Text style={styles.serviceText}>{getServiceName()}</Text>
-                </View>
-              )}
-              {project?.budget != null && (
-                <View style={styles.budgetRow}>
-                  <Text style={styles.budgetLabel}>{t('Budget')}:</Text>
-                  <ExpoImage source={riyalLogo} style={{ width: 16, height: 16 }} contentFit="contain" />
-                  <Text style={styles.budgetText}>{new Intl.NumberFormat(i18n.language === 'ar' ? 'ar-SA' : 'en-US').format(project.budget)}</Text>
-                </View>
-              )}
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={s.root}>
+          <View style={s.context}>
+            <View style={s.contextTop}>
+              <View style={s.contextIconWrap}>
+                <Ionicons name="briefcase-outline" size={20} color={colors.primary} />
+              </View>
+              <View style={s.contextMain}>
+                <Text style={s.contextTitle} numberOfLines={2}>
+                  {getServiceName() || t('Project')}
+                </Text>
+                <Text style={s.contextDesc} numberOfLines={3}>
+                  {project?.description?.trim() ? project.description : t('No description')}
+                </Text>
+                {budgetFmt != null && (
+                  <View style={s.budgetLine}>
+                    <Text style={s.budgetLabel}>{t('Budget')}</Text>
+                    <Text style={[s.contextTitle, { fontSize: 14 }]}>{budgetFmt}</Text>
+                    <ExpoImage source={riyalSource} style={{ width: 16, height: 15 }} contentFit="contain" />
+                  </View>
+                )}
+              </View>
             </View>
           </View>
 
-          {/* Bid Price Input */}
-          <View style={styles.inputSection}>
-            <View style={styles.inputHeader}>
-              <Text style={[styles.inputLabel, { color: COLORS.green80 }]}>{t('Your Bid Price')}</Text>
-              <Text style={styles.requiredText}>*</Text>
+          <View style={s.field}>
+            <View style={s.labelRow}>
+              <Text style={s.label}>{t('Your Bid Price')}</Text>
+              <Text style={s.star}>*</Text>
             </View>
-            <View style={styles.priceInputContainer}>
+            <View style={s.inputShell}>
               <TextInput
-                style={styles.priceInput}
+                style={s.input}
                 placeholder={t('Enter amount')}
-                placeholderTextColor={COLORS.textSecondary}
+                placeholderTextColor={colors.textSecondary}
                 value={bidPrice}
                 onChangeText={setBidPrice}
                 keyboardType="decimal-pad"
                 editable={!isSubmitting}
               />
-              <View style={styles.currencyBadge}>
-                <ExpoImage source={riyalLogo} style={{ width: 20, height: 20 }} contentFit="contain" />
-              </View>
             </View>
           </View>
 
-          {/* Duration Input */}
-          <View style={styles.inputSection}>
-            <View style={styles.inputHeader}>
-              <Ionicons name="time-outline" size={16} color={COLORS.primary80} />
-              <Text style={styles.inputLabel}>{t('Estimated Duration')}</Text>
-              <Text style={styles.requiredText}>*</Text>
+          <View style={s.field}>
+            <View style={s.labelRow}>
+              <Ionicons name="time-outline" size={14} color={colors.primary} />
+              <Text style={s.label}>{t('Estimated Duration')}</Text>
+              <Text style={s.star}>*</Text>
             </View>
-            <View style={styles.durationInputContainer}>
+            <View style={s.inputShell}>
               <TextInput
-                style={styles.durationInput}
-                placeholder={t('Enter amount')}
-                placeholderTextColor={COLORS.textSecondary}
+                style={[s.input, s.inputMuted]}
+                placeholder={t('Days')}
+                placeholderTextColor={colors.textSecondary}
                 value={estimatedDays}
                 onChangeText={setEstimatedDays}
                 keyboardType="number-pad"
                 editable={!isSubmitting}
               />
-              <View style={styles.daysBadge}>
-                <Ionicons name="calendar-outline" size={16} color={COLORS.primary80} />
-                <Text style={styles.daysText}>{t('Days')}</Text>
+              <View style={s.inputSuffix}>
+                <Ionicons name="calendar-outline" size={18} color={colors.primary} />
+                <Text style={s.daysHint}>{t('Days')}</Text>
               </View>
             </View>
           </View>
 
-          {/* Description Input */}
-          <View style={styles.inputSection}>
-            <View style={styles.inputHeader}>
-              <Ionicons name="document-text-outline" size={16} color={COLORS.amber60} />
-              <Text style={[styles.inputLabel, { color: COLORS.amber60 }]}>{t('Proposal Description')}</Text>
-              <Text style={styles.requiredText}>*</Text>
+          <View style={s.field}>
+            <View style={s.labelRow}>
+              <Ionicons name="document-text-outline" size={14} color={colors.primary} />
+              <Text style={s.label}>{t('Proposal Description')}</Text>
+              <Text style={s.star}>*</Text>
             </View>
-            <TextInput
-              style={styles.textArea}
-              placeholder={t('Describe your approach, experience, and why you are the best fit for this project...')}
-              placeholderTextColor={COLORS.textSecondary}
-              value={bidDescription}
-              onChangeText={setBidDescription}
-              multiline
-              numberOfLines={4}
-              maxLength={500}
-              editable={!isSubmitting}
-            />
-            <Text style={styles.charCount}>{bidDescription.length}/500</Text>
+            <View style={s.textAreaShell}>
+              <TextInput
+                style={s.textArea}
+                placeholder={t('Describe your approach, experience, and why you are the best fit for this project...')}
+                placeholderTextColor={colors.textSecondary}
+                value={bidDescription}
+                onChangeText={setBidDescription}
+                multiline
+                maxLength={500}
+                editable={!isSubmitting}
+              />
+            </View>
+            <Text style={s.charCount}>{bidDescription.length}/500</Text>
           </View>
 
-          {/* Action Buttons */}
-          <View style={styles.actionButtons}>
-            <TouchableOpacity style={styles.cancelButton} onPress={handleClose} disabled={isSubmitting}>
-              <Text style={[styles.cancelButtonText, { fontSize: scaledSize(16) }]}>{t('Cancel')}</Text>
+          <View style={s.actions}>
+            <TouchableOpacity style={s.btnGhost} onPress={handleClose} disabled={isSubmitting}>
+              <Text style={[s.btnGhostText, { fontSize: scaledSize(15) }]}>{t('Cancel')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.submitButton, isSubmitDisabled && styles.submitButtonDisabled]}
+              style={[s.btnPrimary, isSubmitDisabled && s.btnPrimaryDisabled]}
               onPress={submitBid}
               disabled={isSubmitDisabled}
             >
               {isSubmitting ? (
-                <ActivityIndicator size="small" color={COLORS.textWhite} />
+                <ActivityIndicator size="small" color={colors.white ?? '#fff'} />
               ) : (
                 <>
-                  <Ionicons name="send" size={18} color={COLORS.textWhite} />
-                  <Text style={[styles.submitButtonText, { fontSize: scaledSize(16) }]}>{t('Submit Bid')}</Text>
+                  <Ionicons name="send" size={18} color={colors.white ?? '#fff'} />
+                  <Text style={[s.btnPrimaryText, { fontSize: scaledSize(15) }]}>{t('Submit Bid')}</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -306,216 +416,3 @@ export default function BidFormModal({ visible, project, onClose, onSuccess }: B
     </>
   );
 }
-
-const styles = StyleSheet.create({
-  keyboardView: {
-    width: '100%',
-    gap: 20,
-  },
-  projectCard: {
-    backgroundColor: COLORS.primary10,
-    borderRadius: 12,
-    padding: 16,
-    gap: 12,
-  },
-  projectCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  projectCardLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.primary80,
-  },
-  projectDescription: {
-    fontSize: 14,
-    fontWeight: '400',
-    color: COLORS.textBody,
-    lineHeight: 20,
-  },
-  projectMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 4,
-  },
-  serviceBadge: {
-    backgroundColor: COLORS.bgWhite,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  serviceText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: COLORS.primary80,
-  },
-  budgetRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  budgetLabel: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-  },
-  budgetText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.green80,
-  },
-  inputSection: {
-    gap: 10,
-  },
-  inputHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.primary80,
-  },
-  requiredText: {
-    fontSize: 14,
-    color: '#EF4444',
-    fontWeight: '600',
-  },
-  priceInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  // Keep right-side unit pills consistent width (SAR / Days)
-  unitBadge: {
-    width: 96,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  priceInput: {
-    flex: 1,
-    fontSize: 22,
-    fontWeight: '600',
-    padding: 14,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: COLORS.green80,
-    backgroundColor: COLORS.green10,
-    color: COLORS.green80,
-    textAlign: 'center',
-  },
-  currencyBadge: {
-    // Keep same width as Days badge
-    width: 96,
-    backgroundColor: COLORS.green10,
-    borderWidth: 1,
-    borderColor: COLORS.green80,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  currencyText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.green80,
-  },
-  durationInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  durationInput: {
-    flex: 1,
-    fontSize: 20,
-    fontWeight: '500',
-    padding: 14,
-    borderRadius: 10,
-    borderWidth: 1,
-    // Match money input style but in blue
-    borderColor: COLORS.primary80,
-    backgroundColor: COLORS.primary10,
-    color: COLORS.primary80,
-    textAlign: 'center',
-  },
-  daysBadge: {
-    // Keep same width as SAR badge
-    width: 96,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: COLORS.primary10,
-    borderWidth: 1,
-    borderColor: COLORS.primary80,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderRadius: 10,
-    justifyContent: 'center',
-  },
-  daysText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: COLORS.primary80,
-  },
-  textArea: {
-    fontSize: 15,
-    padding: 14,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: COLORS.textDividers,
-    backgroundColor: COLORS.bgWhite,
-    textAlignVertical: 'top',
-    minHeight: 120,
-    color: COLORS.textBody,
-  },
-  charCount: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    textAlign: 'right',
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    padding: 20,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.textDividers,
-    backgroundColor: COLORS.bgWhite,
-  },
-  cancelButton: {
-    flex: 1,
-    backgroundColor: COLORS.purple10,
-    borderWidth: 1.5,
-    borderColor: COLORS.purple100,
-    borderRadius: 10,
-    paddingVertical: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cancelButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.purple100,
-  },
-  submitButton: {
-    flex: 1,
-    flexDirection: 'row',
-    backgroundColor: COLORS.primary60,
-    borderRadius: 10,
-    paddingVertical: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  submitButtonDisabled: {
-    opacity: 0.5,
-  },
-  submitButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.textWhite,
-  },
-});

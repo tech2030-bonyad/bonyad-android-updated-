@@ -28,21 +28,6 @@ function CoachMarkContent({ children }: { children: React.ReactNode }) {
   const { t } = useTranslation();
 
   useEffect(() => {
-    const checkAndShowCoachMarks = async () => {
-      const hasSeen = await coachMarksStorage.hasSeenHomeCoachMarks();
-      if (!hasSeen && !visible) {
-        const timer = setTimeout(() => {
-          console.log('🎯 Starting coach tour...');
-          start();
-        }, 2500);
-        return () => clearTimeout(timer);
-      }
-    };
-
-    checkAndShowCoachMarks();
-  }, [start, visible]);
-
-  useEffect(() => {
     const handleStop = async () => {
       console.log('✅ Coach marks completed or skipped');
       await coachMarksStorage.setHomeCoachMarksCompleted();

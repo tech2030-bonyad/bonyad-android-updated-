@@ -23,6 +23,7 @@ import { useTheme } from '../context/ThemeContext';
 import * as SupportTicketService from '../services/SupportTicketService';
 import type { SupportTicket, SupportTicketMessage } from '../types/chat';
 import { buildAssetUrl } from '../config/api';
+import AnimatedLoadingScreen from '../components/AnimatedLoadingScreen';
 
 const SUPPORT_FILE_MAX_BYTES = 10 * 1024 * 1024; // 10MB
 
@@ -179,12 +180,7 @@ const TicketDetailScreen: React.FC<TicketDetailScreenProps> = ({ ticketId, onBac
   const canResolve = ticket && ticket.status !== 'CLOSED' && (ticket.status === 'RESOLVED' || ticket.status === 'OPEN' || ticket.status === 'IN_PROGRESS' || ticket.status === 'WAITING_FOR_CUSTOMER');
 
   if (loading && !ticket) {
-    return (
-      <View style={[styles.container, styles.centered, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>{t('support.loading') || 'Loading...'}</Text>
-      </View>
-    );
+    return <AnimatedLoadingScreen message={t('support.loading') || 'Loading...'} />;
   }
 
   if (!ticket) {

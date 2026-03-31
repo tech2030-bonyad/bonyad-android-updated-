@@ -12,6 +12,7 @@ import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
 import ConfirmationPopup, { useConfirmationPopup } from '../components/ConfirmationPopup';
 import AppointmentCard from '../components/AppointmentCard';
 import { getTopPadding } from '../utils/statusBarHelper';
+import AnimatedLoadingScreen from '../components/AnimatedLoadingScreen';
 
 export interface Appointment {
   id: number;
@@ -649,10 +650,7 @@ export default function AppointmentsScreen({ onBack }: AppointmentsScreenProps) 
 
         {/* Appointments List */}
         {isLoading && appointments.length === 0 ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={[styles.loadingText, { fontSize: scaledSize(14), color: colors.textSecondary }]}>{t('Loading...')}</Text>
-          </View>
+          <AnimatedLoadingScreen message={t('Loading...')} />
         ) : appointments.length === 0 ? (
           <View style={styles.emptyState}>
             <Ionicons name="calendar-outline" size={64} color={colors.textSecondary} />

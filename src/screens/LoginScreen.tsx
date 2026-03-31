@@ -265,7 +265,13 @@ export default function LoginScreen({
         <View style={[styles.mainContainer, { flex: 1, paddingTop: Platform.OS === 'web' ? 0 : insets.top, paddingBottom: Platform.OS === 'web' ? 0 : insets.bottom }]}>
           {Platform.OS === 'android' ? (
             <View style={[styles.container, { backgroundColor: isDarkMode ? colors.background : figmaMobileColors.background }]}>
-              <View style={[styles.scrollContent, Platform.OS === 'web' && styles.webScrollContent]}>
+              <ScrollView
+                contentContainerStyle={[styles.scrollContent, Platform.OS === 'web' && styles.webScrollContent]}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                bounces={false}
+                overScrollMode="never"
+              >
                 <View style={[styles.contentWrapper, { backgroundColor: isDarkMode ? colors.cardBackground : figmaMobileColors.background }]}>
                   {/* Language Toggle at Top */}
                   <View style={styles.languageToggleTop}>
@@ -373,7 +379,7 @@ export default function LoginScreen({
                   {/* Theme Toggle */}
                   <ThemeToggle />
                 </View>
-              </View>
+              </ScrollView>
             </View>
           ) : (
             <ScrollView 
@@ -766,7 +772,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     alignItems: 'center',
-    paddingTop: 40,
+    paddingTop: 24,
     paddingBottom: 60, // Extra padding at bottom to ensure last element is visible
     paddingHorizontal: 16, // Add horizontal padding for mobile
     ...Platform.select({
@@ -776,9 +782,11 @@ const styles = StyleSheet.create({
         paddingBottom: 80,
       },
       ios: {
+        paddingTop: 24,
         paddingBottom: 80, // Extra padding for iOS safe area
       },
       android: {
+        paddingTop: 12,
         paddingBottom: 80, // Extra padding for Android
       },
     }),

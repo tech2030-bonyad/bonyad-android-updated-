@@ -21,6 +21,7 @@ import { API_BASE_URL, API_ENDPOINTS, buildApiUrl } from '../config/api';
 import { requestPhoneChange } from '../services/ProfileService';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
 import { getTopPadding } from '../utils/statusBarHelper';
+import AnimatedLoadingScreen from '../components/AnimatedLoadingScreen';
 
 // Figma Design Colors
 const FIGMA_COLORS = {
@@ -196,7 +197,7 @@ export default function ChangePhoneScreen({ onBack, onOTPSent }: ChangePhoneScre
   if (isFetching) {
     return (
       <Animated.View style={[styles.loadingContainer, { backgroundColor: bgColor, paddingTop: insets.top, opacity: screenOpacity, transform: [{ translateX: screenSlideX }] }]}>
-        <ActivityIndicator size="large" color={primaryColor} />
+        <AnimatedLoadingScreen showMessage={false} />
       </Animated.View>
     );
   }
