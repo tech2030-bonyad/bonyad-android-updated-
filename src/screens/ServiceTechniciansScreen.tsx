@@ -1,19 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   FlatList,
   TouchableOpacity,
   Image,
-  ActivityIndicator,
   StyleSheet,
-  Linking,
-  ScrollView,
   Platform,
   Dimensions,
+  Animated,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import { useRTL } from '../hooks/useRTL';
@@ -22,10 +21,10 @@ import { getTechniciansByService } from '../services/TechnicianService';
 import TechnicianProfileView from './TechnicianProfileView';
 import { generateRoomId } from '../utils/chatUtils';
 import { storage } from '../utils/storage';
-import { getTopPadding } from '../utils/statusBarHelper';
+import AnimatedLoadingScreen from '../components/AnimatedLoadingScreen';
+import { getGlassTabBarOverlayHeight } from '../components/GlassTabBar';
 
-const { width } = Dimensions.get('window');
-const IS_LARGE_WEB = Platform.OS === 'web' && width >= 1024;
+const { width: SCREEN_W } = Dimensions.get('window');
 
 interface ServiceTechniciansScreenProps {
   serviceId: number;
@@ -33,7 +32,7 @@ interface ServiceTechniciansScreenProps {
   onBack?: () => void;
   onNavigateToTechnicianProfile?: (technicianId: number) => void;
   onNavigateToChat?: (roomId: string, receiverId: number, receiverName: string) => void;
-  onNavigateToBooking?: (technicianId: number, technicianName?: string) => void; // This is for "Hire" button
+  onNavigateToBooking?: (technicianId: number, technicianName?: string) => void;
 }
 
 export default function ServiceTechniciansScreen({
@@ -46,458 +45,336 @@ export default function ServiceTechniciansScreen({
 }: ServiceTechniciansScreenProps) {
   const { t, i18n } = useTranslation();
   const { colors } = useTheme();
-  const { fontFamily, scaledSize } = useFontFamily();
+  const { scaledSize } = useFontFamily();
   const { arrowBackIcon } = useRTL();
   const insets = useSafeAreaInsets();
-  
+  const isRTL = i18n.language === 'ar';
+
   const [technicians, setTechnicians] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedTechnicianId, setSelectedTechnicianId] = useState<number | null>(null);
-  
+  const [chatLoadingId, setChatLoadingId] = useState<number | null>(null);
+
+  // Slide-in animation
+  const slideX = useRef(new Animated.Value(SCREEN_W)).current;
+
   useEffect(() => {
+    Animated.spring(slideX, {
+      toValue: 0,
+      tension: 280,
+      friction: 28,
+      useNativeDriver: true,
+    }).start();
     loadTechnicians();
   }, [serviceId]);
-  
+
+  const handleBack = () => {
+    Animated.timing(slideX, {
+      toValue: SCREEN_W,
+      duration: 220,
+      useNativeDriver: true,
+    }).start(() => onBack?.());
+  };
+
   const loadTechnicians = async () => {
     setIsLoading(true);
     setError(null);
-    
     try {
-      console.log('🔍 [ServiceTechniciansScreen] Loading technicians for service:', serviceId);
-      
       const data = await getTechniciansByService(serviceId);
-      
-      console.log('✅ [ServiceTechniciansScreen] Loaded technicians:', data.length);
-      
       setTechnicians(data);
     } catch (err: any) {
-      console.error('❌ [ServiceTechniciansScreen] Error loading technicians:', err);
       setError(err.message || t('Failed to load technicians'));
     } finally {
       setIsLoading(false);
     }
   };
-  
-  const handleChatTechnician = async (technicianId: number, technicianName?: string) => {
-    console.log('🔵 [ServiceTechniciansScreen] Chat button clicked for technician:', technicianId);
+
+  const handleChat = async (technicianId: number, technicianName?: string) => {
     if (onNavigateToChat) {
+      setChatLoadingId(technicianId);
       try {
         const currentUserId = await storage.getUserId();
         if (currentUserId) {
           const roomId = generateRoomId(currentUserId, technicianId);
-          const receiverName = technicianName || `Technician ${technicianId}`;
-          console.log('🔵 [ServiceTechniciansScreen] Opening chat with roomId:', roomId, 'receiverId:', technicianId, 'receiverName:', receiverName);
-          onNavigateToChat(roomId, technicianId, receiverName);
-        } else {
-          console.error('❌ [ServiceTechniciansScreen] No current user ID found');
+          onNavigateToChat(roomId, technicianId, technicianName || `Technician ${technicianId}`);
         }
-      } catch (error) {
-        console.error('❌ [ServiceTechniciansScreen] Error opening chat:', error);
+      } catch (e) {
+        console.error('❌ [ServiceTechniciansScreen] Error opening chat:', e);
+      } finally {
+        setChatLoadingId(null);
       }
     }
   };
-  
+
   const handleViewProfile = (technicianId: number) => {
-    console.log('🔵 [ServiceTechniciansScreen] Profile button clicked for technician:', technicianId);
     if (onNavigateToTechnicianProfile) {
       onNavigateToTechnicianProfile(technicianId);
     } else {
       setSelectedTechnicianId(technicianId);
     }
   };
-  
-  const handleHire = (technicianId: number, technicianName?: string) => {
-    console.log('🔵 [ServiceTechniciansScreen] Hire button clicked for technician:', technicianId);
-    if (onNavigateToBooking) {
-      onNavigateToBooking(technicianId, technicianName);
-    }
-  };
-  
-  const renderTechnician = ({ item }: { item: any }) => (
-    <View style={[styles.technicianCard, { backgroundColor: colors.cardBackground }]}>
-      {/* Header */}
-      <View style={styles.cardHeader}>
-        <TouchableOpacity
-          style={styles.profileHeaderTouchable}
-          onPress={() => handleViewProfile(item.id)}
-        >
-          <Image
-            source={{
-              uri: item.profileImage || item.avatar || 'https://via.placeholder.com/80'
-            }}
-            style={styles.avatar}
-          />
-        </TouchableOpacity>
-        
-        <View style={styles.technicianInfo}>
-          <TouchableOpacity onPress={() => handleViewProfile(item.id)}>
-            <Text style={[styles.technicianName, { color: colors.text }]}>{item.name}</Text>
-          </TouchableOpacity>
-          
-          <View style={styles.ratingContainer}>
-            <Ionicons name="star" size={16} color="#FFC107" />
-            <Text style={[styles.ratingText, { color: colors.text }]}>
-              {item.averageRating?.toFixed(1) || 'N/A'}
-            </Text>
-            <Text style={[styles.reviewsText, { color: colors.textSecondary }]}>
-              ({item.totalReviews || 0} {t('reviews')})
-            </Text>
-          </View>
-          
-          {item.yearsOfExperience && (
-            <Text style={[styles.experience, { color: colors.textSecondary }]}>
-              {item.yearsOfExperience} {t('years experience')}
-            </Text>
-          )}
-        </View>
+
+  const renderStars = (rating: number) => {
+    const full = Math.floor(rating ?? 0);
+    const half = (rating ?? 0) % 1 >= 0.5;
+    const empty = 5 - Math.ceil(rating ?? 0);
+    return (
+      <View style={styles.starsRow}>
+        {Array.from({ length: full }).map((_, i) => (
+          <Ionicons key={`f${i}`} name="star" size={12} color="#F59E0B" />
+        ))}
+        {half && <Ionicons key="h" name="star-half" size={12} color="#F59E0B" />}
+        {Array.from({ length: Math.max(empty, 0) }).map((_, i) => (
+          <Ionicons key={`e${i}`} name="star-outline" size={12} color="#F59E0B" />
+        ))}
       </View>
-      
-      {/* Services */}
-      {item.services && item.services.length > 0 && (
-        <View style={styles.servicesContainer}>
-          <Text style={[styles.servicesLabel, { color: colors.text }]}>{t('Services')}:</Text>
-          <View style={styles.servicesList}>
-            {item.services.slice(0, 3).map((service: any, index: number) => (
-              <View key={index} style={[styles.serviceBadge, { backgroundColor: colors.primary + '20' }]}>
-                <Text style={[styles.serviceBadgeText, { color: colors.primary }]}>
-                  {i18n.language === 'ar' && service.nameAr ? service.nameAr : service.nameEn}
+    );
+  };
+
+  const renderCard = ({ item, index }: { item: any; index: number }) => {
+    const name: string = item.name || '';
+    const rating: number = item.averageRating ?? 0;
+    const reviews: number = item.totalReviews ?? 0;
+    const region: string = isRTL && item.regionNameAr ? item.regionNameAr : (item.regionNameEn || '');
+    const years: number | null = item.yearsOfExperience ?? null;
+    const services: any[] = item.services ?? [];
+    const isChatLoading = chatLoadingId === item.id;
+
+    return (
+      <TouchableOpacity
+        activeOpacity={0.92}
+        onPress={() => handleViewProfile(item.id)}
+        style={[styles.card, { backgroundColor: colors.cardBackground }]}
+      >
+        {/* Top row: avatar + info */}
+        <View style={styles.cardTop}>
+          <TouchableOpacity onPress={() => handleViewProfile(item.id)} activeOpacity={0.8}>
+            {item.profileImage ? (
+              <Image source={{ uri: item.profileImage }} style={styles.avatar} />
+            ) : (
+              <LinearGradient
+                colors={[colors.primary, colors.primary + 'AA']}
+                style={styles.avatar}
+              >
+                <Text style={styles.avatarInitial}>{name.charAt(0).toUpperCase()}</Text>
+              </LinearGradient>
+            )}
+          </TouchableOpacity>
+
+          <View style={styles.cardInfo}>
+            <Text style={[styles.cardName, { color: colors.text, fontSize: scaledSize(15) }]} numberOfLines={1}>
+              {name}
+            </Text>
+
+            <View style={styles.ratingRow}>
+              {renderStars(rating)}
+              <Text style={[styles.ratingNum, { color: colors.text, fontSize: scaledSize(12) }]}>
+                {rating.toFixed(1)}
+              </Text>
+              <Text style={[styles.ratingCount, { color: colors.textSecondary, fontSize: scaledSize(11) }]}>
+                ({reviews})
+              </Text>
+            </View>
+
+            <View style={styles.pillsRow}>
+              {!!region && (
+                <View style={[styles.pill, { backgroundColor: colors.primary + '15' }]}>
+                  <Ionicons name="location-outline" size={11} color={colors.primary} />
+                  <Text style={[styles.pillText, { color: colors.primary, fontSize: scaledSize(11) }]}>
+                    {region}
+                  </Text>
+                </View>
+              )}
+              {!!years && (
+                <View style={[styles.pill, { backgroundColor: colors.primary + '15' }]}>
+                  <Ionicons name="time-outline" size={11} color={colors.primary} />
+                  <Text style={[styles.pillText, { color: colors.primary, fontSize: scaledSize(11) }]}>
+                    {years} {t('yrs')}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </View>
+        </View>
+
+        {/* Service chips */}
+        {services.length > 0 && (
+          <View style={styles.chipsRow}>
+            {services.slice(0, 3).map((s: any, i: number) => (
+              <View key={i} style={[styles.chip, { backgroundColor: colors.primary + '12', borderColor: colors.primary + '28' }]}>
+                <Text style={[styles.chipText, { color: colors.primary, fontSize: scaledSize(11) }]}>
+                  {isRTL && s.nameAr ? s.nameAr : s.nameEn}
                 </Text>
               </View>
             ))}
-            {item.services.length > 3 && (
-              <Text style={[styles.moreServices, { color: colors.textSecondary }]}>
-                +{item.services.length - 3} {t('more')}
+            {services.length > 3 && (
+              <Text style={[styles.moreChips, { color: colors.textSecondary, fontSize: scaledSize(11) }]}>
+                +{services.length - 3}
               </Text>
             )}
           </View>
+        )}
+
+        {/* Divider */}
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+        {/* CTA buttons */}
+        <View style={styles.ctaRow}>
+          <TouchableOpacity
+            style={[styles.ctaBtn, styles.ctaBtnOutline, { borderColor: colors.primary }]}
+            onPress={() => handleChat(item.id, item.name)}
+            activeOpacity={0.75}
+            disabled={isChatLoading}
+          >
+            <Ionicons name={isChatLoading ? 'hourglass-outline' : 'chatbubble-outline'} size={16} color={colors.primary} />
+            <Text style={[styles.ctaBtnText, { color: colors.primary, fontSize: scaledSize(13) }]}>
+              {t('Chat')}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.ctaBtn, { backgroundColor: colors.primary }]}
+            onPress={() => onNavigateToBooking?.(item.id, item.name)}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="briefcase-outline" size={16} color="#fff" />
+            <Text style={[styles.ctaBtnText, { color: '#fff', fontSize: scaledSize(13) }]}>
+              {t('Hire')}
+            </Text>
+          </TouchableOpacity>
         </View>
-      )}
-      
-      {/* Location */}
-      {item.regionNameEn && (
-        <View style={styles.locationContainer}>
-          <Ionicons name="location" size={16} color={colors.textSecondary} />
-          <Text style={[styles.locationText, { color: colors.textSecondary }]}>
-            {i18n.language === 'ar' && item.regionNameAr ? item.regionNameAr : item.regionNameEn}
-          </Text>
-        </View>
-      )}
-      
-      {/* Description */}
-      {item.description && (
-        <Text style={[styles.description, { color: colors.textSecondary }]} numberOfLines={2}>
-          {item.description}
-        </Text>
-      )}
-      
-      {/* Action Buttons */}
-      <View style={styles.actionButtons}>
-        <TouchableOpacity
-          style={[styles.actionButton, styles.hireButton, { backgroundColor: colors.primary }]}
-          onPress={() => handleHire(item.id, item.name)}
-        >
-          <Ionicons name="person-add-outline" size={20} color="#fff" />
-          <Text style={styles.actionButtonText}>{t('Hire')}</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[styles.actionButton, styles.chatButton, { backgroundColor: '#4CAF50' }]}
-          onPress={() => handleChatTechnician(item.id, item.name)}
-        >
-          <Ionicons name="chatbubble-outline" size={20} color="#fff" />
-          <Text style={styles.actionButtonText}>{t('Chat')}</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-  
-  // If viewing a technician profile
+      </TouchableOpacity>
+    );
+  };
+
+  // Inline TechnicianProfileView (when parent doesn't handle profile nav)
   if (selectedTechnicianId) {
     return (
       <TechnicianProfileView
         technicianId={selectedTechnicianId}
         onBack={() => setSelectedTechnicianId(null)}
+        onChat={async (roomId, receiverId, receiverName) => {
+          setSelectedTechnicianId(null);
+          onNavigateToChat?.(roomId, receiverId, receiverName);
+        }}
+        onHire={(techId, techName) => {
+          setSelectedTechnicianId(null);
+          onNavigateToBooking?.(techId, techName);
+        }}
       />
     );
   }
-  
-  if (isLoading) {
-    return (
-      <View style={[styles.centerContainer, { backgroundColor: colors.background, paddingTop: insets.top }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-          {t('Loading technicians...')}
-        </Text>
-      </View>
-    );
-  }
-  
-  if (error) {
-    return (
-      <View style={[styles.centerContainer, { backgroundColor: colors.background, paddingTop: insets.top }]}>
-        <Ionicons name="alert-circle" size={60} color="#EF4444" />
-        <Text style={[styles.errorText, { color: colors.text }]}>{t('Error')}</Text>
-        <Text style={[styles.errorMessage, { color: colors.textSecondary }]}>{error}</Text>
-        <TouchableOpacity 
-          style={[styles.retryButton, { backgroundColor: colors.primary }]} 
-          onPress={loadTechnicians}
-        >
-          <Text style={styles.retryButtonText}>{t('Retry')}</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-  
-  if (technicians.length === 0) {
-    return (
-      <View style={[styles.centerContainer, { backgroundColor: colors.background, paddingTop: insets.top }]}>
-        <Ionicons name="person-outline" size={60} color={colors.textSecondary} />
-        <Text style={[styles.emptyText, { color: colors.text }]}>
-          {t('No technicians available')}
-        </Text>
-        <Text style={[styles.emptySubtext, { color: colors.textSecondary }]}>
-          {t('Try searching for a different service')}
-        </Text>
-        {onBack && (
-          <TouchableOpacity 
-            style={[styles.backButton, { backgroundColor: colors.primary }]} 
-            onPress={onBack}
-          >
-            <Text style={styles.backButtonText}>{t('Back')}</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-    );
-  }
-  
+
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <Animated.View style={[styles.screen, { backgroundColor: colors.background, transform: [{ translateX: slideX }] }]}>
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
-        {onBack && (
-          <TouchableOpacity onPress={onBack} style={styles.backButtonHeader}>
-            <Ionicons name={arrowBackIcon} size={24} color={colors.text} />
-          </TouchableOpacity>
-        )}
-        <Text style={[styles.headerTitle, { color: colors.text }]}>
-          {serviceName || t('Technicians')} ({technicians.length})
+      <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
+        <TouchableOpacity onPress={handleBack} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <Ionicons name={arrowBackIcon} size={22} color={colors.text} />
+        </TouchableOpacity>
+        <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(16) }]} numberOfLines={1}>
+          {serviceName || t('Technicians')}
+          {!isLoading && technicians.length > 0 ? `  (${technicians.length})` : ''}
         </Text>
-        {onBack && <View style={styles.backButtonHeader} />}
+        <View style={{ width: 40 }} />
       </View>
-      
-      <FlatList
-        data={technicians}
-        keyExtractor={(item) => item.id.toString()}
-        renderItem={renderTechnician}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-      />
-    </View>
+
+      {isLoading ? (
+        <AnimatedLoadingScreen message={t('Loading technicians...')} />
+      ) : error ? (
+        <View style={styles.center}>
+          <Ionicons name="alert-circle-outline" size={48} color={colors.textSecondary} />
+          <Text style={[styles.centerText, { color: colors.textSecondary, fontSize: scaledSize(14) }]}>{error}</Text>
+          <TouchableOpacity style={[styles.retryBtn, { backgroundColor: colors.primary }]} onPress={loadTechnicians}>
+            <Text style={[styles.retryBtnText, { fontSize: scaledSize(14) }]}>{t('Retry')}</Text>
+          </TouchableOpacity>
+        </View>
+      ) : technicians.length === 0 ? (
+        <View style={styles.center}>
+          <Ionicons name="people-outline" size={48} color={colors.textSecondary} />
+          <Text style={[styles.centerText, { color: colors.textSecondary, fontSize: scaledSize(14) }]}>
+            {t('No technicians available')}
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={technicians}
+          keyExtractor={(item) => item.id.toString()}
+          renderItem={renderCard}
+          contentContainerStyle={[styles.list, { paddingBottom: getGlassTabBarOverlayHeight(insets.bottom) + 12 }]}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  centerContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
+  screen: { flex: 1 },
+  // Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
+    paddingBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  backBtn: { width: 40, alignItems: 'flex-start' },
+  headerTitle: { flex: 1, fontWeight: '600', textAlign: 'center' },
+  // List
+  list: { padding: 16, gap: 12 },
+  // Card
+  card: {
+    borderRadius: 20,
+    padding: 16,
     ...Platform.select({
-      web: {
-        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-      } as any,
-      default: {
-        elevation: 2,
-      },
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.07, shadowRadius: 10 },
+      android: { elevation: 3 },
     }),
   },
-  backButtonHeader: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    flex: 1,
-    textAlign: 'center',
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-  },
-  errorText: {
-    fontSize: 24,
-    fontWeight: '700',
-    marginTop: 16,
-  },
-  errorMessage: {
-    fontSize: 14,
-    textAlign: 'center',
-    marginTop: 8,
-  },
-  retryButton: {
-    marginTop: 24,
-    paddingHorizontal: 32,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  retryButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginTop: 16,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    textAlign: 'center',
-    marginTop: 8,
-  },
-  backButton: {
-    marginTop: 24,
-    paddingHorizontal: 32,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  backButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  listContent: {
-    padding: 16,
-  },
-  technicianCard: {
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    ...Platform.select({
-      web: {
-        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-      } as any,
-      default: {
-        elevation: 3,
-      },
-    }),
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    marginBottom: 16,
-  },
-  profileHeaderTouchable: {
-    marginRight: 16,
-  },
+  cardTop: { flexDirection: 'row', gap: 14, marginBottom: 12 },
   avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-  },
-  technicianInfo: {
-    flex: 1,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
     justifyContent: 'center',
   },
-  technicianName: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  ratingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  ratingText: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 4,
-  },
-  reviewsText: {
-    fontSize: 12,
-    marginLeft: 4,
-  },
-  experience: {
-    fontSize: 12,
-  },
-  servicesContainer: {
-    marginBottom: 12,
-  },
-  servicesLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  servicesList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  serviceBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  serviceBadgeText: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  moreServices: {
-    fontSize: 12,
-    alignSelf: 'center',
-  },
-  locationContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  locationText: {
-    fontSize: 14,
-    marginLeft: 4,
-  },
-  description: {
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 16,
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  actionButton: {
+  avatarInitial: { fontSize: 22, fontWeight: '700', color: '#fff' },
+  cardInfo: { flex: 1, justifyContent: 'center', gap: 4 },
+  cardName: { fontWeight: '700' },
+  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  starsRow: { flexDirection: 'row', gap: 1 },
+  ratingNum: { fontWeight: '600', marginLeft: 3 },
+  ratingCount: {},
+  pillsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 2 },
+  pill: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
+  pillText: { fontWeight: '600' },
+  // Chips
+  chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 },
+  chip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, borderWidth: 1 },
+  chipText: { fontWeight: '500' },
+  moreChips: { alignSelf: 'center' },
+  // Divider
+  divider: { height: StyleSheet.hairlineWidth, marginBottom: 12 },
+  // CTA
+  ctaRow: { flexDirection: 'row', gap: 10 },
+  ctaBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 8,
-    gap: 8,
+    gap: 6,
+    paddingVertical: 11,
+    borderRadius: 14,
   },
-  actionButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  chatButton: {
-    // backgroundColor set inline
-  },
-  hireButton: {
-    // backgroundColor set inline
-  },
+  ctaBtnOutline: { borderWidth: 1.5, backgroundColor: 'transparent' },
+  ctaBtnText: { fontWeight: '700' },
+  // States
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14, padding: 32 },
+  centerText: { textAlign: 'center' },
+  retryBtn: { paddingHorizontal: 28, paddingVertical: 12, borderRadius: 12 },
+  retryBtnText: { color: '#fff', fontWeight: '600' },
 });
-

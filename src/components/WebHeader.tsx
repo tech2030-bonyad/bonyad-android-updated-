@@ -6,7 +6,7 @@ import BonyadLogo from './BonyadLogo';
 import { useFontFamily } from '../context/FontContext';
 import { useTranslation } from 'react-i18next';
 
-type Screen = 'splash' | 'welcome' | 'overview' | 'login' | 'signup' | 'otp' | 'home' | 'profile' | 'editProfile' | 'myData' | 'changePhone' | 'changePassword' | 'portfolio' | 'services' | 'availability' | 'subscription' | 'newProject' | 'manualForm' | 'aiForm' | 'projects' | 'runningProjects' | 'chatRooms' | 'chatDetail' | 'notifications' | 'appointments' | 'booking' | 'technicianProfile' | 'roomDesign' | 'voiceAI' | 'costExplorer' | 'roomVisualizer' | 'askBonyadAI' | 'projectsMap';
+type Screen = 'splash' | 'welcome' | 'overview' | 'login' | 'signup' | 'otp' | 'home' | 'profile' | 'editProfile' | 'myData' | 'changePhone' | 'changePassword' | 'portfolio' | 'services' | 'availability' | 'subscription' | 'newProject' | 'manualForm' | 'aiForm' | 'projects' | 'runningProjects' | 'chatRooms' | 'chatDetail' | 'notifications' | 'appointments' | 'booking' | 'technicianProfile' | 'roomDesign' | 'costExplorer' | 'roomVisualizer' | 'askBonyadAI' | 'projectsMap';
 
 interface WebHeaderProps {
   currentScreen?: Screen;

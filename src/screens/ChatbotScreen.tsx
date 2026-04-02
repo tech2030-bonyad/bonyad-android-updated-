@@ -1,5 +1,5 @@
-// ChatbotScreen - AI Support Chat Interface
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+// ChatbotScreen — AI assistant (light UI; robot hero when no user messages; composer clears GlassTabBar)
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,17 +13,76 @@ import {
   ActivityIndicator,
   Dimensions,
   ScrollView,
+  Animated,
+  Easing,
+  BackHandler,
+  Modal,
+  type TextStyle,
 } from 'react-native';
-import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather, Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
+import { LightColors } from '../constants/Colors';
 import { useChatbot } from '../hooks/useChatbot';
 import { ChatbotMessage } from '../types/chat';
 import type { NavigationAction } from '../utils/navigationParser';
 import { isChatbotHomeTabTarget, resolveChatbotScreenToken } from '../utils/chatbotNavTargets';
 import { renderChatbotInlineText } from '../utils/chatbotAndroidRichText';
+import { ChatbotRobotFace } from '../components/ChatbotFab';
+import { getGlassTabBarOverlayHeight } from '../components/GlassTabBar';
+import ChatbotService from '../services/ChatbotService';
 
-const { width: screenWidth } = Dimensions.get('window');
+const { width: SCREEN_W } = Dimensions.get('window');
+const MAX_BUBBLE_W = Math.min(320, SCREEN_W * 0.78);
+
+type ChatChrome = {
+  screenBg: string;
+  cardBg: string;
+  border: string;
+  text: string;
+  textSecondary: string;
+  headerGrad: [string, string];
+  inputBg: string;
+  placeholder: string;
+  userBubbleBg: string;
+};
+
+function buildLightChrome(colors: { primary: string; primaryDark: string }): ChatChrome {
+  return {
+    screenBg: LightColors.background,
+    cardBg: LightColors.cardBackground,
+    border: LightColors.border,
+    text: LightColors.text,
+    textSecondary: LightColors.textSecondary,
+    headerGrad: [colors.primaryDark, colors.primary],
+    inputBg: LightColors.gray100,
+    placeholder: LightColors.textTertiary,
+    userBubbleBg: LightColors.cardBackground,
+  };
+}
+
+type ListRow =
+  | { type: 'date'; id: string; label: string }
+  | { type: 'msg'; msg: ChatbotMessage };
+
+function calendarDayKey(iso: Date): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+
+function datePillLabel(d: Date, t: (k: string) => string): string {
+  const start = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diffDays = Math.round((start(new Date()) - start(d)) / 86400000);
+  if (diffDays === 0) return t('Today');
+  if (diffDays === 1) return t('Yesterday');
+  return d.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: d.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined,
+  });
+}
 
 interface ChatbotScreenProps {
   onBack?: () => void;
@@ -37,15 +96,60 @@ interface ChatbotScreenProps {
   userId?: number;
   onNavigateToTab?: (tabName: string) => void;
   onNavigateToScreen?: (screenName: string, params?: Record<string, unknown>) => void;
+  /** When true, reserve space for the floating `GlassTabBar` (home shell). */
+  hasBottomTabBar?: boolean;
 }
 
-// Chat Bubble Component
+const TYPING_DOT = 'rgba(0,0,0,0.35)';
+
+/** Milliseconds between each character (bot “typing” the welcome line). */
+const WELCOME_TYPE_INTERVAL_MS = 38;
+
+function TypingWelcomeText({
+  fullText,
+  textStyle,
+  cursorColor,
+}: {
+  fullText: string;
+  textStyle: TextStyle | TextStyle[];
+  cursorColor: string;
+}) {
+  const chars = useMemo(() => Array.from(fullText), [fullText]);
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    setCount(0);
+    if (chars.length === 0) return;
+    let i = 0;
+    const id = setInterval(() => {
+      i += 1;
+      setCount(i);
+      if (i >= chars.length) {
+        clearInterval(id);
+      }
+    }, WELCOME_TYPE_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [chars]);
+
+  const visible = chars.slice(0, count).join('');
+  const showCursor = count < chars.length;
+
+  return (
+    <Text style={textStyle}>
+      {visible}
+      {showCursor ? (
+        <Text style={[styles.welcomeCursor, { color: cursorColor }]}>|</Text>
+      ) : null}
+    </Text>
+  );
+}
+
 const ChatBubble: React.FC<{
   message: ChatbotMessage;
-  isDarkMode: boolean;
-  colors: any;
+  colors: { primary: string; primaryLight: string; primaryDark: string; text: string };
+  chrome: ChatChrome;
   onNavPress?: (action: NavigationAction) => void;
-}> = ({ message, isDarkMode, colors, onNavPress }) => {
+}> = ({ message, colors, chrome, onNavPress }) => {
   const isUser = message.isUser;
   const noopNav = () => {};
   const botBody =
@@ -55,7 +159,7 @@ const ChatBubble: React.FC<{
           message.navigationActions as NavigationAction[] | undefined,
           [
             styles.bubbleText,
-            isUser ? styles.userText : { color: colors.text },
+            isUser ? styles.userBubbleTextDark : styles.botBubbleText,
           ],
           { color: colors.primary, textDecorationLine: 'underline' as const, fontWeight: '600' as const },
           onNavPress ?? noopNav
@@ -63,41 +167,36 @@ const ChatBubble: React.FC<{
       : null;
 
   return (
-    <View
-      style={[
-        styles.bubbleContainer,
-        isUser ? styles.userBubbleContainer : styles.botBubbleContainer,
-      ]}
-    >
-      {!isUser && (
-        <View style={[styles.botAvatar, { backgroundColor: colors.primary + '20' }]}>
-          <MaterialCommunityIcons name="robot" size={20} color={colors.primary} />
-        </View>
-      )}
-      <View
-        style={[
-          styles.bubble,
-          isUser
-            ? [styles.userBubble, { backgroundColor: colors.primary }]
-            : [styles.botBubble, { 
-                backgroundColor: isDarkMode ? colors.cardBackground : '#fff',
-                borderColor: isDarkMode ? colors.gray700 : '#e0e0e0',
-              }],
-        ]}
-      >
-        {botBody ? (
-          botBody
-        ) : (
-          <Text
+    <View style={[styles.msgRow, isUser ? styles.msgRowUser : styles.msgRowBot]}>
+      <View style={[styles.bubbleWrap, { maxWidth: MAX_BUBBLE_W }]}>
+        {isUser ? (
+          <View
             style={[
-              styles.bubbleText,
-              isUser ? styles.userText : [styles.botText, { color: colors.text }],
+              styles.userBubble,
+              { backgroundColor: chrome.userBubbleBg, borderColor: chrome.border },
             ]}
           >
-            {message.displayText ?? message.text}
-          </Text>
+            {botBody ? (
+              botBody
+            ) : (
+              <Text style={[styles.bubbleText, styles.userBubbleTextDark]}>{message.displayText ?? message.text}</Text>
+            )}
+          </View>
+        ) : (
+          <LinearGradient colors={chrome.headerGrad} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.botBubble}>
+            {botBody ? (
+              botBody
+            ) : (
+              <Text style={[styles.bubbleText, styles.botBubbleText]}>{message.displayText ?? message.text}</Text>
+            )}
+          </LinearGradient>
         )}
-        <Text style={[styles.timestamp, { color: isUser ? 'rgba(255,255,255,0.7)' : colors.gray500 }]}>
+        <Text
+          style={[
+            styles.msgTime,
+            { alignSelf: isUser ? 'flex-end' : 'flex-start', color: chrome.textSecondary },
+          ]}
+        >
           {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </Text>
       </View>
@@ -105,40 +204,29 @@ const ChatBubble: React.FC<{
   );
 };
 
-// Typing Indicator Component
-const TypingIndicator: React.FC<{ isDarkMode: boolean; colors: any }> = ({ isDarkMode, colors }) => (
-  <View style={[styles.typingContainer, { justifyContent: 'flex-start' }]}>
-    <View style={[styles.botAvatar, { backgroundColor: colors.primary + '20' }]}>
-      <MaterialCommunityIcons name="robot" size={20} color={colors.primary} />
-    </View>
-    <View style={[styles.typingBubble, { backgroundColor: isDarkMode ? colors.cardBackground : '#fff' }]}>
+const TypingIndicator: React.FC<{ chrome: ChatChrome }> = ({ chrome }) => (
+  <View style={[styles.msgRow, styles.msgRowBot]}>
+    <View style={[styles.typingBubble, { backgroundColor: chrome.inputBg, borderColor: chrome.border }]}>
       <View style={styles.typingDots}>
-        <View style={[styles.dot, { backgroundColor: colors.primary }]} />
-        <View style={[styles.dot, { backgroundColor: colors.primary }]} />
-        <View style={[styles.dot, { backgroundColor: colors.primary }]} />
+        <View style={[styles.dot, { backgroundColor: TYPING_DOT }]} />
+        <View style={[styles.dot, { backgroundColor: TYPING_DOT }]} />
+        <View style={[styles.dot, { backgroundColor: TYPING_DOT }]} />
       </View>
     </View>
   </View>
 );
 
-// Quick Question Chip
 const QuickQuestionChip: React.FC<{
   question: string;
   onPress: () => void;
-  colors: any;
-  isDarkMode: boolean;
-}> = ({ question, onPress, colors, isDarkMode }) => (
+  primary: string;
+  chrome: ChatChrome;
+}> = ({ question, onPress, primary, chrome }) => (
   <TouchableOpacity
-    style={[
-      styles.quickChip,
-      {
-        backgroundColor: isDarkMode ? colors.cardBackground : '#f0f4f8',
-        borderColor: colors.primary + '30',
-      },
-    ]}
+    style={[styles.quickChip, { borderColor: `${primary}44`, backgroundColor: chrome.cardBg }]}
     onPress={onPress}
   >
-    <Text style={[styles.quickChipText, { color: colors.primary }]} numberOfLines={1}>
+    <Text style={[styles.quickChipText, { color: chrome.text }]} numberOfLines={2}>
       {question}
     </Text>
   </TouchableOpacity>
@@ -146,45 +234,126 @@ const QuickQuestionChip: React.FC<{
 
 const ChatbotScreen: React.FC<ChatbotScreenProps> = ({
   onBack,
-  onRequestLiveAgent,
   language: propLanguage,
   userRole = 'user',
   userId = 0,
   onNavigateToTab,
   onNavigateToScreen,
+  hasBottomTabBar = false,
 }) => {
   const { t, i18n } = useTranslation();
-  const { colors, theme } = useTheme();
-  const isDarkMode = theme === 'dark';
+  const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const language = propLanguage || (i18n.language === 'ar' ? 'ar' : 'en');
   const isRTL = language === 'ar';
-  const headerDirectionStyle = { direction: 'ltr' as const };
+  const chrome = useMemo(() => buildLightChrome(colors), [colors.primary, colors.primaryDark]);
+
+  const tabBarClearance = useMemo(() => {
+    if (!hasBottomTabBar) return Math.max(insets.bottom, 12);
+    return getGlassTabBarOverlayHeight(insets.bottom);
+  }, [hasBottomTabBar, insets.bottom]);
 
   const {
     messages,
     loading,
     error,
-    conversationId,
     sendMessage,
     sendQuickQuestion,
-    getAIHistory,
-    getFirstUserMessage,
     resetChat,
     quickQuestions,
   } = useChatbot({ language, userRole, userId });
 
+  const hasUserMessage = messages.some((m) => m.isUser);
+  const welcomeOnly = !hasUserMessage;
+
   const [inputText, setInputText] = useState('');
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const inputRef = useRef<TextInput>(null);
 
-  // Scroll to bottom when new messages arrive
+  const screenOpacity = useRef(new Animated.Value(0)).current;
+  const screenTranslateY = useRef(new Animated.Value(28)).current;
+
   useEffect(() => {
-    if (messages.length > 0) {
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 100);
+    screenOpacity.setValue(0);
+    screenTranslateY.setValue(28);
+    Animated.parallel([
+      Animated.timing(screenOpacity, {
+        toValue: 1,
+        duration: 320,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.spring(screenTranslateY, {
+        toValue: 0,
+        tension: 68,
+        friction: 12,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [screenOpacity, screenTranslateY]);
+
+  const runCloseAnimation = useCallback(
+    (then?: () => void) => {
+      Animated.parallel([
+        Animated.timing(screenOpacity, {
+          toValue: 0,
+          duration: 240,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(screenTranslateY, {
+          toValue: 36,
+          duration: 240,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]).start(({ finished }) => {
+        if (finished) then?.();
+      });
+    },
+    [screenOpacity, screenTranslateY]
+  );
+
+  const handleBack = useCallback(() => {
+    runCloseAnimation(() => onBack?.());
+  }, [onBack, runCloseAnimation]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (showDeleteModal) {
+        setShowDeleteModal(false);
+        return true;
+      }
+      if (onBack) {
+        handleBack();
+        return true;
+      }
+      return false;
+    });
+    return () => sub.remove();
+  }, [onBack, handleBack, showDeleteModal]);
+
+  useEffect(() => {
+    if (hasUserMessage && messages.length > 0) {
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 80);
     }
-  }, [messages]);
+  }, [messages, loading, hasUserMessage]);
+
+  const listRows: ListRow[] = useMemo(() => {
+    const rows: ListRow[] = [];
+    let lastKey: string | null = null;
+    messages.forEach((m) => {
+      const k = calendarDayKey(m.timestamp);
+      if (k !== lastKey) {
+        lastKey = k;
+        rows.push({ type: 'date', id: `d-${k}`, label: datePillLabel(m.timestamp, t) });
+      }
+      rows.push({ type: 'msg', msg: m });
+    });
+    return rows;
+  }, [messages, t]);
 
   const handleSend = useCallback(() => {
     if (inputText.trim() && !loading) {
@@ -193,40 +362,22 @@ const ChatbotScreen: React.FC<ChatbotScreenProps> = ({
     }
   }, [inputText, loading, sendMessage]);
 
-  const handleQuickQuestion = useCallback((question: string) => {
-    sendQuickQuestion(question);
-  }, [sendQuickQuestion]);
+  const handleQuickQuestion = useCallback(
+    (question: string) => {
+      sendQuickQuestion(question);
+    },
+    [sendQuickQuestion]
+  );
 
-  const handleRequestLiveAgent = useCallback(() => {
-    const aiHistory = getAIHistory();
-    const firstUserMessage = getFirstUserMessage();
-
-    Alert.alert(
-      language === 'ar' ? 'Request Live Agent' : 'Request Live Agent',
-      language === 'ar'
-        ? 'Your conversation will be shared with the agent. Continue?'
-        : 'Your conversation will be shared with the agent for better assistance. Continue?',
-      [
-        {
-          text: language === 'ar' ? 'Cancel' : 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: language === 'ar' ? 'Request' : 'Request',
-          onPress: () => {
-            if (onRequestLiveAgent) {
-              onRequestLiveAgent(firstUserMessage, aiHistory, firstUserMessage);
-            }
-          },
-        },
-      ]
-    );
-  }, [getAIHistory, getFirstUserMessage, language, onRequestLiveAgent]);
+  const confirmDeleteChat = useCallback(() => {
+    resetChat();
+    setShowDeleteModal(false);
+  }, [resetChat]);
 
   const runNavAction = useCallback(
     (action: NavigationAction) => {
-      const t = action.type;
-      if (t === 'tab' && onNavigateToTab) {
+      const ty = action.type;
+      if (ty === 'tab' && onNavigateToTab) {
         const token = action.target;
         const resolved = resolveChatbotScreenToken(String(token)) ?? String(token);
         if (!isChatbotHomeTabTarget(String(token)) && onNavigateToScreen) {
@@ -241,367 +392,585 @@ const ChatbotScreen: React.FC<ChatbotScreenProps> = ({
     [onNavigateToTab, onNavigateToScreen]
   );
 
-  const renderMessage = useCallback(
-    ({ item }: { item: ChatbotMessage; index: number }) => {
-      return (
-        <ChatBubble
-          message={item}
-          isDarkMode={isDarkMode}
-          colors={colors}
-          onNavPress={runNavAction}
-        />
-      );
+  const renderRow = useCallback(
+    ({ item }: { item: ListRow }) => {
+      if (item.type === 'date') {
+        return (
+          <View style={styles.dateSection}>
+            <View style={[styles.datePill, { backgroundColor: chrome.cardBg, borderColor: chrome.border }]}>
+              <Text style={[styles.datePillText, { color: chrome.text }]}>{item.label}</Text>
+            </View>
+          </View>
+        );
+      }
+      return <ChatBubble message={item.msg} colors={colors} chrome={chrome} onNavPress={runNavAction} />;
     },
-    [isDarkMode, colors, runNavAction, onNavigateToScreen, onNavigateToTab]
+    [colors, chrome, runNavAction]
+  );
+
+  const keyExtractor = useCallback((item: ListRow) => {
+    if (item.type === 'date') return item.id;
+    return item.msg.id;
+  }, []);
+
+  const placeholder = language === 'ar' ? 'اكتب رسالتك…' : 'Enter your message…';
+
+  const welcomeFullText = ChatbotService.getWelcomeMessage(language === 'ar' ? 'ar' : 'en');
+
+  const showQuickQuestions = !loading && (welcomeOnly || messages.length <= 2);
+
+  const quickChips = (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickScroll}>
+      {quickQuestions.map((question, index) => (
+        <QuickQuestionChip
+          key={index}
+          question={question}
+          onPress={() => handleQuickQuestion(question)}
+          primary={colors.primary}
+          chrome={chrome}
+        />
+      ))}
+    </ScrollView>
   );
 
   return (
     <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: colors.background }]}
+      style={[styles.root, { backgroundColor: chrome.screenBg }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? Math.max(insets.top, 12) : 0}
     >
-      {/* Header */}
-      <View
+      <Animated.View
         style={[
-          styles.header,
-          { backgroundColor: colors.cardBackground, borderBottomColor: colors.border },
-          headerDirectionStyle,
+          styles.animatedScreen,
+          {
+            opacity: screenOpacity,
+            transform: [{ translateY: screenTranslateY }],
+            paddingTop: insets.top + 8,
+          },
         ]}
       >
-        <TouchableOpacity onPress={onBack} style={styles.backButton} accessibilityRole="button">
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-
-        <View style={styles.headerCenter}>
-          <View style={[styles.botIcon, { backgroundColor: colors.primary + '20' }]}>
-            <MaterialCommunityIcons name="robot" size={24} color={colors.primary} />
-          </View>
-          <View>
-            <Text style={[styles.headerTitle, { color: colors.text, textAlign: 'left' }]}>
-              {language === 'ar' ? 'Bonyad Assistant' : 'Bonyad Assistant'}
-            </Text>
-            <View style={styles.onlineIndicator}>
-              <View style={[styles.onlineDot, { backgroundColor: '#10b981' }]} />
-              <Text style={[styles.onlineText, { color: colors.gray500 }]}>
-                {language === 'ar' ? 'Online' : 'Online'}
+        <View style={[styles.mainColumn, { paddingHorizontal: 12 }]}>
+          <View style={[styles.topBar, isRTL && styles.rowReverse]}>
+            {onBack ? (
+              <TouchableOpacity
+                onPress={handleBack}
+                style={styles.backBtn}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                accessibilityRole="button"
+                accessibilityLabel={language === 'ar' ? 'رجوع' : 'Back'}
+              >
+                <Ionicons
+                  name={isRTL ? 'chevron-forward' : 'chevron-back'}
+                  size={26}
+                  color={chrome.text}
+                />
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.backBtnSpacer} />
+            )}
+            <View
+              style={[
+                styles.headerPill,
+                { backgroundColor: chrome.cardBg, borderColor: chrome.border },
+              ]}
+            >
+              <Text style={[styles.headerTitle, { color: chrome.text }]} numberOfLines={1}>
+                {language === 'ar' ? 'مساعد بنياد' : 'Bonyad Assistant'}
               </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => setShowDeleteModal(true)}
+              style={styles.deleteBtnOutside}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              accessibilityRole="button"
+              accessibilityLabel={language === 'ar' ? 'حذف المحادثة' : 'Delete chat'}
+            >
+              <Ionicons name="trash-outline" size={22} color={colors.error} />
+            </TouchableOpacity>
+          </View>
+
+          {error ? (
+            <Text style={styles.errorBanner}>{error}</Text>
+          ) : null}
+
+          {welcomeOnly ? (
+            <View style={styles.emptyCenter}>
+              <ChatbotRobotFace
+                primaryColor={colors.primaryLight}
+                primaryDark={colors.primaryDark}
+                diameter={100}
+                enableBlink
+              />
+              <TypingWelcomeText
+                fullText={welcomeFullText}
+                textStyle={[styles.welcomeText, { color: chrome.text }]}
+                cursorColor={colors.primary}
+              />
+            </View>
+          ) : (
+            <>
+              <FlatList
+                ref={flatListRef}
+                data={listRows}
+                keyExtractor={keyExtractor}
+                renderItem={renderRow}
+                style={styles.listFlex}
+                contentContainerStyle={styles.listContent}
+                showsVerticalScrollIndicator={false}
+                onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+              />
+              {loading && <TypingIndicator chrome={chrome} />}
+            </>
+          )}
+        </View>
+
+        <View
+          style={[
+            styles.composerDock,
+            {
+              backgroundColor: chrome.cardBg,
+              borderTopColor: chrome.border,
+              paddingBottom: tabBarClearance,
+            },
+          ]}
+        >
+          {showQuickQuestions ? (
+            <View style={styles.quickAboveComposer}>
+              <Text style={[styles.quickTitle, { color: chrome.textSecondary }]}>
+                {language === 'ar' ? 'أسئلة سريعة' : 'Quick questions'}
+              </Text>
+              {quickChips}
+            </View>
+          ) : null}
+          <View style={[styles.composerRow, isRTL && styles.rowReverse]}>
+            <View
+              style={[
+                styles.inputShell,
+                { backgroundColor: chrome.inputBg, borderColor: chrome.border },
+              ]}
+            >
+              <TextInput
+                ref={inputRef}
+                style={[styles.input, { color: chrome.text, textAlign: isRTL ? 'right' : 'left' }]}
+                value={inputText}
+                onChangeText={setInputText}
+                placeholder={placeholder}
+                placeholderTextColor={chrome.placeholder}
+                multiline
+                maxLength={500}
+              />
+            </View>
+            <TouchableOpacity
+              onPress={handleSend}
+              disabled={!inputText.trim() || loading}
+              style={[styles.roundAction, (!inputText.trim() || loading) && styles.roundActionDisabled]}
+              activeOpacity={0.85}
+            >
+              <LinearGradient colors={chrome.headerGrad} style={StyleSheet.absoluteFill} />
+              {loading ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Ionicons name="paper-plane" size={18} color="#fff" style={{ transform: [{ scaleX: isRTL ? -1 : 1 }] }} />
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.roundAction}
+              onPress={() =>
+                Alert.alert(
+                  language === 'ar' ? 'قريباً' : 'Coming soon',
+                  language === 'ar' ? 'الإدخال الصوتي قيد التطوير.' : 'Voice input is not available yet.'
+                )
+              }
+              activeOpacity={0.85}
+            >
+              <LinearGradient colors={chrome.headerGrad} style={StyleSheet.absoluteFill} />
+              <Feather name="mic" size={18} color="#fff" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.roundAction, styles.roundActionBorder, { borderColor: chrome.border }]}
+              onPress={() =>
+                Alert.alert(
+                  language === 'ar' ? 'قريباً' : 'Coming soon',
+                  language === 'ar' ? 'إرفاق الملفات قيد التطوير.' : 'Attachments are not available yet.'
+                )
+              }
+              activeOpacity={0.85}
+            >
+              <LinearGradient colors={chrome.headerGrad} style={StyleSheet.absoluteFill} />
+              <Feather name="paperclip" size={18} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Animated.View>
+
+      <Modal
+        visible={showDeleteModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDeleteModal(false)}
+        statusBarTranslucent
+      >
+        <View style={styles.deleteModalRoot}>
+          <TouchableOpacity
+            style={styles.deleteModalBackdrop}
+            activeOpacity={1}
+            onPress={() => setShowDeleteModal(false)}
+          />
+          <View style={styles.deleteModalWrap} pointerEvents="box-none">
+            <View style={[styles.deleteModalCard, { backgroundColor: chrome.cardBg, borderColor: chrome.border }]}>
+              <Text style={[styles.deleteModalTitle, { color: chrome.text }]}>
+                {language === 'ar' ? 'حذف المحادثة؟' : 'Delete chat?'}
+              </Text>
+              <Text style={[styles.deleteModalBody, { color: chrome.textSecondary }]}>
+                {language === 'ar'
+                  ? 'سيتم مسح جميع الرسائل في هذه المحادثة. لا يمكن التراجع عن هذا الإجراء.'
+                  : 'All messages in this chat will be cleared. This cannot be undone.'}
+              </Text>
+              <View style={[styles.deleteModalActions, isRTL && styles.rowReverse]}>
+                <TouchableOpacity
+                  style={[styles.deleteModalBtnSecondary, { borderColor: chrome.border }]}
+                  onPress={() => setShowDeleteModal(false)}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[styles.deleteModalBtnSecondaryText, { color: chrome.text }]}>
+                    {language === 'ar' ? 'إلغاء' : 'Cancel'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.deleteModalBtnPrimary, { backgroundColor: colors.error }]}
+                  onPress={confirmDeleteChat}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.deleteModalBtnPrimaryText}>
+                    {language === 'ar' ? 'حذف' : 'Delete'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         </View>
-
-        <TouchableOpacity onPress={resetChat} style={styles.resetButton}>
-          <Feather name="refresh-cw" size={20} color={colors.gray500} />
-        </TouchableOpacity>
-      </View>
-
-      {/* Messages List */}
-      <FlatList
-        ref={flatListRef}
-        data={messages}
-        keyExtractor={(item) => item.id}
-        renderItem={renderMessage}
-        contentContainerStyle={styles.messagesList}
-        showsVerticalScrollIndicator={false}
-        inverted={false}
-      />
-
-      {/* Quick Questions */}
-      {messages.length <= 2 && !loading && (
-        <View style={[styles.quickQuestionsContainer, { backgroundColor: colors.background }]}>
-          <Text style={[styles.quickQuestionsTitle, { color: colors.gray500 }]}>
-            {language === 'ar' ? 'Quick Questions:' : 'Quick Questions:'}
-          </Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.quickQuestionsScroll}
-          >
-            {quickQuestions.map((question, index) => (
-              <QuickQuestionChip
-                key={index}
-                question={question}
-                onPress={() => handleQuickQuestion(question)}
-                colors={colors}
-                isDarkMode={isDarkMode}
-              />
-            ))}
-          </ScrollView>
-        </View>
-      )}
-
-      {/* Typing Indicator */}
-      {loading && <TypingIndicator isDarkMode={isDarkMode} colors={colors} />}
-
-      {/* Live Agent Circular Button */}
-      <View style={styles.liveAgentContainer}>
-        <TouchableOpacity
-          style={[styles.liveAgentCircleButton, { backgroundColor: colors.success }]}
-          onPress={handleRequestLiveAgent}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="headset" size={24} color="#fff" />
-        </TouchableOpacity>
-        <Text style={[styles.liveAgentCircleText, { color: colors.textSecondary }]}>
-          {language === 'ar' ? 'Live Agent' : 'Live Agent'}
-        </Text>
-      </View>
-
-      {/* Input Area */}
-      <View style={[styles.inputContainer, { backgroundColor: colors.cardBackground, borderTopColor: colors.border }]}>
-        <TextInput
-          ref={inputRef}
-          style={[
-            styles.input,
-            {
-              backgroundColor: isDarkMode ? colors.gray100 : '#f1f5f9',
-              color: colors.text,
-            },
-          ]}
-          value={inputText}
-          onChangeText={setInputText}
-          placeholder={language === 'ar' ? 'Type your message...' : 'Type your message...'}
-          placeholderTextColor={colors.gray500}
-          multiline
-          maxLength={500}
-          textAlign={isRTL ? 'right' : 'left'}
-        />
-        <TouchableOpacity
-          style={[
-            styles.sendButton,
-            {
-              backgroundColor: inputText.trim() && !loading ? colors.primary : colors.gray400,
-            },
-          ]}
-          onPress={handleSend}
-          disabled={!inputText.trim() || loading}
-        >
-          {loading ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Ionicons
-              name={isRTL ? 'arrow-back' : 'arrow-forward'}
-              size={20}
-              color="#fff"
-            />
-          )}
-        </TouchableOpacity>
-      </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
   },
-  header: {
+  animatedScreen: {
+    flex: 1,
+  },
+  mainColumn: {
+    flex: 1,
+  },
+  topBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
+    gap: 10,
+    marginBottom: 10,
+  },
+  rowReverse: {
+    flexDirection: 'row-reverse',
+  },
+  backBtn: {
+    width: 40,
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  backBtnSpacer: {
+    width: 40,
+  },
+  headerPill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 56,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    borderWidth: 1,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
       },
-      android: {
-        elevation: 2,
-      },
+      android: { elevation: 2 },
     }),
   },
-  backButton: {
-    padding: 8,
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    letterSpacing: -0.3,
+    textAlign: 'center',
   },
-  headerCenter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  botIcon: {
+  deleteBtnOutside: {
     width: 44,
     height: 44,
-    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    borderRadius: 12,
   },
-  headerTitle: {
+  errorBanner: {
+    color: '#c62828',
+    fontSize: 13,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  listFlex: {
+    flex: 1,
+  },
+  listContent: {
+    paddingBottom: 12,
+    paddingHorizontal: 2,
+    flexGrow: 1,
+  },
+  emptyCenter: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingBottom: 24,
+  },
+  welcomeText: {
+    marginTop: 20,
     fontSize: 16,
-    fontWeight: '600',
+    lineHeight: 22,
+    textAlign: 'center',
+    maxWidth: 320,
   },
-  onlineIndicator: {
-    flexDirection: 'row',
+  welcomeCursor: {
+    opacity: 0.85,
+    fontWeight: '300',
+  },
+  quickAboveComposer: {
+    marginBottom: 10,
+    paddingTop: 2,
+  },
+  dateSection: {
     alignItems: 'center',
-    marginTop: 2,
-  },
-  onlineDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 6,
-  },
-  onlineText: {
-    fontSize: 12,
-  },
-  resetButton: {
-    padding: 8,
-  },
-  messagesList: {
-    padding: 16,
-    paddingBottom: 8,
-  },
-  bubbleContainer: {
-    flexDirection: 'row',
-    marginBottom: 12,
-    maxWidth: '85%',
-  },
-  userBubbleContainer: {
-    alignSelf: 'flex-end',
-    justifyContent: 'flex-end',
-  },
-  botBubbleContainer: {
-    alignSelf: 'flex-start',
-  },
-  botAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 8,
-    alignSelf: 'flex-end',
-    marginBottom: 4,
-  },
-  bubble: {
-    padding: 12,
-    borderRadius: 16,
-    maxWidth: screenWidth * 0.7,
-  },
-  userBubble: {
-    borderBottomRightRadius: 4,
-  },
-  botBubble: {
-    borderBottomLeftRadius: 4,
-    borderWidth: 1,
-  },
-  bubbleText: {
-    fontSize: 15,
-    lineHeight: 20,
-  },
-  userText: {
-    color: '#fff',
-  },
-  botText: {
-    color: '#1f2937',
-  },
-  timestamp: {
-    fontSize: 10,
+    marginBottom: 14,
     marginTop: 4,
-    alignSelf: 'flex-end',
   },
-  typingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  datePill: {
     paddingHorizontal: 16,
     paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  datePillText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  msgRow: {
+    marginBottom: 14,
+  },
+  msgRowUser: {
+    alignItems: 'flex-end',
+  },
+  msgRowBot: {
+    alignItems: 'flex-start',
+  },
+  bubbleWrap: {
+    maxWidth: MAX_BUBBLE_W,
+  },
+  userBubble: {
+    borderRadius: 22,
+    borderTopRightRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 18,
+    paddingVertical: 15,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+      },
+      android: { elevation: 2 },
+    }),
+  },
+  botBubble: {
+    borderRadius: 22,
+    borderTopLeftRadius: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 15,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+      },
+      android: { elevation: 3 },
+    }),
+  },
+  bubbleText: {
+    fontSize: 17,
+    lineHeight: 23,
+    letterSpacing: -0.2,
+  },
+  userBubbleTextDark: {
+    color: '#111827',
+  },
+  botBubbleText: {
+    color: '#FFFFFF',
+  },
+  msgTime: {
+    fontSize: 13,
+    marginTop: 8,
+    paddingHorizontal: 4,
   },
   typingBubble: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 16,
-    borderBottomLeftRadius: 4,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    borderRadius: 22,
+    borderTopLeftRadius: 14,
+    borderWidth: 1,
   },
   typingDots: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
   },
   dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    opacity: 0.6,
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    opacity: 0.85,
+    marginHorizontal: 3,
   },
-  quickQuestionsContainer: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-  },
-  quickQuestionsTitle: {
+  quickTitle: {
     fontSize: 12,
     marginBottom: 8,
   },
-  quickQuestionsScroll: {
-    paddingRight: 16,
-    gap: 8,
+  quickScroll: {
+    paddingRight: 8,
+    paddingVertical: 2,
   },
   quickChip: {
     paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingVertical: 10,
+    borderRadius: 16,
     borderWidth: 1,
     marginRight: 8,
+    maxWidth: SCREEN_W * 0.72,
   },
   quickChipText: {
     fontSize: 13,
     fontWeight: '500',
   },
-  liveAgentContainer: {
-    alignItems: 'center',
-    marginBottom: 12,
-    paddingHorizontal: 16,
+  composerDock: {
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
-  liveAgentCircleButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+  composerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    minHeight: 48,
+  },
+  inputShell: {
+    flex: 1,
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: Platform.OS === 'ios' ? 10 : 6,
+    minHeight: 44,
+    maxHeight: 120,
+    justifyContent: 'center',
+  },
+  input: {
+    fontSize: 15,
+    paddingVertical: 0,
+  },
+  roundAction: {
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  roundActionDisabled: {
+    opacity: 0.45,
+  },
+  roundActionBorder: {
+    borderWidth: 1,
+  },
+  deleteModalRoot: {
+    flex: 1,
+  },
+  deleteModalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  deleteModalWrap: {
+    ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  deleteModalCard: {
+    width: '100%',
+    maxWidth: 340,
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 16,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
+        shadowOffset: { width: 0, height: 8 },
         shadowOpacity: 0.2,
-        shadowRadius: 8,
+        shadowRadius: 24,
       },
-      android: {
-        elevation: 6,
-      },
-      web: {
-        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)' as any,
-      },
+      android: { elevation: 8 },
     }),
   },
-  liveAgentCircleText: {
-    fontSize: 12,
-    fontWeight: '500',
-    marginTop: 6,
+  deleteModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 8,
+    textAlign: 'center',
   },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderTopWidth: 1,
-  },
-  input: {
-    flex: 1,
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    maxHeight: 100,
+  deleteModalBody: {
     fontSize: 15,
+    lineHeight: 21,
+    marginBottom: 20,
+    textAlign: 'center',
   },
-  sendButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  deleteModalActions: {
+    flexDirection: 'row',
     justifyContent: 'center',
+  },
+  deleteModalBtnSecondary: {
+    flex: 1,
+    marginEnd: 5,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
     alignItems: 'center',
-    marginLeft: 10,
+  },
+  deleteModalBtnSecondaryText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  deleteModalBtnPrimary: {
+    flex: 1,
+    marginStart: 5,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  deleteModalBtnPrimaryText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });
 

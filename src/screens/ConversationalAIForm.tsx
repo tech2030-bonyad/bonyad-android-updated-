@@ -206,8 +206,17 @@ export default function ConversationalAIForm({
   const loadingRotateAnim = useRef(new Animated.Value(0)).current;
   const loadingAnimRef = useRef<Animated.CompositeAnimation | null>(null);
   const screenOpacity = useRef(new Animated.Value(0)).current;
-  const screenTranslateY = useRef(new Animated.Value(18)).current;
+  const screenTranslateY = useRef(new Animated.Value(320)).current;
+  const screenScale = useRef(new Animated.Value(0.95)).current;
   const isClosingScreenRef = useRef(false);
+
+  // Creative loading animation refs
+  const orbit1Anim = useRef(new Animated.Value(0)).current;
+  const orbit2Anim = useRef(new Animated.Value(0)).current;
+  const orbit3Anim = useRef(new Animated.Value(0)).current;
+  const loadingTextAnim = useRef(new Animated.Value(1)).current;
+  const [loadingMsgIdx, setLoadingMsgIdx] = useState(0);
+  const loadingMsgTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     // Pulse animation
@@ -237,28 +246,45 @@ export default function ConversationalAIForm({
     );
     rotateLoop.start();
 
+    // Always-on hero orbit animation (Step 1 description)
+    const heroOrbit1 = Animated.loop(Animated.timing(orbit1Anim, { toValue: 1, duration: 2400, useNativeDriver: true }));
+    const heroOrbit2 = Animated.loop(Animated.timing(orbit2Anim, { toValue: 1, duration: 3200, useNativeDriver: true }));
+    const heroOrbit3 = Animated.loop(Animated.timing(orbit3Anim, { toValue: 1, duration: 4000, useNativeDriver: true }));
+    heroOrbit1.start();
+    heroOrbit2.start();
+    heroOrbit3.start();
+
     // Cleanup animations on unmount
     return () => {
       pulseLoop.stop();
       rotateLoop.stop();
+      heroOrbit1.stop();
+      heroOrbit2.stop();
+      heroOrbit3.stop();
     };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     Animated.parallel([
       Animated.timing(screenOpacity, {
         toValue: 1,
-        duration: 220,
+        duration: 280,
         useNativeDriver: true,
       }),
       Animated.spring(screenTranslateY, {
         toValue: 0,
-        friction: 9,
-        tension: 110,
+        friction: 8,
+        tension: 70,
+        useNativeDriver: true,
+      }),
+      Animated.spring(screenScale, {
+        toValue: 1,
+        friction: 8,
+        tension: 70,
         useNativeDriver: true,
       }),
     ]).start();
-  }, [screenOpacity, screenTranslateY]);
+  }, [screenOpacity, screenTranslateY, screenScale]);
 
   const closeScreenAnimated = () => {
     if (isClosingScreenRef.current) return;
@@ -266,18 +292,27 @@ export default function ConversationalAIForm({
     Animated.parallel([
       Animated.timing(screenOpacity, {
         toValue: 0,
-        duration: 170,
+        duration: 220,
         useNativeDriver: true,
       }),
       Animated.timing(screenTranslateY, {
-        toValue: 16,
-        duration: 170,
+        toValue: 280,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+      Animated.timing(screenScale, {
+        toValue: 0.96,
+        duration: 220,
         useNativeDriver: true,
       }),
     ]).start(() => {
       onBack();
     });
   };
+
+  const loadingMessages = isRTL
+    ? ['جارٍ تحليل طلبك...', 'فهم متطلبات المشروع...', 'إعداد خطة المشروع...', 'تحسين التفاصيل...']
+    : ['Analyzing your request...', 'Understanding requirements...', 'Building your project plan...', 'Refining the details...'];
 
   // Loading spinner animation - starts/stops based on isLoading
   useEffect(() => {
@@ -286,25 +321,34 @@ export default function ConversationalAIForm({
       loadingAnimRef.current = Animated.loop(
         Animated.timing(loadingRotateAnim, {
           toValue: 1,
-          duration: 800, // Fast spin
+          duration: 800,
           useNativeDriver: true,
         })
       );
       loadingAnimRef.current.start();
+
+      // Cycle loading messages
+      setLoadingMsgIdx(0);
+      loadingMsgTimerRef.current = setInterval(() => {
+        setLoadingMsgIdx((prev) => (prev + 1) % loadingMessages.length);
+      }, 1800);
     } else {
       if (loadingAnimRef.current) {
         loadingAnimRef.current.stop();
         loadingAnimRef.current = null;
       }
+      if (loadingMsgTimerRef.current) {
+        clearInterval(loadingMsgTimerRef.current);
+        loadingMsgTimerRef.current = null;
+      }
       loadingRotateAnim.setValue(0);
     }
 
     return () => {
-      if (loadingAnimRef.current) {
-        loadingAnimRef.current.stop();
-      }
+      if (loadingAnimRef.current) loadingAnimRef.current.stop();
+      if (loadingMsgTimerRef.current) clearInterval(loadingMsgTimerRef.current);
     };
-  }, [isLoading]);
+  }, [isLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const spin = rotateAnim.interpolate({
     inputRange: [0, 1],
@@ -907,69 +951,133 @@ export default function ConversationalAIForm({
 
   // Render UI based on current step
 
+  // Orbit helper: computes position on a circle given animated 0-1 value
+  const makeOrbitStyle = (animVal: Animated.Value, radius: number) => {
+    const angle = animVal.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+    return {
+      position: 'absolute' as const,
+      width: 12,
+      height: 12,
+      borderRadius: 6,
+      marginLeft: -6,
+      marginTop: -6,
+      top: '50%' as any,
+      left: '50%' as any,
+      transform: [
+        { translateX: -radius } as any,
+        { rotate: angle } as any,
+        { translateX: radius } as any,
+      ],
+    };
+  };
+
   // Render mobile layout
   if (shouldRenderMobile) {
     return (
-      <Animated.View style={{ flex: 1, opacity: screenOpacity, transform: [{ translateY: screenTranslateY }] }}>
+      <Animated.View style={{ flex: 1, opacity: screenOpacity, transform: [{ translateY: screenTranslateY }, { scale: screenScale }] }}>
       <KeyboardAvoidingView
         style={[styles.container, { backgroundColor: '#FFFFFF' }]}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
-        {/* Figma Header - Simple Back Button */}
-        <View style={[styles.figmaHeader, { paddingTop: Math.max(insets.top, 16) }]}>
-          <TouchableOpacity onPress={closeScreenAnimated} style={styles.figmaBackButton}>
-            <Ionicons name={arrowBackIcon} size={24} color="#383838" />
+        {/* Header */}
+        <View style={[styles.newHeader, { paddingTop: Math.max(insets.top, 16) }]}>
+          <TouchableOpacity onPress={closeScreenAnimated} style={styles.newHeaderBack}>
+            <Ionicons name={arrowBackIcon} size={22} color="#1A1A1A" />
           </TouchableOpacity>
+          <View style={styles.newHeaderCenter}>
+            <View style={styles.newHeaderIconWrap}>
+              <Ionicons name="sparkles" size={14} color="#fff" />
+            </View>
+            <Text style={styles.newHeaderTitle}>
+              {currentStep === 'description'
+                ? t('AI Assistant')
+                : currentStep === 'questions'
+                ? t('Quick Questions')
+                : t('Review Project')}
+            </Text>
+          </View>
+          <View style={{ width: 38 }} />
+        </View>
+
+        {/* Step indicator pills */}
+        <View style={styles.stepPills}>
+          {(['description', 'questions', 'review'] as const).map((s, i) => (
+            <View
+              key={s}
+              style={[
+                styles.stepPill,
+                currentStep === s && styles.stepPillActive,
+                (['description', 'questions'].includes(currentStep) && i === 0 && currentStep !== 'description') ||
+                (currentStep === 'review' && i < 2)
+                  ? styles.stepPillDone
+                  : undefined,
+              ]}
+            />
+          ))}
         </View>
 
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
-        {/* Step 1: Description Input - Figma Design */}
+        {/* Step 1: Description Input */}
         {currentStep === 'description' && (
-          <View style={styles.figmaFormContainer}>
-            {/* Figma AI Icon with amber background */}
-            <View style={styles.figmaLogoSection}>
-              <View style={styles.figmaAiIconBox}>
-                <Ionicons name="chatbubbles" size={32} color="#FFB703" />
+          <View style={styles.newDescContainer}>
+            {/* Hero */}
+            <View style={styles.newHero}>
+              <Animated.View style={[styles.newHeroOrbit, makeOrbitStyle(orbit1Anim, 44)]}>
+                <View style={[styles.newOrbitDot, { backgroundColor: colors.primary }]} />
+              </Animated.View>
+              <Animated.View style={[styles.newHeroOrbit, makeOrbitStyle(orbit2Anim, 44)]}>
+                <View style={[styles.newOrbitDot, { backgroundColor: '#FFB703', width: 8, height: 8, borderRadius: 4 }]} />
+              </Animated.View>
+              <Animated.View style={[styles.newHeroOrbit, makeOrbitStyle(orbit3Anim, 44)]}>
+                <View style={[styles.newOrbitDot, { backgroundColor: colors.primaryDark || '#003d73', width: 6, height: 6, borderRadius: 3 }]} />
+              </Animated.View>
+              <View style={styles.newHeroIcon}>
+                <Animated.View style={{ transform: [{ rotate: spin }] }}>
+                  <Ionicons name="sparkles" size={34} color={colors.primary} />
+                </Animated.View>
               </View>
-              <Text style={styles.figmaAiTitle}>{t('AI project generator')}</Text>
             </View>
 
-            {/* Figma Description Text */}
-            <Text style={styles.figmaDescriptionText}>
-              {t('Describe your need and we will help you define the scope of work, cost estimate and the expected duration.')}
+            <Text style={styles.newHeroTitle}>{t('What project do you need?')}</Text>
+            <Text style={styles.newHeroSubtitle}>
+              {t('Describe your need and AI will define the scope, cost and timeline.')}
             </Text>
 
-            {/* Figma Example Prompt Chip */}
-            <TouchableOpacity
-              style={styles.figmaExampleChip}
-              onPress={() => setDescription(currentExamples[0] || '')}
-            >
-              <View style={styles.figmaExampleIcon}>
-                <Ionicons name="sparkles-outline" size={18} color="#00549B" />
-              </View>
-              <Text style={styles.figmaExampleText}>
-                {currentExamples[0] || t('Renovate bedroom with new flooring and paint including red walls.')}
-              </Text>
-            </TouchableOpacity>
+            {/* Example chips */}
+            <View style={styles.newChipsRow}>
+              {currentExamples.slice(0, 2).map((ex, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  style={[styles.newChip, { borderColor: colors.primary + '40' }]}
+                  onPress={() => setDescription(ex)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="bulb-outline" size={13} color={colors.primary} />
+                  <Text style={[styles.newChipText, { color: colors.primary }]} numberOfLines={2}>
+                    {ex}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
 
-            {/* Figma Input Area */}
-            <View style={styles.figmaInputContainer}>
+            {/* Input */}
+            <View style={[styles.newInputWrap, { borderColor: description.trim() ? colors.primary : '#E0E0E0' }]}>
               <TextInput
-                style={[styles.figmaTextInput, { textAlign: isRTL ? 'right' : 'left' }]}
+                style={[styles.newTextInput, { textAlign: isRTL ? 'right' : 'left', color: '#1A1A1A' }]}
                 multiline
                 value={description}
                 onChangeText={setDescription}
                 placeholder={t('Write your prompt here...')}
-                placeholderTextColor="#003867"
+                placeholderTextColor="#AAAAAA"
                 textAlignVertical="top"
                 blurOnSubmit={false}
                 onKeyPress={(e: any) => {
-                  // Handle Enter key press (for web and some mobile keyboards)
                   if (e.nativeEvent?.key === 'Enter' && !e.nativeEvent?.shiftKey) {
                     if (description.trim() && !isLoading) {
                       e.preventDefault?.();
@@ -979,83 +1087,71 @@ export default function ConversationalAIForm({
                 }}
                 returnKeyType="send"
                 onSubmitEditing={() => {
-                  if (description.trim() && !isLoading) {
-                    handleDescriptionSubmit();
-                  }
+                  if (description.trim() && !isLoading) handleDescriptionSubmit();
                 }}
               />
               <TouchableOpacity
                 style={[
-                  styles.figmaSendButton,
-                  (!description.trim() || isLoading) && styles.figmaSendButtonDisabled,
+                  styles.newSendBtn,
+                  { backgroundColor: description.trim() ? colors.primary : '#CCCCCC' },
                 ]}
                 onPress={handleDescriptionSubmit}
-                disabled={isLoading || !description.trim()}
+                disabled={!description.trim() || isLoading}
+                activeOpacity={0.8}
               >
-                <Animated.View style={isLoading ? { transform: [{ rotate: loadingSpin }] } : undefined}>
-                  <Ionicons name="sparkles" size={12} color="#E6EFF7" />
-                </Animated.View>
+                <Ionicons name="arrow-up" size={18} color="#fff" />
               </TouchableOpacity>
             </View>
 
             {error && (
               <View style={styles.errorContainer}>
-                <Ionicons name="alert-circle" size={20} color={colors.error} />
+                <Ionicons name="alert-circle" size={18} color={colors.error} />
                 <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
               </View>
             )}
           </View>
         )}
 
-        {/* Step 2: AI Questions - Show all at once */}
+        {/* Step 2: AI Questions */}
         {currentStep === 'questions' && aiQuestions.length > 0 && (
-          <View style={styles.formContainer}>
-            <View style={styles.questionsHeader}>
-              <Ionicons name="help-circle" size={60} color={colors.warning} />
-              <Text style={[styles.questionsTitle, { color: colors.text }]}>
-                {t('AI has a few questions')}
-              </Text>
-              <Text style={[styles.questionsSubtitle, { color: colors.textSecondary }]}>
-                {t('Please answer these questions to help us create an accurate project')}
-              </Text>
-            </View>
-
-            {/* Display all questions */}
-            <View style={styles.questionsList}>
-              {aiQuestions.map((question, index) => (
-                <View key={index} style={[styles.questionItem, { backgroundColor: colors.surface }]}>
-                  <View style={styles.questionNumberBadge}>
-                    <Text style={[styles.questionNumber, { color: colors.primary }]}>
-                      {index + 1}
-                    </Text>
-                  </View>
-                  <Text style={[styles.questionItemText, { color: colors.text }]}>
-                    {question}
-                  </Text>
-                </View>
-              ))}
-            </View>
-
-            {/* Combined answer textarea */}
-            <View style={styles.answersSection}>
-              <View style={[styles.labelWithIcon, { flexDirection: 'row', alignItems: 'center', marginBottom: 12 }]}>
-                <Ionicons name="chatbox-ellipses" size={20} color={colors.primary} />
-                <Text style={[styles.label, { color: colors.text, marginLeft: 8, marginBottom: 0 }]}>
-                  {t('Your Answers')} *
-                </Text>
+          <View style={styles.newQuestionsContainer}>
+            {/* Header */}
+            <View style={styles.newQuestionsHero}>
+              <View style={[styles.newQuestionsIconWrap, { backgroundColor: colors.primary + '15' }]}>
+                <Ionicons name="help-buoy" size={28} color={colors.primary} />
               </View>
-              <View style={[styles.answersTextAreaWrapper, { borderColor: colors.primary, backgroundColor: colors.cardBackground }]}>
-                <Animated.View style={[styles.aiIconAnswer, { transform: [{ scale: pulseAnim }] }]}>
-                  <Ionicons name="create" size={24} color={colors.primary} />
-                </Animated.View>
+              <Text style={[styles.newQuestionsTitle, { color: '#1A1A1A' }]}>
+                {t('A few quick questions')}
+              </Text>
+              <Text style={[styles.newQuestionsSubtitle, { color: '#666666' }]}>
+                {t('Help us understand your project better')}
+              </Text>
+            </View>
+
+            {/* Questions */}
+            {aiQuestions.map((question, index) => (
+              <View key={index} style={[styles.newQuestionCard, { borderColor: '#E8EFF7' }]}>
+                <View style={[styles.newQuestionBadge, { backgroundColor: colors.primary }]}>
+                  <Text style={styles.newQuestionBadgeText}>{index + 1}</Text>
+                </View>
+                <Text style={[styles.newQuestionText, { color: '#383838' }]}>{question}</Text>
+              </View>
+            ))}
+
+            {/* Answer input */}
+            <View style={styles.newAnswerSection}>
+              <Text style={[styles.newAnswerLabel, { color: '#1A1A1A' }]}>
+                {t('Your answers')}
+              </Text>
+              <View style={[styles.newAnswerInputWrap, { borderColor: answersText.trim() ? colors.primary : '#E0E0E0' }]}>
                 <TextInput
-                  style={[styles.answersTextArea, { color: colors.text, flex: 1, textAlign: isRTL ? 'right' : 'left' }]}
+                  style={[styles.newAnswerInput, { color: '#1A1A1A', textAlign: isRTL ? 'right' : 'left' }]}
                   value={answersText}
                   onChangeText={setAnswersText}
-                  placeholder={t('Provide details to answer the questions above...')}
-                  placeholderTextColor={colors.textTertiary}
+                  placeholder={t('Answer the questions above...')}
+                  placeholderTextColor="#AAAAAA"
                   multiline
-                  numberOfLines={10}
+                  numberOfLines={6}
                   textAlignVertical="top"
                 />
               </View>
@@ -1063,32 +1159,36 @@ export default function ConversationalAIForm({
 
             {error && (
               <View style={styles.errorContainer}>
-                <Ionicons name="alert-circle" size={20} color={colors.error} />
+                <Ionicons name="alert-circle" size={18} color={colors.error} />
                 <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
               </View>
             )}
 
-            <View style={styles.buttonRow}>
-              <Button
-                mode="outlined"
+            <View style={styles.newButtonRow}>
+              <TouchableOpacity
+                style={[styles.newSecondaryBtn, { borderColor: '#DDDDDD' }]}
                 onPress={() => {
                   setAiQuestions([]);
                   setAnswersText('');
                   setCurrentStep('description');
                 }}
-                style={styles.cancelButton}
+                activeOpacity={0.8}
               >
-                {t('Back')}
-              </Button>
-              <Button
-                mode="contained"
+                <Ionicons name={arrowBackIcon} size={16} color="#383838" />
+                <Text style={[styles.newSecondaryBtnText, { color: '#383838' }]}>{t('Back')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.newPrimaryBtn,
+                  { backgroundColor: answersText.trim() ? colors.primary : '#CCCCCC' },
+                ]}
                 onPress={handleQuestionsSubmit}
-                loading={isLoading}
                 disabled={!answersText.trim() || isLoading}
-                style={[styles.continueButton, { backgroundColor: colors.primary }]}
+                activeOpacity={0.85}
               >
-                {t('Generate Project')}
-              </Button>
+                <Ionicons name="sparkles" size={16} color="#fff" />
+                <Text style={styles.newPrimaryBtnText}>{t('Generate Project')}</Text>
+              </TouchableOpacity>
             </View>
           </View>
         )}
@@ -1581,27 +1681,60 @@ export default function ConversationalAIForm({
         )}
       </ScrollView>
 
-      {/* Loading Overlay with Progress */}
+      {/* AI Thinking Loading Overlay */}
+      {isLoading && (
+        <View style={styles.aiThinkingOverlay}>
+          <View style={[styles.aiThinkingCard, { backgroundColor: '#FFFFFF' }]}>
+            {/* Orbiting particles */}
+            <View style={styles.aiOrbitContainer}>
+              <Animated.View style={makeOrbitStyle(orbit1Anim, 40)}>
+                <View style={[styles.aiOrbitParticle, { backgroundColor: colors.primary, width: 10, height: 10, borderRadius: 5 }]} />
+              </Animated.View>
+              <Animated.View style={makeOrbitStyle(orbit2Anim, 40)}>
+                <View style={[styles.aiOrbitParticle, { backgroundColor: '#FFB703', width: 8, height: 8, borderRadius: 4 }]} />
+              </Animated.View>
+              <Animated.View style={makeOrbitStyle(orbit3Anim, 40)}>
+                <View style={[styles.aiOrbitParticle, { backgroundColor: colors.primaryDark || '#003d73', width: 6, height: 6, borderRadius: 3 }]} />
+              </Animated.View>
+              {/* Center icon */}
+              <View style={[styles.aiOrbitCenter, { backgroundColor: colors.primary + '15' }]}>
+                <Animated.View style={{ transform: [{ rotate: spin }] }}>
+                  <Ionicons name="sparkles" size={26} color={colors.primary} />
+                </Animated.View>
+              </View>
+            </View>
+            <Text style={[styles.aiThinkingTitle, { color: '#1A1A1A' }]}>
+              {t('AI is thinking')}
+            </Text>
+            <Text style={[styles.aiThinkingMsg, { color: '#666666' }]}>
+              {loadingMessages[loadingMsgIdx]}
+            </Text>
+          </View>
+        </View>
+      )}
+
+      {/* Submission Progress Overlay */}
       {isSubmitting && (
         <View style={styles.loadingOverlay}>
           <View style={[styles.loadingCard, { backgroundColor: colors.cardBackground }]}>
-            <View style={styles.progressCircle}>
-              <View style={[styles.progressCircleBackground, { borderColor: colors.border }]} />
-                  <View
-                    style={[
-                  styles.progressCircleFill, 
-                  { 
+            {/* Progress ring */}
+            <View style={styles.newProgressRing}>
+              <View style={[styles.newProgressRingBg, { borderColor: '#EEEEEE' }]} />
+              <View
+                style={[
+                  styles.newProgressRingFill,
+                  {
                     borderColor: colors.primary,
-                    transform: [{ rotate: `${submissionProgress * 360}deg` }]
-                  }
-                ]} 
+                    transform: [{ rotate: `${submissionProgress * 360}deg` }],
+                  },
+                ]}
               />
-              <View style={styles.progressCircleCenter}>
+              <View style={styles.newProgressRingCenter}>
                 <Text style={[styles.progressPercentage, { color: colors.text }]}>
                   {Math.round(submissionProgress * 100)}%
                 </Text>
-                  </View>
               </View>
+            </View>
 
             <View style={styles.loadingTextContainer}>
               <Text style={[styles.loadingTitle, { color: colors.text }]}>
@@ -1610,16 +1743,16 @@ export default function ConversationalAIForm({
               <Text style={[styles.loadingMessage, { color: colors.textSecondary }]}>
                 {submissionMessage}
               </Text>
-              </View>
+            </View>
 
             <View style={styles.loadingDots}>
               <View style={[styles.dot, { backgroundColor: colors.primary }]} />
               <View style={[styles.dot, { backgroundColor: colors.primary, opacity: 0.7 }]} />
               <View style={[styles.dot, { backgroundColor: colors.primary, opacity: 0.4 }]} />
-              </View>
+            </View>
           </View>
-          </View>
-        )}
+        </View>
+      )}
 
       {/* Location Picker Modal */}
       {showMapPicker && (
@@ -1976,7 +2109,7 @@ export default function ConversationalAIForm({
 
   // Render desktop layout - reuse mobile content but with desktop styling
   return (
-    <Animated.View style={[styles.desktopContainer, { backgroundColor: colors.background, opacity: screenOpacity, transform: [{ translateY: screenTranslateY }] }]}>
+    <Animated.View style={[styles.desktopContainer, { backgroundColor: colors.background, opacity: screenOpacity, transform: [{ translateY: screenTranslateY }, { scale: screenScale }] }]}>
       {/* Desktop Header */}
       <View style={[styles.desktopHeader, { backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={closeScreenAnimated} style={styles.desktopBackButton}>
@@ -4259,17 +4392,354 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     width: 24,
   },
-  // ==================== FIGMA DESIGN STYLES ====================
-  figmaHeader: {
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-    backgroundColor: '#FFFFFF',
-  },
-  figmaBackButton: {
+  // ==================== NEW MODERN DESIGN STYLES ====================
+  newHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 20,
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+    backgroundColor: '#FFFFFF',
   },
+  newHeaderBack: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: '#F5F5F5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  newHeaderCenter: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+  },
+  newHeaderIconWrap: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    backgroundColor: '#00549B',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  newHeaderTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1A1A1A',
+  },
+  stepPills: {
+    flexDirection: 'row',
+    gap: 6,
+    paddingHorizontal: 24,
+    paddingBottom: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  stepPill: {
+    height: 4,
+    flex: 1,
+    borderRadius: 2,
+    backgroundColor: '#EEEEEE',
+  },
+  stepPillActive: {
+    backgroundColor: '#00549B',
+  },
+  stepPillDone: {
+    backgroundColor: '#00549B80',
+  },
+  // Description step
+  newDescContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 24,
+  },
+  newHero: {
+    width: 100,
+    height: 100,
+    alignSelf: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    marginTop: 12,
+  },
+  newHeroOrbit: {
+    position: 'absolute',
+  },
+  newOrbitDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  newHeroIcon: {
+    width: 72,
+    height: 72,
+    borderRadius: 22,
+    backgroundColor: '#E8F0F8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#00549B20',
+  },
+  newHeroTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#1A1A1A',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  newHeroSubtitle: {
+    fontSize: 14,
+    color: '#666666',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 20,
+    paddingHorizontal: 12,
+  },
+  newChipsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 20,
+  },
+  newChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    backgroundColor: '#F8FBFF',
+  },
+  newChipText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '400',
+  },
+  newInputWrap: {
+    borderWidth: 1.5,
+    borderRadius: 16,
+    backgroundColor: '#FAFAFA',
+    padding: 14,
+    minHeight: 100,
+    flexDirection: 'column',
+    gap: 10,
+  },
+  newTextInput: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 21,
+    minHeight: 70,
+    textAlignVertical: 'top',
+    ...Platform.select({ web: { outlineStyle: 'none' as any } }),
+  },
+  newSendBtn: {
+    alignSelf: 'flex-end',
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Questions step
+  newQuestionsContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 32,
+  },
+  newQuestionsHero: {
+    alignItems: 'center',
+    paddingVertical: 16,
+    marginBottom: 8,
+  },
+  newQuestionsIconWrap: {
+    width: 60,
+    height: 60,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  newQuestionsTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  newQuestionsSubtitle: {
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 19,
+  },
+  newQuestionCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
+    backgroundColor: '#FAFBFF',
+    gap: 12,
+  },
+  newQuestionBadge: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  newQuestionBadgeText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  newQuestionText: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 21,
+  },
+  newAnswerSection: {
+    marginTop: 16,
+    marginBottom: 16,
+  },
+  newAnswerLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  newAnswerInputWrap: {
+    borderWidth: 1.5,
+    borderRadius: 14,
+    backgroundColor: '#FAFAFA',
+    padding: 14,
+    minHeight: 130,
+  },
+  newAnswerInput: {
+    fontSize: 14,
+    lineHeight: 21,
+    minHeight: 100,
+    textAlignVertical: 'top',
+    ...Platform.select({ web: { outlineStyle: 'none' as any } }),
+  },
+  newButtonRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 4,
+  },
+  newSecondaryBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderWidth: 1.5,
+    borderRadius: 14,
+    paddingVertical: 14,
+    backgroundColor: '#FFFFFF',
+  },
+  newSecondaryBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  newPrimaryBtn: {
+    flex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: 14,
+    paddingVertical: 14,
+  },
+  newPrimaryBtnText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  // AI Thinking overlay
+  aiThinkingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255,255,255,0.88)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 100,
+  },
+  aiThinkingCard: {
+    width: 230,
+    borderRadius: 24,
+    padding: 28,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#EEEEEE',
+    ...Platform.OS === 'ios' ? {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.12,
+      shadowRadius: 20,
+    } : { elevation: 8 },
+  },
+  aiOrbitContainer: {
+    width: 100,
+    height: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 18,
+  },
+  aiOrbitCenter: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  aiOrbitParticle: {
+    borderRadius: 6,
+  },
+  aiThinkingTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  aiThinkingMsg: {
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  // New progress ring for submission overlay
+  newProgressRing: {
+    width: 90,
+    height: 90,
+    alignSelf: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  newProgressRingBg: {
+    position: 'absolute',
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    borderWidth: 8,
+  },
+  newProgressRingFill: {
+    position: 'absolute',
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    borderWidth: 8,
+    borderTopColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderBottomColor: 'transparent',
+  },
+  newProgressRingCenter: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Legacy figma styles kept for review step compatibility
   figmaFormContainer: {
     flex: 1,
     paddingHorizontal: 0,
@@ -4283,31 +4753,31 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 6,
-    backgroundColor: '#FFF2CF', // amber10
+    backgroundColor: '#FFF2CF',
     justifyContent: 'center',
     alignItems: 'center',
   },
   figmaAiTitle: {
     fontSize: 20,
     fontWeight: '400',
-    color: '#003867', // primary100
+    color: '#003867',
     textAlign: 'center',
   },
   figmaDescriptionText: {
     fontSize: 16,
     fontWeight: '400',
-    color: '#383838', // textBody
+    color: '#383838',
     textAlign: 'center',
     lineHeight: 24,
     marginTop: 24,
-    marginBottom: 100, // Space to push content up
+    marginBottom: 100,
   },
   figmaExampleChip: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#00549B', // primary70
+    borderColor: '#00549B',
     borderRadius: 16,
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -4324,15 +4794,15 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     fontWeight: '400',
-    color: '#00549B', // primary70
+    color: '#00549B',
     textAlign: 'center',
   },
   figmaInputContainer: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: '#E6EFF7', // primary10
+    backgroundColor: '#E6EFF7',
     borderWidth: 0.5,
-    borderColor: '#003867', // primary100
+    borderColor: '#003867',
     borderRadius: 8,
     padding: 8,
     minHeight: 84,
@@ -4342,20 +4812,16 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     fontWeight: '200',
-    color: '#003867', // primary100
+    color: '#003867',
     minHeight: 68,
     textAlignVertical: 'top',
-    ...Platform.select({
-      web: {
-        outlineStyle: 'none' as any,
-      },
-    }),
+    ...Platform.select({ web: { outlineStyle: 'none' as any } }),
   },
   figmaSendButton: {
     width: 32,
     height: 32,
     borderRadius: 35,
-    backgroundColor: '#005DAC', // primary60
+    backgroundColor: '#005DAC',
     justifyContent: 'center',
     alignItems: 'center',
   },

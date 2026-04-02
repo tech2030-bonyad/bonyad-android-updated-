@@ -1,0 +1,10 @@
+<svg preserveAspectRatio="none" width="100%" height="100%" overflow="visible" style="display: block;" viewBox="0 0 53 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Logo">
+<path id="Rectangle 66" d="M50 2L25 17.5172V47L50 31.4828V2Z" fill="var(--fill-0, #80AED6)"/>
+<path id="Rectangle 67" d="M0 2L25 17.5172V47L0 31.4828V2Z" fill="var(--fill-0, #4D8EC5)"/>
+<path id="Rectangle 68" d="M25 17L40 25.5L25 34L10 25.5L25 17Z" fill="var(--fill-0, #004178)"/>
+<path id="Rectangle 69" d="M10 8L25 0V17L10 25.5V8Z" fill="var(--fill-0, #1A6DB4)"/>
+<path id="Rectangle 70" d="M40 8L25 0V17L40 25.5V8Z" fill="var(--fill-0, #00549B)"/>
+<path id="Ellipse 1" d="M30.5 56.5C30.5 59.5376 28.0376 62 25 62C21.9624 62 19.5 59.5376 19.5 56.5C19.5 53.4624 21.9624 51 25 51C28.0376 51 30.5 53.4624 30.5 56.5Z" fill="var(--fill-0, #80AED6)"/>
+</g>
+</svg>

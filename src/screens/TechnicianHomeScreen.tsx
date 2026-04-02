@@ -333,25 +333,28 @@ export default function TechnicianHomeScreen({
     }
   }, [initialSmallTaskToOpen]);
 
-  // Tab content transition animation
+  // Tab content transition animation (stronger for assistant / chatbot tab)
   useEffect(() => {
     if (prevActiveTabRef.current === activeTab) return;
+    const previousTab = prevActiveTabRef.current;
     prevActiveTabRef.current = activeTab;
     setIsInHomeTransitionLoading(true);
     if (homeTransitionTimerRef.current) clearTimeout(homeTransitionTimerRef.current);
-    homeTransitionTimerRef.current = setTimeout(() => setIsInHomeTransitionLoading(false), 240);
+    homeTransitionTimerRef.current = setTimeout(() => setIsInHomeTransitionLoading(false), 280);
     tabContentOpacity.setValue(0);
-    tabContentTranslateY.setValue(18);
+    const chatbotMotion =
+      previousTab === 'chatbot' || activeTab === 'chatbot';
+    tabContentTranslateY.setValue(chatbotMotion ? 32 : 18);
     Animated.parallel([
       Animated.timing(tabContentOpacity, {
         toValue: 1,
-        duration: 280,
+        duration: chatbotMotion ? 300 : 280,
         useNativeDriver: true,
       }),
       Animated.spring(tabContentTranslateY, {
         toValue: 0,
-        tension: 280,
-        friction: 20,
+        tension: chatbotMotion ? 300 : 280,
+        friction: chatbotMotion ? 22 : 20,
         useNativeDriver: true,
       }),
     ]).start();
@@ -799,7 +802,7 @@ export default function TechnicianHomeScreen({
                 ]}
               >
                 <ChatRoomsListScreen
-                  stackedUnderAppTopBar={!IS_LARGE_WEB}
+                  stackedUnderAppTopBar
                   onOpenChat={(roomId, receiverId, receiverName, projectId) => {
                     setSelectedChat({ roomId, receiverId, receiverName, projectId: projectId ?? undefined });
                     setShowChatList(IS_LARGE_WEB);
@@ -981,6 +984,7 @@ export default function TechnicianHomeScreen({
               onNavigateToTab={onChatbotNavigateToTab}
               onNavigateToScreen={onChatbotNavigateToScreen}
               onRequestLiveAgent={onChatbotRequestLiveAgent}
+              hasBottomTabBar
             />
           </View>
         )}
@@ -1315,6 +1319,7 @@ export default function TechnicianHomeScreen({
               }
             ]}>
               <ChatRoomsListScreen
+                stackedUnderAppTopBar
                 onOpenChat={(roomId, receiverId, receiverName, projectId) => {
                   setSelectedChat({ roomId, receiverId, receiverName, projectId: projectId ?? undefined });
                   setShowChatList(IS_LARGE_WEB);
@@ -1506,6 +1511,7 @@ export default function TechnicianHomeScreen({
               onNavigateToTab={onChatbotNavigateToTab}
               onNavigateToScreen={onChatbotNavigateToScreen}
               onRequestLiveAgent={onChatbotRequestLiveAgent}
+              hasBottomTabBar={false}
             />
           </View>
         )}

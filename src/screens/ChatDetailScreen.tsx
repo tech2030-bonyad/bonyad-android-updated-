@@ -12,7 +12,10 @@ import {
   Alert,
   Image,
   Dimensions,
+  LayoutAnimation,
+  UIManager,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -27,11 +30,68 @@ import * as DocumentPicker from 'expo-document-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import VoiceNoteService from '../services/VoiceNoteService';
+import * as FileSystem from 'expo-file-system';
 import AnimatedLoadingScreen from '../components/AnimatedLoadingScreen';
+import { getGlassTabBarOverlayHeight } from '../components/GlassTabBar';
 
 const ATTACHMENT_PLACEHOLDER = '[Attachment]';
+
+/** RN multipart: iOS often expects path without `file://`; Android keeps full URI (incl. file://). */
+function normalizeMultipartFileUri(uri: string): string {
+  if (Platform.OS === 'ios' && uri.startsWith('file://')) {
+    return uri.replace(/^file:\/\//, '');
+  }
+  return uri;
+}
 const getDraftStorageKey = (roomId: string, receiverId: number) =>
   `@bonyad_chat_draft_${roomId}_${receiverId}`;
+
+/** Figma node 61:2158 — CONVERSATION VIEW (screen body only; shell nav is outside) */
+const FIGMA = {
+  screenBg: '#EEF0F5',
+  white: '#FFFFFF',
+  border: '#E8EAF0',
+  azure18: '#1A2744',
+  muted: '#8892A4',
+  green: '#22C55E',
+  iconBg: '#F0F2F7',
+  inputBg: '#F5F6FA',
+} as const;
+
+const HEADER_AVATAR_GRADIENT: [string, string] = ['#64748B', '#475569'];
+
+function calendarDayKey(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+
+/** Stable ordering + one row per id (fixes duplicate keys when API/MQTT overlap). */
+function dedupeChatMessages(messages: ChatMessage[]): ChatMessage[] {
+  const sorted = [...messages].sort(
+    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  );
+  const seen = new Set<number>();
+  const out: ChatMessage[] = [];
+  for (const m of sorted) {
+    if (seen.has(m.id)) continue;
+    seen.add(m.id);
+    out.push(m);
+  }
+  return out;
+}
+
+function datePillLabel(iso: string, t: (k: string) => string): string {
+  const d = new Date(iso);
+  const start = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diffDays = Math.round((start(new Date()) - start(d)) / 86400000);
+  if (diffDays === 0) return t('Today');
+  if (diffDays === 1) return t('Yesterday');
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: d.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined });
+}
+
+type ChatListRow =
+  | { type: 'date'; id: string; label: string }
+  | { type: 'msg'; msg: ChatMessage };
 
 interface ChatDetailScreenProps {
   roomId: string;
@@ -53,7 +113,7 @@ export default function ChatDetailScreen({
 }: ChatDetailScreenProps) {
   const { t, i18n } = useTranslation();
   const { colors } = useTheme();
-  const { fontFamily, scaledSize } = useFontFamily();
+  const { fontFamily } = useFontFamily();
   const headerDirectionStyle = { direction: 'ltr' as const };
   const insets = useSafeAreaInsets();
   const [message, setMessage] = useState('');
@@ -108,25 +168,39 @@ export default function ChatDetailScreen({
     }
     const inset = Math.max(insets.bottom, 0);
     if (tabBarChrome) {
-      // Tab bar is a sibling; FlatList uses flex:1 so the composer stays in this column. Extra inset
-      // clears the pill / system nav so the bar is not covered on Android.
-      // `GlassTabBar` is relatively tall (pill + outer padding + bottom inset), so we reserve
-      // a bit more space to keep the composer clearly above it.
-      const safe = Math.max(inset, 10) + 96;
+      // `GlassTabBar` is `position: absolute` at the bottom of the home shell — it overlays content.
+      // Reserve the same vertical space so the composer sits above the pill + safe area.
+      const overlay = getGlassTabBarOverlayHeight(inset);
       return {
-        kavPad: safe,
-        listPad: 16,
-        inputPad: 14,
-        loadingPad: safe,
+        kavPad: overlay,
+        listPad: 12,
+        inputPad: 10,
+        loadingPad: overlay,
       };
     }
     return {
-      kavPad: Math.max(inset + 28, 52),
-      listPad: Math.max(inset + 72, 96),
+      kavPad: 0,
+      listPad: Math.max(inset + 8, 16),
       inputPad: Math.max(inset, 12),
-      loadingPad: Math.max(inset + 48, 72),
+      loadingPad: Math.max(inset + 16, 32),
     };
   }, [IS_LARGE_WEB, tabBarChrome, insets.bottom]);
+
+  const messagesDeduped = useMemo(() => dedupeChatMessages(messages), [messages]);
+
+  const listRows: ChatListRow[] = useMemo(() => {
+    const rows: ChatListRow[] = [];
+    let lastKey: string | null = null;
+    messagesDeduped.forEach((m) => {
+      const k = calendarDayKey(m.createdAt);
+      if (k !== lastKey) {
+        lastKey = k;
+        rows.push({ type: 'date', id: `d-${k}`, label: datePillLabel(m.createdAt, t) });
+      }
+      rows.push({ type: 'msg', msg: m });
+    });
+    return rows;
+  }, [messagesDeduped, t]);
 
   useEffect(() => {
     return () => {
@@ -144,6 +218,12 @@ export default function ChatDetailScreen({
     setMessage('');
     loadDraft();
   }, [loadDraft]);
+
+  useEffect(() => {
+    if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+      UIManager.setLayoutAnimationEnabledExperimental(true);
+    }
+  }, []);
 
   useEffect(() => {
     if (!draftLoadedRef.current) {
@@ -280,7 +360,7 @@ export default function ChatDetailScreen({
           };
         });
 
-        setMessages(messagesWithOwnership);
+        setMessages(dedupeChatMessages(messagesWithOwnership));
         if (!silent) console.log('✅ Loaded messages:', messagesWithOwnership.length);
 
         if (!silent) {
@@ -292,6 +372,17 @@ export default function ChatDetailScreen({
         markAllMessagesAsRead().catch((err) => {
           console.error('❌ Failed to mark messages as read:', err);
         });
+      } else if (response.status === 400) {
+        // Room doesn't exist yet — treat as a fresh conversation (0 messages).
+        // The server creates the room automatically when the first message is sent.
+        const body = await response.text();
+        if (body.includes('not found') || body.includes('Chat room')) {
+          setMessages([]);
+          if (!silent) console.log('💬 New conversation — no messages yet');
+        } else if (!silent) {
+          console.error('❌ Failed to load messages - Status:', response.status, body);
+          Alert.alert(t('Error'), t('Failed to load messages'));
+        }
       } else {
         if (!silent) {
           const errorText = await response.text();
@@ -319,7 +410,7 @@ export default function ChatDetailScreen({
       const currentUserId = await storage.getUserId();
       if (!currentUserId) throw new Error('No user ID found');
       optimisticMessage = {
-        id: Date.now(),
+        id: -Math.abs(Date.now()),
         roomId,
         senderId: currentUserId,
         receiverId: receiverId,
@@ -329,6 +420,7 @@ export default function ChatDetailScreen({
         isRead: false,
         isMine: true,
       };
+      LayoutAnimation.configureNext(LayoutAnimation.create(220, LayoutAnimation.Types.easeInEaseOut, LayoutAnimation.Properties.opacity));
       setMessages((prev) => [...prev, optimisticMessage]);
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     } catch (e) {
@@ -361,9 +453,12 @@ export default function ChatDetailScreen({
 
       if (response.ok) {
         const newMessage = await response.json();
+        LayoutAnimation.configureNext(LayoutAnimation.create(180, LayoutAnimation.Types.easeInEaseOut, LayoutAnimation.Properties.opacity));
         setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === optimisticMessage.id ? { ...newMessage, isMine: true } : msg
+          dedupeChatMessages(
+            prev.map((msg) =>
+              msg.id === optimisticMessage.id ? { ...newMessage, isMine: true } : msg
+            )
           )
         );
       } else {
@@ -462,11 +557,60 @@ export default function ChatDetailScreen({
       if (payload.file) {
         formData.append('file', payload.file, payload.name);
       } else if (payload.uri) {
-        formData.append('file', {
-          uri: payload.uri,
+        const uriForUpload = normalizeMultipartFileUri(payload.uri);
+        const fileName = payload.name || `attachment-${Date.now()}`;
+
+        // Voice / file: ensure file is readable and non-empty (common VN failure mode on native).
+        if (payload.type === 'audio/m4a' && Platform.OS !== 'web') {
+          const statUri =
+            uriForUpload.startsWith('file://') || uriForUpload.startsWith('content://')
+              ? uriForUpload
+              : `file://${uriForUpload}`;
+          try {
+            const info = await FileSystem.getInfoAsync(statUri);
+            if (!info.exists) {
+              throw new Error(
+                i18n.language === 'en' ? 'Recording file was not found' : 'لم يُعثر على ملف التسجيل'
+              );
+            }
+            const size = (info as { size?: number }).size ?? 0;
+            if (size === 0) {
+              throw new Error(
+                i18n.language === 'en'
+                  ? 'Recording is empty — hold to record a bit longer'
+                  : 'التسجيل فارغ — أبقِ الضغط لمدة أطول'
+              );
+            }
+          } catch (e: any) {
+            const msg = String(e?.message ?? e ?? '');
+            const isOurValidation =
+              msg.includes('Recording file') ||
+              msg.includes('Recording is empty') ||
+              msg.includes('لم يُعثر') ||
+              msg.includes('فارغ');
+            if (isOurValidation) {
+              throw e;
+            }
+            console.warn('⚠️ [ChatDetailScreen] Could not stat voice file before upload:', e);
+          }
+          // Let native FS flush the file before multipart read (OkHttp).
+          await new Promise<void>((r) => setTimeout(r, 200));
+        }
+
+        const filePart: {
+          uri: string;
+          type: string;
+          name: string;
+          filename?: string;
+        } = {
+          uri: uriForUpload,
           type: payload.type || 'application/octet-stream',
-          name: payload.name || `attachment-${Date.now()}`,
-        } as any);
+          name: fileName,
+        };
+        if (Platform.OS === 'android') {
+          filePart.filename = fileName;
+        }
+        formData.append('file', filePart as any);
       } else {
         throw new Error('Invalid attachment payload');
       }
@@ -704,48 +848,89 @@ export default function ChatDetailScreen({
     }
   };
 
-  const renderMessage = ({ item }: { item: ChatMessage }) => (
-    <MessageBubble message={item} isMine={item.isMine || false} />
+  const renderListItem = useCallback(
+    ({ item }: { item: ChatListRow }) => {
+      if (item.type === 'date') {
+        return (
+          <View style={styles.datePillWrap}>
+            <View style={styles.datePill}>
+              <Text style={styles.datePillText}>{item.label}</Text>
+            </View>
+          </View>
+        );
+      }
+      return (
+        <MessageBubble
+          message={item.msg}
+          isMine={item.msg.isMine || false}
+          variant="bonyad"
+          peerInitial={receiverName.charAt(0) || '?'}
+        />
+      );
+    },
+    [receiverName]
   );
 
   if (isLoading) {
-    return <AnimatedLoadingScreen message={t('Loading messages...')} />;
+    return (
+      <View style={[styles.loadingRoot, { backgroundColor: FIGMA.screenBg }]}>
+        <AnimatedLoadingScreen message={t('Loading messages...')} />
+      </View>
+    );
   }
+
+  const peerInitial = (receiverName || '?').charAt(0).toUpperCase();
 
   return (
     <KeyboardAvoidingView
       style={[
         styles.container,
         {
-          backgroundColor: colors.background,
+          backgroundColor: FIGMA.screenBg,
           paddingBottom: bottomLayout.kavPad,
         },
       ]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={90}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
     >
-      {/* Header */}
-      <View style={[styles.header, { borderBottomColor: colors.border }, headerDirectionStyle]}>
+      <View style={styles.chatScreenInner}>
+      {/* Figma chat header — not the app shell top nav */}
+      <View style={[styles.chatHeader, { borderBottomColor: FIGMA.border }, headerDirectionStyle]}>
         {shouldShowBackButton ? (
-          <TouchableOpacity onPress={onBack} accessibilityRole="button">
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
+          <TouchableOpacity
+            onPress={onBack}
+            accessibilityRole="button"
+            style={styles.headerIconBox}
+            hitSlop={8}
+          >
+            <Ionicons name="chevron-back" size={20} color={FIGMA.azure18} />
           </TouchableOpacity>
         ) : (
-          <View style={{ width: 24 }} />
+          <View style={styles.headerIconBox} />
         )}
-        <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(17) }]}>
-          {receiverName}
-        </Text>
-        <View style={{ width: 24 }} />
+        <LinearGradient
+          colors={HEADER_AVATAR_GRADIENT}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.headerAvatar}
+        >
+          <Text style={styles.headerAvatarLetter}>{peerInitial}</Text>
+        </LinearGradient>
+        <View style={styles.headerTitleBlock}>
+          <Text style={[styles.headerName, { fontFamily }]} numberOfLines={1}>
+            {receiverName}
+          </Text>
+        </View>
       </View>
 
-      {/* Messages List */}
       <FlatList
         ref={flatListRef}
         style={styles.messagesListFlex}
-        data={messages}
-        renderItem={renderMessage}
-        keyExtractor={(item) => item.id.toString()}
+        data={listRows}
+        renderItem={renderListItem}
+        keyExtractor={(item) =>
+          item.type === 'date' ? item.id : `m-${item.msg.id}-${item.msg.createdAt}`
+        }
         contentContainerStyle={[
           styles.messagesList,
           {
@@ -753,24 +938,24 @@ export default function ChatDetailScreen({
             flexGrow: 1,
           },
         ]}
+        keyboardShouldPersistTaps="handled"
         onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
         showsVerticalScrollIndicator={false}
       />
 
-      {/* Recording Indicator */}
       {isRecording && (
         <View
           style={[
             styles.recordingContainer,
             {
-              backgroundColor: colors.cardBackground,
-              borderTopColor: colors.border,
+              backgroundColor: FIGMA.white,
+              borderTopColor: FIGMA.border,
             },
           ]}
         >
           <View style={styles.recordingInfo}>
             <View style={[styles.recordingDot, { backgroundColor: colors.error }]} />
-            <Text style={[styles.recordingText, { color: colors.text }]}>
+            <Text style={[styles.recordingText, { color: FIGMA.azure18 }]}>
               {t('Recording')}... {formatDuration(recordingDuration)}
             </Text>
           </View>
@@ -783,7 +968,7 @@ export default function ChatDetailScreen({
             </TouchableOpacity>
             <TouchableOpacity
               onPress={handleStopRecording}
-              style={[styles.stopButton, { backgroundColor: colors.primary }]}
+              style={[styles.stopButton, { backgroundColor: FIGMA.azure18 }]}
             >
               <Ionicons name="stop" size={20} color={colors.white} />
             </TouchableOpacity>
@@ -791,43 +976,35 @@ export default function ChatDetailScreen({
         </View>
       )}
 
-      {/* Input Field */}
       <View
         style={[
           styles.inputContainer,
           {
-            backgroundColor: colors.cardBackground,
-            borderTopColor: colors.border,
-            paddingBottom: IS_LARGE_WEB ? 0 : bottomLayout.inputPad,
+            backgroundColor: FIGMA.white,
+            borderTopColor: FIGMA.border,
+            paddingBottom: IS_LARGE_WEB ? 12 : bottomLayout.inputPad,
           },
         ]}
       >
-        <TouchableOpacity
-          onPress={handleAttachmentPress}
-          style={styles.attachmentButton}
-          disabled={isUploadingAttachment || isRecording}
-        >
-          {isUploadingAttachment ? (
-            <ActivityIndicator size="small" color={colors.primary} />
-          ) : (
-            <Ionicons name="attach" size={24} color={colors.textSecondary} />
-          )}
-        </TouchableOpacity>
-
         {!isRecording ? (
           <>
             <TouchableOpacity
-              onPress={handleStartRecording}
-              style={styles.voiceButton}
+              style={styles.composerEmojiBtn}
+              onLongPress={handleAttachmentPress}
               disabled={isUploadingAttachment}
+              hitSlop={6}
             >
-              <Ionicons name="mic" size={24} color={colors.primary} />
+              {isUploadingAttachment ? (
+                <ActivityIndicator size="small" color={FIGMA.azure18} />
+              ) : (
+                <Ionicons name="happy-outline" size={18} color={FIGMA.muted} />
+              )}
             </TouchableOpacity>
 
             <TextInput
-              style={[styles.input, { backgroundColor: colors.background, color: colors.text }]}
-              placeholder={t('Type message...')}
-              placeholderTextColor={colors.textSecondary}
+              style={[styles.composerInput, { color: FIGMA.azure18, fontFamily }]}
+              placeholder={t('Type a message...')}
+              placeholderTextColor={FIGMA.muted}
               value={message}
               onChangeText={setMessage}
               multiline
@@ -843,29 +1020,53 @@ export default function ChatDetailScreen({
               }}
             />
 
-            <TouchableOpacity
-              onPress={sendMessage}
-              disabled={!message.trim() || isSending}
-              style={styles.sendButton}
-            >
-              {isSending ? (
-                <ActivityIndicator size="small" color={colors.primary} />
-              ) : (
-                <Ionicons
-                  name="send"
-                  size={24}
-                  color={message.trim() ? colors.primary : colors.textSecondary}
-                />
-              )}
-            </TouchableOpacity>
+            {message.trim() ? (
+              <TouchableOpacity
+                onPress={sendMessage}
+                disabled={isSending}
+                style={styles.composerSendBtn}
+              >
+                {isSending ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Ionicons name="send" size={16} color="#FFFFFF" />
+                )}
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.composerTrailingActions}>
+                <TouchableOpacity
+                  onPress={handleAttachmentPress}
+                  style={styles.composerAttachBtn}
+                  disabled={isUploadingAttachment}
+                  accessibilityLabel={t('Attach file')}
+                  hitSlop={4}
+                >
+                  {isUploadingAttachment ? (
+                    <ActivityIndicator size="small" color={FIGMA.azure18} />
+                  ) : (
+                    <Ionicons name="attach" size={20} color={FIGMA.azure18} />
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleStartRecording}
+                  style={styles.composerMicBtn}
+                  disabled={isUploadingAttachment}
+                  accessibilityLabel={t('Voice message')}
+                  hitSlop={4}
+                >
+                  <Ionicons name="mic" size={15} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+            )}
           </>
         ) : (
           <View style={styles.recordingInputPlaceholder}>
-            <Text style={[styles.recordingPlaceholderText, { color: colors.textSecondary }]}>
+            <Text style={[styles.recordingPlaceholderText, { color: FIGMA.muted }]}>
               {t('Recording voice note...')}
             </Text>
           </View>
         )}
+      </View>
       </View>
     </KeyboardAvoidingView>
   );
@@ -875,32 +1076,83 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
+  chatScreenInner: {
+    flex: 1,
+  },
+  loadingRoot: {
+    flex: 1,
+  },
+  /** Figma 61:2159 chat header */
+  chatHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 0,
+    gap: 9,
+    paddingHorizontal: 13,
+    paddingTop: 11,
     paddingBottom: 12,
+    backgroundColor: FIGMA.white,
     borderBottomWidth: StyleSheet.hairlineWidth,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+      },
+      android: { elevation: 3 },
+    }),
   },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    flex: 1,
-    textAlign: 'center',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
+  headerIconBox: {
+    width: 30,
+    height: 30,
+    borderRadius: 9,
+    backgroundColor: FIGMA.iconBg,
     alignItems: 'center',
-    gap: 12,
+    justifyContent: 'center',
   },
-  loadingText: {
+  headerAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerAvatarLetter: {
     fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  headerTitleBlock: {
+    flex: 1,
+    minWidth: 0,
+  },
+  headerName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: FIGMA.azure18,
+    lineHeight: 16.8,
+  },
+  datePillWrap: {
+    alignItems: 'center',
+    paddingVertical: 2,
+    marginBottom: 8,
+  },
+  datePill: {
+    backgroundColor: 'rgba(26, 39, 68, 0.07)',
+    paddingHorizontal: 13,
+    paddingVertical: 3,
+    borderRadius: 20,
+  },
+  datePillText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: FIGMA.muted,
+    letterSpacing: 0.5,
   },
   messagesList: {
-    padding: 16,
+    paddingHorizontal: 13,
+    paddingTop: 14,
+    paddingBottom: 14,
   },
   messagesListFlex: {
     flex: 1,
@@ -908,29 +1160,72 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderTopWidth: 1,
+    alignItems: 'center',
+    paddingHorizontal: 13,
+    paddingTop: 10,
+    paddingBottom: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
     gap: 8,
   },
-  attachmentButton: {
-    padding: 8,
+  composerEmojiBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: FIGMA.iconBg,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  input: {
+  composerInput: {
     flex: 1,
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    marginTop: 4,
+    minHeight: 38,
     maxHeight: 100,
-    fontSize: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: FIGMA.border,
+    backgroundColor: FIGMA.inputBg,
+    paddingHorizontal: 13,
+    paddingVertical: Platform.OS === 'ios' ? 10 : 8,
+    fontSize: 13,
   },
-  sendButton: {
-    padding: 8,
+  composerTrailingActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
-  voiceButton: {
-    padding: 8,
+  composerAttachBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: FIGMA.iconBg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: FIGMA.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  composerMicBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: FIGMA.azure18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: FIGMA.azure18,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 12,
+      },
+      android: { elevation: 6 },
+    }),
+  },
+  composerSendBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: FIGMA.azure18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   recordingContainer: {
     flexDirection: 'row',

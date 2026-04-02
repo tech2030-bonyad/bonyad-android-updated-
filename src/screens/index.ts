@@ -1,6 +1,5 @@
 // 📁 SCREENS INDEX: Export all screens for easy imports
 
-export { default as SplashScreen } from './SplashScreen';
 export { default as OnboardingScreen } from './OnboardingScreen';
 export { default as WelcomeScreen } from './WelcomeScreen';
 export { default as OverviewScreen } from './OverviewScreen';
@@ -42,7 +41,6 @@ export { default as AppointmentsScreen } from './AppointmentsScreen';
 export { default as BookingScreen } from './BookingScreen';
 export { default as TechnicianProfileViewScreen } from './TechnicianProfileViewScreen';
 export { default as RoomDesignScreen } from './RoomDesignScreen';
-export { default as VoiceAIScreen } from './VoiceAIScreen';
 export { default as CostExplorerScreen } from './CostExplorerScreen';
 export { default as RoomVisualizerScreen } from './RoomVisualizerScreen';
 export { default as AskBonyadAIScreen } from './AskBonyadAIScreen';

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fully transparent — Android 12+ still requires an animated icon drawable; this removes
+     the default grid/circle placeholder while keeping a plain white splash background. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+  <solid android:color="@android:color/transparent" />
+  <size android:width="48dp" android:height="48dp" />
+</shape>

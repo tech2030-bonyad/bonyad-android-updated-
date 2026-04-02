@@ -7,7 +7,7 @@ import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { FontProvider } from './src/context/FontContext';
 // Import API config early to ensure global fetch override is applied
 import './src/config/api';
-import { SplashScreen, WelcomeScreen, OverviewScreen, LoginScreen, SignupScreen, OTPVerificationScreen, ForgotPasswordScreen, ForgotPasswordOTPScreen, ResetPasswordScreen, UserHomeScreen, TechnicianHomeScreen, TechnicianOnboardingScreen, ProfileScreen, EditProfileScreen, MyDataScreen, ChangePhoneScreen, ChangePasswordScreen, PortfolioScreen, ServiceManagementScreen, AvailabilityScreen, SubscriptionScreen, NewProjectView, ManualProjectForm, ConversationalAIForm, ProjectsScreen, ChatRoomsListScreen, ChatDetailScreen, RunningProjectsScreen, NotificationsScreen, AppointmentsScreen, BookingScreen, TechnicianProfileViewScreen, RoomDesignScreen, VoiceAIScreen, CostExplorerScreen, RoomVisualizerScreen, AskBonyadAIScreen, ProjectsMapScreen, AboutScreen, ContactScreen, IntroToAppScreen, OnboardingScreen, TechnicianCompleteProfileScreen, WaitingApprovalScreen, ChatbotScreen, SupportChatScreen, TicketListScreen, CreateTicketScreen, TicketDetailScreen, ServiceProvidersScreen, CommissionPaymentScreen, PaymentCheckoutScreen, CategorySubcategoryScreen, CreationMethodScreen, PendingProjectScreen, BidReceivedProjectScreen, ApprovedProjectScreen, ContractSigningProjectScreen, InProgressProjectScreen, CompletedProjectViewPage, ChangeRequestListScreen, ChangeRequestDetailScreen, RequestModificationScreen } from './src/screens';
+import { WelcomeScreen, OverviewScreen, LoginScreen, SignupScreen, OTPVerificationScreen, ForgotPasswordScreen, ForgotPasswordOTPScreen, ResetPasswordScreen, UserHomeScreen, TechnicianHomeScreen, TechnicianOnboardingScreen, ProfileScreen, EditProfileScreen, MyDataScreen, ChangePhoneScreen, ChangePasswordScreen, PortfolioScreen, ServiceManagementScreen, AvailabilityScreen, SubscriptionScreen, NewProjectView, ManualProjectForm, ConversationalAIForm, ProjectsScreen, ChatRoomsListScreen, ChatDetailScreen, RunningProjectsScreen, NotificationsScreen, AppointmentsScreen, BookingScreen, TechnicianProfileViewScreen, RoomDesignScreen, CostExplorerScreen, RoomVisualizerScreen, AskBonyadAIScreen, ProjectsMapScreen, AboutScreen, ContactScreen, IntroToAppScreen, OnboardingScreen, TechnicianCompleteProfileScreen, WaitingApprovalScreen, ChatbotScreen, SupportChatScreen, TicketListScreen, CreateTicketScreen, TicketDetailScreen, ServiceProvidersScreen, CommissionPaymentScreen, PaymentCheckoutScreen, CategorySubcategoryScreen, CreationMethodScreen, PendingProjectScreen, BidReceivedProjectScreen, ApprovedProjectScreen, ContractSigningProjectScreen, InProgressProjectScreen, CompletedProjectViewPage, ChangeRequestListScreen, ChangeRequestDetailScreen, RequestModificationScreen } from './src/screens';
 import i18n from './src/localization/i18n'; // Initialize i18n
 import OnlineStatusService from './src/services/OnlineStatusService';
 import { presenceService } from './src/services/PresenceService';
@@ -24,7 +24,6 @@ import {
   type ProfileSubviewForChatbot,
 } from './src/utils/chatbotNavigateAndroid';
 import { getOrCreateRoomId, tryParseChatRoomIdFromActionUrl } from './src/utils/chatUtils';
-import * as SplashScreenNative from 'expo-splash-screen';
 import * as Font from 'expo-font';
 import { Asset } from 'expo-asset';
 import {
@@ -40,6 +39,7 @@ import {
   Poppins_700Bold,
 } from '@expo-google-fonts/poppins';
 import * as ScreenOrientation from 'expo-screen-orientation';
+import * as SplashScreen from 'expo-splash-screen';
 import WebHeader from './src/components/WebHeader';
 import { useAuthGuard } from './src/hooks/useAuthGuard';
 import WebSocketNotificationService from './src/services/WebSocketNotificationService';
@@ -70,11 +70,8 @@ try {
   console.warn('⚠️ React Native Firebase Messaging not available:', error);
 }
 
-// Keep native splash screen visible while we show custom splash
-SplashScreenNative.preventAutoHideAsync();
-
 export default function App() {
-  const initialScreen: Screen = Platform.OS === 'web' ? 'welcome' : 'splash';
+  const initialScreen: Screen = 'welcome';
   const [currentScreen, setCurrentScreen] = useState<Screen>(initialScreen);
   /** On Android: stack so back goes to previous screen (e.g. Home → Create project → back → Home). */
   const [screenStack, setScreenStack] = useState<Screen[]>([initialScreen]);
@@ -164,7 +161,7 @@ export default function App() {
   // Router hook for URL-based routing on web
   const router = useRouter(currentScreen, setCurrentScreen);
 
-  // Check session function - used by both useEffect and SplashScreen
+  // Check session function
   const checkSession = useCallback(async () => {
     const setScreen = (screen: Screen) => {
       setCurrentScreen(screen);
@@ -173,10 +170,7 @@ export default function App() {
     try {
       console.log('🔍 Checking for stored session and onboarding status...');
 
-      // Onboarding shows only: (1) after user signup, (2) after technician completes profile + 5 steps.
-      // Never show onboarding at login — go to welcome/login when not authenticated.
-      const hasSeenOnboarding = await storage.hasSeenOnboarding();
-
+      // Never show auth onboarding at cold start without a valid session — handled below per role.
       // Use checkAuthentication to validate token
       const { checkAuthentication } = await import('./src/utils/authGuard');
       const authResult = await checkAuthentication();
@@ -246,19 +240,34 @@ export default function App() {
         // Navigate based on onboarded and profileComplete status (technician: same order as web)
         const role = authResult.role.toLowerCase() as 'user' | 'technician';
 
-        const hasSeenTour = await storage.hasSeenOnboarding();
-
         if (role === 'technician') {
-          const status = authResult.user?.status;
+          const accountStatus = authResult.user?.status;
           if (!authResult.profileComplete) {
             console.log('📍 Technician profile incomplete - redirecting to complete profile');
             setScreen('technicianCompleteProfile');
-          } else if (status === 'WAITING_ADMIN_APPROVAL' || status === 'PENDING') {
+          } else if (accountStatus === 'WAITING_ADMIN_APPROVAL' || accountStatus === 'PENDING') {
             console.log('📍 Technician waiting for admin approval');
             setScreen('waitingApproval');
           } else if (!authResult.onboarded) {
-            console.log('📍 Technician not onboarded - redirecting to onboarding');
-            setScreen('technicianOnboarding');
+            console.log('📍 Technician not onboarded - product tour then setup');
+            try {
+              const onbStatus = await getOnboardingStatus(authResult.token, authResult.userId);
+              if (onbStatus && !onbStatus.completed) {
+                const nextStep = onbStatus.currentStep && onbStatus.currentStep >= 1 && onbStatus.currentStep <= 4 ? onbStatus.currentStep : 1;
+                await onboardingStorage.set('currentStep', String(nextStep));
+              } else {
+                await onboardingStorage.clear();
+              }
+            } catch (e) {
+              console.warn('⚠️ Failed to fetch onboarding status (session):', e);
+            }
+            const hasSeenProductTour = await storage.hasSeenOnboarding();
+            if (!hasSeenProductTour && Platform.OS !== 'web') {
+              postOnboardingScreenRef.current = 'technicianOnboarding';
+              setScreen('onboarding');
+            } else {
+              setScreen('technicianOnboarding');
+            }
           } else {
             console.log('📍 Technician fully onboarded - going to home');
             setScreen('home');
@@ -315,8 +324,6 @@ export default function App() {
   useEffect(() => {
     const prepareApp = async () => {
       try {
-        await SplashScreenNative.preventAutoHideAsync();
-
         await Font.loadAsync({
           // Arabic — Cairo (same as web, from @expo-google-fonts/cairo)
           Cairo_400Regular,
@@ -356,6 +363,9 @@ export default function App() {
         console.warn('⚠️ Failed to preload assets:', error);
       } finally {
         setAppReady(true);
+        if (Platform.OS !== 'web') {
+          SplashScreen.hideAsync().catch(() => {});
+        }
       }
     };
 
@@ -373,13 +383,6 @@ export default function App() {
       i18n.off('languageChanged', handleLanguageChanged);
     };
   }, []);
-
-  const onLayoutRootView = useCallback(async () => {
-    if (isAppReady) {
-      await SplashScreenNative.hideAsync();
-    }
-  }, [isAppReady]);
-
 
   // Check for new notifications from API
   const checkForNewNotifications = async () => {
@@ -630,6 +633,32 @@ export default function App() {
     setCurrentScreen(screen);
   };
 
+  /**
+   * Technicians get the same 3-slide product tour as users (OnboardingScreen) once,
+   * then continue to TechnicianOnboardingScreen (availability / services / subscription).
+   */
+  const goToTechnicianProductTourThenSetup = async (token: string, id: number) => {
+    try {
+      const status = await getOnboardingStatus(token, id);
+      if (status && !status.completed) {
+        const nextStep = status.currentStep && status.currentStep >= 1 && status.currentStep <= 4 ? status.currentStep : 1;
+        await onboardingStorage.set('currentStep', String(nextStep));
+      } else {
+        await onboardingStorage.clear();
+      }
+    } catch (e) {
+      console.warn('⚠️ Failed to fetch onboarding status:', e);
+    }
+    const hasSeenTour = await storage.hasSeenOnboarding();
+    if (!hasSeenTour && Platform.OS !== 'web') {
+      console.log('📍 Product tour (user parity) before technician setup');
+      postOnboardingScreenRef.current = 'technicianOnboarding';
+      navigateToScreen('onboarding', true);
+    } else {
+      navigateToScreen('technicianOnboarding', true);
+    }
+  };
+
   // Handle successful login
   const handleLoginSuccess = async (role: 'user' | 'technician', token: string, id: number) => {
     setUserRole(role);
@@ -658,19 +687,8 @@ export default function App() {
           return;
         }
         if (technicianStatus.status === 'APPROVED' && !technicianStatus.onboarded) {
-          console.log('📍 Technician approved but not onboarded - redirecting to onboarding');
-          try {
-            const status = await getOnboardingStatus(token, id);
-            if (status && !status.completed) {
-              const nextStep = status.currentStep && status.currentStep >= 1 && status.currentStep <= 4 ? status.currentStep : 1;
-              await onboardingStorage.set('currentStep', String(nextStep));
-            } else {
-              await onboardingStorage.clear();
-            }
-          } catch (e) {
-            console.warn('⚠️ Failed to fetch onboarding status:', e);
-          }
-          navigateToScreen('technicianOnboarding', true);
+          console.log('📍 Technician approved but not onboarded - product tour then setup');
+          await goToTechnicianProductTourThenSetup(token, id);
           return;
         }
         console.log('📍 Technician ready - going to home');
@@ -773,19 +791,8 @@ export default function App() {
           return;
         }
         if (technicianStatus.status === 'APPROVED' && !technicianStatus.onboarded) {
-          console.log('📍 Technician approved but not onboarded - redirecting to onboarding');
-          try {
-            const status = await getOnboardingStatus(token, id);
-            if (status && !status.completed) {
-              const nextStep = status.currentStep && status.currentStep >= 1 && status.currentStep <= 4 ? status.currentStep : 1;
-              await onboardingStorage.set('currentStep', String(nextStep));
-            } else {
-              await onboardingStorage.clear();
-            }
-          } catch (e) {
-            console.warn('⚠️ Failed to fetch onboarding status (signup):', e);
-          }
-          navigateToScreen('technicianOnboarding', true);
+          console.log('📍 Technician approved but not onboarded - product tour then setup');
+          await goToTechnicianProductTourThenSetup(token, id);
           return;
         }
         console.log('📍 Technician ready - going to home');
@@ -903,15 +910,11 @@ export default function App() {
     setShowProfile(false);
   };
 
-  if (!isAppReady) {
-    return null;
-  }
-
   return (
     <ThemeProvider>
       <FontProvider>
         <GlobalAlertProvider>
-          <View style={{ flex: 1, direction: isAppRTL ? 'rtl' : 'ltr' }} onLayout={onLayoutRootView}>
+          <View style={{ flex: 1, direction: isAppRTL ? 'rtl' : 'ltr' }}>
             <AppContent
               currentScreen={currentScreen}
               setCurrentScreen={setCurrentScreen}
@@ -996,6 +999,7 @@ export default function App() {
               bundleLoadError={bundleLoadError}
               setBundleLoadError={setBundleLoadError}
               postOnboardingScreenRef={postOnboardingScreenRef}
+              goToTechnicianProductTourThenSetup={goToTechnicianProductTourThenSetup}
               setIsRouteTransitionLoading={setIsRouteTransitionLoading}
               isRouteTransitionLoading={isRouteTransitionLoading}
               routeTransitionTimerRef={routeTransitionTimerRef}
@@ -1093,6 +1097,7 @@ function AppContent({
   bundleLoadError,
   setBundleLoadError,
   postOnboardingScreenRef,
+  goToTechnicianProductTourThenSetup,
   setIsRouteTransitionLoading,
   isRouteTransitionLoading,
   routeTransitionTimerRef,
@@ -1690,21 +1695,6 @@ function AppContent({
             />
           )}
 
-          {currentScreen === 'splash' && Platform.OS !== 'web' && (
-            <SplashScreen
-              onComplete={async () => {
-                console.log('✅ SplashScreen onComplete called - checking session');
-                // Onboarding/product-tour should NOT show just by opening the app.
-                // Session restoration decides the correct next screen (login/home/tech flows).
-                await checkSession();
-              }}
-              onNavigateToOverview={() => {
-                console.log('🌐 SplashScreen onNavigateToOverview called - navigating to welcome');
-                navigate('welcome');
-              }}
-            />
-          )}
-
           {currentScreen === 'onboarding' && (
             <OnboardingScreen
               variant={userRole === 'technician' ? 'technician' : 'user'}
@@ -1736,7 +1726,6 @@ function AppContent({
             <OverviewScreen
               onNavigateToLogin={() => navigate('login')}
               onNavigateToDesign={() => navigate('roomDesign')}
-              onNavigateToVoiceAI={() => navigate('voiceAI')}
               onNavigateToCostExplorer={() => navigate('costExplorer')}
               onNavigateToRoomVisualizer={() => navigate('roomVisualizer')}
               onNavigateToAskBonyadAI={() => navigate('askBonyadAI')}
@@ -1761,12 +1750,6 @@ function AppContent({
 
           {currentScreen === 'introToApp' && (
             <IntroToAppScreen
-              onBack={goBack}
-            />
-          )}
-
-          {currentScreen === 'voiceAI' && (
-            <VoiceAIScreen
               onBack={goBack}
             />
           )}
@@ -1939,14 +1922,7 @@ function AppContent({
               userId={userId}
               onFinished={async () => {
                 presenceService.markOnline().catch(() => {});
-                const hasSeenTour = await storage.hasSeenOnboarding();
-                if (!hasSeenTour && Platform.OS !== 'web') {
-                  console.log('📍 Technician setup done - showing product tour before home');
-                  postOnboardingScreenRef.current = 'home';
-                  navigate('onboarding');
-                } else {
-                  navigate('home');
-                }
+                navigate('home', { replace: true });
               }}
             />
           )}
@@ -1968,18 +1944,7 @@ function AppContent({
                     return;
                   }
                   if (technicianStatus.status === 'APPROVED' && !technicianStatus.onboarded) {
-                    try {
-                      const status = await getOnboardingStatus(authToken, userId);
-                      if (status && !status.completed) {
-                        const nextStep = status.currentStep && status.currentStep >= 1 && status.currentStep <= 4 ? status.currentStep : 1;
-                        await onboardingStorage.set('currentStep', String(nextStep));
-                      } else {
-                        await onboardingStorage.clear();
-                      }
-                    } catch (e) {
-                      console.warn('⚠️ Failed to fetch onboarding status:', e);
-                    }
-                    navigate('technicianOnboarding');
+                    await goToTechnicianProductTourThenSetup(authToken, userId);
                     return;
                   }
                   navigate('home');
@@ -1997,18 +1962,7 @@ function AppContent({
                 try {
                   const technicianStatus = await getTechnicianStatus();
                   if (technicianStatus.status === 'APPROVED' && !technicianStatus.onboarded) {
-                    try {
-                      const status = await getOnboardingStatus(authToken, userId);
-                      if (status && !status.completed) {
-                        const nextStep = status.currentStep && status.currentStep >= 1 && status.currentStep <= 4 ? status.currentStep : 1;
-                        await onboardingStorage.set('currentStep', String(nextStep));
-                      } else {
-                        await onboardingStorage.clear();
-                      }
-                    } catch (e) {
-                      console.warn('⚠️ Failed to fetch onboarding status:', e);
-                    }
-                    navigate('technicianOnboarding');
+                    await goToTechnicianProductTourThenSetup(authToken, userId);
                     return;
                   }
                   navigate('home');

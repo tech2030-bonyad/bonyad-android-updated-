@@ -57,7 +57,6 @@ const LOCAL_OVERVIEW_IMAGE_SOURCES = [
 interface OverviewScreenProps {
   onNavigateToLogin: () => void;
   onNavigateToDesign?: () => void;
-  onNavigateToVoiceAI?: () => void;
   onNavigateToCostExplorer?: () => void;
   onNavigateToRoomVisualizer?: () => void;
   onNavigateToAskBonyadAI?: () => void;
@@ -67,7 +66,7 @@ interface OverviewScreenProps {
   onNavigateToIntroToApp?: () => void;
 }
 
-export default function OverviewScreen({ onNavigateToLogin, onNavigateToDesign, onNavigateToVoiceAI, onNavigateToCostExplorer, onNavigateToRoomVisualizer, onNavigateToAskBonyadAI, onNavigateToProjectsMap, onNavigateToContact, onNavigateToAbout, onNavigateToIntroToApp }: OverviewScreenProps) {
+export default function OverviewScreen({ onNavigateToLogin, onNavigateToDesign, onNavigateToCostExplorer, onNavigateToRoomVisualizer, onNavigateToAskBonyadAI, onNavigateToProjectsMap, onNavigateToContact, onNavigateToAbout, onNavigateToIntroToApp }: OverviewScreenProps) {
   const { colors } = useTheme();
   const { fontFamily, scaledSize } = useFontFamily();
   const { t, i18n } = useTranslation();
@@ -519,15 +518,8 @@ export default function OverviewScreen({ onNavigateToLogin, onNavigateToDesign, 
                 </TouchableOpacity>
                 {featuresMenuOpen && (
                   <View style={[styles.dropdownMenu, { backgroundColor: cardBackground, borderColor: borderColor }]}>
-                    <TouchableOpacity 
-                      style={styles.dropdownItem} 
-                      onPress={() => { setFeaturesMenuOpen(false); onNavigateToVoiceAI?.(); }}
-                    >
-                      <Ionicons name="mic" size={20} color={config.primaryColor} />
-                      <Text style={[styles.dropdownText, { color: textColor }]}>{t('Voice AI')}</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                      style={styles.dropdownItem} 
+                    <TouchableOpacity
+                      style={styles.dropdownItem}
                       onPress={() => { setFeaturesMenuOpen(false); onNavigateToCostExplorer?.(); }}
                     >
                       <Ionicons name="calculator" size={20} color={config.primaryColor} />
@@ -643,15 +635,8 @@ export default function OverviewScreen({ onNavigateToLogin, onNavigateToDesign, 
             </TouchableOpacity>
             {featuresMenuOpen && (
               <View style={styles.mobileFeaturesList}>
-                <TouchableOpacity 
-                  style={styles.mobileFeatureItem} 
-                  onPress={() => { setMobileMenuOpen(false); setFeaturesMenuOpen(false); onNavigateToVoiceAI?.(); }}
-                >
-                  <Ionicons name="mic" size={20} color={config.primaryColor} />
-                  <Text style={[styles.mobileFeatureText, { color: textColor }]}>{t('Voice AI')}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={styles.mobileFeatureItem} 
+                <TouchableOpacity
+                  style={styles.mobileFeatureItem}
                   onPress={() => { setMobileMenuOpen(false); setFeaturesMenuOpen(false); onNavigateToCostExplorer?.(); }}
                 >
                   <Ionicons name="calculator" size={20} color={config.primaryColor} />

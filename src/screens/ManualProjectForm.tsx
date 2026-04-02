@@ -27,6 +27,7 @@ import { useFontFamily } from '../context/FontContext';
 import LocationPicker from '../components/LocationPicker';
 import ProjectCreationFlow from '../components/ProjectCreationFlow';
 import { createProject, CreateProjectRequest } from '../services/ProjectService';
+import { searchUserByPhone, type UserSearchResult } from '../services/UserService';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
 import { globalAlertManager } from '../utils/globalAlertManager';
 import { getCategories, getSubcategories, ServiceCategory as ApiServiceCategory, ServiceSubcategory } from '../services/ServiceService';
@@ -208,6 +209,40 @@ export default function ManualProjectForm({
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [bidsCloseAt, setBidsCloseAt] = useState<string>('');
 
+  // Open for bids vs direct assignment (same as web ManualProjectForm)
+  const [assignmentType, setAssignmentType] = useState<'ALL' | 'DIRECT_ASSIGNMENT'>(
+    technician ? 'DIRECT_ASSIGNMENT' : 'ALL'
+  );
+  const [directAssignmentTechnician, setDirectAssignmentTechnician] = useState<UserSearchResult | null>(
+    technician
+      ? {
+          id: technician.id,
+          name: technician.name || technician.userName || '',
+          phoneNumber: technician.phoneNumber || technician.phone || '',
+          role: 'TECHNICIAN',
+          status: technician.status,
+        }
+      : null
+  );
+  const [technicianSearchPhone, setTechnicianSearchPhone] = useState('');
+  const [technicianSearchLoading, setTechnicianSearchLoading] = useState(false);
+  const [technicianSearchError, setTechnicianSearchError] = useState<string | null>(null);
+  const assignmentToggleAnim = useRef(new Animated.Value(technician ? 1 : 0)).current;
+
+  useEffect(() => {
+    if (technician) {
+      setAssignmentType('DIRECT_ASSIGNMENT');
+      setDirectAssignmentTechnician({
+        id: technician.id,
+        name: technician.name || technician.userName || '',
+        phoneNumber: technician.phoneNumber || technician.phone || '',
+        role: 'TECHNICIAN',
+        status: technician.status,
+      });
+      assignmentToggleAnim.setValue(1);
+    }
+  }, [technician]);
+
   // Fetch service categories (GET /services/categories)
   useEffect(() => {
     getCategories()
@@ -378,6 +413,45 @@ export default function ManualProjectForm({
     setBidsCloseAt('');
   };
 
+  const setAssignmentTypeWithAnimation = (next: 'ALL' | 'DIRECT_ASSIGNMENT') => {
+    LayoutAnimation.configureNext(
+      LayoutAnimation.create(280, LayoutAnimation.Types.easeInEaseOut, LayoutAnimation.Properties.opacity)
+    );
+    const toValue = next === 'DIRECT_ASSIGNMENT' ? 1 : 0;
+    Animated.spring(assignmentToggleAnim, {
+      toValue,
+      useNativeDriver: true,
+      friction: 8,
+      tension: 180,
+    }).start();
+    setAssignmentType(next);
+    if (next === 'ALL') setTechnicianSearchError(null);
+  };
+
+  const handleSearchTechnician = async () => {
+    const phone = (technicianSearchPhone || '').trim();
+    if (!phone) {
+      setTechnicianSearchError(t('Please enter technician phone number'));
+      return;
+    }
+    setTechnicianSearchError(null);
+    setTechnicianSearchLoading(true);
+    try {
+      const user = await searchUserByPhone(phone);
+      if ((user.role || '').toUpperCase() !== 'TECHNICIAN') {
+        setTechnicianSearchError(t('Assigned user must be a TECHNICIAN'));
+        setDirectAssignmentTechnician(null);
+        return;
+      }
+      setDirectAssignmentTechnician(user);
+    } catch (e: any) {
+      setTechnicianSearchError(e.message || t('Technician not found'));
+      setDirectAssignmentTechnician(null);
+    } finally {
+      setTechnicianSearchLoading(false);
+    }
+  };
+
   const addProjectPhase = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setProjectPhases((prev) => [
@@ -426,6 +500,12 @@ export default function ManualProjectForm({
       return;
     }
 
+    const effectiveTechnician = technician || directAssignmentTechnician;
+    if (assignmentType === 'DIRECT_ASSIGNMENT' && !effectiveTechnician?.id) {
+      showError(t('Please assign to a technician or switch to Open for Bids.'));
+      return;
+    }
+
     const hasValidLocation =
       latitude != null &&
       longitude != null &&
@@ -468,21 +548,20 @@ export default function ManualProjectForm({
       });
 
       const projectData: CreateProjectRequest = {
-        title: projectName.trim() || undefined,
         description: description.trim(),
-        projectPhases: projectPhases.map((phase) => phase.title.trim()).filter(Boolean),
         serviceCategoryId: selectedCategoryId,
         serviceSubcategoryId: selectedSubcategoryId || undefined,
         address: address || '',
         latitude: latitude as number,
         longitude: longitude as number,
         timeRequired: 7,
-        projectType: technician ? 'DIRECT_ASSIGNMENT' : 'ALL',
+        projectType: assignmentType,
         budget: budgetUnspecified ? undefined : parseFloat(budget || '0'),
         budgetUnspecified: budgetUnspecified || undefined,
         images: images.length > 0 ? images : undefined,
-        assignedTechnicianId: technician ? technician.id : undefined,
-        assignmentType: technician ? 'DIRECT_ASSIGNMENT' : undefined,
+        assignedTechnicianId:
+          assignmentType === 'DIRECT_ASSIGNMENT' ? effectiveTechnician?.id : undefined,
+        assignmentType: assignmentType === 'DIRECT_ASSIGNMENT' ? 'DIRECT_ASSIGNMENT' : undefined,
         bidsCloseAt: bidsCloseAt || undefined,
       };
 
@@ -494,7 +573,10 @@ export default function ManualProjectForm({
         null;
 
       if (createdProjectId) {
-        const successMessage = technician ? 'Deal sent successfully!' : 'Project submitted successfully!';
+        const successMessage =
+          assignmentType === 'DIRECT_ASSIGNMENT'
+            ? t('Deal sent successfully!')
+            : t('Project submitted successfully!');
         showAlert(
           t('Success'),
           successMessage,
@@ -967,6 +1049,143 @@ export default function ManualProjectForm({
           </View>
         </View>
 
+        {/* Assignment: Open for Bids vs Assign technician (same as web manual entry) */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="person-outline" size={14} color={FIGMA_COLORS.bluePrimary80} />
+            <Text style={[styles.sectionLabel, { color: FIGMA_COLORS.bluePrimary80 }]}>{t('Assignment')}</Text>
+          </View>
+          <View style={[styles.cardsRow, { flexDirection: 'column', gap: 8 }]}>
+            <Animated.View
+              style={{
+                transform: [
+                  {
+                    scale: assignmentToggleAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [1.04, 0.98],
+                    }),
+                  },
+                ],
+              }}
+            >
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => setAssignmentTypeWithAnimation('ALL')}
+                style={[
+                  styles.selectButton,
+                  styles.editableInput,
+                  {
+                    backgroundColor: cardBg,
+                    borderColor: assignmentType === 'ALL' ? primaryBlue : borderColor,
+                    borderWidth: assignmentType === 'ALL' ? 1.5 : 1,
+                  },
+                ]}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                  <Text style={[styles.selectButtonText, { color: textBody }]}>{t('Open for Bids')}</Text>
+                  {assignmentType === 'ALL' ? <Ionicons name="checkmark" size={18} color={primaryBlue} /> : null}
+                </View>
+              </TouchableOpacity>
+            </Animated.View>
+            <Animated.View
+              style={{
+                transform: [
+                  {
+                    scale: assignmentToggleAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.98, 1.04],
+                    }),
+                  },
+                ],
+              }}
+            >
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => setAssignmentTypeWithAnimation('DIRECT_ASSIGNMENT')}
+                style={[
+                  styles.selectButton,
+                  styles.editableInput,
+                  {
+                    backgroundColor: cardBg,
+                    borderColor: assignmentType === 'DIRECT_ASSIGNMENT' ? primaryBlue : borderColor,
+                    borderWidth: assignmentType === 'DIRECT_ASSIGNMENT' ? 1.5 : 1,
+                  },
+                ]}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                  <Text style={[styles.selectButtonText, { color: textBody }]}>{t('Assign to Technician')}</Text>
+                  {assignmentType === 'DIRECT_ASSIGNMENT' ? (
+                    <Ionicons name="checkmark" size={18} color={primaryBlue} />
+                  ) : null}
+                </View>
+              </TouchableOpacity>
+            </Animated.View>
+          </View>
+          {assignmentType === 'DIRECT_ASSIGNMENT' ? (
+            <View style={{ marginTop: 10 }}>
+              <Text style={[styles.sectionLabel, { marginBottom: 4, color: FIGMA_COLORS.bluePrimary80 }]}>
+                {t('Technician phone number')}
+              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <TextInput
+                  style={[styles.editableInput, styles.budgetInput, { flex: 1, backgroundColor: cardBg, borderColor }]}
+                  value={technicianSearchPhone}
+                  onChangeText={(text) => {
+                    setTechnicianSearchPhone(text);
+                    setTechnicianSearchError(null);
+                  }}
+                  placeholder={t('e.g. 555123456')}
+                  placeholderTextColor={textSecondary}
+                  editable={!technicianSearchLoading}
+                  keyboardType="phone-pad"
+                />
+                <TouchableOpacity
+                  style={[styles.selectButton, { paddingHorizontal: 14, backgroundColor: lightBlueBg }]}
+                  onPress={handleSearchTechnician}
+                  disabled={technicianSearchLoading}
+                >
+                  {technicianSearchLoading ? (
+                    <ActivityIndicator size="small" color={primaryBlue} />
+                  ) : (
+                    <Ionicons name="search" size={22} color={primaryBlue} />
+                  )}
+                </TouchableOpacity>
+              </View>
+              {technicianSearchError ? (
+                <Text style={{ color: colors.error || '#FF3B30', fontSize: 12, marginTop: 4 }}>
+                  {technicianSearchError}
+                </Text>
+              ) : null}
+              {directAssignmentTechnician ? (
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    marginTop: 8,
+                    padding: 10,
+                    backgroundColor: lightBlueBg,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor,
+                  }}
+                >
+                  <Ionicons name="person" size={20} color={primaryBlue} />
+                  <Text style={{ marginLeft: 8, color: textBody, flex: 1 }} numberOfLines={2}>
+                    {directAssignmentTechnician.name} · {directAssignmentTechnician.phoneNumber}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => setDirectAssignmentTechnician(null)}
+                    style={{ padding: 4 }}
+                    accessibilityLabel={t('Cancel')}
+                  >
+                    <Ionicons name="close-circle" size={22} color={textSecondary} />
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+        </View>
+
         {/* Address */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -1036,7 +1255,7 @@ export default function ManualProjectForm({
             <ActivityIndicator color={FIGMA_COLORS.white} size="small" />
           ) : (
             <Text style={styles.submitButtonText}>
-              {technician ? t('Send Deal') : t('Submit Project')}
+              {assignmentType === 'DIRECT_ASSIGNMENT' ? t('Send Deal') : t('Submit Project')}
             </Text>
           )}
         </TouchableOpacity>

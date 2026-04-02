@@ -21,7 +21,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import StaggeredAppearView from '../../components/StaggeredAppearView';
 import PressableScaleView from '../../components/PressableScaleView';
 import BonyadLogo from '../../components/BonyadLogo';
-import ChatbotFab from '../../components/ChatbotFab';
+import ChatbotFab, { chatbotFabBottomOffset } from '../../components/ChatbotFab';
 import { buildApiUrl, API_ENDPOINTS } from '../../config/api';
 import { storage } from '../../utils/storage';
 import { getMyRequests } from '../../services/SmallTaskService';
@@ -368,11 +368,14 @@ export default function UserHomeScreenContent({
     [onPressSubcategory, onPressSubcategoryForManual, selectedCategoryForModal, closeSubcategoriesModal]
   );
 
-  /** Same as web: getDisplayIconFullUrl (useSvg→svgUrl, else imageUrl, else iconUrl). RN Image cannot show SVG so we return null for .svg and show fallback icon. */
+  /**
+   * RN cannot render SVG. When useSvg is true, getDisplayIconUrl returns svgUrl first
+   * (which may not have a .svg extension). Strip svgUrl so it falls through to imageUrl/iconUrl.
+   */
   const resolveServiceImage = (item: ServiceCategory | ServiceSubcategory): { uri: string } | null => {
-    const url = getDisplayIconFullUrl(item);
-    if (!url) return null;
-    if (item.useSvg || url.toLowerCase().endsWith('.svg')) return null;
+    const rasterItem = item.useSvg ? { ...item, useSvg: false, svgUrl: null } : item;
+    const url = getDisplayIconFullUrl(rasterItem);
+    if (!url || url.toLowerCase().endsWith('.svg')) return null;
     return { uri: url };
   };
 
@@ -596,10 +599,7 @@ export default function UserHomeScreenContent({
                     )}
                   </View>
                   <View style={styles.categoryCardWebContent}>
-                    <Text style={[styles.categoryCardTitleWeb, { color: colors.text }, fontStyle]} numberOfLines={2}>{name}</Text>
-                    <View style={[styles.categoryCardChevronWrap, isSelected && { backgroundColor: primaryColor }]}>
-                      <Ionicons name="chevron-up" size={18} color={isSelected ? '#FFF' : primaryColor} />
-                    </View>
+                    <Text style={[styles.categoryCardTitleWeb, { color: colors.text }, fontStyle]}>{name}</Text>
                   </View>
                 </PressableScaleView>
               );
@@ -738,7 +738,7 @@ export default function UserHomeScreenContent({
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
           {loadingTasks ? (
-            <View style={[styles.homeCard, { backgroundColor: colors.cardBackground, width: CARD_WIDTH, minHeight: 100, justifyContent: 'center', alignItems: 'center' }]}>
+            <View style={[styles.homeCard, { backgroundColor: colors.cardBackground, justifyContent: 'center', alignItems: 'center' }]}>
               <ActivityIndicator size="small" color="#FF9500" />
             </View>
           ) : smallTasks.length === 0 ? (
@@ -753,15 +753,13 @@ export default function UserHomeScreenContent({
                 style={[styles.homeCard, { backgroundColor: colors.cardBackground }]}
                 onPress={() => onPressSmallTask ? onPressSmallTask(task) : onPressMySmallTasks?.()}
               >
-                <View style={styles.homeCardRow}>
-                  <View style={[styles.homeCardIconWrap, { backgroundColor: 'rgba(255,149,0,0.18)' }]}>
-                    <Ionicons name="flash" size={20} color="#FF9500" />
-                  </View>
-                  <Text style={[styles.homeCardTitle, { color: colors.text }, boldStyle]} numberOfLines={1}>
-                    {getTaskTypeName(task) || `#${task.id}`}
-                  </Text>
+                <View style={[styles.homeCardIconWrap, { backgroundColor: 'rgba(255,149,0,0.18)', marginBottom: 8 }]}>
+                  <Ionicons name="flash" size={20} color="#FF9500" />
                 </View>
-                <Text style={[styles.homeCardSub, { color: colors.textSecondary }, fontStyle]} numberOfLines={2}>
+                <Text style={[styles.homeCardTitle, { color: colors.text }, boldStyle]}>
+                  {getTaskTypeName(task) || `#${task.id}`}
+                </Text>
+                <Text style={[styles.homeCardSub, { color: colors.textSecondary }, fontStyle]}>
                   {task.description?.trim() || task.address || '—'}
                 </Text>
                 <Text style={[styles.homeCardStatus, { color: '#FF9500' }, fontStyle]}>
@@ -776,7 +774,12 @@ export default function UserHomeScreenContent({
       </ScrollView>
       {/* iOS-style Chatbot FAB: fixed bottom-left, wave rings + white circle + robot */}
       {onPressChatbot && (
-        <ChatbotFab onPress={onPressChatbot} primaryColor={primaryColor} primaryDark={isDark ? colors.primary : '#0078E0'} />
+        <ChatbotFab
+          onPress={onPressChatbot}
+          primaryColor={primaryColor}
+          primaryDark={isDark ? colors.primary : '#0078E0'}
+          bottomOffset={chatbotFabBottomOffset(insets.bottom)}
+        />
       )}
     </View>
   );
@@ -868,16 +871,15 @@ const styles = StyleSheet.create({
   sectionSubtitle: { fontSize: 13, marginTop: 4 },
   categoryCardWeb: {
     width: CATEGORY_CARD_SIZE,
-    minHeight: CATEGORY_CARD_SIZE,
+    height: CATEGORY_CARD_SIZE,
     borderRadius: 16,
     overflow: 'hidden',
     ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8 }, android: { elevation: 3 } }),
   },
-  categoryCardWebImageWrap: { width: '100%', height: CATEGORY_CARD_SIZE * 0.4, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  categoryCardWebImageWrap: { width: '100%', height: CATEGORY_CARD_SIZE * 0.55, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   categoryCardImage: { width: 56, height: 56 },
-  categoryCardWebContent: { flex: 1, padding: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 },
-  categoryCardTitleWeb: { flex: 1, fontSize: 14, fontWeight: '600' },
-  categoryCardChevronWrap: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  categoryCardWebContent: { height: CATEGORY_CARD_SIZE * 0.45, paddingHorizontal: 10, paddingVertical: 6, alignItems: 'center', justifyContent: 'center' },
+  categoryCardTitleWeb: { fontSize: 13, fontWeight: '600', textAlign: 'center' },
   inlineSubcategoriesWrap: { marginTop: 24, paddingHorizontal: 0, overflow: 'hidden' },
   inlineSubcatLineWrap: { position: 'absolute', top: -20, left: '10%', width: '80%', height: 2, overflow: 'hidden', borderRadius: 1 },
   inlineSubcatLine: { flex: 1, width: '100%' },
@@ -912,14 +914,15 @@ const styles = StyleSheet.create({
   hScroll: { paddingRight: H_PADDING, gap: 12 },
   homeCard: {
     width: CARD_WIDTH,
-    minHeight: 100,
+    height: 160,
     borderRadius: CARD_RADIUS,
     padding: 12,
+    overflow: 'hidden',
     ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 6 }, android: { elevation: 2 } }),
   },
   homeCardRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
   homeCardIconWrap: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  homeCardTitle: { flex: 1, fontSize: 14 },
+  homeCardTitle: { fontSize: 14, marginBottom: 4 },
   homeCardSub: { fontSize: 12, marginBottom: 4 },
   homeCardStatus: { fontSize: 11, textTransform: 'capitalize' },
   placeholderCard: {

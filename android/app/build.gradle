@@ -182,3 +182,14 @@ dependencies {
 }
 
 apply plugin: 'com.google.gms.google-services'
+
+// RN New Architecture: `externalNativeBuildClean*` runs CMake "clean", which reconfigures and
+// requires `node_modules/*/android/build/generated/source/codegen/jni` — those folders only
+// exist after a successful codegen build, so `./gradlew clean` can fail in a fresh or stripped tree.
+// Disabling native clean keeps Java/Kotlin `clean` working; for a full native reset run
+// `npm run android:deep-clean` (removes `.cxx` + build dirs).
+afterEvaluate {
+    tasks.matching { it.name.startsWith("externalNativeBuildClean") }.configureEach {
+        enabled = false
+    }
+}

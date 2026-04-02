@@ -433,6 +433,19 @@ export const buildAssetUrl = (relativePath: string): string => {
   return `${getServerBaseUrl()}${path}`;
 };
 
+/** Chat uploads / portfolio-style paths: bare filename → GET /api/static/:name; paths with slashes → server base + path. */
+export const buildStaticFileUrl = (filenameOrPath: string): string => {
+  if (!filenameOrPath || typeof filenameOrPath !== 'string') return '';
+  const trimmed = filenameOrPath.trim();
+  if (!trimmed) return '';
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
+  if (trimmed.includes('/')) {
+    const path = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+    return `${getServerBaseUrl()}${path}`;
+  }
+  return `${API_BASE_URL}/static/${trimmed}`;
+};
+
 // Helper function to build full URL (always absolute base – same as web)
 export const buildApiUrl = (endpoint: string): string => {
   const base = API_BASE_URL && API_BASE_URL.startsWith('http') ? API_BASE_URL : DEFAULT_BASE_URL;

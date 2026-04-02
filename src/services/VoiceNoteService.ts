@@ -391,14 +391,30 @@ class VoiceNoteService {
       if (Platform.OS === 'web') {
         const recordingData = this.recording as any;
         if (recordingData?.mediaRecorder) {
-          recordingData.mediaRecorder.stop();
+          try {
+            if (recordingData.mediaRecorder.state === 'recording') {
+              recordingData.mediaRecorder.stop();
+            }
+          } catch (e) {
+            console.warn('⚠️ [Web] MediaRecorder stop on cancel:', e);
+          }
         }
         if (recordingData?.stream) {
-          recordingData.stream.getTracks().forEach((track: MediaStreamTrack) => track.stop());
+          try {
+            recordingData.stream.getTracks().forEach((track: MediaStreamTrack) => track.stop());
+          } catch (e) {
+            console.warn('⚠️ [Web] Stop tracks on cancel:', e);
+          }
         }
-      } else {
-        if (this.recording) {
+      } else if (this.recording) {
+        try {
           await this.recording.stopAndUnloadAsync();
+        } catch (e: any) {
+          const msg = String(e?.message ?? e ?? '');
+          // Expo AV: native recorder already gone (app background, race, or unload elsewhere)
+          if (!/does not exist|not loaded|already been unloaded|invalidated|Cannot unload a Recording/i.test(msg)) {
+            console.warn('⚠️ [Native] cancelRecording:', e);
+          }
         }
       }
 
@@ -415,7 +431,12 @@ class VoiceNoteService {
       this.recordingUri = null;
       console.log('🛑 Recording cancelled');
     } catch (error: any) {
-      console.error('❌ Error cancelling recording:', error);
+      this.recording = null;
+      this.recordingUri = null;
+      const msg = String(error?.message ?? error ?? '');
+      if (!/does not exist|not loaded|already been unloaded|invalidated|Cannot unload a Recording/i.test(msg)) {
+        console.error('❌ Error cancelling recording:', error);
+      }
     }
   }
 

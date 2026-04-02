@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,14 +6,17 @@ import {
   TouchableOpacity,
   Platform,
   useWindowDimensions,
+  Animated,
+  Easing,
   ScrollView,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../context/ThemeContext';
-import { useFontFamily } from '../context/FontContext';
+
+/** Extra space above system home indicator when a bottom tab bar overlays the screen */
+const BOTTOM_TAB_BAR_CLEARANCE = 76;
 
 export interface CategoryInfo {
   id: number;
@@ -44,270 +47,482 @@ export default function CreationMethodScreen({
   onChooseManual,
 }: CreationMethodScreenProps) {
   const { t, i18n } = useTranslation();
-  const { colors, theme } = useTheme();
-  const { fontFamily, scaledSize } = useFontFamily();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const isDarkMode = theme === 'dark';
-
-  const isRTL = i18n.language === 'ar';
+  const isRTL = i18n.language?.startsWith('ar') ?? false;
   const isWeb = Platform.OS === 'web';
   const isLargeScreen = isWeb && width >= 768;
-  const cardElevation = isDarkMode && Platform.OS === 'android' ? 2 : 6;
 
   const categoryName = isRTL && category.nameAr ? category.nameAr : category.nameEn;
   const subcategoryName = isRTL && subcategory.nameAr ? subcategory.nameAr : subcategory.nameEn;
 
+  // ─── Screen enter / exit animation ────────────────────────────────────────
+  const screenOpacity = useRef(new Animated.Value(0)).current;
+  const screenTranslateY = useRef(new Animated.Value(260)).current;
+  const screenScale = useRef(new Animated.Value(0.96)).current;
+  const isClosingRef = useRef(false);
+
+  // Card stagger animations
+  const card1Opacity = useRef(new Animated.Value(0)).current;
+  const card1Y = useRef(new Animated.Value(30)).current;
+  const card2Opacity = useRef(new Animated.Value(0)).current;
+  const card2Y = useRef(new Animated.Value(30)).current;
+
+  // Press scale for cards
+  const aiPressScale = useRef(new Animated.Value(1)).current;
+  const manualPressScale = useRef(new Animated.Value(1)).current;
+
+  // Sparkle pulse for AI badge
+  const sparkleScale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    // Screen slide-up entrance
+    Animated.parallel([
+      Animated.timing(screenOpacity, {
+        toValue: 1,
+        duration: 280,
+        useNativeDriver: true,
+      }),
+      Animated.spring(screenTranslateY, {
+        toValue: 0,
+        friction: 8,
+        tension: 65,
+        useNativeDriver: true,
+      }),
+      Animated.spring(screenScale, {
+        toValue: 1,
+        friction: 8,
+        tension: 65,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      // Stagger cards in after screen appears
+      Animated.stagger(90, [
+        Animated.parallel([
+          Animated.timing(card1Opacity, { toValue: 1, duration: 260, useNativeDriver: true }),
+          Animated.spring(card1Y, { toValue: 0, friction: 9, tension: 100, useNativeDriver: true }),
+        ]),
+        Animated.parallel([
+          Animated.timing(card2Opacity, { toValue: 1, duration: 260, useNativeDriver: true }),
+          Animated.spring(card2Y, { toValue: 0, friction: 9, tension: 100, useNativeDriver: true }),
+        ]),
+      ]).start();
+    });
+
+    // Sparkle pulse loop
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(sparkleScale, { toValue: 1.18, duration: 900, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(sparkleScale, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ])
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleBack = () => {
+    if (isClosingRef.current) return;
+    isClosingRef.current = true;
+    Animated.parallel([
+      Animated.timing(screenOpacity, { toValue: 0, duration: 200, useNativeDriver: true }),
+      Animated.timing(screenTranslateY, { toValue: 260, duration: 200, useNativeDriver: true }),
+      Animated.timing(screenScale, { toValue: 0.96, duration: 200, useNativeDriver: true }),
+    ]).start(() => onBack());
+  };
+
+  const handleChooseAI = () => {
+    if (isClosingRef.current) return;
+    isClosingRef.current = true;
+    Animated.parallel([
+      Animated.timing(screenOpacity, { toValue: 0, duration: 180, useNativeDriver: true }),
+      Animated.timing(screenTranslateY, { toValue: -40, duration: 180, useNativeDriver: true }),
+    ]).start(() => onChooseAI(category, subcategory));
+  };
+
+  const handleChooseManual = () => {
+    if (isClosingRef.current) return;
+    isClosingRef.current = true;
+    Animated.parallel([
+      Animated.timing(screenOpacity, { toValue: 0, duration: 180, useNativeDriver: true }),
+      Animated.timing(screenTranslateY, { toValue: -40, duration: 180, useNativeDriver: true }),
+    ]).start(() => onChooseManual(category, subcategory));
+  };
+
+  const pressIn = (anim: Animated.Value) =>
+    Animated.spring(anim, { toValue: 0.96, friction: 10, tension: 200, useNativeDriver: true }).start();
+  const pressOut = (anim: Animated.Value) =>
+    Animated.spring(anim, { toValue: 1, friction: 6, tension: 180, useNativeDriver: true }).start();
+
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View style={[styles.header, { borderBottomColor: colors.border, direction: 'ltr' }]}>
-        <TouchableOpacity
-          onPress={onBack}
-          style={styles.backBtn}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        >
-          <Ionicons name="chevron-back" size={28} color={colors.text} />
+    <Animated.View
+      style={[
+        styles.root,
+        { backgroundColor: '#FFFFFF' },
+        { opacity: screenOpacity, transform: [{ translateY: screenTranslateY }, { scale: screenScale }] },
+      ]}
+    >
+      {/* Top bar: back + centered New Project */}
+      <View style={[styles.topBar, { paddingTop: insets.top }]}>
+        <TouchableOpacity onPress={handleBack} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <Ionicons
+            name={isRTL ? 'chevron-forward' : 'chevron-back'}
+            size={22}
+            color="#1A1A1A"
+          />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
-            {t('Choose Method')}
-          </Text>
-          <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
-            {subcategoryName}
+          <View style={[styles.headerBadge, { backgroundColor: colors.primary }]}>
+            <Ionicons name="add-circle" size={13} color="#fff" />
+          </View>
+          <Text style={styles.headerTitle} numberOfLines={1}>
+            {t('New Project')}
           </Text>
         </View>
-        <View style={styles.headerRight} />
+        <View style={styles.topBarSpacer} />
       </View>
 
       <ScrollView
-        style={[styles.content, { backgroundColor: colors.background }]}
-        contentContainerStyle={[styles.contentScroll, { paddingBottom: Math.max(insets.bottom, 20) + 24 }]}
+        style={styles.scroll}
+        contentContainerStyle={[
+          styles.scrollContent,
+          {
+            paddingBottom: Math.max(insets.bottom, 12) + BOTTOM_TAB_BAR_CLEARANCE,
+          },
+        ]}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
-        {/* Info Section */}
-        <View style={styles.infoSection}>
-          <View style={[styles.categoryBadge, { backgroundColor: colors.primary + '15' }]}>
-            <MaterialCommunityIcons name="folder-outline" size={20} color={colors.primary} />
-            <Text style={[styles.categoryText, { color: colors.primary }]}>
-              {categoryName}
-            </Text>
-          </View>
-          <Text style={[styles.instruction, { color: colors.text }]}>
-            {t('How would you like to create your project?')}
+      {/* Hero — compact */}
+      <View style={styles.hero}>
+        <View style={[styles.categoryPill, { backgroundColor: colors.primary + '12' }]}>
+          <Ionicons name="folder-open-outline" size={12} color={colors.primary} />
+          <Text style={[styles.categoryPillText, { color: colors.primary }]} numberOfLines={1}>
+            {categoryName}
+          </Text>
+          <Text style={[styles.categoryPillSep, { color: colors.primary + '60' }]}>·</Text>
+          <Text style={[styles.categoryPillText, { color: colors.primary + 'CC' }]} numberOfLines={1}>
+            {subcategoryName}
           </Text>
         </View>
+        <Text style={styles.heroTitle}>{t('How would you like to create your project?')}</Text>
+        <Text style={styles.heroSub}>
+          {t('Choose the method that works best for you')}
+        </Text>
+      </View>
 
-        {/* Method Cards */}
-        <View style={[styles.cardsContainer, isLargeScreen && styles.cardsContainerRow]}>
-          {/* AI Method Card */}
+      {/* Cards */}
+      <View style={[styles.cards, isLargeScreen && styles.cardsRow]}>
+        {/* AI Card */}
+        <Animated.View
+          style={[
+            styles.cardWrap,
+            isLargeScreen && styles.cardWrapWide,
+            { opacity: card1Opacity, transform: [{ translateY: card1Y }, { scale: aiPressScale }] },
+          ]}
+        >
           <TouchableOpacity
-            style={[
-              styles.methodCard,
-              { backgroundColor: colors.cardBackground },
-              Platform.OS === 'android' && { elevation: cardElevation },
-              isLargeScreen && styles.methodCardWide,
-            ]}
-            onPress={() => onChooseAI(category, subcategory)}
-            activeOpacity={0.9}
+            style={styles.cardAI}
+            onPress={handleChooseAI}
+            onPressIn={() => pressIn(aiPressScale)}
+            onPressOut={() => pressOut(aiPressScale)}
+            activeOpacity={1}
           >
-            <LinearGradient
-              colors={[colors.primary + '20', colors.primary + '05']}
-              style={styles.cardGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            >
-              <View style={[styles.iconContainer, { backgroundColor: colors.primary }]}>
-                <MaterialCommunityIcons name="robot" size={32} color={colors.white} />
-              </View>
-              <Text style={[styles.cardTitle, { color: colors.text }]}>
-                {t('AI Assistant')}
-              </Text>
-              <Text style={[styles.cardDescription, { color: colors.textSecondary }]}>
-                {t('Let our AI guide you through a conversation to create your project details automatically.')}
-              </Text>
-              <View style={[styles.benefitBadge, { backgroundColor: colors.success + '15' }]}>
-                <Ionicons name="flash" size={14} color={colors.success} />
-                <Text style={[styles.benefitText, { color: colors.success }]}>
-                  {t('Fast & Easy')}
-                </Text>
-              </View>
-            </LinearGradient>
-          </TouchableOpacity>
+            {/* Top accent line */}
+            <View style={[styles.cardAccentBar, { backgroundColor: colors.primary }]} />
 
-          {/* Manual Method Card */}
-          <TouchableOpacity
-            style={[
-              styles.methodCard,
-              { backgroundColor: colors.cardBackground },
-              Platform.OS === 'android' && { elevation: cardElevation },
-              isLargeScreen && styles.methodCardWide,
-            ]}
-            onPress={() => onChooseManual(category, subcategory)}
-            activeOpacity={0.9}
-          >
-            <LinearGradient
-              colors={[colors.warning + '15', colors.warning + '05']}
-              style={styles.cardGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            >
-              <View style={[styles.iconContainer, { backgroundColor: colors.warning }]}>
-                <MaterialCommunityIcons name="file-document-edit" size={32} color={colors.white} />
+            <View style={styles.cardInner}>
+              {/* Icon + recommended badge row */}
+              <View style={styles.cardTopRow}>
+                <View style={[styles.cardIconWrap, { backgroundColor: colors.primary }]}>
+                  <Ionicons name="sparkles" size={22} color="#fff" />
+                </View>
+                <Animated.View
+                  style={[
+                    styles.recommendedBadge,
+                    { backgroundColor: colors.primary + '15', transform: [{ scale: sparkleScale }] },
+                  ]}
+                >
+                  <Ionicons name="flash" size={11} color={colors.primary} />
+                  <Text style={[styles.recommendedText, { color: colors.primary }]}>{t('Recommended')}</Text>
+                </Animated.View>
               </View>
-              <Text style={[styles.cardTitle, { color: colors.text }]}>
-                {t('Manual Entry')}
+
+              <Text style={styles.cardTitle}>{t('AI Assistant')}</Text>
+              <Text style={styles.cardDesc} numberOfLines={3}>
+                {t('Describe your project in plain words and AI will handle the details — scope, budget and timeline.')}
               </Text>
-              <Text style={[styles.cardDescription, { color: colors.textSecondary }]}>
-                {t('Fill in the project details yourself with full control over all specifications.')}
-              </Text>
-              <View style={[styles.benefitBadge, { backgroundColor: colors.primary + '15' }]}>
-                <Ionicons name="settings" size={14} color={colors.primary} />
-                <Text style={[styles.benefitText, { color: colors.primary }]}>
-                  {t('Full Control')}
-                </Text>
+
+              {/* Feature pills */}
+              <View style={styles.featurePills}>
+                {[t('Fast'), t('Smart'), t('Auto-filled')].map((f) => (
+                  <View key={f} style={[styles.featurePill, { backgroundColor: colors.primary + '10' }]}>
+                    <Text style={[styles.featurePillText, { color: colors.primary }]}>{f}</Text>
+                  </View>
+                ))}
               </View>
-            </LinearGradient>
+
+              <View style={[styles.cardCta, { backgroundColor: colors.primary }]}>
+                <Text style={styles.cardCtaText}>{t('Use AI Assistant')}</Text>
+                <Ionicons name={isRTL ? 'arrow-back' : 'arrow-forward'} size={15} color="#fff" />
+              </View>
+            </View>
           </TouchableOpacity>
-        </View>
+        </Animated.View>
+
+        {/* Manual Card */}
+        <Animated.View
+          style={[
+            styles.cardWrap,
+            isLargeScreen && styles.cardWrapWide,
+            { opacity: card2Opacity, transform: [{ translateY: card2Y }, { scale: manualPressScale }] },
+          ]}
+        >
+          <TouchableOpacity
+            style={[styles.cardManual, { borderColor: '#E5E7EB' }]}
+            onPress={handleChooseManual}
+            onPressIn={() => pressIn(manualPressScale)}
+            onPressOut={() => pressOut(manualPressScale)}
+            activeOpacity={1}
+          >
+            <View style={styles.cardInner}>
+              <View style={styles.cardTopRow}>
+                <View style={[styles.cardIconWrap, { backgroundColor: '#F5F5F5' }]}>
+                  <Ionicons name="create-outline" size={22} color="#383838" />
+                </View>
+                <View style={[styles.recommendedBadge, { backgroundColor: '#F5F5F5' }]}>
+                  <Ionicons name="settings-outline" size={11} color="#666666" />
+                  <Text style={[styles.recommendedText, { color: '#666666' }]}>{t('Full Control')}</Text>
+                </View>
+              </View>
+
+              <Text style={[styles.cardTitle, { color: '#1A1A1A' }]}>{t('Manual Entry')}</Text>
+              <Text style={[styles.cardDesc, { color: '#666666' }]} numberOfLines={3}>
+                {t('Fill in all project details yourself — title, budget, timeline and phases at your own pace.')}
+              </Text>
+
+              <View style={styles.featurePills}>
+                {[t('Precise'), t('Flexible'), t('Custom')].map((f) => (
+                  <View key={f} style={[styles.featurePill, { backgroundColor: '#F0F0F0' }]}>
+                    <Text style={[styles.featurePillText, { color: '#555555' }]}>{f}</Text>
+                  </View>
+                ))}
+              </View>
+
+              <View style={[styles.cardCta, { backgroundColor: '#1A1A1A' }]}>
+                <Text style={styles.cardCtaText}>{t('Enter Manually')}</Text>
+                <Ionicons name={isRTL ? 'arrow-back' : 'arrow-forward'} size={15} color="#fff" />
+              </View>
+            </View>
+          </TouchableOpacity>
+        </Animated.View>
+      </View>
       </ScrollView>
-    </View>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
   },
-  header: {
+  topBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
+    paddingHorizontal: 12,
+    paddingBottom: 6,
   },
-  backBtn: {
-    width: 44,
-    height: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
+  topBarRTL: {
+    flexDirection: 'row-reverse',
+  },
+  topBarSpacer: {
+    width: 36,
+    height: 36,
   },
   headerCenter: {
     flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 4,
+  },
+  headerBadge: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: '700',
+    color: '#1A1A1A',
   },
-  headerSubtitle: {
-    fontSize: 14,
-    marginTop: 2,
-  },
-  headerRight: {
-    width: 44,
-  },
-  content: {
+  scroll: {
     flex: 1,
   },
-  contentScroll: {
-    paddingHorizontal: 16,
-    paddingTop: 10,
+  scrollContent: {
+    flexGrow: 1,
   },
-  infoSection: {
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#F5F5F5',
     alignItems: 'center',
-    marginBottom: 18,
+    justifyContent: 'center',
   },
-  categoryBadge: {
+  hero: {
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 2,
+    paddingBottom: 8,
+  },
+  categoryPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 7,
-    borderRadius: 20,
-    gap: 8,
-    marginBottom: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 16,
+    gap: 4,
+    marginBottom: 8,
+    maxWidth: '95%',
   },
-  categoryText: {
-    fontSize: 14,
-    fontWeight: '600',
+  categoryPillText: {
+    fontSize: 12,
+    fontWeight: '500',
   },
-  instruction: {
+  categoryPillSep: {
+    fontSize: 12,
+    fontWeight: '400',
+  },
+  heroTitle: {
     fontSize: 17,
     fontWeight: '700',
+    color: '#1A1A1A',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 4,
+    paddingHorizontal: 8,
+  },
+  heroSub: {
+    fontSize: 13,
+    color: '#888888',
     textAlign: 'center',
   },
-  cardsContainer: {
-    gap: 12,
+  cards: {
+    paddingHorizontal: 16,
+    gap: 8,
   },
-  cardsContainerRow: {
+  cardsRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 20,
+    gap: 16,
   },
-  methodCard: {
-    borderRadius: 16,
-    overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 12,
-      },
-      android: {
-        elevation: 6,
-      },
-    }),
+  cardWrap: {
+    marginBottom: 0,
   },
-  methodCardWide: {
+  cardWrapWide: {
     flex: 1,
-    maxWidth: 400,
+    maxWidth: 380,
   },
-  cardGradient: {
-    padding: 16,
+  cardAI: {
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
+    ...Platform.OS === 'ios' ? {
+      shadowColor: '#00549B',
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.15,
+      shadowRadius: 16,
+    } : { elevation: 5 },
+    borderWidth: 1.5,
+    borderColor: '#00549B20',
+  },
+  cardAccentBar: {
+    height: 3,
+    width: '100%',
+  },
+  cardManual: {
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
+    borderWidth: 1.5,
+    ...Platform.OS === 'ios' ? {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.07,
+      shadowRadius: 12,
+    } : { elevation: 2 },
+  },
+  cardInner: {
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+  },
+  cardTopRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-  },
-  iconContainer: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 8,
-      },
-    }),
-  },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: '700',
+    justifyContent: 'space-between',
     marginBottom: 8,
   },
-  cardDescription: {
-    fontSize: 13,
-    textAlign: 'center',
-    lineHeight: 19,
-    marginBottom: 12,
+  cardIconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  benefitBadge: {
+  recommendedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 16,
-    gap: 6,
+    gap: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
-  benefitText: {
-    fontSize: 13,
+  recommendedText: {
+    fontSize: 11,
     fontWeight: '600',
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#1A1A1A',
+    marginBottom: 4,
+  },
+  cardDesc: {
+    fontSize: 12,
+    color: '#666666',
+    lineHeight: 16,
+    marginBottom: 8,
+  },
+  featurePills: {
+    flexDirection: 'row',
+    gap: 5,
+    marginBottom: 9,
+    flexWrap: 'wrap',
+  },
+  featurePill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  featurePillText: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  cardCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 9,
+    borderRadius: 10,
+  },
+  cardCtaText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
   },
 });

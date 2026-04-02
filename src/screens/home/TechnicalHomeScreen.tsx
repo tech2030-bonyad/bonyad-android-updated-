@@ -17,7 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import StaggeredAppearView from '../../components/StaggeredAppearView';
 import PressableScaleView from '../../components/PressableScaleView';
 import BonyadLogo from '../../components/BonyadLogo';
-import ChatbotFab from '../../components/ChatbotFab';
+import ChatbotFab, { chatbotFabBottomOffset } from '../../components/ChatbotFab';
 import RialIcon from '../../components/RialIcon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { buildApiUrl, API_ENDPOINTS } from '../../config/api';
@@ -564,7 +564,12 @@ export default function TechnicalHomeScreen({
       </ScrollView>
       {/* iOS-style Chatbot FAB when provided; otherwise legacy FAB for small tasks */}
       {onPressChatbot ? (
-        <ChatbotFab onPress={onPressChatbot} primaryColor={primaryColor} primaryDark={themeColors.primary} />
+        <ChatbotFab
+          onPress={onPressChatbot}
+          primaryColor={primaryColor}
+          primaryDark={themeColors.primary}
+          bottomOffset={chatbotFabBottomOffset(insets.bottom)}
+        />
       ) : onPressFab ? (
         <TouchableOpacity
           style={[styles.fab, { backgroundColor: themeColors.primary }, styles.fabLTR]}

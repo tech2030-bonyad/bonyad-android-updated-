@@ -211,6 +211,8 @@ export default function UserHomeScreen({
   const [serviceTechniciansView, setServiceTechniciansView] = useState<{ serviceId: number; serviceName?: string; source?: 'search' | 'lookForBonyaders' | 'category' } | null>(null);
   const [selectedTechnicianId, setSelectedTechnicianId] = useState<number | null>(null);
   const [hiringTechnician, setHiringTechnician] = useState<{ id: number; name?: string } | null>(null);
+  const [hireReturnTab, setHireReturnTab] = useState<string | null>(null);
+  const [techProfileReturnTab, setTechProfileReturnTab] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<CategoryInfo | null>(null);
   const [projectsScreenCategoryId, setProjectsScreenCategoryId] = useState<number | null>(null);
   const [pendingOpenProject, setPendingOpenProject] = useState<any>(null);
@@ -273,17 +275,21 @@ export default function UserHomeScreen({
       setSelectedChat(null);
       setShowChatList(true);
     }
-    if (activeTab !== 'service-technicians' && chatReturnContext !== 'service-technicians') {
+    if (activeTab !== 'service-technicians' && chatReturnContext !== 'service-technicians' && hireReturnTab !== 'service-technicians' && techProfileReturnTab !== 'service-technicians') {
       setServiceTechniciansView(null);
     }
     if (activeTab !== 'chat') {
       setChatReturnContext(null);
     }
-    if (activeTab !== 'technician-profile') {
+    if (activeTab !== 'technician-profile' && hireReturnTab !== 'technician-profile') {
       setSelectedTechnicianId(null);
+    }
+    if (activeTab !== 'technician-profile') {
+      setTechProfileReturnTab(null);
     }
     if (activeTab !== 'new') {
       setHiringTechnician(null);
+      setHireReturnTab(null);
     }
     if (activeTab !== 'home') {
       setSelectedCategory(null);
@@ -294,27 +300,30 @@ export default function UserHomeScreen({
       setPendingOpenSmallTask(null);
       setProjectsTabEmbeddedType(null);
     }
-  }, [activeTab, chatReturnContext]);
+  }, [activeTab, chatReturnContext, hireReturnTab, techProfileReturnTab]);
 
-  // Animate tab content transition when tab changes (slide-up + fade)
+  // Animate tab content transition when tab changes (slide-up + fade); stronger motion for assistant tab
   useEffect(() => {
     if (prevActiveTabRef.current === activeTab) return;
+    const previousTab = prevActiveTabRef.current;
     prevActiveTabRef.current = activeTab;
     setIsInHomeTransitionLoading(true);
     if (homeTransitionTimerRef.current) clearTimeout(homeTransitionTimerRef.current);
-    homeTransitionTimerRef.current = setTimeout(() => setIsInHomeTransitionLoading(false), 240);
+    homeTransitionTimerRef.current = setTimeout(() => setIsInHomeTransitionLoading(false), 280);
     tabContentOpacity.setValue(0);
-    tabContentTranslateY.setValue(18);
+    const chatbotMotion =
+      previousTab === 'chatbot' || activeTab === 'chatbot';
+    tabContentTranslateY.setValue(chatbotMotion ? 32 : 18);
     Animated.parallel([
       Animated.timing(tabContentOpacity, {
         toValue: 1,
-        duration: 280,
+        duration: chatbotMotion ? 300 : 280,
         useNativeDriver: true,
       }),
       Animated.spring(tabContentTranslateY, {
         toValue: 0,
-        tension: 280,
-        friction: 20,
+        tension: chatbotMotion ? 300 : 280,
+        friction: chatbotMotion ? 22 : 20,
         useNativeDriver: true,
       }),
     ]).start();
@@ -1176,6 +1185,7 @@ export default function UserHomeScreen({
               }}
               onNavigateToTechnicianProfile={(technicianId) => {
                 console.log('🔵 [UserHomeScreen] Navigating to technician profile:', technicianId);
+                setTechProfileReturnTab('service-technicians');
                 setSelectedTechnicianId(technicianId);
                 setActiveTab('technician-profile');
               }}
@@ -1191,8 +1201,10 @@ export default function UserHomeScreen({
                 openChat(roomId, receiverId, receiverName, { returnContext });
               }}
               onNavigateToBooking={(technicianId, technicianName) => {
-                console.log('🔵 [UserHomeScreen] Hire button clicked for technician:', technicianId);
+                setHireReturnTab('service-technicians');
                 setHiringTechnician({ id: technicianId, name: technicianName });
+                setManualFormInitial({ categoryId: 0, categoryNameEn: 'All services', categoryNameAr: 'كل الخدمات' });
+                setNewProjectSubView('creation-method');
                 setActiveTab('new');
               }}
             />
@@ -1204,9 +1216,22 @@ export default function UserHomeScreen({
             <TechnicianProfileView
               technicianId={selectedTechnicianId}
               onBack={() => {
-                console.log('🔵 [UserHomeScreen] Back from TechnicianProfileView');
-                setActiveTab('service-technicians');
+                const returnTab = techProfileReturnTab || 'home';
+                setTechProfileReturnTab(null);
                 setSelectedTechnicianId(null);
+                setActiveTab(returnTab as any);
+              }}
+              onChat={(roomId, receiverId, receiverName) => {
+                const returnContext = (techProfileReturnTab as any) || null;
+                setSelectedTechnicianId(null);
+                openChat(roomId, receiverId, receiverName, { returnContext });
+              }}
+              onHire={(techId, techName) => {
+                setHireReturnTab('technician-profile');
+                setHiringTechnician({ id: techId, name: techName });
+                setManualFormInitial({ categoryId: 0, categoryNameEn: 'All services', categoryNameAr: 'كل الخدمات' });
+                setNewProjectSubView('creation-method');
+                setActiveTab('new');
               }}
             />
           </View>
@@ -1236,6 +1261,7 @@ export default function UserHomeScreen({
                 }
               ]}>
                 <ChatRoomsListScreen
+                  stackedUnderAppTopBar
                   onOpenChat={(roomId, receiverId, receiverName, projectId) => {
                     openChat(roomId, receiverId, receiverName, { projectId });
                   }}
@@ -1433,9 +1459,15 @@ export default function UserHomeScreen({
                     : { id: 0, nameEn: 'All services', nameAr: 'الكل' }
                 }
                 onBack={() => {
-                  setActiveTab('home');
-                  setNewProjectSubView(null);
                   setManualFormInitial(null);
+                  if (hireReturnTab) {
+                    setActiveTab(hireReturnTab as any);
+                    setHireReturnTab(null);
+                    setHiringTechnician(null);
+                    setNewProjectSubView(null);
+                  } else {
+                    setNewProjectSubView('project-type-selection');
+                  }
                 }}
                 onChooseAI={() => setNewProjectSubView('ai')}
                 onChooseManual={() => setNewProjectSubView('manual')}
@@ -1459,12 +1491,17 @@ export default function UserHomeScreen({
                 initialSubcategoryId={manualFormInitial?.subcategoryId}
                 initialSubcategoryName={i18n.language === 'ar' ? manualFormInitial?.subcategoryNameAr : manualFormInitial?.subcategoryNameEn}
                 onBack={() => {
-                  setActiveTab('home');
-                  setNewProjectSubView(null);
-                  setHiringTechnician(null);
+                  if (manualFormInitial) {
+                    setNewProjectSubView('creation-method');
+                  } else {
+                    setActiveTab('home');
+                    setNewProjectSubView(null);
+                    setHiringTechnician(null);
+                  }
                 }}
                 onSuccess={() => {
                   setHiringTechnician(null);
+                  setHireReturnTab(null);
                   setActiveTab('home');
                 }}
               />
@@ -1472,13 +1509,18 @@ export default function UserHomeScreen({
               <ManualProjectForm
                 technician={hiringTechnician}
                 onBack={() => {
-                  setActiveTab('home');
-                  setNewProjectSubView(null);
-                  setHiringTechnician(null);
-                  setManualFormInitial(null);
+                  if (manualFormInitial) {
+                    setNewProjectSubView('creation-method');
+                  } else {
+                    setActiveTab('home');
+                    setNewProjectSubView(null);
+                    setHiringTechnician(null);
+                    setManualFormInitial(null);
+                  }
                 }}
                 onSuccess={() => {
                   setHiringTechnician(null);
+                  setHireReturnTab(null);
                   setManualFormInitial(null);
                   setActiveTab('home');
                 }}
@@ -1500,6 +1542,7 @@ export default function UserHomeScreen({
               onNavigateToTab={onChatbotNavigateToTab}
               onNavigateToScreen={onChatbotNavigateToScreen}
               onRequestLiveAgent={onChatbotRequestLiveAgent}
+              hasBottomTabBar
             />
           </View>
         )}
@@ -2004,6 +2047,7 @@ export default function UserHomeScreen({
                 }}
                 onNavigateToTechnicianProfile={(technicianId) => {
                   console.log('🔵 [UserHomeScreen] Navigating to technician profile:', technicianId);
+                  setTechProfileReturnTab('service-technicians');
                   setSelectedTechnicianId(technicianId);
                   setActiveTab('technician-profile');
                 }}
@@ -2019,8 +2063,10 @@ export default function UserHomeScreen({
                   openChat(roomId, receiverId, receiverName, { returnContext });
                 }}
                 onNavigateToBooking={(technicianId, technicianName) => {
-                  console.log('🔵 [UserHomeScreen] Hire button clicked for technician:', technicianId);
+                  setHireReturnTab('service-technicians');
                   setHiringTechnician({ id: technicianId, name: technicianName });
+                  setManualFormInitial({ categoryId: 0, categoryNameEn: 'All services', categoryNameAr: 'كل الخدمات' });
+                  setNewProjectSubView('creation-method');
                   setActiveTab('new');
                 }}
               />
@@ -2039,9 +2085,22 @@ export default function UserHomeScreen({
               <TechnicianProfileView
                 technicianId={selectedTechnicianId}
                 onBack={() => {
-                  console.log('🔵 [UserHomeScreen] Back from TechnicianProfileView');
-                  setActiveTab('service-technicians');
+                  const returnTab = techProfileReturnTab || 'home';
+                  setTechProfileReturnTab(null);
                   setSelectedTechnicianId(null);
+                  setActiveTab(returnTab as any);
+                }}
+                onChat={(roomId, receiverId, receiverName) => {
+                  const returnContext = (techProfileReturnTab as any) || null;
+                  setSelectedTechnicianId(null);
+                  openChat(roomId, receiverId, receiverName, { returnContext });
+                }}
+                onHire={(techId, techName) => {
+                  setHireReturnTab('technician-profile');
+                  setHiringTechnician({ id: techId, name: techName });
+                  setManualFormInitial({ categoryId: 0, categoryNameEn: 'All services', categoryNameAr: 'كل الخدمات' });
+                  setNewProjectSubView('creation-method');
+                  setActiveTab('new');
                 }}
               />
             </View>
@@ -2075,6 +2134,7 @@ export default function UserHomeScreen({
                 }
               ]}>
                 <ChatRoomsListScreen
+                  stackedUnderAppTopBar
                   onOpenChat={(roomId, receiverId, receiverName, projectId) => {
                     openChat(roomId, receiverId, receiverName, { projectId });
                   }}
@@ -2238,9 +2298,15 @@ export default function UserHomeScreen({
                       : { id: 0, nameEn: 'All services', nameAr: 'الكل' }
                   }
                   onBack={() => {
-                    setActiveTab('home');
-                    setNewProjectSubView(null);
                     setManualFormInitial(null);
+                    if (hireReturnTab) {
+                      setActiveTab(hireReturnTab as any);
+                      setHireReturnTab(null);
+                      setHiringTechnician(null);
+                      setNewProjectSubView(null);
+                    } else {
+                      setNewProjectSubView('project-type-selection');
+                    }
                   }}
                   onChooseAI={() => setNewProjectSubView('ai')}
                   onChooseManual={() => setNewProjectSubView('manual')}
@@ -2264,12 +2330,17 @@ export default function UserHomeScreen({
                   initialSubcategoryId={manualFormInitial?.subcategoryId}
                   initialSubcategoryName={i18n.language === 'ar' ? manualFormInitial?.subcategoryNameAr : manualFormInitial?.subcategoryNameEn}
                   onBack={() => {
-                    setActiveTab('home');
-                    setNewProjectSubView(null);
-                    setHiringTechnician(null);
+                    if (manualFormInitial) {
+                      setNewProjectSubView('creation-method');
+                    } else {
+                      setActiveTab('home');
+                      setNewProjectSubView(null);
+                      setHiringTechnician(null);
+                    }
                   }}
                   onSuccess={() => {
                     setHiringTechnician(null);
+                    setHireReturnTab(null);
                     setActiveTab('home');
                   }}
                 />
@@ -2277,13 +2348,18 @@ export default function UserHomeScreen({
                 <ManualProjectForm
                   technician={hiringTechnician}
                   onBack={() => {
-                    setActiveTab('home');
-                    setNewProjectSubView(null);
-                    setHiringTechnician(null);
-                    setManualFormInitial(null);
+                    if (manualFormInitial) {
+                      setNewProjectSubView('creation-method');
+                    } else {
+                      setActiveTab('home');
+                      setNewProjectSubView(null);
+                      setHiringTechnician(null);
+                      setManualFormInitial(null);
+                    }
                   }}
                   onSuccess={() => {
                     setHiringTechnician(null);
+                    setHireReturnTab(null);
                     setManualFormInitial(null);
                     setActiveTab('home');
                   }}
@@ -2307,6 +2383,7 @@ export default function UserHomeScreen({
               onNavigateToTab={onChatbotNavigateToTab}
               onNavigateToScreen={onChatbotNavigateToScreen}
               onRequestLiveAgent={onChatbotRequestLiveAgent}
+              hasBottomTabBar={false}
             />
           </View>
         )}
@@ -3881,7 +3958,7 @@ const styles = StyleSheet.create({
   chatbotFab: {
     position: 'absolute',
     right: 20,
-    bottom: 100,
+    bottom: 150,
     width: 56,
     height: 56,
     borderRadius: 28,

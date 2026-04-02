@@ -52,6 +52,20 @@ interface GlassTabBarProps {
   t?: (key: string) => string;
 }
 
+/**
+ * Reserve this much space at the bottom of embedded screens (e.g. chat) so content clears the
+ * floating tab bar (`glassTabBarContainer` is `position: 'absolute'` in UserHomeScreen / TechnicianHomeScreen).
+ * Matches `styles.outer` (paddingTop 6 + paddingBottom) + pill row (paddingVertical 8 + tabSlot 52) + gap.
+ */
+export function getGlassTabBarOverlayHeight(bottomInset: number): number {
+  const outerTop = 6;
+  const rowVertical = 8 * 2;
+  const tabSlot = 52;
+  const outerBottom = Math.max(bottomInset, 10);
+  const gapAbovePill = 6;
+  return outerTop + rowVertical + tabSlot + outerBottom + gapAbovePill;
+}
+
 export default function GlassTabBar({
   activeTab,
   onTabPress,
@@ -71,7 +85,11 @@ export default function GlassTabBar({
   const indicatorX = useRef(new Animated.Value(0)).current;
   const barWidth = SCREEN_W - 32;
   const slotCount = hasCenter ? regularTabs.length + 1 : regularTabs.length;
-  const slotW = barWidth / slotCount;
+  const rowPadding = 4;
+  const slotW = (barWidth - rowPadding * 2) / slotCount;
+  // indicator dimensions — kept here so position calc and style stay in sync
+  const INDICATOR_W = slotW - 8;
+  const INDICATOR_H = 54;
 
   useEffect(() => {
     if (activeIndex < 0) return;
@@ -84,7 +102,8 @@ export default function GlassTabBar({
         physicalIdx = activeIndex < beforeCenter ? activeIndex : activeIndex + 1;
       }
     }
-    const target = physicalIdx * slotW + (slotW - 56) / 2;
+    const slotCenter = rowPadding + physicalIdx * slotW + slotW / 2;
+    const target = slotCenter - INDICATOR_W / 2;
     Animated.spring(indicatorX, {
       toValue: target,
       tension: 300,
@@ -113,6 +132,9 @@ export default function GlassTabBar({
             style={[
               styles.slidingIndicator,
               {
+                width: INDICATOR_W,
+                height: INDICATOR_H,
+                top: (68 - INDICATOR_H) / 2,
                 backgroundColor: (primaryColor || BRAND_BLUE) + '18',
                 borderColor: (primaryColor || BRAND_BLUE) + '30',
                 transform: [{ translateX: indicatorX }],
@@ -281,25 +303,42 @@ function PlusButton({
   primaryColorDark: string;
 }) {
   const scale = useRef(new Animated.Value(1)).current;
-  const glowPulse = useRef(new Animated.Value(0.2)).current;
+  const glowOpacity = useRef(new Animated.Value(0.1)).current;
+  const glowScale = useRef(new Animated.Value(0.88)).current;
   const rippleScale = useRef(new Animated.Value(0)).current;
   const rippleOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     const pulse = Animated.loop(
       Animated.sequence([
-        Animated.timing(glowPulse, {
-          toValue: 0.4,
-          duration: 1800,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
-        Animated.timing(glowPulse, {
-          toValue: 0.15,
-          duration: 1800,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
+        Animated.parallel([
+          Animated.timing(glowOpacity, {
+            toValue: 0.28,
+            duration: 2400,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+          Animated.timing(glowScale, {
+            toValue: 1.12,
+            duration: 2400,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+        ]),
+        Animated.parallel([
+          Animated.timing(glowOpacity, {
+            toValue: 0.1,
+            duration: 2400,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+          Animated.timing(glowScale, {
+            toValue: 0.88,
+            duration: 2400,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+        ]),
       ]),
     );
     pulse.start();
@@ -342,7 +381,14 @@ function PlusButton({
       <Animated.View style={[styles.plusContainer, { transform: [{ scale }] }]}>
         <Animated.View
           pointerEvents="none"
-          style={[styles.plusGlow, { backgroundColor: primaryColor, opacity: glowPulse }]}
+          style={[
+            styles.plusGlow,
+            {
+              backgroundColor: primaryColor,
+              opacity: glowOpacity,
+              transform: [{ scale: glowScale }],
+            },
+          ]}
         />
         <Animated.View
           pointerEvents="none"
@@ -412,9 +458,7 @@ const styles = StyleSheet.create({
   },
   slidingIndicator: {
     position: 'absolute',
-    top: 8,
-    width: 56,
-    height: 48,
+    left: 0,
     borderRadius: 16,
     borderWidth: 1,
   },
@@ -460,7 +504,7 @@ const styles = StyleSheet.create({
   plusContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: -14,
+    marginTop: -6,
     width: 56,
     height: 56,
   },

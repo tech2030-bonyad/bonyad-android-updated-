@@ -489,6 +489,16 @@
   "Failed to generate questions": "فشل في إنشاء الأسئلة",
   "Please answer the questions": "يرجى الإجابة على الأسئلة",
   "Project Phases": "مراحل المشروع",
+  "Assignment": "التعيين",
+  "Open for Bids": "مفتوح للمناقصة",
+  "Assign to Technician": "تعيين لفني",
+  "Technician phone number": "رقم هاتف الفني",
+  "Please enter technician phone number": "يرجى إدخال رقم هاتف الفني",
+  "Assigned user must be a TECHNICIAN": "المستخدم المعين يجب أن يكون فنيًا",
+  "Technician not found": "لم يتم العثور على الفني",
+  "Please assign to a technician or switch to Open for Bids.": "يرجى تعيين فني أو التبديل إلى العروض المفتوحة.",
+  "e.g. 555123456": "مثال: 555123456",
+  "Search": "بحث",
   "Review the details below and confirm to submit.": "راجع التفاصيل أدناه وأكد للإرسال.",
   "overview": {
     "typewriterMessage": "مرحباً بك في بنياد",
@@ -2044,5 +2054,23 @@
   "Fast & Easy": "سريع وسهل",
   "Manual Entry": "إدخال يدوي",
   "Fill in the project details yourself with full control over all specifications.": "أدخل تفاصيل المشروع بنفسك مع تحكم كامل في جميع المواصفات.",
-  "Full Control": "تحكم كامل"
+  "Full Control": "تحكم كامل",
+
+  "Chats": "المحادثات",
+  "Search chats...": "البحث في المحادثات...",
+  "No matching chats": "لا توجد محادثات مطابقة",
+  "Try a different search or filter": "جرب بحثاً أو فلتراً مختلفاً",
+  "Please login to view chats": "يرجى تسجيل الدخول لعرض المحادثات",
+  "Failed to load chats": "فشل تحميل المحادثات",
+
+  "Choose the method that works best for you": "اختر الطريقة التي تناسبك",
+  "Recommended": "موصى به",
+  "Describe your project in plain words and AI will handle the details — scope, budget and timeline.": "صف مشروعك بكلمات بسيطة وسيتكفل الذكاء الاصطناعي بالتفاصيل — النطاق والميزانية والجدول الزمني.",
+  "Fast": "سريع",
+  "Smart": "ذكي",
+  "Auto-filled": "ملء تلقائي",
+  "Precise": "دقيق",
+  "Custom": "مخصص",
+  "Enter Manually": "أدخل يدوياً",
+  "Fill in all project details yourself — title, budget, timeline and phases at your own pace.": "أدخل جميع تفاصيل المشروع بنفسك — العنوان والميزانية والجدول الزمني والمراحل بالوتيرة التي تريدها."
 }

@@ -32,13 +32,22 @@ const PUPIL_SIZE = 7;
 const MOUTH_W = 16;
 const MOUTH_H = 3;
 
-const DEFAULT_BOTTOM = 100;
+/** Fallback when bottomInset is unknown; keeps FAB above floating GlassTabBar + wave rings */
+const DEFAULT_BOTTOM = 120;
+
+/**
+ * Positions the FAB above the glass bottom tab bar (see GlassTabBar: inset padding + pill ~74px)
+ * plus a little margin so pulse rings are not clipped by the tab bar.
+ */
+export function chatbotFabBottomOffset(bottomInset: number): number {
+  return Math.max(bottomInset, 10) + 94;
+}
 
 interface ChatbotFabProps {
   onPress: () => void;
   primaryColor?: string;
   primaryDark?: string;
-  /** Distance from bottom of screen; increase to move FAB higher (default 100, above tab bar) */
+  /** Distance from bottom of screen; prefer `chatbotFabBottomOffset(insets.bottom)` on mobile */
   bottomOffset?: number;
 }
 
@@ -95,7 +104,7 @@ const BLINK_CLOSE_MS = 90;
 const BLINK_OPEN_MS = 120;
 
 /** Robot face icon: only the pupils look toward plus (center); blink every 3s */
-function ChatbotIcon({
+export function ChatbotIcon({
   primaryColor,
   primaryDark,
   lookRight,
@@ -138,6 +147,70 @@ function ChatbotIcon({
         {/* Mouth */}
         <View style={iconStyles.mouth} />
       </LinearGradient>
+    </View>
+  );
+}
+
+/**
+ * Same robot face as the home FAB (ChatbotFab), scaled for header avatars and inline use.
+ * Uses the shared ChatbotIcon visuals with primary / primaryDark from the app theme.
+ */
+export function ChatbotRobotFace({
+  primaryColor = PRIMARY,
+  primaryDark = PRIMARY_DARK,
+  diameter = 40,
+  enableBlink = true,
+}: {
+  primaryColor?: string;
+  primaryDark?: string;
+  /** Outer size of the avatar (matches Figma ~46px header circle). */
+  diameter?: number;
+  enableBlink?: boolean;
+}) {
+  const eyeScaleY = useRef(new Animated.Value(1)).current;
+  const isRTL = I18nManager.isRTL;
+
+  useEffect(() => {
+    if (!enableBlink) return;
+    const blink = () =>
+      Animated.sequence([
+        Animated.timing(eyeScaleY, {
+          toValue: 0.12,
+          duration: BLINK_CLOSE_MS,
+          useNativeDriver: true,
+          easing: Easing.out(Easing.ease),
+        }),
+        Animated.timing(eyeScaleY, {
+          toValue: 1,
+          duration: BLINK_OPEN_MS,
+          useNativeDriver: true,
+          easing: Easing.out(Easing.ease),
+        }),
+      ]).start();
+    const interval = setInterval(blink, BLINK_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [enableBlink, eyeScaleY]);
+
+  const scale = diameter / SIZE;
+
+  return (
+    <View
+      style={{
+        width: diameter,
+        height: diameter,
+        alignItems: 'center',
+        justifyContent: 'center',
+        overflow: 'hidden',
+      }}
+    >
+      <View style={{ transform: [{ scale }], alignItems: 'center', justifyContent: 'center' }}>
+        <ChatbotIcon
+          primaryColor={primaryColor}
+          primaryDark={primaryDark}
+          lookRight={!isRTL}
+          eyeScaleY={eyeScaleY}
+        />
+      </View>
     </View>
   );
 }
@@ -245,7 +318,9 @@ export default function ChatbotFab({ onPress, primaryColor = PRIMARY, primaryDar
           <WaveRing key={d} delay={d} primaryColor={primaryColor} primaryDark={primaryDark} />
         ))}
       </View>
-      <View style={[styles.whiteCircle, Platform.select({ ios: styles.shadowIOS, android: styles.shadowAndroid })]}>
+      <View
+        style={[styles.whiteCircle, Platform.OS === 'ios' ? styles.shadowIOS : styles.shadowAndroid]}
+      >
         <ChatbotIcon
           primaryColor={primaryColor}
           primaryDark={primaryDark}

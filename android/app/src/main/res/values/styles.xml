@@ -8,7 +8,8 @@
   <style name="Theme.App.SplashScreen" parent="Theme.SplashScreen">
     <item name="windowSplashScreenBackground">@color/splashscreen_background</item>
     <item name="windowSplashScreenAnimatedIcon">@drawable/splashscreen_logo</item>
+    <!-- Match icon plate to background so no visible circle/mask before JS loads (Android 12+) -->
+    <item name="windowSplashScreenIconBackgroundColor">@color/splashscreen_background</item>
     <item name="postSplashScreenTheme">@style/AppTheme</item>
-    <item name="android:windowSplashScreenBehavior">icon_preferred</item>
   </style>
 </resources>

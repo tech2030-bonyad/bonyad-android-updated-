@@ -114,7 +114,7 @@ class ChatbotService {
   getWelcomeMessage(language: 'en' | 'ar' = 'en'): string {
     return language === 'ar'
       ? 'مرحباً! أنا مساعد بُنْيَة الذكي. كيف يمكنني مساعدتك اليوم؟'
-      : "Hello! I'm Bonyad AI Assistant. How can I help you today?";
+      : 'Hello, I am Bonyad. How can I help you today?';
   }
 
   /**

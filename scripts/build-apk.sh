@@ -10,7 +10,11 @@ cd "$ROOT/android"
 # Clean reanimated and app native build caches to avoid CMake "unreadable outputs" failures
 rm -rf "$ROOT/node_modules/react-native-reanimated/android/build" 2>/dev/null || true
 ./gradlew --stop 2>/dev/null || true
-./gradlew clean 2>/dev/null || true
+# Drop Metro cache so removed/changed image assets are not re-emitted into the JS bundle.
+rm -rf "$ROOT/node_modules/.cache/metro" "$ROOT/.expo/cache" 2>/dev/null || true
+# Remove app build output so stale drawable-mdpi copies (e.g. old mislabeled PNGs) cannot linger after clean fails.
+rm -rf "$ROOT/android/app/build"
+./gradlew clean
 
 ./gradlew assembleRelease
 echo "✅ APK built at android/app/build/outputs/apk/release/app-release.apk"
