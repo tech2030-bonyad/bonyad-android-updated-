@@ -413,4 +413,3 @@ Your React Native Expo app is ready!
 ✅ **Ready** - Foundation for all iOS features  
 
 **Run `npm run web` to see it live!** 🚀
-
