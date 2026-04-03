@@ -14,6 +14,7 @@
     "clear": "expo start --clear",
     "dev": "./dev.sh",
     "build": "npm run build:apk",
+    "build:aab": "./scripts/build-aab.sh",
     "build:web": "npx expo export --platform web --output-dir web-build && node scripts/update-asset-paths.js",
     "build:apk": "./scripts/build-apk.sh",
     "build:dev:android": "eas build --profile development --platform android",
