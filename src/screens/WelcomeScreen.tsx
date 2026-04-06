@@ -1,12 +1,14 @@
 import React, { useRef, useEffect } from 'react';
 import { View, StyleSheet, Animated } from 'react-native';
 import BonyadLogo from '../components/BonyadLogo';
+import { useTheme } from '../context/ThemeContext';
 
 interface WelcomeScreenProps {
   onComplete: () => void;
 }
 
 export default function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
+  const { colors, theme } = useTheme();
   const scaleAnim = useRef(new Animated.Value(0.35)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -45,7 +47,7 @@ export default function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
   }, []);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Animated.View
         style={{
           opacity: opacityAnim,
@@ -56,7 +58,7 @@ export default function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
           ],
         }}
       >
-        <BonyadLogo size="xlarge" variant="dark" />
+        <BonyadLogo size="xlarge" variant={theme === 'dark' ? 'light' : 'dark'} />
       </Animated.View>
     </View>
   );
@@ -65,7 +67,6 @@ export default function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
     alignItems: 'center',
     justifyContent: 'center',
   },

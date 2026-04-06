@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
@@ -162,9 +163,15 @@ export default function TechnicianProfileView({
   return (
     <Animated.View style={[styles.screen, { transform: [{ translateX: slideX }] }]}>
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
+      <View
+        style={[
+          styles.header,
+          isRTL && styles.headerRTL,
+          { paddingTop: insets.top + 8, backgroundColor: colors.cardBackground, borderBottomColor: colors.border },
+        ]}
+      >
         <TouchableOpacity onPress={handleBack} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <Ionicons name={arrowBackIcon} size={22} color={colors.text} />
+          <BackArrowIonicons variant="arrow" size={22} color={colors.text} forceLtrLayout={!isRTL} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(16) }]} numberOfLines={1}>
           {name}
@@ -339,6 +346,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  headerRTL: {
+    direction: 'rtl',
   },
   backBtn: { width: 40, alignItems: 'flex-start' },
   headerTitle: { flex: 1, fontWeight: '600', textAlign: 'center' },

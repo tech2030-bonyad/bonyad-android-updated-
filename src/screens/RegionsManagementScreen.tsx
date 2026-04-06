@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
@@ -209,7 +210,7 @@ export default function RegionsManagementScreen({ onBack }: RegionsManagementScr
     <Animated.View style={[styles.container, { paddingTop: getTopPadding(insets), backgroundColor: bgColor, opacity: screenOpacity, transform: [{ translateX: screenSlideX }] }]}>
       <View style={[styles.headerRow, isRTL && styles.rowRTL]}>
         <TouchableOpacity onPress={handleBackScreen} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={24} color={textColor} />
+          <BackArrowIonicons variant="chevron" size={24} color={textColor}/>
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: textColor, fontSize: scaledSize(18) }]}>
           {t('Working Areas')}

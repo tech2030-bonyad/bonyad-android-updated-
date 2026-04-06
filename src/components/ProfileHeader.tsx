@@ -9,7 +9,7 @@ import {
   StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useTranslation } from 'react-i18next';
+import { BackArrowIonicons } from './navigation/BackArrowIonicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Figma Design Colors
@@ -45,8 +45,6 @@ export default function ProfileHeader({
   isDarkMode = false,
   colors,
 }: ProfileHeaderProps) {
-  const { i18n } = useTranslation();
-  const isRTL = i18n.language === 'ar';
   const insets = useSafeAreaInsets();
 
   // Calculate top padding to avoid status bar overlap on Android
@@ -68,13 +66,9 @@ export default function ProfileHeader({
   return (
     <View style={[styles.container, { backgroundColor: bgColor, paddingTop: getTopPadding() }]}>
       {/* Header Row */}
-      <View style={[styles.headerRow, isRTL && styles.rowRTL]}>
+      <View style={[styles.headerRow, styles.headerBarLTR]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Ionicons
-            name="chevron-back"
-            size={24}
-            color={textColor}
-          />
+          <BackArrowIonicons variant="chevron" size={24} color={textColor} forceLtrLayout />
         </TouchableOpacity>
         <Text style={[styles.title, { color: textColor }]}>{title}</Text>
         <View style={styles.placeholder} />
@@ -113,8 +107,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
-  rowRTL: {
-    flexDirection: 'row-reverse',
+  headerBarLTR: {
+    direction: 'ltr',
   },
   backButton: {
     width: 40,

@@ -13,6 +13,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons, Feather } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -295,11 +296,7 @@ export default function ServiceProvidersScreen({
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top, borderBottomColor: colorsConfig.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Ionicons
-            name="chevron-back"
-            size={24}
-            color={colorsConfig.text}
-          />
+          <BackArrowIonicons variant="chevron" size={24} color={colorsConfig.text} />
         </TouchableOpacity>
         <View style={styles.headerTitle}>
           <Text style={[styles.title, { color: colorsConfig.text }]}>{t('Service Providers')}</Text>

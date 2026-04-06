@@ -13,6 +13,7 @@ import {
 import { Image as ExpoImage } from 'expo-image';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -61,6 +62,7 @@ export default function AssignedSmallTaskScreen({
   const { fontFamily, fonts, scaledSize } = useFontFamily();
   const insets = useSafeAreaInsets();
   const isDarkMode = theme === 'dark';
+  const isArabic = i18n.language?.startsWith('ar');
   const screenWidth = Dimensions.get('window').width;
   const screenHeight = Dimensions.get('window').height;
   // Android-only responsive design for tablets
@@ -303,9 +305,9 @@ export default function AssignedSmallTaskScreen({
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header - iOS style */}
-      <View style={[styles.header, styles.headerLTR, { paddingTop: topSpacing, borderBottomColor: colors.border }]}>
+      <View style={[styles.header, isArabic ? styles.headerRTL : styles.headerLTR, { paddingTop: topSpacing, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.headerBackButton}>
-          <Ionicons name="chevron-back" size={24} color={primaryColor} />
+          <BackArrowIonicons variant="chevron" size={24} color={primaryColor} forceLtrLayout={!isArabic} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: primaryColor }]}>{t('smallTasks.taskRequestDetails')}</Text>
         <View style={styles.headerSpacer} />
@@ -552,6 +554,9 @@ const styles = StyleSheet.create({
   },
   headerLTR: {
     direction: 'ltr',
+  },
+  headerRTL: {
+    direction: 'rtl',
   },
   headerBackButton: {
     width: 40,

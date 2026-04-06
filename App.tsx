@@ -7,14 +7,16 @@ import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { FontProvider } from './src/context/FontContext';
 // Import API config early to ensure global fetch override is applied
 import './src/config/api';
-import { WelcomeScreen, OverviewScreen, LoginScreen, SignupScreen, OTPVerificationScreen, ForgotPasswordScreen, ForgotPasswordOTPScreen, ResetPasswordScreen, UserHomeScreen, TechnicianHomeScreen, TechnicianOnboardingScreen, ProfileScreen, EditProfileScreen, MyDataScreen, ChangePhoneScreen, ChangePasswordScreen, PortfolioScreen, ServiceManagementScreen, AvailabilityScreen, SubscriptionScreen, NewProjectView, ManualProjectForm, ConversationalAIForm, ProjectsScreen, ChatRoomsListScreen, ChatDetailScreen, RunningProjectsScreen, NotificationsScreen, AppointmentsScreen, BookingScreen, TechnicianProfileViewScreen, RoomDesignScreen, CostExplorerScreen, RoomVisualizerScreen, AskBonyadAIScreen, ProjectsMapScreen, AboutScreen, ContactScreen, IntroToAppScreen, OnboardingScreen, TechnicianCompleteProfileScreen, WaitingApprovalScreen, ChatbotScreen, SupportChatScreen, TicketListScreen, CreateTicketScreen, TicketDetailScreen, ServiceProvidersScreen, CommissionPaymentScreen, PaymentCheckoutScreen, CategorySubcategoryScreen, CreationMethodScreen, PendingProjectScreen, BidReceivedProjectScreen, ApprovedProjectScreen, ContractSigningProjectScreen, InProgressProjectScreen, CompletedProjectViewPage, ChangeRequestListScreen, ChangeRequestDetailScreen, RequestModificationScreen } from './src/screens';
+import { WelcomeScreen, OverviewScreen, LoginScreen, SignupScreen, OTPVerificationScreen, ForgotPasswordScreen, ForgotPasswordOTPScreen, ResetPasswordScreen, UserHomeScreen, TechnicianHomeScreen, TechnicianOnboardingScreen, ProfileScreen, EditProfileScreen, MyDataScreen, ChangePhoneScreen, ChangePasswordScreen, PortfolioScreen, ServiceManagementScreen, AvailabilityScreen, SubscriptionScreen, NewProjectView, ManualProjectForm, ConversationalAIForm, ProjectsScreen, ChatRoomsListScreen, ChatDetailScreen, RunningProjectsScreen, NotificationsScreen, AppointmentsScreen, BookingScreen, TechnicianProfileView, RoomDesignScreen, CostExplorerScreen, RoomVisualizerScreen, AskBonyadAIScreen, ProjectsMapScreen, AboutScreen, ContactScreen, IntroToAppScreen, OnboardingScreen, TechnicianCompleteProfileScreen, WaitingApprovalScreen, ChatbotScreen, SupportChatScreen, TicketListScreen, CreateTicketScreen, TicketDetailScreen, ServiceProvidersScreen, CommissionPaymentScreen, PaymentCheckoutScreen, CategorySubcategoryScreen, CreationMethodScreen, PendingProjectScreen, BidReceivedProjectScreen, ApprovedProjectScreen, ContractSigningProjectScreen, InProgressProjectScreen, CompletedProjectScreen, ChangeRequestListScreen, ChangeRequestDetailScreen, RequestModificationScreen } from './src/screens';
 import i18n from './src/localization/i18n'; // Initialize i18n
+import { useRTL } from './src/hooks/useRTL';
+import { useLanguageFlip } from './src/hooks/useLanguageFlip';
+import Animated from 'react-native-reanimated';
 import OnlineStatusService from './src/services/OnlineStatusService';
 import { presenceService } from './src/services/PresenceService';
 import { storage } from './src/utils/storage';
 import CoachMarkProvider from './src/components/CoachMarkProvider';
 import AnimatedLoadingScreen from './src/components/AnimatedLoadingScreen';
-import { coachMarksStorage } from './src/utils/coachMarks';
 import { useRouter, type Screen } from './src/utils/useRouter';
 import {
   handleChatbotNavigationAndroid,
@@ -155,9 +157,13 @@ export default function App() {
 
   // Bundle load error message (when Metro unreachable)
   const [bundleLoadError, setBundleLoadError] = useState<string | null>(null);
-  const [activeLanguage, setActiveLanguage] = useState<string>(i18n.resolvedLanguage || i18n.language || 'en');
-  const isAppRTL = activeLanguage.toLowerCase() === 'ar' || activeLanguage.toLowerCase().startsWith('ar-');
-  
+  // Derive RTL directly from i18n via useRTL — no manual state needed.
+  // useTranslation() inside useRTL re-renders App when language changes, keeping
+  // isAppRTL up-to-date without a separate setActiveLanguage call that would
+  // recreate `router` and spuriously retrigger useAuthGuard.
+  const { isRTL: isAppRTL } = useRTL();
+  const langFlipStyle = useLanguageFlip();
+
   // Router hook for URL-based routing on web
   const router = useRouter(currentScreen, setCurrentScreen);
 
@@ -372,17 +378,8 @@ export default function App() {
     prepareApp();
   }, []);
 
-  // React immediately to language toggles so translated text/RTL styles update without manual reload.
-  useEffect(() => {
-    const handleLanguageChanged = (lng: string) => {
-      setActiveLanguage(lng || 'en');
-    };
-
-    i18n.on('languageChanged', handleLanguageChanged);
-    return () => {
-      i18n.off('languageChanged', handleLanguageChanged);
-    };
-  }, []);
+  // Language changes are handled reactively via useRTL() → useTranslation().
+  // No manual i18n.on('languageChanged') listener needed here.
 
   // Check for new notifications from API
   const checkForNewNotifications = async () => {
@@ -914,7 +911,7 @@ export default function App() {
     <ThemeProvider>
       <FontProvider>
         <GlobalAlertProvider>
-          <View style={{ flex: 1, direction: isAppRTL ? 'rtl' : 'ltr' }}>
+          <Animated.View style={[{ flex: 1, direction: isAppRTL ? 'rtl' : 'ltr' }, langFlipStyle]}>
             <AppContent
               currentScreen={currentScreen}
               setCurrentScreen={setCurrentScreen}
@@ -1004,7 +1001,7 @@ export default function App() {
               isRouteTransitionLoading={isRouteTransitionLoading}
               routeTransitionTimerRef={routeTransitionTimerRef}
             />
-          </View>
+          </Animated.View>
         </GlobalAlertProvider>
       </FontProvider>
     </ThemeProvider>
@@ -1676,6 +1673,7 @@ function AppContent({
   return (
     <SafeAreaProvider>
       <PaperProvider>
+        <CoachMarkProvider>
         <View style={[styles.container, { backgroundColor: colors.background }]}>
           <StatusBar style="auto" />
 
@@ -2022,7 +2020,6 @@ function AppContent({
           {currentScreen === 'home' && (
             <>
               {userRole === 'user' ? (
-                <CoachMarkProvider>
                   <UserHomeScreen
                     onLogout={handleLogout}
                     onShowProfile={() => setShowProfile(true)}
@@ -2087,9 +2084,7 @@ function AppContent({
                       await handleNotificationTap({ data: n });
                     }}
                   />
-                </CoachMarkProvider>
               ) : (
-                <CoachMarkProvider>
                   <TechnicianHomeScreen
                     onLogout={handleLogout}
                     onShowProfile={() => setShowProfile(true)}
@@ -2123,7 +2118,6 @@ function AppContent({
                       await handleNotificationTap({ data: n });
                     }}
                   />
-                </CoachMarkProvider>
               )}
             </>
           )}
@@ -2319,7 +2313,7 @@ function AppContent({
             />
           )}
           {currentScreen === 'completedProject' && selectedProjectForDetail && (
-            <CompletedProjectViewPage
+            <CompletedProjectScreen
               project={selectedProjectForDetail}
               onBack={goBack}
               onSuccess={() => { setSelectedProjectForDetail(null); setCurrentScreen('runningProjects'); }}
@@ -2489,19 +2483,20 @@ function AppContent({
           )}
 
           {currentScreen === 'technicianProfile' && viewTechnicianId && (
-            <TechnicianProfileViewScreen
+            <TechnicianProfileView
               technicianId={viewTechnicianId}
               onBack={() => {
                 goBack();
                 setViewTechnicianId(null);
               }}
-              onBooking={(technicianId, technicianName) => {
+              onHire={(technicianId: number, technicianName: string) => {
                 setBookingTechnician({ id: technicianId, name: technicianName });
                 navigate('booking');
               }}
             />
           )}
         </View>
+        </CoachMarkProvider>
       </PaperProvider>
 
       {/* Notification Popup - Web only */}

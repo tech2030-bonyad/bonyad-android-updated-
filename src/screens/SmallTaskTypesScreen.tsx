@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
@@ -187,14 +188,9 @@ export default function SmallTaskTypesScreen({ onBack }: SmallTaskTypesScreenPro
 
   return (
     <Animated.View style={[styles.container, { paddingTop: insets.top, backgroundColor: bgColor, opacity: screenOpacity, transform: [{ translateX: screenSlideX }] }]}>
-      <View style={styles.headerRow}>
+      <View style={[styles.headerRow, isRTL ? styles.headerRowRTL : styles.headerRowLTR]}>
         <TouchableOpacity onPress={handleBackScreen} style={styles.backButton}>
-          <Ionicons
-            name="chevron-back"
-            size={24}
-            color={textColor}
-            style={isRTL ? { transform: [{ scaleX: -1 }] } : undefined}
-          />
+          <BackArrowIonicons variant="chevron" size={24} color={textColor} forceLtrLayout={!isRTL} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: textColor, fontSize: scaledSize(18) }]}>
           {t('smallTasks.smallTaskTypes')}
@@ -352,6 +348,8 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 },
+  headerRowLTR: { direction: 'ltr' as const },
+  headerRowRTL: { direction: 'rtl' as const },
   backButton: { width: 40, height: 40, justifyContent: 'center', alignItems: 'flex-start' },
   headerTitle: { fontWeight: '600', textAlign: 'center', flex: 1 },
   addButton: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },

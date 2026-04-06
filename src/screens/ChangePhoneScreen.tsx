@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
@@ -205,13 +206,9 @@ export default function ChangePhoneScreen({ onBack, onOTPSent }: ChangePhoneScre
   return (
     <Animated.View style={[styles.container, { backgroundColor: bgColor, paddingTop: insets.top, opacity: screenOpacity, transform: [{ translateX: screenSlideX }] }]}>
       {/* Header */}
-      <View style={[styles.headerRow, isRTL && styles.rowRTL]}>
+      <View style={[styles.headerRow, isRTL && styles.headerRTL]}>
         <TouchableOpacity onPress={handleBackScreen} style={styles.backButton}>
-          <Ionicons
-            name="chevron-back"
-            size={24}
-            color={headerTextColor}
-          />
+          <BackArrowIonicons variant="chevron" size={24} color={headerTextColor} forceLtrLayout />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: headerTextColor, fontSize: scaledSize(18) }]}>
           {t('Change Phone Number')}
@@ -328,6 +325,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
+  headerRTL: {
+    direction: 'rtl',
+  },
   backButton: {
     width: 40,
     height: 40,
@@ -416,9 +416,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '400',
-  },
-  rowRTL: {
-    flexDirection: 'row-reverse',
   },
   textRTL: {
     textAlign: 'right',

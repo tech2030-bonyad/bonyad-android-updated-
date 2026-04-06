@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,8 @@ import {
   FlatList,
   ActivityIndicator,
   Animated,
+  I18nManager,
+  InteractionManager,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,18 +23,15 @@ import { Surface, Card, Chip } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SvgXml } from 'react-native-svg';
 import { Image as ExpoImage } from 'expo-image';
-import { CopilotStep, walkthroughable, useCopilot } from 'react-native-copilot';
 import BonyadLogo from '../components/BonyadLogo';
 import AppTopBar from '../components/AppTopBar';
 import GlassTabBar, { type UserTabId } from '../components/GlassTabBar';
 import AnimatedLoadingScreen from '../components/AnimatedLoadingScreen';
 import { coachMarksStorage } from '../utils/coachMarks';
+import ScreenTourOverlay from '../components/tour/ScreenTourOverlay';
+import { useSimpleScreenTour } from '../hooks/useSimpleScreenTour';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
-
-// Walkthroughable component for coach marks
-const WalkableView = walkthroughable(View);
-const CoachTouchable = walkthroughable(TouchableOpacity);
 
 import AppointmentsScreen from './AppointmentsScreen';
 import ProjectsScreen from './ProjectsScreen';
@@ -61,6 +60,7 @@ import ManualProjectForm from './ManualProjectForm';
 import CreationMethodScreen from './CreationMethodScreen';
 import ServiceTechniciansScreen from './ServiceTechniciansScreen';
 import TechnicianProfileView from './TechnicianProfileView';
+import CategoryTechniciansScreen from './CategoryTechniciansScreen';
 import Footer from '../components/Footer';
 import { buildApiUrl, API_ENDPOINTS, getApiUrl, getServerBaseUrl } from '../config/api';
 import { storage } from '../utils/storage';
@@ -161,7 +161,7 @@ export default function UserHomeScreen({
 
   const { t, i18n } = useTranslation();
   const { colors, theme } = useTheme();
-  const { fontFamily, scaledSize } = useFontFamily();
+  const { fontFamily, boldFontFamily, scaledSize } = useFontFamily();
   const isDarkMode = theme === 'dark';
   const [showProjectsDropdown, setShowProjectsDropdown] = useState(false);
   const [activeTab, setActiveTab] = useState<
@@ -173,6 +173,7 @@ export default function UserHomeScreen({
     | 'appointments'
     | 'new'
     | 'service-technicians'
+    | 'category-technicians'
     | 'technician-profile'
     | 'services-list'
     | 'chatbot'
@@ -209,6 +210,7 @@ export default function UserHomeScreen({
   const [showChatList, setShowChatList] = useState(true);
   const [chatReturnContext, setChatReturnContext] = useState<'home' | 'service-technicians' | null>(null);
   const [serviceTechniciansView, setServiceTechniciansView] = useState<{ serviceId: number; serviceName?: string; source?: 'search' | 'lookForBonyaders' | 'category' } | null>(null);
+  const [categoryTechniciansView, setCategoryTechniciansView] = useState<{ categoryId: number; categoryName?: string; source?: 'search' } | null>(null);
   const [selectedTechnicianId, setSelectedTechnicianId] = useState<number | null>(null);
   const [hiringTechnician, setHiringTechnician] = useState<{ id: number; name?: string } | null>(null);
   const [hireReturnTab, setHireReturnTab] = useState<string | null>(null);
@@ -228,7 +230,23 @@ export default function UserHomeScreen({
     subcategoryNameAr?: string;
   } | null>(null);
   const insets = useSafeAreaInsets();
-  const { start: startCoachTour } = useCopilot();
+  const homeContentControl = useRef<{ startTour: () => void } | null>(null);
+  const projectsTourControl = useRef<{ startTour: () => void } | null>(null);
+  const chatTourControl = useRef<{ startTour: () => void } | null>(null);
+  /** Stable reference so ChatRoomsListScreen’s expose effect does not re-fire every parent render. */
+  const exposeChatTourControl = useCallback((c: { startTour: () => void }) => {
+    chatTourControl.current = c;
+  }, []);
+  const profileTourControl = useRef<{ startTour: () => void } | null>(null);
+  const notificationsTourControl = useRef<{ startTour: () => void } | null>(null);
+  const appointmentsTourControl = useRef<{ startTour: () => void } | null>(null);
+  const projectTypeSelectionTourControl = useRef<{ startTour: () => void } | null>(null);
+
+  const newTabTourSteps = useMemo(
+    () => [{ id: 'panel', i18nSuffix: 'overview' as const }],
+    [],
+  );
+  const newTabTour = useSimpleScreenTour(newTabTourSteps, 'userNewTab');
   const [userProfile, setUserProfile] = useState<{ name?: string; avatar?: string; profileImage?: string } | null>(null);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [isInHomeTransitionLoading, setIsInHomeTransitionLoading] = useState(false);
@@ -242,12 +260,12 @@ export default function UserHomeScreen({
     let cancelled = false;
     let timer: any = null;
     (async () => {
-      const hasSeen = await coachMarksStorage.hasSeenHomeCoachMarks();
+      const hasSeen = await coachMarksStorage.hasSeenTutorial('userHome');
       if (cancelled) return;
       if (!hasSeen) {
         timer = setTimeout(() => {
-          console.log('🎯 Starting coach tour (home tab)...');
-          startCoachTour();
+          if (cancelled) return;
+          homeContentControl.current?.startTour();
         }, 2500);
       }
     })();
@@ -255,7 +273,7 @@ export default function UserHomeScreen({
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [activeTab, startCoachTour]);
+  }, [activeTab]);
 
   // Reset sub-views when switching tabs and sync tab bar scroll
   useEffect(() => {
@@ -349,13 +367,78 @@ export default function UserHomeScreen({
     homeTransitionTimerRef.current = setTimeout(() => setIsInHomeTransitionLoading(false), 240);
   }, [activeTab, newProjectSubView]);
 
-  // Function to restart coach tour
+  const exposeProjectTypeTourControl = useCallback((c: { startTour: () => void } | null) => {
+    projectTypeSelectionTourControl.current = c;
+  }, []);
+
+  // Info button: restart the tour for whichever main tab is currently open (same overlay style as Home).
   const handleRestartCoachTour = async () => {
-    console.log('🎯 Restarting coach tour...');
-    await coachMarksStorage.clearHomeCoachMarksStatus();
-    setTimeout(() => {
-      startCoachTour();
-    }, 1500);
+    const delayStart = (fn: () => void) => {
+      requestAnimationFrame(() => setTimeout(fn, 150));
+    };
+
+    if (activeTab === 'home') {
+      await coachMarksStorage.clearTutorial('userHome');
+      setSelectedCategory(null);
+      delayStart(() => homeContentControl.current?.startTour());
+      return;
+    }
+
+    if (activeTab === 'projects') {
+      const projectTypeTour = projectTypeSelectionTourControl.current;
+      if (projectTypeTour) {
+        await coachMarksStorage.clearTutorial('userProjectTypeSelection');
+        delayStart(() => projectTypeTour.startTour());
+      } else {
+        await coachMarksStorage.clearTutorial('userProjectsTab');
+        delayStart(() => projectsTourControl.current?.startTour());
+      }
+      return;
+    }
+
+    if (activeTab === 'chat') {
+      await coachMarksStorage.clearTutorial('userChatTab');
+      setSelectedChat(null);
+      setShowChatList(true);
+      let started = false;
+      const runChatTour = () => {
+        if (started) return;
+        started = true;
+        requestAnimationFrame(() => chatTourControl.current?.startTour());
+      };
+      InteractionManager.runAfterInteractions(runChatTour);
+      setTimeout(runChatTour, 420);
+      return;
+    }
+
+    if (activeTab === 'profile' && profileSubView === null) {
+      await coachMarksStorage.clearTutorial('userProfileTab');
+      delayStart(() => profileTourControl.current?.startTour());
+      return;
+    }
+
+    if (activeTab === 'new') {
+      if (newProjectSubView === 'project-type-selection') {
+        await coachMarksStorage.clearTutorial('userProjectTypeSelection');
+        delayStart(() => projectTypeSelectionTourControl.current?.startTour());
+      } else {
+        await coachMarksStorage.clearTutorial('userNewTab');
+        delayStart(() => newTabTour.startTour());
+      }
+      return;
+    }
+
+    if (activeTab === 'notifications') {
+      await coachMarksStorage.clearTutorial('userNotificationsTab');
+      delayStart(() => notificationsTourControl.current?.startTour());
+      return;
+    }
+
+    if (activeTab === 'appointments') {
+      await coachMarksStorage.clearTutorial('appointments');
+      delayStart(() => appointmentsTourControl.current?.startTour());
+      return;
+    }
   };
 
   // Sync currentProjectsFilter when projectsFilter prop changes
@@ -470,8 +553,8 @@ export default function UserHomeScreen({
   const [filteredServices, setFilteredServices] = useState<any[]>([]);
   const [allServices, setAllServices] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  const [isAISearching, setIsAISearching] = useState(false);
-  const [aiMessage, setAiMessage] = useState('');
+  const isAISearching = false;
+  const aiMessage = '';
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
 
@@ -827,72 +910,6 @@ export default function UserHomeScreen({
   };
 
   // AI Search function
-  const performAISearch = async (query: string): Promise<any[]> => {
-    try {
-      setIsAISearching(true);
-      setAiMessage('Using AI to find best matches...');
-
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer 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',
-        },
-        body: JSON.stringify({
-          model: 'gpt-3.5-turbo',
-          messages: [
-            {
-              role: 'system',
-              content: `You are a service matching assistant. Given a user query, find the most relevant services from this list: ${JSON.stringify(allServices.map(s => ({ id: s.id, nameEn: s.nameEn, nameAr: s.nameAr, description: s.description })))}. Return a JSON array of service IDs that match the query. Only return the JSON array, nothing else.`,
-            },
-            {
-              role: 'user',
-              content: `Find services matching: "${query}". Return only a JSON array of service IDs like [1, 2, 3].`,
-            },
-          ],
-          temperature: 0.3,
-          max_tokens: 200,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('AI search failed');
-      }
-
-      const data = await response.json();
-      const aiResponse = data.choices[0]?.message?.content || '[]';
-
-      // Parse AI response to get service IDs
-      let serviceIds: number[] = [];
-      try {
-        // Try to extract JSON array from response
-        const jsonMatch = aiResponse.match(/\[[\d,\s]+\]/);
-        if (jsonMatch) {
-          serviceIds = JSON.parse(jsonMatch[0]);
-        }
-      } catch (e) {
-        console.error('Error parsing AI response:', e);
-      }
-
-      // Find services by IDs
-      const aiMatchedServices = allServices.filter(service =>
-        serviceIds.includes(service.id)
-      );
-
-      setAiMessage(aiMatchedServices.length > 0
-        ? `AI found ${aiMatchedServices.length} relevant services`
-        : 'AI search completed, but no matches found');
-
-      setIsAISearching(false);
-      return aiMatchedServices;
-    } catch (error) {
-      console.error('AI search error:', error);
-      setAiMessage('');
-      setIsAISearching(false);
-      return [];
-    }
-  };
-
   // Handle search text change
   useEffect(() => {
     if (searchTimeoutRef.current) {
@@ -902,41 +919,23 @@ export default function UserHomeScreen({
     if (!searchText || searchText.trim().length === 0) {
       setShowSearchResults(false);
       setFilteredServices([]);
-      setAiMessage('');
-      setIsAISearching(false);
       return;
     }
 
     setShowSearchResults(true);
     setIsSearching(true);
 
-    searchTimeoutRef.current = setTimeout(async () => {
+    searchTimeoutRef.current = setTimeout(() => {
       const trimmedQuery = searchText.trim();
       const exactMatches = performExactSearch(trimmedQuery);
 
       if (exactMatches.length > 0) {
         setFilteredServices(exactMatches);
-        setAiMessage('');
-        setIsAISearching(false);
         setIsSearching(false);
       } else {
         const fuzzyMatches = performFuzzySearch(trimmedQuery);
-        if (fuzzyMatches.length > 0) {
-          setFilteredServices(fuzzyMatches);
-          setAiMessage('Found matches with typo correction');
-          setIsAISearching(false);
-          setIsSearching(false);
-        } else {
-          // Try AI search as last resort
-          const aiMatches = await performAISearch(trimmedQuery);
-          if (aiMatches.length > 0) {
-            setFilteredServices(aiMatches);
-          } else {
-            setFilteredServices([]);
-            setAiMessage('');
-          }
-          setIsSearching(false);
-        }
+        setFilteredServices(fuzzyMatches);
+        setIsSearching(false);
       }
     }, 300);
 
@@ -1007,13 +1006,6 @@ export default function UserHomeScreen({
             onPressChat={() => setActiveTab('chat')}
             onPressInfo={handleRestartCoachTour}
             onPressNotifications={() => setActiveTab('notifications')}
-            notificationsWrapper={({ onPress, children }) => (
-              <CopilotStep text={t('coachMark.notifications')} order={1} name="notifications">
-                <CoachTouchable style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }} onPress={onPress}>
-                  {children}
-                </CoachTouchable>
-              </CopilotStep>
-            )}
           />
         )}
 
@@ -1036,6 +1028,7 @@ export default function UserHomeScreen({
             <UserHomeScreenContent
               userName={userProfile?.name}
               unreadNotificationCount={unreadNotificationCount}
+              onExposeControl={(ctrl) => { homeContentControl.current = ctrl; }}
               onPressSearch={(query: string) => {
                 setSearchText(query);
                 if (query.trim().length > 0) {
@@ -1080,10 +1073,21 @@ export default function UserHomeScreen({
                   setSelectedCategory(cat);
                 }
               }}
+              onPressSearchCategory={(cat: CategoryInfo) => {
+                // Web behavior: category search click shows technicians for that whole category.
+                const categoryName = i18n.language === 'ar' && cat.nameAr ? cat.nameAr : cat.nameEn;
+                setCategoryTechniciansView({ categoryId: cat.id, categoryName, source: 'search' });
+                setActiveTab('category-technicians');
+              }}
               onPressSubcategory={(sub) => {
                 const serviceName = i18n.language === 'ar' && sub.nameAr ? sub.nameAr : sub.nameEn;
                 setServiceTechniciansView({ serviceId: sub.id, serviceName, source: 'category' });
                 setActiveTab('service-technicians');
+              }}
+              onPressTechnician={(technicianId) => {
+                setTechProfileReturnTab('home');
+                setSelectedTechnicianId(technicianId);
+                setActiveTab('technician-profile');
               }}
               onPressCategoryForManual={(category) => {
                 setManualFormInitial({
@@ -1142,6 +1146,10 @@ export default function UserHomeScreen({
               initialProject={pendingOpenProject}
               initialSmallTask={pendingOpenSmallTask}
               initialProjectType={projectsTabEmbeddedType ?? undefined}
+              onExposeTourControl={(c) => {
+                projectsTourControl.current = c;
+              }}
+              onExposeProjectTypeTourControl={exposeProjectTypeTourControl}
               onBack={() => {
                 if (projectsReturnTabOnBack) {
                   setActiveTab(projectsReturnTabOnBack as any);
@@ -1169,7 +1177,11 @@ export default function UserHomeScreen({
 
         {activeTab === 'appointments' && (
           <View style={{ flex: 1 }}>
-            <AppointmentsScreen />
+            <AppointmentsScreen
+              onExposeTourControl={(c) => {
+                appointmentsTourControl.current = c;
+              }}
+            />
           </View>
         )}
 
@@ -1202,6 +1214,34 @@ export default function UserHomeScreen({
               }}
               onNavigateToBooking={(technicianId, technicianName) => {
                 setHireReturnTab('service-technicians');
+                setHiringTechnician({ id: technicianId, name: technicianName });
+                setManualFormInitial({ categoryId: 0, categoryNameEn: 'All services', categoryNameAr: 'كل الخدمات' });
+                setNewProjectSubView('creation-method');
+                setActiveTab('new');
+              }}
+            />
+          </View>
+        )}
+
+        {activeTab === 'category-technicians' && categoryTechniciansView && (
+          <View style={{ flex: 1 }}>
+            <CategoryTechniciansScreen
+              categoryId={categoryTechniciansView.categoryId}
+              categoryName={categoryTechniciansView.categoryName}
+              onBack={() => {
+                setActiveTab('home');
+                setCategoryTechniciansView(null);
+              }}
+              onNavigateToTechnicianProfile={(technicianId) => {
+                setTechProfileReturnTab('category-technicians');
+                setSelectedTechnicianId(technicianId);
+                setActiveTab('technician-profile');
+              }}
+              onNavigateToChat={(roomId, receiverId, receiverName) => {
+                openChat(roomId, receiverId, receiverName, { returnContext: 'home' });
+              }}
+              onNavigateToBooking={(technicianId, technicianName) => {
+                setHireReturnTab('category-technicians');
                 setHiringTechnician({ id: technicianId, name: technicianName });
                 setManualFormInitial({ categoryId: 0, categoryNameEn: 'All services', categoryNameAr: 'كل الخدمات' });
                 setNewProjectSubView('creation-method');
@@ -1262,6 +1302,7 @@ export default function UserHomeScreen({
               ]}>
                 <ChatRoomsListScreen
                   stackedUnderAppTopBar
+                  onExposeTourControl={exposeChatTourControl}
                   onOpenChat={(roomId, receiverId, receiverName, projectId) => {
                     openChat(roomId, receiverId, receiverName, { projectId });
                   }}
@@ -1310,6 +1351,9 @@ export default function UserHomeScreen({
             <NotificationsScreen
               onUnreadCountChange={setUnreadNotificationCount}
               onNavigateFromNotification={onNavigateFromNotification}
+              onExposeTourControl={(c) => {
+                notificationsTourControl.current = c;
+              }}
             />
           </View>
         )}
@@ -1318,6 +1362,9 @@ export default function UserHomeScreen({
           <View style={{ flex: 1 }}>
             {profileSubView === null ? (
               <ProfileScreen
+                onExposeTourControl={(c) => {
+                  profileTourControl.current = c;
+                }}
                 onLogout={onLogout}
                 onNavigateToEditProfile={() => setProfileSubView('myData')}
                 onNavigateToPortfolio={() => setProfileSubView('portfolio')}
@@ -1399,9 +1446,14 @@ export default function UserHomeScreen({
         )}
 
         {activeTab === 'new' && (
-          <View style={{ flex: 1 }}>
+          <View
+            ref={newProjectSubView !== 'project-type-selection' ? newTabTour.register('panel') : undefined}
+            collapsable={false}
+            style={{ flex: 1 }}
+          >
             {newProjectSubView === 'project-type-selection' ? (
               <ProjectTypeSelectionScreen
+                onExposeTourControl={exposeProjectTypeTourControl}
                 onSelectLarge={() => {
                   setSelectedTaskType(null);
                   setManualFormInitial({
@@ -1579,6 +1631,37 @@ export default function UserHomeScreen({
             t={t}
           />
         </View>
+
+        {activeTab === 'new' && (
+          <ScreenTourOverlay
+            visible={newTabTour.tourActive}
+            tourStep={newTabTour.tourStep}
+            stepRect={newTabTour.stepRect}
+            totalSteps={newTabTourSteps.length}
+            stepOrder={newTabTour.tourStep + 1}
+            stepText={
+              newTabTourSteps[newTabTour.tourStep]
+                ? t(`tutorial.tab.new.${newTabTourSteps[newTabTour.tourStep].i18nSuffix}`)
+                : ''
+            }
+            isFirst={newTabTour.tourStep === 0}
+            isLast={newTabTour.tourStep === newTabTourSteps.length - 1}
+            primaryColor={colors.primary}
+            textColor={colors.text}
+            secondaryTextColor={colors.textSecondary}
+            bgColor={colors.cardBackground}
+            isRTL={i18n.language === 'ar' || I18nManager.isRTL}
+            fontFamily={fontFamily}
+            boldFontFamily={boldFontFamily}
+            onNext={() =>
+              newTabTour.setTourStep((s: number) => Math.min(s + 1, newTabTourSteps.length - 1))
+            }
+            onPrev={() => newTabTour.setTourStep((s: number) => Math.max(s - 1, 0))}
+            onSkip={newTabTour.endTour}
+            onFinish={newTabTour.endTour}
+            t={t}
+          />
+        )}
 
         <Modal
           visible={showServicesList}
@@ -1884,6 +1967,7 @@ export default function UserHomeScreen({
             <UserHomeScreenContent
               userName={userProfile?.name}
               unreadNotificationCount={unreadNotificationCount}
+              onExposeControl={(ctrl) => { homeContentControl.current = ctrl; }}
               onPressSearch={(query: string) => {
                 setSearchText(query);
                 if (query.trim().length > 0) {
@@ -1995,6 +2079,10 @@ export default function UserHomeScreen({
                 initialProject={pendingOpenProject}
                 initialSmallTask={pendingOpenSmallTask}
                 initialProjectType={projectsTabEmbeddedType ?? undefined}
+                onExposeTourControl={(c) => {
+                  projectsTourControl.current = c;
+                }}
+                onExposeProjectTypeTourControl={exposeProjectTypeTourControl}
                 onBack={() => {
                   setActiveTab('home');
                   setProjectsScreenCategoryId(null);
@@ -2024,7 +2112,11 @@ export default function UserHomeScreen({
             showsVerticalScrollIndicator={true}
           >
             <View style={styles.mainContentWrapper}>
-              <AppointmentsScreen />
+              <AppointmentsScreen
+                onExposeTourControl={(c) => {
+                  appointmentsTourControl.current = c;
+                }}
+              />
             </View>
             <Footer />
           </ScrollView>
@@ -2135,6 +2227,7 @@ export default function UserHomeScreen({
               ]}>
                 <ChatRoomsListScreen
                   stackedUnderAppTopBar
+                  onExposeTourControl={exposeChatTourControl}
                   onOpenChat={(roomId, receiverId, receiverName, projectId) => {
                     openChat(roomId, receiverId, receiverName, { projectId });
                   }}
@@ -2177,6 +2270,9 @@ export default function UserHomeScreen({
               <NotificationsScreen
                 onUnreadCountChange={setUnreadNotificationCount}
                 onNavigateFromNotification={onNavigateFromNotification}
+                onExposeTourControl={(c) => {
+                  notificationsTourControl.current = c;
+                }}
               />
             </View>
             <Footer />
@@ -2192,6 +2288,9 @@ export default function UserHomeScreen({
             <View style={styles.mainContentWrapper}>
               {profileSubView === null ? (
                 <ProfileScreen
+                  onExposeTourControl={(c) => {
+                    profileTourControl.current = c;
+                  }}
                   onLogout={onLogout}
                   onNavigateToEditProfile={() => setProfileSubView('myData')}
                   onNavigateToPortfolio={() => setProfileSubView('portfolio')}
@@ -2280,7 +2379,7 @@ export default function UserHomeScreen({
             contentContainerStyle={styles.scrollContentWithFooter}
             showsVerticalScrollIndicator={true}
           >
-            <View style={styles.mainContentWrapper}>
+            <View ref={newTabTour.register('panel')} collapsable={false} style={styles.mainContentWrapper}>
               {newProjectSubView === 'creation-method' && manualFormInitial ? (
                 <CreationMethodScreen
                   category={{
@@ -2474,6 +2573,37 @@ export default function UserHomeScreen({
           </View>
         </View>
       </Modal>
+
+      {activeTab === 'new' && (
+        <ScreenTourOverlay
+          visible={newTabTour.tourActive}
+          tourStep={newTabTour.tourStep}
+          stepRect={newTabTour.stepRect}
+          totalSteps={newTabTourSteps.length}
+          stepOrder={newTabTour.tourStep + 1}
+          stepText={
+            newTabTourSteps[newTabTour.tourStep]
+              ? t(`tutorial.tab.new.${newTabTourSteps[newTabTour.tourStep].i18nSuffix}`)
+              : ''
+          }
+          isFirst={newTabTour.tourStep === 0}
+          isLast={newTabTour.tourStep === newTabTourSteps.length - 1}
+          primaryColor={colors.primary}
+          textColor={colors.text}
+          secondaryTextColor={colors.textSecondary}
+          bgColor={colors.cardBackground}
+          isRTL={i18n.language === 'ar' || I18nManager.isRTL}
+          fontFamily={fontFamily}
+          boldFontFamily={boldFontFamily}
+          onNext={() =>
+            newTabTour.setTourStep((s: number) => Math.min(s + 1, newTabTourSteps.length - 1))
+          }
+          onPrev={() => newTabTour.setTourStep((s: number) => Math.max(s - 1, 0))}
+          onSkip={newTabTour.endTour}
+          onFinish={newTabTour.endTour}
+          t={t}
+        />
+      )}
 
       {/* Floating Chatbot Button (desktop web — same assistant as mobile FAB in home content) */}
       <TouchableOpacity

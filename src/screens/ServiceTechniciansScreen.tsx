@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
@@ -271,7 +272,7 @@ export default function ServiceTechniciansScreen({
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={handleBack} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <Ionicons name={arrowBackIcon} size={22} color={colors.text} />
+          <BackArrowIonicons variant="arrow" size={22} color={colors.text}/>
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(16) }]} numberOfLines={1}>
           {serviceName || t('Technicians')}

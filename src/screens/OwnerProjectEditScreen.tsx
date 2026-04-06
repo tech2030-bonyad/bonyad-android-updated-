@@ -17,6 +17,7 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -469,7 +470,7 @@ export default function OwnerProjectEditScreen({ projectId, onBack, onSuccess }:
       >
         <View style={styles.sectionHeader}>
           <TouchableOpacity onPress={onBack} style={styles.backButton}>
-            <Ionicons name="chevron-back" size={24} color={colors.text} />
+            <BackArrowIonicons variant="chevron" size={24} color={colors.text}/>
           </TouchableOpacity>
           <Text style={[styles.title, { color: colors.text }]}>{t('Edit Project')}</Text>
         </View>

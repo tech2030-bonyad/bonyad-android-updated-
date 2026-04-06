@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,168 +6,245 @@ import {
   TouchableOpacity,
   Animated,
   Dimensions,
-  Platform,
   ScrollView,
+  I18nManager,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useTheme } from '../context/ThemeContext';
+import { useFontFamily } from '../context/FontContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import ScreenTourOverlay from '../components/tour/ScreenTourOverlay';
+import { useSimpleScreenTour } from '../hooks/useSimpleScreenTour';
+import { LinearGradient } from 'expo-linear-gradient';
+import ReAnimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withTiming,
+  Easing as ReEasing,
+} from 'react-native-reanimated';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const CARD_HEIGHT = 220;
+
+interface OptionCardProps {
+  icon: string;
+  title: string;
+  subtitle: string;
+  color: string;
+  cardBackground: string;
+  textColor: string;
+  subtitleColor: string;
+  shimmerDuration: number;
+  onPress: () => void;
+}
+
+const OptionCard = React.memo(({
+  icon,
+  title,
+  subtitle,
+  color,
+  cardBackground,
+  textColor,
+  subtitleColor,
+  shimmerDuration,
+  onPress,
+}: OptionCardProps) => {
+  const shimmerY = useSharedValue(CARD_HEIGHT);
+
+  useEffect(() => {
+    shimmerY.value = withRepeat(
+      withTiming(-CARD_HEIGHT, {
+        duration: shimmerDuration,
+        easing: ReEasing.inOut(ReEasing.sin),
+      }),
+      -1,
+      false
+    );
+  }, []);
+
+  const shimmerStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: shimmerY.value }],
+  }));
+
+  return (
+    <ReAnimated.View style={[styles.card, { backgroundColor: cardBackground, borderColor: color + '40' }]}>
+      {/* Bottom-to-top color shimmer */}
+      <ReAnimated.View style={[styles.shimmerWrap, shimmerStyle]} pointerEvents="none">
+        <LinearGradient
+          colors={['transparent', color + '28', color + '50', color + '28', 'transparent']}
+          start={{ x: 0.5, y: 1 }}
+          end={{ x: 0.5, y: 0 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </ReAnimated.View>
+
+      {/* Top accent bar */}
+      <LinearGradient
+        colors={[color, color + '88']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.accentBar}
+      />
+
+      <TouchableOpacity onPress={onPress} activeOpacity={0.82} style={styles.cardContent}>
+        {/* Icon circle */}
+        <View style={[styles.iconWrap, { backgroundColor: color + '18' }]}>
+          <Ionicons name={icon as any} size={48} color={color} />
+        </View>
+
+        {/* Title */}
+        <Text style={[styles.cardTitle, { color: textColor }]}>{title}</Text>
+
+        {/* Subtitle */}
+        <Text style={[styles.cardSubtitle, { color: subtitleColor }]}>{subtitle}</Text>
+      </TouchableOpacity>
+    </ReAnimated.View>
+  );
+});
 
 interface ProjectTypeSelectionScreenProps {
   onSelectLarge: () => void;
   onSelectSmall: () => void;
   onBack?: () => void;
+  /** Wired from shells so Info can restart this screen’s tour (large vs small task cards). */
+  onExposeTourControl?: (c: { startTour: () => void } | null) => void;
 }
 
 export default function ProjectTypeSelectionScreen({
   onSelectLarge,
   onSelectSmall,
   onBack,
+  onExposeTourControl,
 }: ProjectTypeSelectionScreenProps) {
   const { t, i18n } = useTranslation();
-  const { colors, theme } = useTheme();
+  const { colors } = useTheme();
+  const { fontFamily, boldFontFamily } = useFontFamily();
   const insets = useSafeAreaInsets();
-  const isRTL = i18n.language === 'ar';
-  const isDarkMode = theme === 'dark';
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
-  const scaleAnim = useRef(new Animated.Value(0.9)).current;
+
+  const typeTourSteps = useMemo(
+    () => [
+      ...(onBack ? [{ id: 'header', i18nSuffix: 'header' }] : []),
+      { id: 'large', i18nSuffix: 'large' },
+      { id: 'small', i18nSuffix: 'small' },
+    ],
+    [onBack],
+  );
+  const typeTour = useSimpleScreenTour(typeTourSteps, 'userProjectTypeSelection');
 
   useEffect(() => {
-    // Entrance animation
+    if (!onExposeTourControl) return;
+    onExposeTourControl({ startTour: typeTour.startTour });
+    return () => onExposeTourControl(null);
+  }, [onExposeTourControl, typeTour.startTour]);
+
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(40)).current;
+
+  useEffect(() => {
     Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 400,
-        useNativeDriver: true,
-      }),
-      Animated.spring(slideAnim, {
-        toValue: 0,
-        tension: 50,
-        friction: 7,
-        useNativeDriver: true,
-      }),
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        tension: 50,
-        friction: 7,
-        useNativeDriver: true,
-      }),
+      Animated.timing(fadeAnim, { toValue: 1, duration: 380, useNativeDriver: true }),
+      Animated.spring(slideAnim, { toValue: 0, tension: 55, friction: 8, useNativeDriver: true }),
     ]).start();
   }, []);
 
   const handleSelect = (callback: () => void) => {
-    // Exit animation before navigation
     Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: -30,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      callback();
-    });
+      Animated.timing(fadeAnim, { toValue: 0, duration: 180, useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: -24, duration: 180, useNativeDriver: true }),
+    ]).start(() => callback());
   };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       {onBack && (
-        <View style={[
-          styles.header, 
-          { 
-            paddingTop: Math.max(insets.top, 20),
-            flexDirection: isRTL ? 'row-reverse' : 'row',
-          }
-        ]}>
+        <View
+          ref={typeTour.register('header')}
+          collapsable={false}
+          style={[styles.header, { paddingTop: Math.max(insets.top, 20) }]}
+        >
           <TouchableOpacity onPress={onBack} style={styles.backButton}>
-            <Ionicons 
-              name="arrow-back" 
-              size={24} 
-              color={colors.text} 
-            />
+            <BackArrowIonicons variant="arrow" size={24} color={colors.text} />
           </TouchableOpacity>
+          <View style={styles.headerText}>
+            <Text style={[styles.pageTitle, { color: colors.text }]}>{t('Create New')}</Text>
+            <Text style={[styles.pageSubtitle, { color: colors.textSecondary }]}>
+              {t('Choose the type of project you want to create')}
+            </Text>
+          </View>
         </View>
       )}
 
       <Animated.View
-        style={[
-          styles.content,
-          {
-            opacity: fadeAnim,
-            transform: [{ translateY: slideAnim }, { scale: scaleAnim }],
-          },
-        ]}
+        style={[styles.body, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}
       >
         <ScrollView
           style={[styles.scrollView, { backgroundColor: colors.background }]}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom, 120) }]}
           showsVerticalScrollIndicator={false}
         >
-          {/* Title Section */}
-          <View style={styles.titleSection}>
-            <Text style={[styles.title, { color: colors.text }]}>
-              {t('Create New')}
-            </Text>
-            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-              {t('Choose the type of project you want to create')}
-            </Text>
+          {/* Cards */}
+          <View style={styles.cardsContainer}>
+            <View ref={typeTour.register('large')} collapsable={false}>
+              <OptionCard
+                icon="business-outline"
+                title={t('Large Project')}
+                subtitle={t('Full project with phases, contracts and bids')}
+                color={colors.primary}
+                cardBackground={colors.cardBackground}
+                textColor={colors.text}
+                subtitleColor={colors.textSecondary}
+                shimmerDuration={2000}
+                onPress={() => handleSelect(onSelectLarge)}
+              />
+            </View>
+
+            <View ref={typeTour.register('small')} collapsable={false}>
+              <OptionCard
+                icon="construct-outline"
+                title={t('Small Task')}
+                subtitle={t('Quick task with fast assignment and payment')}
+                color={colors.warning}
+                cardBackground={colors.cardBackground}
+                textColor={colors.text}
+                subtitleColor={colors.textSecondary}
+                shimmerDuration={2400}
+                onPress={() => handleSelect(onSelectSmall)}
+              />
+            </View>
           </View>
-
-          {/* Options */}
-          <View style={styles.optionsContainer}>
-          {/* Large Project Option */}
-          <TouchableOpacity
-            style={[
-              styles.optionCard,
-              {
-                backgroundColor: colors.cardBackground,
-                borderColor: colors.primary + '30',
-                shadowColor: colors.primary,
-                ...(isDarkMode && Platform.OS === 'android' ? { elevation: 2 } : {}),
-              },
-            ]}
-            onPress={() => handleSelect(onSelectLarge)}
-            activeOpacity={0.8}
-          >
-            <View style={[styles.iconContainer, { backgroundColor: colors.primary + '15' }]}>
-              <Ionicons name="business-outline" size={48} color={colors.primary} />
-            </View>
-            <Text style={[styles.optionTitle, { color: colors.text }]}>
-              {t('Large Project')}
-            </Text>
-          </TouchableOpacity>
-
-          {/* Small Task Option (theme-aware warning/amber) */}
-          <TouchableOpacity
-            style={[
-              styles.optionCard,
-              {
-                backgroundColor: colors.cardBackground,
-                borderColor: colors.warning + '40',
-                shadowColor: colors.warning,
-                ...(isDarkMode && Platform.OS === 'android' ? { elevation: 2 } : {}),
-              },
-            ]}
-            onPress={() => handleSelect(onSelectSmall)}
-            activeOpacity={0.8}
-          >
-            <View style={[styles.iconContainer, { backgroundColor: colors.warning + '20' }]}>
-              <Ionicons name="construct-outline" size={48} color={colors.warning} />
-            </View>
-            <Text style={[styles.optionTitle, { color: colors.text }]}>
-              {t('Small Task')}
-            </Text>
-          </TouchableOpacity>
-        </View>
         </ScrollView>
       </Animated.View>
+
+      <ScreenTourOverlay
+        visible={typeTour.tourActive}
+        tourStep={typeTour.tourStep}
+        stepRect={typeTour.stepRect}
+        totalSteps={typeTourSteps.length}
+        stepOrder={typeTour.tourStep + 1}
+        stepText={
+          typeTourSteps[typeTour.tourStep]
+            ? t(`tutorial.projectType.${typeTourSteps[typeTour.tourStep].i18nSuffix}`)
+            : ''
+        }
+        isFirst={typeTour.tourStep === 0}
+        isLast={typeTour.tourStep === typeTourSteps.length - 1}
+        primaryColor={colors.primary}
+        textColor={colors.text}
+        secondaryTextColor={colors.textSecondary}
+        bgColor={colors.cardBackground}
+        isRTL={i18n.language === 'ar' || I18nManager.isRTL}
+        fontFamily={fontFamily}
+        boldFontFamily={boldFontFamily}
+        onNext={() => typeTour.setTourStep((s: number) => Math.min(s + 1, typeTourSteps.length - 1))}
+        onPrev={() => typeTour.setTourStep((s: number) => Math.max(s - 1, 0))}
+        onSkip={typeTour.endTour}
+        onFinish={typeTour.endTour}
+        t={t}
+      />
     </View>
   );
 }
@@ -177,13 +254,20 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 20,
     paddingBottom: 16,
+    gap: 12,
   },
   backButton: {
     padding: 8,
+    alignSelf: 'center',
   },
-  content: {
+  headerText: {
+    flex: 1,
+  },
+  body: {
     flex: 1,
   },
   scrollView: {
@@ -191,56 +275,64 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 40,
+    paddingTop: 8,
   },
-  titleSection: {
-    marginBottom: 32,
-    alignItems: 'center',
+  pageTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    marginBottom: 2,
+    letterSpacing: -0.4,
   },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    marginBottom: 8,
-    textAlign: 'center',
+  pageSubtitle: {
+    fontSize: 13,
+    lineHeight: 18,
   },
-  subtitle: {
-    fontSize: 16,
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  optionsContainer: {
+  cardsContainer: {
     gap: 20,
-    paddingBottom: 40,
   },
-  optionCard: {
-    borderRadius: 16,
-    padding: 24,
-    borderWidth: 2,
-    ...Platform.select({
-      ios: {
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 4,
-      },
-    }),
+  // Card
+  card: {
+    borderRadius: 20,
+    borderWidth: 1,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    elevation: 6,
   },
-  iconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+  shimmerWrap: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 0,
+    height: CARD_HEIGHT,
+  },
+  accentBar: {
+    height: 3,
+    width: '100%',
+  },
+  cardContent: {
+    padding: 28,
+    alignItems: 'center',
+    zIndex: 1,
+  },
+  iconWrap: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
     justifyContent: 'center',
     alignItems: 'center',
-    alignSelf: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
   },
-  optionTitle: {
+  cardTitle: {
     fontSize: 22,
-    fontWeight: '700',
+    fontWeight: '800',
     textAlign: 'center',
-    marginTop: 16,
+    marginBottom: 8,
+    letterSpacing: -0.3,
+  },
+  cardSubtitle: {
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });

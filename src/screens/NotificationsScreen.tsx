@@ -14,8 +14,10 @@ import {
   SectionList,
   Animated,
   Dimensions,
+  I18nManager,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import { useTranslation } from 'react-i18next';
@@ -23,6 +25,8 @@ import { notificationService } from '../services/NotificationService';
 import type { Notification } from '../services/NotificationService';
 import { normalizeNotificationFromApi } from '../utils/normalizeNotificationPayload';
 import AnimatedLoadingScreen from '../components/AnimatedLoadingScreen';
+import ScreenTourOverlay from '../components/tour/ScreenTourOverlay';
+import { useSimpleScreenTour } from '../hooks/useSimpleScreenTour';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const FILTER_ANIMATION_DURATION = 280;
@@ -103,6 +107,7 @@ interface NotificationsScreenProps {
   onNavigateToPhase?: (projectId: number, phaseId?: number) => void;
   onNavigateToBid?: (projectId: number, bidId: number) => void;
   onUnreadCountChange?: (count: number) => void;
+  onExposeTourControl?: (c: { startTour: () => void }) => void;
 }
 
 export default function NotificationsScreen({
@@ -112,11 +117,25 @@ export default function NotificationsScreen({
   onNavigateToPhase,
   onNavigateToBid,
   onUnreadCountChange,
+  onExposeTourControl,
 }: NotificationsScreenProps) {
   const { colors, theme } = useTheme();
-  const { t } = useTranslation();
-  const { scaledSize } = useFontFamily();
+  const { t, i18n } = useTranslation();
+  const { scaledSize, fontFamily, boldFontFamily } = useFontFamily();
   const isDarkMode = theme === 'dark';
+
+  const notifTourSteps = useMemo(
+    () => [
+      { id: 'filters', i18nSuffix: 'filters' },
+      { id: 'list', i18nSuffix: 'list' },
+    ],
+    [],
+  );
+  const notifTour = useSimpleScreenTour(notifTourSteps, 'userNotificationsTab');
+
+  useEffect(() => {
+    onExposeTourControl?.({ startTour: notifTour.startTour });
+  }, [onExposeTourControl, notifTour.startTour]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -328,7 +347,7 @@ export default function NotificationsScreen({
         <View style={styles.headerSide}>
           {onBack ? (
             <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-              <Ionicons name="chevron-back" size={24} color={colors.text} />
+              <BackArrowIonicons variant="chevron" size={24} color={colors.text}/>
             </TouchableOpacity>
           ) : null}
         </View>
@@ -338,7 +357,11 @@ export default function NotificationsScreen({
         <View style={styles.headerSide} />
       </View>
 
-      <View style={[styles.filterTabs, { backgroundColor: colors.background, paddingBottom: 16, paddingHorizontal: 16, gap: 8 }]}>
+      <View
+        ref={notifTour.register('filters')}
+        collapsable={false}
+        style={[styles.filterTabs, { backgroundColor: colors.background, paddingBottom: 16, paddingHorizontal: 16, gap: 8 }]}
+      >
         <TouchableOpacity
           onPress={() => runFilterTransition('all')}
           style={[styles.tab, { backgroundColor: selectedFilter === 'all' ? colors.primary : colors.gray100, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 6 }]}
@@ -366,6 +389,8 @@ export default function NotificationsScreen({
       </View>
 
       <Animated.View
+        ref={notifTour.register('list')}
+        collapsable={false}
         style={[
           styles.listWrapper,
           {
@@ -409,6 +434,35 @@ export default function NotificationsScreen({
           }
         />
       </Animated.View>
+
+      <ScreenTourOverlay
+        visible={notifTour.tourActive}
+        tourStep={notifTour.tourStep}
+        stepRect={notifTour.stepRect}
+        totalSteps={notifTourSteps.length}
+        stepOrder={notifTour.tourStep + 1}
+        stepText={
+          notifTourSteps[notifTour.tourStep]
+            ? t(`tutorial.tab.notifications.${notifTourSteps[notifTour.tourStep].i18nSuffix}`)
+            : ''
+        }
+        isFirst={notifTour.tourStep === 0}
+        isLast={notifTour.tourStep === notifTourSteps.length - 1}
+        primaryColor={colors.primary}
+        textColor={colors.text}
+        secondaryTextColor={colors.textSecondary}
+        bgColor={colors.cardBackground}
+        isRTL={i18n.language === 'ar' || I18nManager.isRTL}
+        fontFamily={fontFamily}
+        boldFontFamily={boldFontFamily}
+        onNext={() =>
+          notifTour.setTourStep((s) => Math.min(s + 1, notifTourSteps.length - 1))
+        }
+        onPrev={() => notifTour.setTourStep((s) => Math.max(s - 1, 0))}
+        onSkip={notifTour.endTour}
+        onFinish={notifTour.endTour}
+        t={t}
+      />
     </Animated.View>
   );
 }

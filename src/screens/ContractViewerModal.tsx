@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import { API_ENDPOINTS, buildApiUrlWithParams, buildApiUrl } from '../config/api';
@@ -305,7 +306,7 @@ export default function ContractViewerModal({
                   </Text>
                 </View>
                 <TouchableOpacity onPress={viewPdfContract} style={styles.serviceAgreementChevron}>
-                  <Ionicons name="chevron-back" size={24} color={colors.textSecondary} />
+                  <BackArrowIonicons variant="chevron" size={24} color={colors.textSecondary}/>
                 </TouchableOpacity>
               </View>
 

@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useMemo } from 'react';
 import { Platform } from 'react-native';
 
 export type Screen = 'splash' | 'onboarding' | 'welcome' | 'overview' | 'about' | 'contact' | 'introToApp' | 'login' | 'signup' | 'otp' | 'forgotPassword' | 'otpVerification' | 'resetPassword' | 'home' | 'profile' | 'editProfile' | 'myData' | 'changePhone' | 'changePassword' | 'portfolio' | 'services' | 'availability' | 'subscription' | 'newProject' | 'manualForm' | 'aiForm' | 'projects' | 'runningProjects' | 'chatRooms' | 'chatDetail' | 'notifications' | 'appointments' | 'booking' | 'technicianProfile' | 'technicianOnboarding' | 'technicianCompleteProfile' | 'waitingApproval' | 'roomDesign' | 'voiceAI' | 'costExplorer' | 'roomVisualizer' | 'askBonyadAI' | 'projectsMap' | 'chatbot' | 'supportChat' | 'ticketList' | 'createTicket' | 'ticketDetail' | 'serviceProviders' | 'commissionPayment' | 'paymentCheckout' | 'categorySubcategories' | 'creationMethod' | 'pendingProject' | 'bidReceivedProject' | 'approvedProject' | 'contractSigningProject' | 'inProgressProject' | 'completedProject' | 'changeRequestList' | 'changeRequestDetail' | 'requestModification';
@@ -269,12 +269,14 @@ export function useRouter(currentScreen: Screen, setCurrentScreen: (screen: Scre
     }
   }, [currentScreen, getPathFromUrl, getPathForScreen, updateUrl]);
 
-  return {
+  // Memoize the returned object so callers get a stable reference between renders.
+  // currentPath uses a getter so it always reads the live URL without breaking memoization.
+  return useMemo(() => ({
     navigate,
-    currentPath: isWeb ? getPathFromUrl() : null,
+    get currentPath() { return isWeb ? getPathFromUrl() : null; },
     getPathForScreen,
     getScreenFromPath,
-  };
+  }), [navigate, getPathFromUrl, getPathForScreen, getScreenFromPath]);
 }
 
 /**

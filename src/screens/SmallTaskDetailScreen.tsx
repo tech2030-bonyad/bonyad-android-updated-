@@ -12,6 +12,7 @@ import {
 import { Image as ExpoImage } from 'expo-image';
 import { useTranslation } from 'react-i18next';
 import { Ionicons, Feather } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -41,7 +42,8 @@ export default function SmallTaskDetailScreen({
   const { fontFamily, fonts } = useFontFamily();
   const insets = useSafeAreaInsets();
   const isDarkMode = theme === 'dark';
-  
+  const isArabic = i18n.language?.startsWith('ar');
+
   const [taskDetails, setTaskDetails] = useState<SmallTaskRequest | null>(task);
   const [bids, setBids] = useState<SmallTaskBid[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -254,9 +256,9 @@ t('smallTasks.updateStatus'),
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={[styles.header, styles.headerLTR, { paddingTop: Math.max(insets.top, 20), borderBottomColor: colors.border }]}>
+      <View style={[styles.header, isArabic ? styles.headerRTL : styles.headerLTR, { paddingTop: Math.max(insets.top, 20), borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={24} color={colors.text} />
+          <BackArrowIonicons variant="chevron" size={24} color={colors.text} forceLtrLayout={!isArabic} />
         </TouchableOpacity>
         <View style={styles.headerTitleContainer}>
           <Text style={[styles.headerTitle, { color: colors.text }]}>
@@ -591,6 +593,9 @@ const styles = StyleSheet.create({
   },
   headerLTR: {
     direction: 'ltr',
+  },
+  headerRTL: {
+    direction: 'rtl',
   },
   backButton: {
     padding: 8,

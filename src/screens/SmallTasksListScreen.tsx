@@ -20,6 +20,7 @@ import {
   Platform,
   Animated,
   TextInput,
+  Dimensions,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons, Feather } from '@expo/vector-icons';
@@ -27,6 +28,18 @@ import { useTheme } from '../context/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { storage } from '../utils/storage';
 import { getMyRequests, getAvailableRequests, getMyBids } from '../services/SmallTaskService';
+import { LinearGradient } from 'expo-linear-gradient';
+import ReAnimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withTiming,
+  Easing as ReEasing,
+  interpolate,
+  Extrapolation,
+} from 'react-native-reanimated';
+
+const { width: STASK_DEVICE_WIDTH } = Dimensions.get('window');
 
 // iOS-matching design colors
 const COLORS = {
@@ -92,6 +105,7 @@ export default function SmallTasksListScreen({
 
   const primaryColor = isDarkMode ? COLORS.primaryDark : COLORS.primaryLight;
   const borderColor = isDarkMode ? COLORS.borderDark : COLORS.borderLight;
+  const isArabic = i18n.language?.startsWith('ar');
 
   useEffect(() => {
     loadTasks();
@@ -317,7 +331,7 @@ export default function SmallTasksListScreen({
         }
       >
         {/* Header Section - iOS style */}
-        <View style={[styles.headerSection, styles.headerSectionLTR]}>
+        <View style={[styles.headerSection, isArabic ? styles.headerSectionRTL : styles.headerSectionLTR]}>
           <Text style={[styles.pageTitle, { color: primaryColor }]}>
             {t('smallTasks.myTaskRequests')}
           </Text>
@@ -458,7 +472,7 @@ export default function SmallTasksListScreen({
   );
 }
 
-// Small Task Request Card - iOS matching design
+// Small Task Request Card - matches project card design with shimmer animation
 const SmallTaskRequestCard = React.memo(({
   task,
   index,
@@ -484,81 +498,102 @@ const SmallTaskRequestCard = React.memo(({
   t: (key: string) => string;
   i18n: any;
 }) => {
-  const cardAnim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.timing(cardAnim, {
-      toValue: 1,
-      duration: 300,
-      delay: index * 50,
-      useNativeDriver: true,
-    }).start();
-  }, []);
-
   const taskType = task.taskType || { nameEn: 'Task', nameAr: 'مهمة' };
   const taskName = i18n.language === 'ar' ? taskType.nameAr : taskType.nameEn;
   const statusColor = getStatusColor(task.status);
   const bidsCount = task.bidsCount ?? task.bidCount ?? 0;
 
-  return (
-    <Animated.View
-      style={{
-        opacity: cardAnim,
-        transform: [{
-          translateY: cardAnim.interpolate({
-            inputRange: [0, 1],
-            outputRange: [20, 0],
-          }),
-        }],
-      }}
-    >
-      <TouchableOpacity
-        style={[
-          styles.taskCard,
-          {
-            backgroundColor: colors.cardBackground,
-            borderColor: borderColor,
-          },
-        ]}
-        onPress={onPress}
-        activeOpacity={0.7}
-      >
-        {/* Header Row: Task Type Name + Status Badge */}
-        <View style={styles.cardHeader}>
-          <View style={styles.taskTypeInfo}>
-            <Text style={[styles.taskTypeName, { color: colors.text }]} numberOfLines={1}>
-              {taskName}
-            </Text>
-            <Text style={[styles.dateText, { color: colors.textSecondary }]}>
-              {formatDate(task.createdAt)}
-            </Text>
-          </View>
+  // Continuously looping shimmer sweep
+  const shimmerX = useSharedValue(-STASK_DEVICE_WIDTH);
+  useEffect(() => {
+    shimmerX.value = withRepeat(
+      withTiming(STASK_DEVICE_WIDTH, {
+        duration: 2000 + index * 150,
+        easing: ReEasing.inOut(ReEasing.sin),
+      }),
+      -1,
+      false
+    );
+  }, []);
 
-          {/* Status Badge with dot */}
-          <View style={[styles.statusBadge, { backgroundColor: statusColor + '15' }]}>
+  const shimmerStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: shimmerX.value }],
+  }));
+
+  // Entry animation: scale + fade from below
+  const entryAnim = useSharedValue(0);
+  useEffect(() => {
+    entryAnim.value = withTiming(1, { duration: 350, easing: ReEasing.out(ReEasing.quad) });
+  }, []);
+
+  const entryStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(entryAnim.value, [0, 1], [0.5, 1], Extrapolation.CLAMP),
+    transform: [{ scale: interpolate(entryAnim.value, [0, 1], [0.94, 1], Extrapolation.CLAMP) }],
+  }));
+
+  return (
+    <ReAnimated.View
+      style={[
+        styles.taskCard,
+        { backgroundColor: colors.cardBackground, borderColor: colors.border + '55' },
+        entryStyle,
+      ]}
+    >
+      {/* Shimmer band */}
+      <ReAnimated.View style={[styles.shimmerWrap, shimmerStyle]} pointerEvents="none">
+        <LinearGradient
+          colors={['transparent', statusColor + '30', statusColor + '55', statusColor + '30', 'transparent']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </ReAnimated.View>
+
+      {/* Top color accent bar */}
+      <LinearGradient
+        colors={[statusColor, statusColor + '88']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.accentBar}
+      />
+
+      <TouchableOpacity onPress={onPress} activeOpacity={0.82} style={styles.cardContent}>
+        {/* ID + Status badge */}
+        <View style={styles.cardTopRow}>
+          <View style={styles.idRow}>
+            <Ionicons name="flash-outline" size={12} color={colors.textSecondary} />
+            <Text style={[styles.idText, { color: colors.textSecondary }]}>#{task.id}</Text>
+          </View>
+          <View style={[styles.statusBadge, { backgroundColor: statusColor + '18', borderColor: statusColor + '45' }]}>
             <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-            <Text style={[styles.statusText, { color: statusColor }]}>
-              {getStatusLabel(task.status)}
-            </Text>
+            <Text style={[styles.statusText, { color: statusColor }]}>{getStatusLabel(task.status)}</Text>
           </View>
         </View>
 
-        {/* Divider */}
+        {/* Task name */}
+        <Text style={[styles.taskTypeName, { color: colors.text }]} numberOfLines={1}>
+          {taskName}
+        </Text>
+
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
-        {/* Bids Count Row */}
-        <View style={styles.bidsRow}>
-          <View style={styles.bidsInfo}>
-            <Text style={[styles.bidsText, { color: colors.textSecondary }]}>
-              {bidsCount} {bidsCount === 1 ? t('smallTasks.bid') : t('smallTasks.bids')}
-            </Text>
+        {/* Footer: date + bids */}
+        <View style={styles.cardFooter}>
+          <View style={styles.metaChip}>
+            <Ionicons name="calendar-outline" size={11} color={colors.textSecondary} />
+            <Text style={[styles.metaChipText, { color: colors.textSecondary }]}>{formatDate(task.createdAt)}</Text>
           </View>
-
-          {/* Chevron: right in LTR, left in AR */}
-          <Ionicons name={i18n.language === 'ar' ? 'chevron-back' : 'chevron-forward'} size={16} color={colors.textSecondary} />
+          {bidsCount > 0 && (
+            <View style={[styles.statChip, { backgroundColor: primaryColor + '15' }]}>
+              <Ionicons name="hand-left-outline" size={11} color={primaryColor} />
+              <Text style={[styles.statChipText, { color: primaryColor }]}>
+                {bidsCount} {bidsCount === 1 ? t('smallTasks.bid') : t('smallTasks.bids')}
+              </Text>
+            </View>
+          )}
         </View>
       </TouchableOpacity>
-    </Animated.View>
+    </ReAnimated.View>
   );
 });
 
@@ -570,7 +605,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    padding: 24,
+    paddingHorizontal: 8,
+    paddingVertical: 24,
     paddingBottom: 100,
   },
   loadingContainer: {
@@ -583,6 +619,9 @@ const styles = StyleSheet.create({
   },
   headerSectionLTR: {
     alignItems: 'flex-start',
+  },
+  headerSectionRTL: {
+    alignItems: 'flex-end',
   },
   pageTitle: {
     fontSize: 24,
@@ -657,75 +696,102 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   tasksContainer: {
-    gap: 12,
+    gap: 16,
   },
   taskCard: {
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 20,
     borderWidth: 1,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
+    overflow: 'hidden',
+    marginBottom: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.09,
+    shadowRadius: 14,
+    elevation: 5,
   },
-  cardHeader: {
+  shimmerWrap: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 0,
+    width: STASK_DEVICE_WIDTH,
+  },
+  accentBar: {
+    height: 3,
+    width: '100%',
+  },
+  cardContent: {
+    padding: 16,
+    zIndex: 1,
+  },
+  cardTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
+    alignItems: 'center',
+    marginBottom: 10,
   },
-  taskTypeInfo: {
-    flex: 1,
-    marginRight: 12,
+  idRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
-  taskTypeName: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  dateText: {
+  idText: {
     fontSize: 12,
+    fontWeight: '500',
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 5,
     paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    gap: 4,
+    paddingVertical: 4,
+    borderRadius: 20,
+    borderWidth: 1,
   },
   statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   statusText: {
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  taskTypeName: {
+    fontSize: 17,
+    fontWeight: '700',
+    marginBottom: 12,
+    letterSpacing: -0.3,
   },
   divider: {
-    height: 1,
+    height: StyleSheet.hairlineWidth,
     marginBottom: 12,
   },
-  bidsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  bidsInfo: {
+  cardFooter: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
   },
-  bidsText: {
-    fontSize: 14,
+  metaChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  metaChipText: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  statChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  statChipText: {
+    fontSize: 11,
+    fontWeight: '700',
   },
   emptyContainer: {
     flex: 1,

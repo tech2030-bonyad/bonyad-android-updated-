@@ -15,6 +15,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import {
@@ -362,11 +363,7 @@ const CreateTicketScreen: React.FC<CreateTicketScreenProps> = ({
       {/* Header */}
       <View style={[styles.header, { backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-          <Ionicons
-            name="arrow-back"
-            size={24}
-            color={colors.text}
-          />
+          <BackArrowIonicons variant="arrow" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>
           {language === 'ar' ? 'تذكرة جديدة' : 'New Ticket'}

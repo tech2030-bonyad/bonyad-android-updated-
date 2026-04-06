@@ -544,12 +544,51 @@ export const getAllTechnicians = async (): Promise<any[]> => {
     
     console.log('✅ [TechnicianService] Fetched technicians:', technicians.length);
     console.log('═══════════════════════════════════════════════════════════');
-    
+
     return technicians;
-    
+
   } catch (error: any) {
     console.error('❌ [TechnicianService] Error fetching technicians:', error);
     throw error;
   }
 };
+
+/**
+ * Get technicians with optional filters (used by unified search).
+ */
+export async function getTechnicians(
+  serviceId?: number,
+  regionId?: number,
+  searchQuery?: string,
+  page: number = 0,
+  limit: number = 20,
+): Promise<any[]> {
+  try {
+    const token = await storage.getAuthToken();
+    if (!token) return [];
+
+    const params = new URLSearchParams();
+    if (serviceId) params.append('serviceId', String(serviceId));
+    if (regionId) params.append('regionId', String(regionId));
+    if (searchQuery) params.append('search', searchQuery);
+    params.append('page', String(page));
+    params.append('limit', String(limit));
+
+    const url = buildApiUrl(API_ENDPOINTS.USER.TECHNICIANS_LIST) + '?' + params.toString();
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) return [];
+    const data = await response.json();
+    return Array.isArray(data) ? data : (data?.technicians ?? data?.data ?? []);
+  } catch (err) {
+    console.warn('⚠️ [TechnicianService] getTechnicians error:', err);
+    return [];
+  }
+}
 

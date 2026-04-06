@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, View } from 'react-native';
 import BonyadLogo from './BonyadLogo';
+import { useTheme } from '../context/ThemeContext';
 
 /**
  * Animated splash shown while fonts/assets are loading.
@@ -8,6 +9,7 @@ import BonyadLogo from './BonyadLogo';
  * then gently pulses until the parent removes it.
  */
 export default function SplashScreenOverlay() {
+  const { colors, theme } = useTheme();
   const opacity = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(0.72)).current;
   const pulse = useRef(new Animated.Value(1)).current;
@@ -49,7 +51,7 @@ export default function SplashScreenOverlay() {
   }, []);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Animated.View
         style={{
           opacity,
@@ -58,7 +60,7 @@ export default function SplashScreenOverlay() {
           ],
         }}
       >
-        <BonyadLogo size="large" variant="dark" />
+        <BonyadLogo size="large" variant={theme === 'dark' ? 'light' : 'dark'} />
       </Animated.View>
     </View>
   );
@@ -67,7 +69,6 @@ export default function SplashScreenOverlay() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, KeyboardAvoidingView, Platform, Alert, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import { useTranslation } from 'react-i18next';
@@ -163,7 +164,7 @@ export default function AskBonyadAIScreen({ onBack }: AskBonyadAIScreenProps) {
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top, backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+          <BackArrowIonicons variant="arrow" size={24} color={colors.text}/>
         </TouchableOpacity>
         <View style={styles.headerCenter}>
           <View style={[styles.aiAvatar, { backgroundColor: colors.primary + '20' }]}>

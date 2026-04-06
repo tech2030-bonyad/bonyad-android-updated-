@@ -11,7 +11,6 @@ import {
 import { useTranslation } from 'react-i18next';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-
 const { width: SCREEN_W } = Dimensions.get('window');
 const BRAND_BLUE = '#00A5F4';
 const BRAND_BLUE_DARK = '#0078C8';
@@ -145,26 +144,28 @@ export default function GlassTabBar({
         )}
 
         <View style={[styles.row, { flexDirection: 'row' }]}>
-          {tabs.map((tab, i) =>
-            tab.id === 'new' ? (
-              <PlusButton
-                key="__plus__"
-                onPress={() => (onNewPress ? onNewPress() : onTabPress('new'))}
-                primaryColor={primaryColor}
-                primaryColorDark={primaryColorDark}
-              />
-            ) : (
-              <TabItem
-                key={tab.id}
-                tab={tab}
-                isSelected={activeTab === tab.id}
-                onPress={() => onTabPress(tab.id)}
-                primaryColor={primaryColor}
-                isDark={isDark}
-                t={tFn}
-              />
-            ),
-          )}
+          {tabs.map((tab) => {
+            const inner =
+              tab.id === 'new' ? (
+                <PlusButton
+                  key="__plus__"
+                  onPress={() => (onNewPress ? onNewPress() : onTabPress('new'))}
+                  primaryColor={primaryColor}
+                  primaryColorDark={primaryColorDark}
+                />
+              ) : (
+                <TabItem
+                  key={tab.id}
+                  tab={tab}
+                  isSelected={activeTab === tab.id}
+                  onPress={() => onTabPress(tab.id)}
+                  primaryColor={primaryColor}
+                  isDark={isDark}
+                  t={tFn}
+                />
+              );
+            return inner;
+          })}
         </View>
       </View>
     </View>
@@ -319,7 +320,7 @@ function PlusButton({
             useNativeDriver: true,
           }),
           Animated.timing(glowScale, {
-            toValue: 1.12,
+            toValue: 1.04,
             duration: 2400,
             easing: Easing.inOut(Easing.sin),
             useNativeDriver: true,
@@ -350,7 +351,7 @@ function PlusButton({
     rippleOpacity.setValue(0.5);
     Animated.parallel([
       Animated.timing(rippleScale, {
-        toValue: 1.6,
+        toValue: 1.18,
         duration: 480,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
@@ -474,6 +475,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     height: 52,
+    overflow: 'hidden',
+    borderRadius: 16,
   },
   tabInner: {
     alignItems: 'center',
@@ -481,7 +484,8 @@ const styles = StyleSheet.create({
     height: 48,
     width: '100%',
     position: 'relative',
-    overflow: 'visible',
+    overflow: 'hidden',
+    borderRadius: 14,
   },
   rippleCircle: {
     position: 'absolute',
@@ -495,16 +499,18 @@ const styles = StyleSheet.create({
     marginTop: 2,
     letterSpacing: 0.3,
   },
-  // ── Plus ──
+  // ── Plus ── (circular clip keeps glow/ripple inside the slot)
   plusSlot: {
     width: 62,
+    height: 62,
+    borderRadius: 31,
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
   },
   plusContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: -6,
     width: 56,
     height: 56,
   },

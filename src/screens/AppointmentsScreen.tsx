@@ -1,11 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useContext } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, RefreshControl, StyleSheet, ScrollView } from 'react-native';
+import { CopilotStep, useCopilot } from 'react-native-copilot';
 import { Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import { useTranslation } from 'react-i18next';
 import { useRTL } from '../hooks/useRTL';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaInsetsContext, initialWindowMetrics } from 'react-native-safe-area-context';
+import type { EdgeInsets } from 'react-native-safe-area-context';
 import { storage } from '../utils/storage';
 import { API_ENDPOINTS, buildApiUrl, buildApiUrlWithParams } from '../config/api';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
@@ -13,6 +16,9 @@ import ConfirmationPopup, { useConfirmationPopup } from '../components/Confirmat
 import AppointmentCard from '../components/AppointmentCard';
 import { getTopPadding } from '../utils/statusBarHelper';
 import AnimatedLoadingScreen from '../components/AnimatedLoadingScreen';
+import { WalkableView } from '../components/CoachMarkProvider';
+import { coachMarksStorage } from '../utils/coachMarks';
+import { setTutorialCompletionKey } from '../utils/tutorialSession';
 
 export interface Appointment {
   id: number;
@@ -42,7 +48,17 @@ type AppointmentFilter = 'today' | 'pending' | 'upcoming' | 'completed';
 
 interface AppointmentsScreenProps {
   onBack?: () => void;
+  onExposeTourControl?: (c: { startTour: () => void }) => void;
 }
+
+const APPOINTMENTS_TOUR_SCROLL_PAD = 88;
+
+const INSETS_FALLBACK: EdgeInsets = initialWindowMetrics?.insets ?? {
+  top: 0,
+  bottom: 0,
+  left: 0,
+  right: 0,
+};
 
 const DAYS_OF_WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -73,12 +89,12 @@ const COLORS = {
   completedGreenLight: '#E6F5EC',
 };
 
-export default function AppointmentsScreen({ onBack }: AppointmentsScreenProps) {
+export default function AppointmentsScreen({ onBack, onExposeTourControl }: AppointmentsScreenProps) {
   const { colors, theme } = useTheme();
   const { fontFamily, scaledSize } = useFontFamily();
   const { t } = useTranslation();
   const { backIcon, arrowBackIcon } = useRTL();
-  const insets = useSafeAreaInsets();
+  const insets = useContext(SafeAreaInsetsContext) ?? INSETS_FALLBACK;
   const isDarkMode = theme === 'dark';
   
   // Custom popup hooks
@@ -90,7 +106,74 @@ export default function AppointmentsScreen({ onBack }: AppointmentsScreenProps) 
   const [selectedFilter, setSelectedFilter] = useState<AppointmentFilter>('today');
   const [isTechnician, setIsTechnician] = useState<boolean | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  
+
+  const { start: startCoachTour, visible: copilotVisible, copilotEvents } = useCopilot();
+  const startCoachTourRef = useRef(startCoachTour);
+  const copilotVisibleRef = useRef(copilotVisible);
+  startCoachTourRef.current = startCoachTour;
+  copilotVisibleRef.current = copilotVisible;
+  const mainScrollRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    onExposeTourControl?.({
+      startTour: () => {
+        setTutorialCompletionKey('appointments');
+        requestAnimationFrame(() => startCoachTour());
+      },
+    });
+  }, [onExposeTourControl, startCoachTour]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    (async () => {
+      try {
+        const seen = await coachMarksStorage.hasSeenTutorial('appointments');
+        if (cancelled || seen) return;
+        timer = setTimeout(() => {
+          if (cancelled || copilotVisibleRef.current) return;
+          setTutorialCompletionKey('appointments');
+          startCoachTourRef.current?.();
+        }, 1800);
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, []);
+
+  useEffect(() => {
+    const scrollToStep = (step: { name?: string; wrapperRef?: React.RefObject<any> } | undefined) => {
+      const sv = mainScrollRef.current;
+      if (!sv || !step?.name?.startsWith('appt')) return;
+      const run = () => {
+        if (step.name === 'apptCalendar') {
+          sv.scrollTo({ y: 0, animated: true });
+          return;
+        }
+        const scrollContent = (sv as ScrollView & { getInnerViewRef?: () => unknown }).getInnerViewRef?.();
+        const target = step.wrapperRef?.current;
+        if (!scrollContent || !target || typeof target.measureLayout !== 'function') return;
+        target.measureLayout(
+          scrollContent,
+          (_x: number, y: number) => {
+            sv.scrollTo({ y: Math.max(0, y - APPOINTMENTS_TOUR_SCROLL_PAD), animated: true });
+          },
+          () => {},
+        );
+      };
+      requestAnimationFrame(() => {
+        requestAnimationFrame(run);
+      });
+    };
+    const handler = (s: unknown) => scrollToStep(s as { name?: string; wrapperRef?: React.RefObject<any> });
+    copilotEvents.on('stepChange', handler);
+    return () => copilotEvents.off('stepChange', handler);
+  }, [copilotEvents]);
+
   // Calendar state
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -577,13 +660,14 @@ export default function AppointmentsScreen({ onBack }: AppointmentsScreenProps) 
       {onBack && (
         <View style={[styles.header, { borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={onBack} style={styles.backButton} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-            <Ionicons name={arrowBackIcon} size={24} color={colors.text} />
+            <BackArrowIonicons variant="arrow" size={24} color={colors.text}/>
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(18) }]}>{t('My appointments')}</Text>
           <View style={styles.backButton} />
         </View>
       )}
-      <ScrollView 
+      <ScrollView
+        ref={mainScrollRef}
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -595,11 +679,13 @@ export default function AppointmentsScreen({ onBack }: AppointmentsScreenProps) 
         }
       >
         {/* Calendar Section */}
-        <View style={[styles.calendarSection, { backgroundColor: colors.cardBackground }]}>
+        <CopilotStep text={t('tutorial.appointments.calendar')} order={101} name="apptCalendar">
+          <WalkableView collapsable={false} style={styles.copilotWalkable}>
+            <View style={[styles.calendarSection, { backgroundColor: colors.cardBackground }]}>
           {/* Month Navigation */}
           <View style={styles.monthNavigation}>
             <TouchableOpacity onPress={() => navigateMonth('prev')} style={styles.navArrow}>
-              <Ionicons name={backIcon} size={24} color={colors.text} />
+              <BackArrowIonicons variant="chevron" size={24} color={colors.text}/>
             </TouchableOpacity>
             <View style={styles.monthTitleContainer}>
               <Text style={[styles.monthTitle, { color: colors.text }]}>
@@ -630,52 +716,64 @@ export default function AppointmentsScreen({ onBack }: AppointmentsScreenProps) 
               {renderCalendar()}
             </View>
           </View>
-        </View>
+            </View>
+          </WalkableView>
+        </CopilotStep>
 
         {/* Filter Tabs */}
-        <View style={styles.filterTabsContainer}>
-          {renderFilterTab('today', t('Today'))}
-          {renderFilterTab('pending', t('Pending'))}
-          {renderFilterTab('upcoming', t('Upcoming'))}
-          {renderFilterTab('completed', t('Completed'))}
-        </View>
+        <CopilotStep text={t('tutorial.appointments.filters')} order={102} name="apptFilters">
+          <WalkableView collapsable={false} style={styles.copilotWalkable}>
+            <View style={styles.filterTabsContainer}>
+              {renderFilterTab('today', t('Today'))}
+              {renderFilterTab('pending', t('Pending'))}
+              {renderFilterTab('upcoming', t('Upcoming'))}
+              {renderFilterTab('completed', t('Completed'))}
+            </View>
+          </WalkableView>
+        </CopilotStep>
 
-        {/* Section Header */}
-        <View style={styles.sectionHeader}>
-          <View style={[styles.sectionIndicator, { backgroundColor: getFilterColor() }]} />
-          <Text style={[styles.sectionTitle, { fontSize: scaledSize(18), color: colors.text }]}>
-            {getSectionTitle()}
-          </Text>
-        </View>
+        <CopilotStep text={t('tutorial.appointments.list')} order={103} name="apptList">
+          <WalkableView collapsable={false} style={styles.copilotWalkable}>
+            <View style={styles.apptListCopilotInner}>
+              {/* Section Header */}
+              <View style={styles.sectionHeader}>
+                <View style={[styles.sectionIndicator, { backgroundColor: getFilterColor() }]} />
+                <Text style={[styles.sectionTitle, { fontSize: scaledSize(18), color: colors.text }]}>
+                  {getSectionTitle()}
+                </Text>
+              </View>
 
-        {/* Appointments List */}
-        {isLoading && appointments.length === 0 ? (
-          <AnimatedLoadingScreen message={t('Loading...')} />
-        ) : appointments.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Ionicons name="calendar-outline" size={64} color={colors.textSecondary} />
-            <Text style={[styles.emptyText, { fontSize: scaledSize(14), color: colors.textSecondary }]}>{t('No appointments found')}</Text>
-          </View>
-        ) : (
-          <View style={styles.appointmentsList}>
-            {appointments.map((item) => (
-              <AppointmentCard
-                key={item.id}
-                appointment={item}
-                filter={selectedFilter}
-                isTechnician={isTechnician || false}
-                onAccept={acceptRequest}
-                onReject={rejectRequest}
-                onComplete={completeAppointment}
-                onCancel={cancelRequest}
-                onChangeDate={() => {
-                  // TODO: Implement change date functionality
-                  console.log('Change date for appointment:', item.id);
-                }}
-              />
-            ))}
-          </View>
-        )}
+              {/* Appointments List */}
+              {isLoading && appointments.length === 0 ? (
+                <AnimatedLoadingScreen message={t('Loading...')} />
+              ) : appointments.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Ionicons name="calendar-outline" size={64} color={colors.textSecondary} />
+                  <Text style={[styles.emptyText, { fontSize: scaledSize(14), color: colors.textSecondary }]}>{t('No appointments found')}</Text>
+                </View>
+              ) : (
+                <View style={styles.appointmentsList}>
+                  {appointments.map((item) => (
+                    <AppointmentCard
+                      key={item.id}
+                      appointment={item}
+                      filter={selectedFilter}
+                      isTechnician={isTechnician || false}
+                      onAccept={acceptRequest}
+                      onReject={rejectRequest}
+                      onComplete={completeAppointment}
+                      onCancel={cancelRequest}
+                      onChangeDate={() => {
+                        // TODO: Implement change date functionality
+                        console.log('Change date for appointment:', item.id);
+                      }}
+                    />
+                  ))}
+                </View>
+              )}
+            </View>
+          </WalkableView>
+        </CopilotStep>
 
         {/* Bottom spacing */}
         <View style={{ height: 120 }} />
@@ -709,6 +807,14 @@ export default function AppointmentsScreen({ onBack }: AppointmentsScreenProps) 
 }
 
 const styles = StyleSheet.create({
+  copilotWalkable: {
+    alignSelf: 'stretch',
+    width: '100%',
+  },
+  apptListCopilotInner: {
+    alignSelf: 'stretch',
+    width: '100%',
+  },
   container: {
     flex: 1,
   },

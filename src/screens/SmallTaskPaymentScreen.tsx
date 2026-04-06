@@ -14,6 +14,7 @@ import {
 import { WebView } from 'react-native-webview';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
@@ -46,6 +47,7 @@ export default function SmallTaskPaymentScreen({
   const { colors } = useTheme();
   const { fontFamily, fonts } = useFontFamily();
   const insets = useSafeAreaInsets();
+  const isArabic = i18n.language?.startsWith('ar');
 
   const [step, setStep] = useState<'form' | 'webview' | 'verifying' | 'done'>('form');
   const [checkoutData, setCheckoutData] = useState<CreateCheckoutResponse | null>(null);
@@ -111,9 +113,9 @@ export default function SmallTaskPaymentScreen({
   if (step === 'form' && showOrchestrator) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={[styles.header, { paddingTop: insets.top, backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
+        <View style={[styles.header, isArabic ? styles.headerRTL : styles.headerLTR, { paddingTop: insets.top, backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={onBack} style={styles.backBtn}>
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
+            <BackArrowIonicons variant="arrow" size={24} color={colors.text} forceLtrLayout={!isArabic} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: colors.text, fontFamily: fonts?.primaryBold || fontFamily }]}>
             {t('Pay for Task')}
@@ -148,9 +150,9 @@ export default function SmallTaskPaymentScreen({
   if (step === 'webview' && checkoutData?.redirectUrl) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={[styles.header, { paddingTop: insets.top, backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
+        <View style={[styles.header, isArabic ? styles.headerRTL : styles.headerLTR, { paddingTop: insets.top, backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={onBack} style={styles.backBtn}>
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
+            <BackArrowIonicons variant="arrow" size={24} color={colors.text} forceLtrLayout={!isArabic} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: colors.text }]}>{t('Payment')}</Text>
         </View>
@@ -214,6 +216,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 12,
     borderBottomWidth: 1,
+  },
+  headerLTR: {
+    direction: 'ltr',
+  },
+  headerRTL: {
+    direction: 'rtl',
   },
   backBtn: {
     padding: 8,

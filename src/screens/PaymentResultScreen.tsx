@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
@@ -138,7 +139,7 @@ export default function PaymentResultScreen({
         ]}
       >
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+          <BackArrowIonicons variant="arrow" size={24} color={colors.text}/>
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(20) }]}>
           {t('Payment Result')}

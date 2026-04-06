@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -112,7 +113,8 @@ export default function CompletedProjectScreen({
   const screenWidth = Dimensions.get('window').width;
   const IS_WEB = Platform.OS === 'web';
   const IS_LARGE_WEB = IS_WEB && screenWidth >= 1024;
-  
+  const isArabic = i18n.language?.startsWith('ar');
+
   const [phases, setPhases] = useState<Phase[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [technicianId, setTechnicianId] = useState<number | null>(null);
@@ -666,14 +668,10 @@ export default function CompletedProjectScreen({
       <View style={[styles.container, { backgroundColor: c.bgWhite, paddingTop: IS_LARGE_WEB ? 0 : getTopPadding(insets) }]}>
         {/* Header - Hidden on large web */}
         {!IS_LARGE_WEB && (
-        <View style={[styles.header, styles.headerLTR, { paddingTop: getTopPadding(insets) }]}>
+        <View style={[styles.header, isArabic ? styles.headerRTL : styles.headerLTR, { paddingTop: getTopPadding(insets) }]}>
           <View style={[styles.headerContent]}>
             <TouchableOpacity onPress={onBack} style={styles.backButton}>
-              <Ionicons 
-                name="chevron-back" 
-                size={28} 
-                color={c.primary100} 
-              />
+              <BackArrowIonicons variant="chevron" size={28} color={c.primary100} forceLtrLayout={!isArabic} />
             </TouchableOpacity>
             <View style={[styles.headerTextContainer]}>
               <Text style={[styles.headerTitle,  { fontSize: scaledSize(20) }]}>
@@ -704,13 +702,9 @@ export default function CompletedProjectScreen({
           >
             {/* Title Section - Large Web */}
             {IS_LARGE_WEB && (
-              <View style={styles.titleSectionLargeWeb}>
+              <View style={[styles.titleSectionLargeWeb, isArabic ? styles.headerRTL : styles.headerLTR]}>
                 <TouchableOpacity onPress={onBack} style={styles.titleBackButton}>
-                  <Ionicons 
-                    name="chevron-back" 
-                    size={24} 
-                    color={c.primary100} 
-                  />
+                  <BackArrowIonicons variant="chevron" size={24} color={c.primary100} forceLtrLayout={!isArabic} />
                 </TouchableOpacity>
                 <View style={styles.titleContainer}>
                   <Text style={[styles.titleMainText, { fontSize: scaledSize(42) }]}>
@@ -979,6 +973,9 @@ function makeStyles(c: typeof COLORS & { error: string }) {
   },
   headerLTR: {
     direction: 'ltr',
+  },
+  headerRTL: {
+    direction: 'rtl',
   },
   headerLargeWeb: {
     paddingHorizontal: 48,

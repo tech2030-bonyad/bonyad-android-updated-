@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useTheme } from '../context/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { storage } from '../utils/storage';
@@ -60,6 +61,7 @@ export default function PendingSmallTaskScreen({
   const { colors, theme } = useTheme();
   const insets = useSafeAreaInsets();
   const isDarkMode = theme === 'dark';
+  const isArabic = i18n.language?.startsWith('ar');
 
   const [taskDetails, setTaskDetails] = useState<SmallTaskRequest>(task);
   const [bids, setBids] = useState<SmallTaskBid[]>([]);
@@ -290,9 +292,9 @@ export default function PendingSmallTaskScreen({
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={[styles.header, styles.headerLTR, { paddingTop: topSpacing, borderBottomColor: colors.border }]}>
+      <View style={[styles.header, isArabic ? styles.headerRTL : styles.headerLTR, { paddingTop: topSpacing, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={24} color={primaryColor} />
+          <BackArrowIonicons variant="chevron" size={24} color={primaryColor} forceLtrLayout={!isArabic} />
         </TouchableOpacity>
         
         <Text style={[styles.headerTitle, { color: primaryColor }]}>
@@ -601,6 +603,9 @@ const styles = StyleSheet.create({
   },
   headerLTR: {
     direction: 'ltr',
+  },
+  headerRTL: {
+    direction: 'rtl',
   },
   backButton: {
     width: 40,

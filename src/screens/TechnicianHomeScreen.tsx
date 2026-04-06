@@ -11,7 +11,7 @@ import {
   Animated,
   Image,
 } from 'react-native';
-import { CopilotStep, walkthroughable, useCopilot } from 'react-native-copilot';
+import { useCopilot, CopilotStep } from 'react-native-copilot';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/Colors';
@@ -21,6 +21,7 @@ import { Image as ExpoImage } from 'expo-image';
 import BonyadLogo from '../components/BonyadLogo';
 import AppTopBar from '../components/AppTopBar';
 import GlassTabBar, { TECHNICIAN_TABS } from '../components/GlassTabBar';
+import { WalkableView } from '../components/CoachMarkProvider';
 import AnimatedLoadingScreen from '../components/AnimatedLoadingScreen';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
@@ -55,6 +56,8 @@ import TechnicalHomeScreenContent from './home/TechnicalHomeScreen';
 import ChatbotScreen from './ChatbotScreen';
 import { SmallTaskRequest } from '../types/smallTasks';
 import type { HomeShellFromChatbotPayload } from '../utils/chatbotNavigateAndroid';
+import { coachMarksStorage } from '../utils/coachMarks';
+import { setTutorialCompletionKey } from '../utils/tutorialSession';
 
 interface TechnicianHomeScreenProps {
   onShowProfile: () => void;
@@ -68,6 +71,7 @@ interface TechnicianHomeScreenProps {
   onShowRunningProjects?: () => void;
   onShowNotifications?: () => void;
   onShowAppointments?: () => void;
+  onShowChatbot?: () => void;
   onChatbotNavigateToTab?: (tabName: string) => void;
   onChatbotNavigateToScreen?: (screenName: string, params?: Record<string, unknown>) => void;
   onChatbotRequestLiveAgent?: (subject: string, aiHistory: any[], firstUserMessage: string) => void;
@@ -227,7 +231,21 @@ export default function TechnicianHomeScreen({
   const [commissionCheckoutDescription, setCommissionCheckoutDescription] = useState('');
 
   // Copilot coach guide
-  const { start: startCoachTour } = useCopilot();
+  const { start: startCoachTour, visible: copilotVisible } = useCopilot();
+  const startCoachTourRef = useRef(startCoachTour);
+  const copilotVisibleRef = useRef(copilotVisible);
+  startCoachTourRef.current = startCoachTour;
+  copilotVisibleRef.current = copilotVisible;
+
+  const restartTechnicianHomeTour = useCallback(async () => {
+    await coachMarksStorage.clearTutorial('technicianHome');
+    setShowAppointmentsView(false);
+    setActiveTab('home');
+    setTimeout(() => {
+      setTutorialCompletionKey('technicianHome');
+      startCoachTourRef.current?.();
+    }, 650);
+  }, []);
 
   // Auto-start the coach tour ONLY on the Home tab (prevents tour showing on other tabs/screens).
   useEffect(() => {
@@ -235,12 +253,14 @@ export default function TechnicianHomeScreen({
     let cancelled = false;
     let timer: any = null;
     (async () => {
-      const hasSeen = await coachMarksStorage.hasSeenHomeCoachMarks();
+      const hasSeen = await coachMarksStorage.hasSeenTutorial('technicianHome');
       if (cancelled) return;
       if (!hasSeen) {
         timer = setTimeout(() => {
+          if (cancelled || copilotVisibleRef.current) return;
           console.log('🎯 Starting coach tour (home tab)...');
-          startCoachTour();
+          setTutorialCompletionKey('technicianHome');
+          startCoachTourRef.current?.();
         }, 2500);
       }
     })();
@@ -248,7 +268,7 @@ export default function TechnicianHomeScreen({
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [activeTab, startCoachTour]);
+  }, [activeTab]);
 
   // Animation values for dropdowns and tab transition
   const mobileDropdownAnim = useRef(new Animated.Value(0)).current;
@@ -579,6 +599,12 @@ export default function TechnicianHomeScreen({
     }
   }, [openProfileOnMount]);
 
+  const technicianDashboardCopilotActive =
+    activeTab === 'home' &&
+    !smallTasksView &&
+    !showCommissionPayment &&
+    !commissionCheckoutRequest &&
+    !showAppointmentsView;
 
   // Render mobile layout — iOS-style: on home tab (content only), hide parent top bar
   if (shouldRenderMobile) {
@@ -597,7 +623,7 @@ export default function TechnicianHomeScreen({
               setShowChatList(true);
               setActiveTab('chat');
             }}
-            onPressInfo={startCoachTour}
+            onPressInfo={restartTechnicianHomeTour}
             // Open notifications INSIDE technician tabs so top/bottom nav stay visible.
             onPressNotifications={() => setActiveTab('notifications')}
           />
@@ -610,6 +636,7 @@ export default function TechnicianHomeScreen({
           <TechnicalHomeScreenContent
             userName={userProfile?.name}
             unreadNotificationCount={unreadNotificationCount}
+            copilotStepsActive={technicianDashboardCopilotActive}
             onPressChat={() => {
               setSelectedChat(null);
               setShowChatList(true);
@@ -617,7 +644,7 @@ export default function TechnicianHomeScreen({
             }}
             // Open notifications INSIDE technician tabs so top/bottom nav stay visible.
             onPressNotifications={() => setActiveTab('notifications')}
-            onPressInfo={startCoachTour}
+            onPressInfo={restartTechnicianHomeTour}
             onPressAvailableProject={(status) => {
               if (status === 'small_tasks') {
                 setProjectsInitialProjectType('small');
@@ -992,27 +1019,36 @@ export default function TechnicianHomeScreen({
 
         {/* Glass tab bar — iOS-style with water-drop press */}
         <View style={styles.glassTabBarContainer}>
-          <GlassTabBar
-            activeTab={
-              activeTab === 'chatbot'
-                ? 'home'
-                : ['home', 'projects', 'wallet', 'profile'].includes(activeTab)
-                  ? activeTab
-                  : 'home'
-            }
-            onTabPress={(tab) => {
-              if (activeTab === 'profile' && tab !== 'profile') {
-                onProfileTabClosed?.();
-              }
-              setActiveTab(tab);
-            }}
-            tabs={TECHNICIAN_TABS}
-            primaryColor={colors.primary}
-            primaryColorDark={colors.primaryDark || '#1A6DB4'}
-            isDark={isDarkMode}
-            bottomInset={insets.bottom}
-            t={t}
-          />
+          <CopilotStep
+            text={t('tutorial.home.technician.bottomNav')}
+            order={3}
+            name="technicianTabBar"
+            active={technicianDashboardCopilotActive}
+          >
+            <WalkableView collapsable={false} style={{ width: '100%' }}>
+              <GlassTabBar
+                activeTab={
+                  activeTab === 'chatbot'
+                    ? 'home'
+                    : ['home', 'projects', 'wallet', 'profile'].includes(activeTab)
+                      ? activeTab
+                      : 'home'
+                }
+                onTabPress={(tab) => {
+                  if (activeTab === 'profile' && tab !== 'profile') {
+                    onProfileTabClosed?.();
+                  }
+                  setActiveTab(tab);
+                }}
+                tabs={TECHNICIAN_TABS}
+                primaryColor={colors.primary}
+                primaryColorDark={colors.primaryDark || '#1A6DB4'}
+                isDark={isDarkMode}
+                bottomInset={insets.bottom}
+                t={t}
+              />
+            </WalkableView>
+          </CopilotStep>
         </View>
 
       </View>
@@ -1168,13 +1204,14 @@ export default function TechnicianHomeScreen({
           <TechnicalHomeScreenContent
             userName={userProfile?.name}
             unreadNotificationCount={unreadNotificationCount}
+            copilotStepsActive={technicianDashboardCopilotActive}
             onPressChat={() => {
               setSelectedChat(null);
               setShowChatList(true);
               setActiveTab('chat');
             }}
             onPressNotifications={onShowNotifications}
-            onPressInfo={startCoachTour}
+            onPressInfo={restartTechnicianHomeTour}
             onPressAvailableProject={(status) => {
               if (status === 'small_tasks') {
                 setProjectsInitialProjectType('small');

@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useTheme } from '../context/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createSmallTaskRequest, type SmallTaskType, type CreateSmallTaskRequestBody } from '../services/SmallTaskService';
@@ -173,11 +174,7 @@ export default function SmallTaskRequestForm({
         }
       ]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Ionicons 
-            name="arrow-back" 
-            size={24} 
-            color={primaryColor} 
-          />
+          <BackArrowIonicons variant="arrow" size={24} color={primaryColor} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: primaryColor }]}>
           {t('create_task_request')}
