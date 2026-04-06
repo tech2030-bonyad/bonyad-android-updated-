@@ -1,4 +1,4 @@
-package com.bonyadapp
+package com.bonyad.app
 
 import android.app.Application
 import android.content.res.Configuration

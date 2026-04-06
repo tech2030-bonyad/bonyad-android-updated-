@@ -2,7 +2,7 @@
   "expo": {
     "name": "bonyad-app",
     "slug": "bonyad-app",
-    "version": "1.0.0",
+    "version": "1.0.3",
     "orientation": "default",
     "icon": "./assets/app-icon.png",
     "userInterfaceStyle": "light",
@@ -28,7 +28,8 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.bonyadapp",
+      "package": "com.bonyad.app",
+      "versionCode": 4,
       "googleServicesFile": "./google-services.json",
       "config": {
         "googleMaps": {

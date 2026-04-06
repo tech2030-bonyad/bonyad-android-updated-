@@ -20,3 +20,7 @@ keystore.properties
 *.jks
 *.keystore
 !**/debug.keystore
+# PEM from Play upload key reset (public cert; ignore to avoid committing noise)
+upload_certificate.pem
+# Entire folder: Play upload keystore backup + local password notes (never commit)
+seceett/
