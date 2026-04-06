@@ -15,6 +15,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
@@ -177,7 +178,7 @@ const PrimaryBtn = ({ label, onPress, disabled, loading, colors }: { label: stri
 
 const BackBtn = ({ label, onPress, colors }: { label: string; onPress: () => void; colors: any }) => (
   <TouchableOpacity onPress={onPress} activeOpacity={0.75} style={[btn.back, { borderColor: P }]}>
-    <Ionicons name="chevron-back" size={16} color={P} />
+    <BackArrowIonicons variant="chevron" size={16} color={P}/>
     <Text style={[btn.backTxt, { color: P }]}>{label}</Text>
   </TouchableOpacity>
 );

@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
@@ -58,6 +59,7 @@ export default function MyDataScreen({
   onNavigateToAvailability,
 }: MyDataScreenProps) {
   const { t, i18n } = useTranslation();
+  const isArabic = i18n.language?.startsWith('ar');
   const insets = useSafeAreaInsets();
   const { colors, theme } = useTheme();
   const { fontFamily, scaledSize } = useFontFamily();
@@ -155,13 +157,9 @@ export default function MyDataScreen({
   return (
     <Animated.View style={[styles.container, { backgroundColor: bgColor, paddingTop: insets.top, opacity: screenOpacity, transform: [{ translateX: screenSlideX }] }]}>
       {/* Header */}
-      <View style={[styles.headerRow, styles.headerLTR]}>
-        <TouchableOpacity onPress={handleBackScreen} style={styles.backButton}>
-          <Ionicons
-            name="chevron-back"
-            size={24}
-            color={textColor}
-          />
+      <View style={styles.headerRow}>
+        <TouchableOpacity onPress={handleBackScreen} style={[styles.backButton, isArabic && { marginLeft: 'auto' }]}>
+          <BackArrowIonicons variant="chevron" size={24} color={textColor} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: textColor, fontSize: scaledSize(18) }]}>
           {isTechnician ? t('myData.titleTechnician') : t('myData.titleUser')}
@@ -174,7 +172,7 @@ export default function MyDataScreen({
         style={styles.scrollView}
         contentContainerStyle={[
           styles.content,
-          { paddingBottom: Math.max(insets.bottom, 120) }
+          { paddingBottom: Math.max(insets.bottom, 180) }
         ]}
       >
         {/* User Avatar Section - Centered */}
@@ -244,9 +242,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
-  headerLTR: {
-    direction: 'ltr',
-  },
   backButton: {
     width: 40,
     height: 40,
@@ -267,14 +262,14 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 16,
-    paddingTop: 8,
-    gap: 24,
+    paddingTop: 32,
+    gap: 40,
   },
   userSection: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 24,
-    gap: 24,
+    paddingVertical: 40,
+    gap: 32,
   },
   avatarContainer: {
     width: 120,
@@ -300,16 +295,16 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   menuSection: {
-    gap: 16,
+    gap: 24,
   },
   menuOption: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 16,
+    padding: 20,
     borderRadius: 6,
     borderWidth: 1,
-    gap: 12,
+    gap: 16,
   },
   menuIconContainer: {
     width: 40,
@@ -327,11 +322,12 @@ const styles = StyleSheet.create({
     color: FIGMA_COLORS.textBody,
   },
   saveButton: {
-    paddingVertical: 16,
+    paddingVertical: 18,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
+    marginTop: 24,
   },
   saveButtonText: {
     color: '#FFFFFF',

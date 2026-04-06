@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, Alert, ActivityIndicator, Platform, Linking, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import { useTranslation } from 'react-i18next';
@@ -176,7 +177,7 @@ export default function RoomVisualizerScreen({ onBack }: RoomVisualizerScreenPro
       {/* Header */}
       <View style={[styles.header, { backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+          <BackArrowIonicons variant="arrow" size={24} color={colors.text}/>
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>
           {i18n.language === 'en' ? 'AI Room Visualizer' : 'مصور الغرفة الذكي'}

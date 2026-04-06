@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
@@ -258,11 +259,7 @@ export default function ChangePasswordScreen({ onBack }: ChangePasswordScreenPro
       {/* Header */}
       <View style={[styles.headerRow, styles.headerLTR]}>
         <TouchableOpacity onPress={handleBackScreen} style={styles.backButton}>
-          <Ionicons
-            name="chevron-back"
-            size={24}
-            color={headerTextColor}
-          />
+          <BackArrowIonicons variant="chevron" size={24} color={headerTextColor} forceLtrLayout />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: headerTextColor, fontSize: scaledSize(18) }]}>
           {t('changePassword.title')}

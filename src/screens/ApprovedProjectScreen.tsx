@@ -22,6 +22,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import { API_ENDPOINTS, buildApiUrl, buildApiUrlWithParams } from '../config/api';
@@ -812,7 +813,8 @@ export default function ApprovedProjectScreen({
   const IS_LARGE_WEB = IS_WEB && screenWidth >= 1024;
   
   const serviceName = i18n.language === 'ar' ? project?.serviceNameAr : project?.serviceNameEn;
-  
+  const isArabic = i18n.language?.startsWith('ar');
+
   const projectStatus = project?.status?.toUpperCase?.() || '';
   
   // Status helpers
@@ -1096,13 +1098,9 @@ export default function ApprovedProjectScreen({
     <View style={[styles.container, { backgroundColor: c.bgWhite, paddingTop: IS_LARGE_WEB ? 0 : insets.top }]}>
       {/* Header - Hidden on large web */}
       {!IS_LARGE_WEB && (
-      <View style={[styles.header, styles.headerLTR]}>
+      <View style={[styles.header, isArabic ? styles.headerRTL : styles.headerLTR]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Ionicons 
-            name="chevron-back" 
-            size={24} 
-            color={c.textHeader} 
-          />
+          <BackArrowIonicons variant="chevron" size={24} color={c.textHeader} forceLtrLayout={!isArabic} />
         </TouchableOpacity>
         <View style={[styles.headerTitleContainer]}>
           <Text style={[styles.headerTitle, { fontSize: scaledSize(16) }]}>
@@ -1132,13 +1130,9 @@ export default function ApprovedProjectScreen({
       >
         {/* Title Section - Large Web */}
         {IS_LARGE_WEB && (
-          <View style={styles.titleSectionLargeWeb}>
+          <View style={[styles.titleSectionLargeWeb, isArabic ? styles.headerRTL : styles.headerLTR]}>
             <TouchableOpacity onPress={onBack} style={styles.titleBackButton}>
-              <Ionicons 
-                name="chevron-back" 
-                size={24} 
-                color={c.textHeader} 
-              />
+              <BackArrowIonicons variant="chevron" size={24} color={c.textHeader} forceLtrLayout={!isArabic} />
             </TouchableOpacity>
             <View style={styles.titleContainer}>
               <Text style={[styles.titleMainText, { fontSize: scaledSize(42) }]}>
@@ -1364,6 +1358,9 @@ function makeStyles(c: typeof COLORS) {
   },
   headerLTR: {
     direction: 'ltr',
+  },
+  headerRTL: {
+    direction: 'rtl',
   },
   headerLargeWeb: {
     paddingHorizontal: 48,

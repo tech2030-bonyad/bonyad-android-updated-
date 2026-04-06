@@ -11,6 +11,7 @@ import {
   Animated,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -244,14 +245,13 @@ const TicketListScreen: React.FC<TicketListScreenProps> = ({
         isDark={isDarkMode}
         backgroundColor={colors.background}
       />
-      {/* Header: back button stays on the left in AR */}
+      {/* Header */}
       <View style={[
         styles.header,
         { backgroundColor: colors.cardBackground, borderBottomColor: colors.border },
-        isRTL && { flexDirection: 'row-reverse' },
       ]}>
-        <TouchableOpacity onPress={handleBackScreen} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+        <TouchableOpacity onPress={handleBackScreen} style={[styles.backButton, isRTL && { marginLeft: 'auto' }]}>
+          <BackArrowIonicons variant="arrow" size={24} color={colors.text}/>
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>{t('supportCenter.title')}</Text>
         <View style={styles.headerRight} />
@@ -329,7 +329,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,

@@ -11,6 +11,8 @@ import {
   ActivityIndicator,
   Animated,
   Image,
+  I18nManager,
+  Keyboard,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons, Feather } from '@expo/vector-icons';
@@ -22,12 +24,24 @@ import StaggeredAppearView from '../../components/StaggeredAppearView';
 import PressableScaleView from '../../components/PressableScaleView';
 import BonyadLogo from '../../components/BonyadLogo';
 import ChatbotFab, { chatbotFabBottomOffset } from '../../components/ChatbotFab';
+import { SvgUriImage } from '../../components/SvgUriImage';
 import { buildApiUrl, API_ENDPOINTS } from '../../config/api';
 import { storage } from '../../utils/storage';
 import { getMyRequests } from '../../services/SmallTaskService';
 import { getCategories, getSubcategories, getDisplayIconFullUrl, type ServiceCategory, type ServiceSubcategory } from '../../services/ServiceService';
 import type { SmallTaskRequest } from '../../types/smallTasks';
+import {
+  unifiedSearch,
+  debounce,
+  getCachedRegions,
+  EMPTY_SCORED_RESULTS,
+  SEARCH_DEBOUNCE_MS,
+} from '../../utils/searchService';
+import type { ScoredSearchResults, Region } from '../../utils/searchService';
+import SearchResultsDropdown from '../../components/SearchResultsDropdown';
+import ScreenTourOverlay from '../../components/tour/ScreenTourOverlay';
 import type { CategoryInfo } from '../CategorySubcategoryScreen';
+import { coachMarksStorage } from '../../utils/coachMarks';
 
 export type { CategoryInfo };
 
@@ -66,7 +80,7 @@ function StaggeredSubcategoryCard({
   primaryColor: string;
   iconBg: string;
   iconFg: string;
-  resolveServiceImage: (item: ServiceSubcategory) => { uri: string } | null;
+  resolveServiceImage: (item: ServiceSubcategory) => { uri: string; isSvg?: boolean } | null;
   getSubcategoryIconName: (name: string) => keyof typeof Ionicons.glyphMap;
   fontStyle: object;
   onPress: () => void;
@@ -94,7 +108,17 @@ function StaggeredSubcategoryCard({
       >
         <View style={[styles.subcategoryCardWebIconWrap, { backgroundColor: iconBg }]}>
           {subImg ? (
-            <Image source={subImg} style={styles.subcategoryCardWebImage} resizeMode="contain" />
+            subImg.isSvg ? (
+              <SvgUriImage
+                uri={subImg.uri}
+                width={36}
+                height={36}
+                style={styles.subcategoryCardWebImage}
+                fallbackColor={iconFg}
+              />
+            ) : (
+              <Image source={subImg} style={styles.subcategoryCardWebImage} resizeMode="contain" />
+            )
           ) : (
             <View style={styles.subcategoryCardWebIconFallback}>
               <Ionicons name={iconName} size={36} color={iconFg} />
@@ -147,6 +171,9 @@ export interface UserHomeScreenContentProps {
   onPressFab?: () => void;
   onPressProjectStatus?: (status: 'pending' | 'running' | 'completed') => void;
   onPressCategory?: (category: CategoryInfo) => void;
+  /** Search dropdown category click (web behavior: show technicians for the whole category) */
+  onPressSearchCategory?: (category: CategoryInfo) => void;
+  onPressTechnician?: (technicianId: number) => void;
   /** When user selects a subcategory from the categories modal – e.g. open service technicians */
   onPressSubcategory?: (subcategory: ServiceSubcategory) => void;
   /** Open manual project form with this category pre-selected (no subcategory) */
@@ -161,6 +188,7 @@ export interface UserHomeScreenContentProps {
   onPressSmallTask?: (task: SmallTaskRequest) => void;
   onPressAppointments?: () => void;
   unreadNotificationCount?: number;
+  onExposeControl?: (ctrl: { startTour: () => void }) => void;
 }
 
 export default function UserHomeScreenContent({
@@ -171,6 +199,8 @@ export default function UserHomeScreenContent({
   onPressFab,
   onPressProjectStatus,
   onPressCategory,
+  onPressSearchCategory,
+  onPressTechnician,
   onPressSubcategory,
   onPressCategoryForManual,
   onPressSubcategoryForManual,
@@ -185,6 +215,7 @@ export default function UserHomeScreenContent({
   onPressMessages,
   onPressInfo,
   unreadNotificationCount = 0,
+  onExposeControl,
 }: UserHomeScreenContentProps) {
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -194,8 +225,72 @@ export default function UserHomeScreenContent({
   const isDark = theme === 'dark';
 
   const [searchText, setSearchText] = useState('');
+
+  // ─── Unified search state ──────────────────────────────────────────────────
+  const [searchResults, setSearchResults] = useState<ScoredSearchResults>(EMPTY_SCORED_RESULTS);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const [regions, setRegions] = useState<Region[]>([]);
+  const [selectedRegionId, setSelectedRegionId] = useState<number | undefined>(undefined);
+  const [searchBarPageY, setSearchBarPageY] = useState(0);
+  const searchBarRef = useRef<View>(null);
+  const searchRequestId = useRef(0); // guards against stale API responses
+
+  const measureSearchBar = useCallback(() => {
+    searchBarRef.current?.measure((_x, _y, _w, h, _px, pageY) => {
+      setSearchBarPageY(pageY + h + 4);
+    });
+  }, []);
+
+  useEffect(() => {
+    getCachedRegions().then(setRegions).catch(() => {});
+  }, []);
+
+  const performSearch = useCallback(async (query: string, regionId?: number) => {
+    const q = query.trim();
+    if (q.length < 2) {
+      setSearchResults(EMPTY_SCORED_RESULTS);
+      setSearchLoading(false);
+      setShowSearchResults(q.length > 0);
+      return;
+    }
+    const reqId = ++searchRequestId.current;
+    setSearchLoading(true);
+    setShowSearchResults(true);
+    try {
+      const results = await unifiedSearch(q, regionId, i18n.language);
+      // Only apply if this is still the latest search request (prevents stale overwrites)
+      if (reqId !== searchRequestId.current) return;
+      setSearchResults(results);
+    } catch {
+      if (reqId !== searchRequestId.current) return;
+      setSearchResults(EMPTY_SCORED_RESULTS);
+    } finally {
+      if (reqId === searchRequestId.current) {
+        setSearchLoading(false);
+      }
+    }
+  }, [i18n.language]);
+
+  // Use a ref so the debounced function always calls the latest performSearch
+  const performSearchRef = useRef(performSearch);
+  useEffect(() => { performSearchRef.current = performSearch; }, [performSearch]);
+
+  const debouncedSearchRef = useRef<ReturnType<typeof debounce<(q: string, r?: number) => void>> | null>(null);
+  if (!debouncedSearchRef.current) {
+    debouncedSearchRef.current = debounce((q: string, r?: number) => performSearchRef.current(q, r), SEARCH_DEBOUNCE_MS);
+  }
+
+  useEffect(() => {
+    if (searchText.trim().length >= 2) {
+      performSearch(searchText, selectedRegionId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedRegionId]);
+
   const [bannerIndex, setBannerIndex] = useState(0);
   const bannerScrollRef = useRef<ScrollView>(null);
+  const mainListScrollRef = useRef<ScrollView>(null);
   const [projects, setProjects] = useState<ApiProject[]>([]);
   const [smallTasks, setSmallTasks] = useState<SmallTaskRequest[]>([]);
   const [loadingProjects, setLoadingProjects] = useState(true);
@@ -369,14 +464,14 @@ export default function UserHomeScreenContent({
   );
 
   /**
-   * RN cannot render SVG. When useSvg is true, getDisplayIconUrl returns svgUrl first
-   * (which may not have a .svg extension). Strip svgUrl so it falls through to imageUrl/iconUrl.
+   * Resolve service icon URL. Returns both raster and SVG URLs.
+   * For SVG, the URL will be used with SvgUriImage component.
    */
-  const resolveServiceImage = (item: ServiceCategory | ServiceSubcategory): { uri: string } | null => {
-    const rasterItem = item.useSvg ? { ...item, useSvg: false, svgUrl: null } : item;
-    const url = getDisplayIconFullUrl(rasterItem);
-    if (!url || url.toLowerCase().endsWith('.svg')) return null;
-    return { uri: url };
+  const resolveServiceImage = (item: ServiceCategory | ServiceSubcategory): { uri: string; isSvg?: boolean } | null => {
+    const url = getDisplayIconFullUrl(item);
+    if (!url) return null;
+    const isSvg = url.toLowerCase().endsWith('.svg');
+    return { uri: url, isSvg };
   };
 
   /** Web-style category icon fallback by name */
@@ -406,10 +501,150 @@ export default function UserHomeScreenContent({
     isArabic ? (task.taskTypeNameAr ?? task.taskType?.nameAr ?? task.taskTypeNameEn) : (task.taskTypeNameEn ?? task.taskType?.nameEn ?? task.taskTypeNameAr);
   const topSpacing = Platform.OS === 'android' ? Math.max(insets.top, 50) : Math.max(insets.top, 12);
 
-  const handleSearchChange = (text: string) => {
-    setSearchText(text);
-    onPressSearch?.(text);
-  };
+  // ─── Web-style tour guide ──────────────────────────────────────────────────
+  const TOUR_STEPS = React.useMemo(() => [
+    { id: 'topNavLogo',          order: 1,  name: 'topNavLogo' as const },
+    { id: 'topNavMessages',      order: 2,  name: 'topNavMessages' as const },
+    { id: 'topNavInfo',          order: 3,  name: 'topNavInfo' as const },
+    { id: 'topNavNotifications', order: 4,  name: 'topNavNotifications' as const },
+    { id: 'search',              order: 5,  name: 'search' as const },
+    { id: 'newProject',          order: 6,  name: 'newProject' as const },
+    { id: 'smallTask',           order: 7,  name: 'smallTask' as const },
+    { id: 'appointments',        order: 8,  name: 'appointments' as const },
+    { id: 'services',            order: 9,  name: 'services' as const },
+    { id: 'serviceCategories',   order: 10, name: 'serviceCategories' as const },
+    { id: 'projectsSection',     order: 11, name: 'projectsSection' as const },
+    { id: 'smallTasksSection',   order: 12, name: 'smallTasksSection' as const },
+    { id: 'chatbot',             order: 13, name: 'chatbot' as const },
+    { id: 'bottomNavHome',       order: 14, name: 'bottomNavHome' as const },
+    { id: 'bottomNavProjects',   order: 15, name: 'bottomNavProjects' as const },
+    { id: 'bottomNavNew',        order: 16, name: 'bottomNavNew' as const },
+    { id: 'bottomNavChat',       order: 17, name: 'bottomNavChat' as const },
+    { id: 'bottomNavProfile',    order: 18, name: 'bottomNavProfile' as const },
+  ], []);
+
+  const [tourActive, setTourActive] = useState(false);
+  const [tourStep, setTourStep] = useState(0);
+  const [stepRect, setStepRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const stepViewRefs = useRef<{ [k: string]: View | null }>({});
+
+  const measureStep = useCallback((stepName: string) => {
+    const ref = stepViewRefs.current[stepName];
+    if (!ref) { setStepRect(null); return; }
+    ref.measure((_fx, _fy, width, height, pageX, pageY) => {
+      const PAD = 8;
+      setStepRect({ x: pageX - PAD, y: pageY - PAD, w: width + PAD * 2, h: height + PAD * 2 });
+    });
+  }, []);
+
+  const scrollAndMeasure = useCallback((stepName: string) => {
+    const sv = mainListScrollRef.current;
+    const ref = stepViewRefs.current[stepName];
+
+    // Bottom nav tabs: computed from screen dimensions (GlassTabBar is outside UserHomeScreenContent)
+    if (stepName.startsWith('bottomNav')) {
+      sv?.scrollToEnd({ animated: false });
+      setTimeout(() => {
+        const { height: SH, width: SW } = Dimensions.get('window');
+        // GlassTabBar: outer paddingTop=6, row paddingVertical=8, tabSlot height=52, paddingBottom=max(inset,10)
+        const outerH = 6 + 8 * 2 + 52 + Math.max(insets.bottom, 10);
+        const pillY = SH - outerH + 6; // pill top on screen
+        const rowY = pillY + 8;        // row inner top
+        const tabH = 52;
+        const PAD = 6;
+        // Slot widths mirror GlassTabBar indicator calc: slotW = (barWidth - 8) / 5
+        const barW = SW - 32; // outer paddingHorizontal=16 each side
+        const slotW = (barW - 8) / 5; // row paddingHorizontal=4 each side
+        const rowX = 16 + 4; // outer padding + row padding
+        const tabIndex: Record<string, number> = {
+          bottomNavHome: 0,
+          bottomNavProjects: 1,
+          bottomNavNew: 2,
+          bottomNavChat: 3,
+          bottomNavProfile: 4,
+        };
+        const idx = tabIndex[stepName] ?? 0;
+        const slotX = rowX + idx * slotW;
+        setStepRect({ x: slotX - PAD, y: rowY - PAD, w: slotW + PAD * 2, h: tabH + PAD * 2 });
+      }, 250);
+      return;
+    }
+
+    if (!ref) { setStepRect(null); return; }
+
+    // Top bar icons and search: scroll to top, then measure directly
+    if (stepName.startsWith('topNav') || stepName === 'search') {
+      sv?.scrollTo({ y: 0, animated: false });
+      setTimeout(() => measureStep(stepName), 150);
+      return;
+    }
+
+    // chatbot FAB: scroll to end first, then measure
+    if (stepName === 'chatbot') {
+      sv?.scrollToEnd({ animated: false });
+      setTimeout(() => measureStep(stepName), 250);
+      return;
+    }
+
+    // Content inside ScrollView: use measureLayout for accurate scroll-to
+    if (sv) {
+      const scrollContent = (sv as ScrollView & { getInnerViewRef?: () => unknown }).getInnerViewRef?.();
+      if (scrollContent && typeof (ref as any).measureLayout === 'function') {
+        (ref as any).measureLayout(
+          scrollContent,
+          (_x: number, y: number) => {
+            sv.scrollTo({ y: Math.max(0, y - 100), animated: false });
+            setTimeout(() => measureStep(stepName), 200);
+          },
+          () => { measureStep(stepName); },
+        );
+        return;
+      }
+    }
+    measureStep(stepName);
+  }, [measureStep, insets.bottom]);
+
+  useEffect(() => {
+    if (!tourActive) { setStepRect(null); return; }
+    const name = TOUR_STEPS[tourStep]?.name;
+    if (!name) return;
+    requestAnimationFrame(() => requestAnimationFrame(() => scrollAndMeasure(name)));
+  }, [tourActive, tourStep, TOUR_STEPS, scrollAndMeasure]);
+
+  const handleTourEnd = useCallback(async () => {
+    setTourActive(false);
+    setTourStep(0);
+    setStepRect(null);
+    await coachMarksStorage.markTutorialComplete('userHome');
+  }, []);
+
+  // Expose start function to parent
+  useEffect(() => {
+    onExposeControl?.({
+      startTour: () => {
+        setTourStep(0);
+        setTourActive(true);
+      },
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleSearchChange = useCallback((query: string) => {
+    setSearchText(query);
+    if (query.trim().length === 0) {
+      setShowSearchResults(false);
+      setSearchResults(EMPTY_SCORED_RESULTS);
+      return;
+    }
+    setShowSearchResults(true);
+    setSearchLoading(true);
+    debouncedSearchRef.current?.[0](query, selectedRegionId);
+  }, [selectedRegionId]);
+
+  const handleSearchSubmit = useCallback(() => {
+    debouncedSearchRef.current?.[1](); // cancel debounce
+    performSearch(searchText, selectedRegionId);
+  }, [searchText, selectedRegionId, performSearch]);
 
   const handleBannerScroll = (e: { nativeEvent: { contentOffset: { x: number }; layoutMeasurement: { width: number } } }) => {
     const x = e.nativeEvent.contentOffset.x;
@@ -420,65 +655,123 @@ export default function UserHomeScreenContent({
 
   const primaryColor = isDark ? colors.primary : IOS_PRIMARY;
 
+  const closeSearch = useCallback(() => {
+    Keyboard.dismiss();
+    debouncedSearchRef.current?.[1](); // cancel any pending debounce
+    setShowSearchResults(false);
+    setSearchText('');
+    setSearchResults(EMPTY_SCORED_RESULTS);
+  }, []);
+
   return (
     <View style={[styles.container, styles.wrapper, { backgroundColor: colors.background }]}>
+      {/* Header: top bar + search bar */}
+      <View style={{ paddingTop: topSpacing, zIndex: 200, backgroundColor: colors.background }}>
+        {/* Top bar */}
+        <View collapsable={false} style={styles.iosTopBar}>
+          <View ref={(el) => { stepViewRefs.current['topNavLogo'] = el; }} collapsable={false} style={styles.iosTopBarLogo}>
+            <BonyadLogo size="small" responsive={false} variant={isDark ? 'light' : 'dark'} />
+          </View>
+          <View style={styles.iosTopBarIcons}>
+            <View
+              ref={(el) => { stepViewRefs.current['topNavMessages'] = el; }}
+              collapsable={false}
+              style={styles.iosTopBarIconBtn}
+            >
+              <TouchableOpacity
+                style={StyleSheet.absoluteFillObject}
+                onPress={onPressMessages}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                  <Ionicons name="chatbubbles-outline" size={24} color={primaryColor} />
+                </View>
+              </TouchableOpacity>
+            </View>
+            <View
+              ref={(el) => { stepViewRefs.current['topNavInfo'] = el; }}
+              collapsable={false}
+              style={styles.iosTopBarIconBtn}
+            >
+              <TouchableOpacity
+                style={StyleSheet.absoluteFillObject}
+                onPress={onPressInfo}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                  <Ionicons name="information-circle-outline" size={24} color={primaryColor} />
+                </View>
+              </TouchableOpacity>
+            </View>
+            <View
+              ref={(el) => { stepViewRefs.current['topNavNotifications'] = el; }}
+              collapsable={false}
+              style={styles.iosTopBarIconBtn}
+            >
+              <TouchableOpacity
+                style={StyleSheet.absoluteFillObject}
+                onPress={onPressNotifications}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                  <View style={{ position: 'relative' }}>
+                    <Ionicons name="notifications-outline" size={24} color={primaryColor} />
+                    {unreadNotificationCount > 0 && (
+                      <View style={[styles.iosNotificationBadge, { backgroundColor: '#FF3B30' }]} />
+                    )}
+                  </View>
+                </View>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+
+        {/* Search bar */}
+        <View
+          ref={(el) => { stepViewRefs.current['search'] = el; }}
+          collapsable={false}
+          style={styles.searchBarWrap}
+        >
+          <View
+            ref={searchBarRef}
+            collapsable={false}
+            style={[styles.searchWrap, { backgroundColor: isDark ? colors.cardBackground : 'rgba(255,255,255,0.9)', borderColor: `${primaryColor}26` }, isDark ? undefined : styles.searchShadow, isArabic && { flexDirection: 'row-reverse' }]}
+          >
+            <Ionicons name="search" size={18} color={primaryColor} />
+            <TextInput
+              style={[styles.searchInput, { color: colors.text, textAlign: isArabic ? 'right' : 'left' }, fontStyle]}
+              placeholder={t('Search services or providers')}
+              placeholderTextColor={colors.textTertiary}
+              value={searchText}
+              onChangeText={handleSearchChange}
+              onSubmitEditing={handleSearchSubmit}
+              onFocus={measureSearchBar}
+              returnKeyType="search"
+            />
+            {searchText.length > 0 && (
+              <TouchableOpacity onPress={closeSearch} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Ionicons name="close-circle" size={20} color={colors.textTertiary} />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
+      </View>
+
       <ScrollView
+        ref={mainListScrollRef}
         style={styles.scroll}
         contentContainerStyle={[
           styles.content,
           styles.contentScroll,
-          { paddingTop: topSpacing, paddingBottom: Math.max(insets.bottom, 24) + 120 },
+          { paddingBottom: Math.max(insets.bottom, 24) + 120 },
         ]}
         showsVerticalScrollIndicator={false}
         bounces={true}
         nestedScrollEnabled={true}
         directionalLockEnabled={true}
+        keyboardShouldPersistTaps="handled"
       >
-      {/* Top bar — same button order & icons as the non-home top bar: Chat | Info | Notifications */}
-      <View style={styles.iosTopBar}>
-        <View style={styles.iosTopBarLogo}>
-          <BonyadLogo size="small" responsive={false} variant={isDark ? 'light' : 'dark'} />
-        </View>
-        <View style={styles.iosTopBarIcons}>
-          {/* Chat — same as non-home bar setActiveTab('chat') */}
-          <TouchableOpacity style={styles.iosTopBarIconBtn} onPress={onPressMessages} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <Ionicons name="chatbubbles-outline" size={24} color={primaryColor} />
-          </TouchableOpacity>
-          {/* Info / Coach tour — same as non-home bar handleRestartCoachTour */}
-          <TouchableOpacity style={styles.iosTopBarIconBtn} onPress={onPressInfo} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <Ionicons name="information-circle-outline" size={24} color={primaryColor} />
-          </TouchableOpacity>
-          {/* Notifications — same as non-home bar setActiveTab('notifications') */}
-          <TouchableOpacity style={styles.iosTopBarIconBtn} onPress={onPressNotifications} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <View>
-              <Ionicons name="notifications-outline" size={24} color={primaryColor} />
-              {unreadNotificationCount > 0 && (
-                <View style={[styles.iosNotificationBadge, { backgroundColor: '#FF3B30' }]} />
-              )}
-            </View>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* 1. Search bar - frosted style (iOS): cornerRadius 14, shadow radius 10, y 4 */}
-      <StaggeredAppearView index={0}>
-        <View style={[styles.searchWrap, { backgroundColor: isDark ? colors.cardBackground : 'rgba(255,255,255,0.9)', borderColor: `${primaryColor}26` }, isDark ? undefined : styles.searchShadow]}>
-          <Ionicons name="search" size={18} color={primaryColor} />
-          <TextInput
-            style={[styles.searchInput, { color: colors.text }, fontStyle]}
-            placeholder={t('Search services or providers')}
-            placeholderTextColor={colors.textTertiary}
-            value={searchText}
-            onChangeText={handleSearchChange}
-            returnKeyType="search"
-          />
-          {searchText.length > 0 && (
-            <TouchableOpacity onPress={() => { setSearchText(''); onPressSearch?.(''); }} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <Ionicons name="close-circle" size={20} color={colors.textTertiary} />
-            </TouchableOpacity>
-          )}
-        </View>
-      </StaggeredAppearView>
 
       {/* 2. Advertisement / feature banners carousel (iOS height 140, capsule dots) */}
       <StaggeredAppearView index={1} style={{ marginTop: SECTION_SPACING }}>
@@ -525,37 +818,49 @@ export default function UserHomeScreenContent({
       </StaggeredAppearView>
 
       {/* 3. Quick actions - circular icons (iOS QuickActionsSection) with press scale */}
-      <StaggeredAppearView index={2} style={{ marginTop: SECTION_SPACING }}>
+      <View style={{ marginTop: SECTION_SPACING }}>
         <View style={styles.quickActions}>
-          <PressableScaleView style={styles.quickActionItem} onPress={() => onPressCreateProject?.(0)}>
-            <View style={[styles.quickActionCircle, { backgroundColor: `${primaryColor}18` }]}>
-              <Feather name="folder-plus" size={24} color={primaryColor} />
-            </View>
-            <Text style={[styles.quickActionLabel, { color: colors.text }, fontStyle]} numberOfLines={1}>{t('New project')}</Text>
-          </PressableScaleView>
-          <PressableScaleView style={styles.quickActionItem} onPress={() => onPressCreateSmallTask?.(0)}>
-            <View style={[styles.quickActionCircle, { backgroundColor: 'rgba(255,149,0,0.18)' }]}>
-              <Ionicons name="flash" size={24} color="#FF9500" />
-            </View>
-            <Text style={[styles.quickActionLabel, { color: colors.text }, fontStyle]} numberOfLines={1}>{t('Small task')}</Text>
-          </PressableScaleView>
-          <PressableScaleView style={styles.quickActionItem} onPress={() => { onPressAppointments ? onPressAppointments() : onPressProjectStatus?.('running'); }}>
-            <View style={[styles.quickActionCircle, { backgroundColor: 'rgba(52,199,89,0.18)' }]}>
-              <Ionicons name="calendar" size={24} color="#34C759" />
-            </View>
-            <Text style={[styles.quickActionLabel, { color: colors.text }, fontStyle]} numberOfLines={1}>{t('Appointments')}</Text>
-          </PressableScaleView>
-          <PressableScaleView style={styles.quickActionItem} onPress={() => onPressOpenServices?.()}>
-            <View style={[styles.quickActionCircle, { backgroundColor: 'rgba(175,82,222,0.18)' }]}>
-              <Feather name="grid" size={24} color="#AF52DE" />
-            </View>
-            <Text style={[styles.quickActionLabel, { color: colors.text }, fontStyle]} numberOfLines={1}>{t('Services')}</Text>
-          </PressableScaleView>
+          <View ref={(el) => { stepViewRefs.current['newProject'] = el; }} collapsable={false}>
+            <PressableScaleView style={styles.quickActionItem} onPress={() => onPressCreateProject?.(0)}>
+              <View style={[styles.quickActionCircle, { backgroundColor: `${primaryColor}18` }]}>
+                <Feather name="folder-plus" size={24} color={primaryColor} />
+              </View>
+              <Text style={[styles.quickActionLabel, { color: colors.text }, fontStyle]} numberOfLines={1}>{t('New project')}</Text>
+            </PressableScaleView>
+          </View>
+          <View ref={(el) => { stepViewRefs.current['smallTask'] = el; }} collapsable={false}>
+            <PressableScaleView style={styles.quickActionItem} onPress={() => onPressCreateSmallTask?.(0)}>
+              <View style={[styles.quickActionCircle, { backgroundColor: 'rgba(255,149,0,0.18)' }]}>
+                <Ionicons name="flash" size={24} color="#FF9500" />
+              </View>
+              <Text style={[styles.quickActionLabel, { color: colors.text }, fontStyle]} numberOfLines={1}>{t('Small task')}</Text>
+            </PressableScaleView>
+          </View>
+          <View ref={(el) => { stepViewRefs.current['appointments'] = el; }} collapsable={false}>
+            <PressableScaleView style={styles.quickActionItem} onPress={() => { onPressAppointments ? onPressAppointments() : onPressProjectStatus?.('running'); }}>
+              <View style={[styles.quickActionCircle, { backgroundColor: 'rgba(52,199,89,0.18)' }]}>
+                <Ionicons name="calendar" size={24} color="#34C759" />
+              </View>
+              <Text style={[styles.quickActionLabel, { color: colors.text }, fontStyle]} numberOfLines={1}>{t('Appointments')}</Text>
+            </PressableScaleView>
+          </View>
+          <View ref={(el) => { stepViewRefs.current['services'] = el; }} collapsable={false}>
+            <PressableScaleView style={styles.quickActionItem} onPress={() => onPressOpenServices?.()}>
+              <View style={[styles.quickActionCircle, { backgroundColor: 'rgba(175,82,222,0.18)' }]}>
+                <Feather name="grid" size={24} color="#AF52DE" />
+              </View>
+              <Text style={[styles.quickActionLabel, { color: colors.text }, fontStyle]} numberOfLines={1}>{t('Services')}</Text>
+            </PressableScaleView>
+          </View>
         </View>
-      </StaggeredAppearView>
+      </View>
 
       {/* 4. Service Categories – web-style: horizontal scroll, square cards, image area + title + chevron when selected */}
-      <StaggeredAppearView index={3} style={{ marginTop: SECTION_SPACING }}>
+      <View
+        ref={(el) => { stepViewRefs.current['serviceCategories'] = el; }}
+        collapsable={false}
+        style={{ marginTop: SECTION_SPACING }}
+      >
         <View style={styles.sectionHeader}>
           <View style={{ flex: 1 }}>
             <Text style={[styles.sectionTitle, { color: colors.text }, { fontSize: scaledSize(18) }, boldStyle]}>{t('Service Categories')}</Text>
@@ -593,7 +898,17 @@ export default function UserHomeScreenContent({
                 >
                   <View style={[styles.categoryCardWebImageWrap, { backgroundColor: iconBg }]}>
                     {imgSrc ? (
-                      <Image source={imgSrc} style={styles.categoryCardImage} resizeMode="contain" />
+                      imgSrc.isSvg ? (
+                        <SvgUriImage
+                          uri={imgSrc.uri}
+                          width={36}
+                          height={36}
+                          style={styles.categoryCardImage}
+                          fallbackColor={iconFg}
+                        />
+                      ) : (
+                        <Image source={imgSrc} style={styles.categoryCardImage} resizeMode="contain" />
+                      )
                     ) : (
                       <Ionicons name={getCategoryIconName(cat.nameEn)} size={36} color={iconFg} />
                     )}
@@ -606,7 +921,7 @@ export default function UserHomeScreenContent({
             })}
           </ScrollView>
         )}
-      </StaggeredAppearView>
+      </View>
 
       {/* Inline subcategories – same as web: slide in from side, "Subcategories – [Name]", gradient line, horizontal cards with stagger */}
       {selectedCategoryForModal && (
@@ -686,7 +1001,11 @@ export default function UserHomeScreenContent({
       )}
 
       {/* 5. My Projects section - horizontal strip with real cards (iOS press scale) */}
-      <StaggeredAppearView index={4} style={{ marginTop: SECTION_SPACING }}>
+      <View
+        ref={(el) => { stepViewRefs.current['projectsSection'] = el; }}
+        collapsable={false}
+        style={{ marginTop: SECTION_SPACING }}
+      >
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: colors.text }, { fontSize: scaledSize(18) }, boldStyle]}>{t('My Projects')}</Text>
           <TouchableOpacity onPress={onPressMyProjects} activeOpacity={0.8}>
@@ -726,10 +1045,14 @@ export default function UserHomeScreenContent({
             ))
           )}
         </ScrollView>
-      </StaggeredAppearView>
+      </View>
 
       {/* 6. My Small Tasks section - horizontal strip with real cards (iOS press scale) */}
-      <StaggeredAppearView index={5} style={{ marginTop: SECTION_SPACING }}>
+      <View
+        ref={(el) => { stepViewRefs.current['smallTasksSection'] = el; }}
+        collapsable={false}
+        style={{ marginTop: SECTION_SPACING }}
+      >
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: colors.text }, { fontSize: scaledSize(18) }, boldStyle]}>{t('My Small Tasks')}</Text>
           <TouchableOpacity onPress={onPressMySmallTasks} activeOpacity={0.8}>
@@ -769,23 +1092,94 @@ export default function UserHomeScreenContent({
             ))
           )}
         </ScrollView>
-      </StaggeredAppearView>
+      </View>
 
       </ScrollView>
       {/* iOS-style Chatbot FAB: fixed bottom-left, wave rings + white circle + robot */}
       {onPressChatbot && (
-        <ChatbotFab
-          onPress={onPressChatbot}
-          primaryColor={primaryColor}
-          primaryDark={isDark ? colors.primary : '#0078E0'}
-          bottomOffset={chatbotFabBottomOffset(insets.bottom)}
-        />
+        <View ref={(el) => { stepViewRefs.current['chatbot'] = el; }} collapsable={false} style={{ position: 'absolute', bottom: chatbotFabBottomOffset(insets.bottom), left: I18nManager.isRTL ? undefined : 20, right: I18nManager.isRTL ? 20 : undefined, width: 67, height: 67 }} pointerEvents="box-none">
+          <ChatbotFab
+            embedInParent
+            onPress={onPressChatbot}
+            primaryColor={primaryColor}
+            primaryDark={isDark ? colors.primary : '#0078E0'}
+            bottomOffset={0}
+          />
+        </View>
       )}
+
+      {/* Search dropdown — rendered at root level with absolute positioning (no Modal) */}
+      <SearchResultsDropdown
+        visible={showSearchResults}
+        anchorPageY={searchBarPageY}
+        results={searchResults}
+        loading={searchLoading}
+        query={searchText}
+        regions={regions}
+        selectedRegionId={selectedRegionId}
+        onRegionChange={setSelectedRegionId}
+        onClose={closeSearch}
+        onCategoryPress={(cat) => {
+          closeSearch();
+          // Web behavior: category search result shows technicians for the whole category.
+          // Fallback to regular category navigation if parent doesn't handle this.
+          const payload = { id: cat.id, nameEn: cat.nameEn, nameAr: cat.nameAr };
+          if (onPressSearchCategory) onPressSearchCategory(payload);
+          else onPressCategory?.(payload);
+        }}
+        onSubcategoryPress={(sub) => {
+          closeSearch();
+          // Subcategory search results should behave like selecting a service:
+          // open technicians / next step (wired by parent via onPressSubcategory).
+          onPressSubcategory?.(sub as unknown as ServiceSubcategory);
+        }}
+        onTechnicianPress={(technicianId) => {
+          closeSearch();
+          onPressTechnician?.(technicianId);
+        }}
+      />
+
+      <ScreenTourOverlay
+        visible={tourActive}
+        tourStep={tourStep}
+        stepRect={stepRect}
+        totalSteps={TOUR_STEPS.length}
+        stepOrder={TOUR_STEPS[tourStep]?.order ?? 1}
+        stepText={TOUR_STEPS[tourStep] ? t(`tutorial.home.user.${TOUR_STEPS[tourStep].name}`) : ''}
+        isFirst={tourStep === 0}
+        isLast={tourStep === TOUR_STEPS.length - 1}
+        primaryColor={primaryColor}
+        textColor={colors.text}
+        secondaryTextColor={colors.textSecondary}
+        bgColor={colors.cardBackground}
+        isRTL={isArabic || I18nManager.isRTL}
+        fontFamily={fontFamily}
+        boldFontFamily={boldFontFamily}
+        onNext={() => setTourStep((s) => s + 1)}
+        onPrev={() => setTourStep((s) => s - 1)}
+        onSkip={handleTourEnd}
+        onFinish={handleTourEnd}
+        t={t}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  searchBarWrap: {
+    marginHorizontal: 16,
+    alignSelf: 'stretch',
+  },
+  tourBackdrop: {
+    position: 'absolute',
+    backgroundColor: 'rgba(0,0,0,0.65)',
+  },
+  tourHighlight: {
+    position: 'absolute',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.5)',
+  },
   container: { flex: 1 },
   wrapper: { flex: 1 },
   scroll: { flex: 1 },

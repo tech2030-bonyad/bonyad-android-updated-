@@ -11,6 +11,7 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useTranslation } from 'react-i18next';
 import { Image as ExpoImage } from 'expo-image';
 import { useTheme } from '../context/ThemeContext';
@@ -379,11 +380,7 @@ export default function MySmallTaskBidsScreen({
         ]}
       >
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Ionicons
-            name="arrow-back"
-            size={24}
-            color={colors.text}
-          />
+          <BackArrowIonicons variant="arrow" size={24} color={colors.text} forceLtrLayout={!isRTL} />
         </TouchableOpacity>
         <View style={styles.headerTitleContainer}>
           <Text style={[styles.headerTitle, { color: colors.text, fontFamily: fontFamily.bold }]}>

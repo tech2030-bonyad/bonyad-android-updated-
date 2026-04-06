@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { Colors } from '../constants/Colors';
 import { Surface } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -145,7 +146,7 @@ export default function NewProjectView({
         <View style={styles.figmaBackContainer}>
           {onBack && (
             <TouchableOpacity onPress={onBack} style={styles.figmaBackButton}>
-              <Ionicons name={arrowBackIcon} size={24} color={colors.text} />
+              <BackArrowIonicons variant="arrow" size={24} color={colors.text}/>
             </TouchableOpacity>
           )}
         </View>
@@ -223,7 +224,7 @@ export default function NewProjectView({
       <View style={[styles.desktopHeader, { backgroundColor: colors.cardBackground }]}>
         {onBack ? (
           <TouchableOpacity onPress={onBack} style={styles.desktopBackButton}>
-            <Ionicons name={arrowBackIcon} size={24} color={colors.primary} />
+            <BackArrowIonicons variant="arrow" size={24} color={colors.primary}/>
           </TouchableOpacity>
         ) : (
           <View style={{ width: 40 }} />

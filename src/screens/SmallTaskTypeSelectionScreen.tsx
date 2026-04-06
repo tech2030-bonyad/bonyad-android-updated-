@@ -9,12 +9,26 @@ import {
   Animated,
   Platform,
   Image,
+  Dimensions,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useTheme } from '../context/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SmallTaskType, getSmallTaskTypeImageUrl } from '../services/SmallTaskService';
+import { LinearGradient } from 'expo-linear-gradient';
+import ReAnimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withTiming,
+  Easing as ReEasing,
+  interpolate,
+  Extrapolation,
+} from 'react-native-reanimated';
+
+const { width: STASK_TYPE_WIDTH } = Dimensions.get('window');
 
 // iOS-matching design colors
 const COLORS = {
@@ -104,25 +118,13 @@ export default function SmallTaskTypeSelectionScreen({
   if (isLoading) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={[
-          styles.header, 
-          { 
-            paddingTop: topSpacing,
-            flexDirection: isRTL ? 'row-reverse' : 'row',
-            borderBottomColor: colors.border,
-          }
-        ]}>
-          <TouchableOpacity onPress={onBack} style={styles.backButton}>
-            <Ionicons 
-              name="arrow-back" 
-              size={24} 
-              color={primaryColor} 
-            />
+        <View style={[styles.header, { paddingTop: topSpacing, borderBottomColor: colors.border }]}>
+          <TouchableOpacity onPress={onBack} style={[styles.backButton, isRTL ? { right: 20 } : { left: 20 }]}>
+            <BackArrowIonicons variant="arrow" size={24} color={primaryColor} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: primaryColor }]}>
             {t('select_task_type')}
           </Text>
-          <View style={{ width: 40 }} />
         </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={primaryColor} />
@@ -134,25 +136,13 @@ export default function SmallTaskTypeSelectionScreen({
   if (errorMessage) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={[
-          styles.header, 
-          { 
-            paddingTop: topSpacing,
-            flexDirection: isRTL ? 'row-reverse' : 'row',
-            borderBottomColor: colors.border,
-          }
-        ]}>
-          <TouchableOpacity onPress={onBack} style={styles.backButton}>
-            <Ionicons 
-              name="arrow-back" 
-              size={24} 
-              color={primaryColor} 
-            />
+        <View style={[styles.header, { paddingTop: topSpacing, borderBottomColor: colors.border }]}>
+          <TouchableOpacity onPress={onBack} style={[styles.backButton, isRTL ? { right: 20 } : { left: 20 }]}>
+            <BackArrowIonicons variant="arrow" size={24} color={primaryColor} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: primaryColor }]}>
             {t('select_task_type')}
           </Text>
-          <View style={{ width: 40 }} />
         </View>
         <View style={styles.errorContainer}>
           <Ionicons name="alert-circle-outline" size={50} color="#FF9500" />
@@ -173,25 +163,13 @@ export default function SmallTaskTypeSelectionScreen({
   if (taskTypes.length === 0) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={[
-          styles.header, 
-          { 
-            paddingTop: topSpacing,
-            flexDirection: isRTL ? 'row-reverse' : 'row',
-            borderBottomColor: colors.border,
-          }
-        ]}>
-          <TouchableOpacity onPress={onBack} style={styles.backButton}>
-            <Ionicons 
-              name="arrow-back" 
-              size={24} 
-              color={primaryColor} 
-            />
+        <View style={[styles.header, { paddingTop: topSpacing, borderBottomColor: colors.border }]}>
+          <TouchableOpacity onPress={onBack} style={[styles.backButton, isRTL ? { right: 20 } : { left: 20 }]}>
+            <BackArrowIonicons variant="arrow" size={24} color={primaryColor} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: primaryColor }]}>
             {t('select_task_type')}
           </Text>
-          <View style={{ width: 40 }} />
         </View>
         <View style={styles.emptyContainer}>
           <Ionicons name="list-outline" size={50} color={colors.textSecondary} />
@@ -206,25 +184,13 @@ export default function SmallTaskTypeSelectionScreen({
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={[
-        styles.header, 
-        { 
-          paddingTop: topSpacing,
-          flexDirection: isRTL ? 'row-reverse' : 'row',
-          borderBottomColor: colors.border,
-        }
-      ]}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Ionicons 
-            name="arrow-back" 
-            size={24} 
-            color={primaryColor} 
-          />
+      <View style={[styles.header, { paddingTop: topSpacing, borderBottomColor: colors.border }]}>
+        <TouchableOpacity onPress={onBack} style={[styles.backButton, isRTL ? { right: 20 } : { left: 20 }]}>
+          <BackArrowIonicons variant="arrow" size={24} color={primaryColor} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: primaryColor }]}>
           {t('select_task_type')}
         </Text>
-        <View style={{ width: 40 }} />
       </View>
 
       <Animated.View
@@ -275,7 +241,7 @@ export default function SmallTaskTypeSelectionScreen({
   );
 }
 
-// Task Type Card - iOS matching design
+// Task Type Card - redesigned with shimmer animation
 const TaskTypeCard = React.memo(({
   taskType,
   index,
@@ -299,101 +265,93 @@ const TaskTypeCard = React.memo(({
   t: (key: string) => string;
   i18n: any;
 }) => {
-  const cardAnim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.timing(cardAnim, {
-      toValue: 1,
-      duration: 300,
-      delay: index * 50,
-      useNativeDriver: true,
-    }).start();
-  }, []);
-
   const name = i18n.language === 'ar' ? taskType.nameAr : taskType.nameEn;
-  const description = taskType.description ?? 
+  const description = taskType.description ??
     (i18n.language === 'ar' ? (taskType as any).descriptionAr : (taskType as any).descriptionEn) ?? '';
   const imageUrl = getSmallTaskTypeImageUrl(taskType);
 
+  // Continuous left-to-right shimmer
+  const shimmerX = useSharedValue(-STASK_TYPE_WIDTH);
+  useEffect(() => {
+    shimmerX.value = withRepeat(
+      withTiming(STASK_TYPE_WIDTH, {
+        duration: 2000 + index * 150,
+        easing: ReEasing.inOut(ReEasing.sin),
+      }),
+      -1,
+      false
+    );
+  }, []);
+
+  const shimmerStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: shimmerX.value }],
+  }));
+
+  // Entry animation
+  const entryAnim = useSharedValue(0);
+  useEffect(() => {
+    entryAnim.value = withTiming(1, {
+      duration: 350 + index * 60,
+      easing: ReEasing.out(ReEasing.quad),
+    });
+  }, []);
+
+  const entryStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(entryAnim.value, [0, 1], [0, 1], Extrapolation.CLAMP),
+    transform: [{ translateY: interpolate(entryAnim.value, [0, 1], [20, 0], Extrapolation.CLAMP) }],
+  }));
+
   return (
-    <Animated.View
-      style={{
-        opacity: cardAnim,
-        transform: [
-          {
-            translateY: cardAnim.interpolate({
-              inputRange: [0, 1],
-              outputRange: [20, 0],
-            }),
-          },
-        ],
-      }}
+    <ReAnimated.View
+      style={[
+        styles.taskTypeCard,
+        { backgroundColor: colors.cardBackground, borderColor: colors.border + '55' },
+        entryStyle,
+      ]}
     >
-      <TouchableOpacity
-        style={[
-          styles.taskTypeCard,
-          {
-            backgroundColor: colors.cardBackground,
-            borderColor: borderColor,
-            flexDirection: isRTL ? 'row-reverse' : 'row',
-          },
-        ]}
-        onPress={() => onSelect(taskType)}
-        activeOpacity={0.7}
-      >
-        {/* Icon Circle */}
-        <View style={[styles.iconCircle, { backgroundColor: primaryColor + '15' }]}>
+      {/* Shimmer */}
+      <ReAnimated.View style={[styles.shimmerWrap, shimmerStyle]} pointerEvents="none">
+        <LinearGradient
+          colors={['transparent', primaryColor + '28', primaryColor + '50', primaryColor + '28', 'transparent']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </ReAnimated.View>
+
+      {/* Top accent bar */}
+      <LinearGradient
+        colors={[primaryColor, primaryColor + '88']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.accentBar}
+      />
+
+      <TouchableOpacity onPress={() => onSelect(taskType)} activeOpacity={0.82} style={styles.cardInner}>
+        {/* Icon circle */}
+        <View style={[styles.iconCircle, { backgroundColor: primaryColor + '18' }]}>
           {imageUrl ? (
-            <Image
-              source={{ uri: imageUrl }}
-              style={styles.taskTypeImage}
-              resizeMode="cover"
-            />
+            <Image source={{ uri: imageUrl }} style={styles.taskTypeImage} resizeMode="cover" />
           ) : (
-            <Ionicons name="checkmark-circle" size={24} color={primaryColor} />
+            <Ionicons name="checkmark-circle" size={28} color={primaryColor} />
           )}
         </View>
 
-        {/* Content */}
-        <View style={[styles.cardContent, { alignItems: isRTL ? 'flex-end' : 'flex-start' }]}>
-          <Text 
-            style={[
-              styles.taskTypeName, 
-              { 
-                color: colors.text,
-                textAlign: isRTL ? 'right' : 'left',
-              }
-            ]} 
-            numberOfLines={1}
-          >
+        {/* Text */}
+        <View style={styles.cardContent}>
+          <Text style={[styles.taskTypeName, { color: colors.text }]} numberOfLines={1}>
             {name}
           </Text>
-          {description ? (
-            <Text 
-              style={[
-                styles.taskTypeDescription, 
-                { 
-                  color: colors.textSecondary,
-                  textAlign: isRTL ? 'right' : 'left',
-                }
-              ]} 
-              numberOfLines={2}
-            >
+          {!!description && (
+            <Text style={[styles.taskTypeDescription, { color: colors.textSecondary }]} numberOfLines={2}>
               {description}
             </Text>
-          ) : null}
+          )}
         </View>
 
-        {/* Chevron */}
-        <View style={styles.chevronContainer}>
-          <Ionicons 
-            name={isRTL ? "chevron-back" : "chevron-forward"} 
-            size={16} 
-            color={colors.textSecondary} 
-          />
-        </View>
+        <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={16} color={colors.textSecondary} />
       </TouchableOpacity>
-    </Animated.View>
+    </ReAnimated.View>
   );
 });
 
@@ -403,18 +361,19 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     paddingHorizontal: 20,
     paddingBottom: 16,
     borderBottomWidth: 1,
   },
   backButton: {
+    position: 'absolute',
     padding: 8,
+    bottom: 10,
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '700',
-    flex: 1,
     textAlign: 'center',
   },
   content: {
@@ -424,7 +383,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 40,
+    paddingBottom: 180,
   },
   titleSection: {
     paddingHorizontal: 24,
@@ -449,23 +408,30 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   taskTypeCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.09,
+    shadowRadius: 14,
+    elevation: 5,
+  },
+  shimmerWrap: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 0,
+    width: STASK_TYPE_WIDTH,
+  },
+  accentBar: {
+    height: 3,
+    width: '100%',
+  },
+  cardInner: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    height: 88,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
+    gap: 14,
+    zIndex: 1,
   },
   iconCircle: {
     width: 56,
@@ -474,6 +440,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
+    flexShrink: 0,
   },
   taskTypeImage: {
     width: 56,
@@ -482,20 +449,19 @@ const styles = StyleSheet.create({
   },
   cardContent: {
     flex: 1,
-    marginHorizontal: 16,
     justifyContent: 'center',
   },
   taskTypeName: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 17,
+    fontWeight: '700',
     marginBottom: 4,
+    letterSpacing: -0.2,
   },
   taskTypeDescription: {
     fontSize: 14,
     lineHeight: 18,
   },
   chevronContainer: {
-    width: 20,
     justifyContent: 'center',
     alignItems: 'center',
   },

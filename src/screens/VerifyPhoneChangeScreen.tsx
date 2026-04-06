@@ -12,11 +12,11 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Card } from 'react-native-paper';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
-import { useRTL } from '../hooks/useRTL';
 import { getTopPadding } from '../utils/statusBarHelper';
 import { verifyPhoneChange, resendPhoneChangeOTP } from '../services/ProfileService';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
@@ -32,8 +32,6 @@ export default function VerifyPhoneChangeScreen({ newPhoneNumber, onBack, onVeri
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { fontFamily, scaledSize } = useFontFamily();
-  const { arrowBackIcon } = useRTL();
-
   // Custom alert hook
   const { alertState, showError, showAlert, hideAlert } = useAlertPopup();
   
@@ -214,9 +212,9 @@ export default function VerifyPhoneChangeScreen({ newPhoneNumber, onBack, onVeri
   return (
     <View style={[styles.container, { paddingTop: getTopPadding(insets), backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: colors.cardBackground }]}>
+      <View style={[styles.header, styles.headerLTR, { backgroundColor: colors.cardBackground }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Ionicons name={arrowBackIcon} size={24} color={colors.text} />
+          <BackArrowIonicons variant="arrow" size={24} color={colors.text} forceLtrLayout />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(18) }]}>{t('Verify Phone Number')}</Text>
         <View style={{ width: 40 }} />
@@ -320,6 +318,9 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0,0,0,0.1)',
+  },
+  headerLTR: {
+    direction: 'ltr',
   },
   backButton: {
     width: 40,

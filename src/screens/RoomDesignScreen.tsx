@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, Platform, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import { useTranslation } from 'react-i18next';
@@ -25,11 +26,7 @@ export default function RoomDesignScreen({ onBack }: RoomDesignScreenProps) {
       <View style={[styles.header, { backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
         <View style={styles.headerContent}>
           <TouchableOpacity onPress={onBack} style={styles.backButton}>
-            <Ionicons 
-              name="arrow-back" 
-              size={24} 
-              color={colors.text} 
-            />
+            <BackArrowIonicons variant="arrow" size={24} color={colors.text} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(20) }]}>
             {i18n.language === 'en' ? 'Room Design' : 'تصميم الغرفة'}

@@ -20,11 +20,11 @@ import {
   type TextStyle,
 } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useTranslation } from 'react-i18next';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
-import { LightColors } from '../constants/Colors';
 import { useChatbot } from '../hooks/useChatbot';
 import { ChatbotMessage } from '../types/chat';
 import type { NavigationAction } from '../utils/navigationParser';
@@ -47,19 +47,23 @@ type ChatChrome = {
   inputBg: string;
   placeholder: string;
   userBubbleBg: string;
+  userBubbleText: string;
+  typingDot: string;
 };
 
-function buildLightChrome(colors: { primary: string; primaryDark: string }): ChatChrome {
+function buildChrome(colors: { primary: string; primaryDark: string; background: string; cardBackground: string; border: string; text: string; textSecondary: string; gray100: string; textTertiary: string }): ChatChrome {
   return {
-    screenBg: LightColors.background,
-    cardBg: LightColors.cardBackground,
-    border: LightColors.border,
-    text: LightColors.text,
-    textSecondary: LightColors.textSecondary,
+    screenBg: colors.background,
+    cardBg: colors.cardBackground,
+    border: colors.border,
+    text: colors.text,
+    textSecondary: colors.textSecondary,
     headerGrad: [colors.primaryDark, colors.primary],
-    inputBg: LightColors.gray100,
-    placeholder: LightColors.textTertiary,
-    userBubbleBg: LightColors.cardBackground,
+    inputBg: colors.gray100,
+    placeholder: colors.textTertiary,
+    userBubbleBg: colors.cardBackground,
+    userBubbleText: colors.text,
+    typingDot: colors.textSecondary,
   };
 }
 
@@ -100,7 +104,6 @@ interface ChatbotScreenProps {
   hasBottomTabBar?: boolean;
 }
 
-const TYPING_DOT = 'rgba(0,0,0,0.35)';
 
 /** Milliseconds between each character (bot “typing” the welcome line). */
 const WELCOME_TYPE_INTERVAL_MS = 38;
@@ -179,7 +182,7 @@ const ChatBubble: React.FC<{
             {botBody ? (
               botBody
             ) : (
-              <Text style={[styles.bubbleText, styles.userBubbleTextDark]}>{message.displayText ?? message.text}</Text>
+              <Text style={[styles.bubbleText, { color: chrome.userBubbleText }]}>{message.displayText ?? message.text}</Text>
             )}
           </View>
         ) : (
@@ -208,9 +211,9 @@ const TypingIndicator: React.FC<{ chrome: ChatChrome }> = ({ chrome }) => (
   <View style={[styles.msgRow, styles.msgRowBot]}>
     <View style={[styles.typingBubble, { backgroundColor: chrome.inputBg, borderColor: chrome.border }]}>
       <View style={styles.typingDots}>
-        <View style={[styles.dot, { backgroundColor: TYPING_DOT }]} />
-        <View style={[styles.dot, { backgroundColor: TYPING_DOT }]} />
-        <View style={[styles.dot, { backgroundColor: TYPING_DOT }]} />
+        <View style={[styles.dot, { backgroundColor: chrome.typingDot }]} />
+        <View style={[styles.dot, { backgroundColor: chrome.typingDot }]} />
+        <View style={[styles.dot, { backgroundColor: chrome.typingDot }]} />
       </View>
     </View>
   </View>
@@ -245,8 +248,7 @@ const ChatbotScreen: React.FC<ChatbotScreenProps> = ({
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const language = propLanguage || (i18n.language === 'ar' ? 'ar' : 'en');
-  const isRTL = language === 'ar';
-  const chrome = useMemo(() => buildLightChrome(colors), [colors.primary, colors.primaryDark]);
+  const chrome = useMemo(() => buildChrome(colors), [colors]);
 
   const tabBarClearance = useMemo(() => {
     if (!hasBottomTabBar) return Math.max(insets.bottom, 12);
@@ -450,7 +452,7 @@ const ChatbotScreen: React.FC<ChatbotScreenProps> = ({
         ]}
       >
         <View style={[styles.mainColumn, { paddingHorizontal: 12 }]}>
-          <View style={[styles.topBar, isRTL && styles.rowReverse]}>
+          <View style={styles.topBar}>
             {onBack ? (
               <TouchableOpacity
                 onPress={handleBack}
@@ -459,11 +461,7 @@ const ChatbotScreen: React.FC<ChatbotScreenProps> = ({
                 accessibilityRole="button"
                 accessibilityLabel={language === 'ar' ? 'رجوع' : 'Back'}
               >
-                <Ionicons
-                  name={isRTL ? 'chevron-forward' : 'chevron-back'}
-                  size={26}
-                  color={chrome.text}
-                />
+                <BackArrowIonicons variant="chevron" size={26} color={chrome.text} />
               </TouchableOpacity>
             ) : (
               <View style={styles.backBtnSpacer} />
@@ -542,7 +540,7 @@ const ChatbotScreen: React.FC<ChatbotScreenProps> = ({
               {quickChips}
             </View>
           ) : null}
-          <View style={[styles.composerRow, isRTL && styles.rowReverse]}>
+          <View style={styles.composerRow}>
             <View
               style={[
                 styles.inputShell,
@@ -551,7 +549,10 @@ const ChatbotScreen: React.FC<ChatbotScreenProps> = ({
             >
               <TextInput
                 ref={inputRef}
-                style={[styles.input, { color: chrome.text, textAlign: isRTL ? 'right' : 'left' }]}
+                style={[
+                  styles.input,
+                  { color: chrome.text, textAlign: language === 'ar' ? 'right' : 'left' },
+                ]}
                 value={inputText}
                 onChangeText={setInputText}
                 placeholder={placeholder}
@@ -570,7 +571,7 @@ const ChatbotScreen: React.FC<ChatbotScreenProps> = ({
               {loading ? (
                 <ActivityIndicator color="#fff" size="small" />
               ) : (
-                <Ionicons name="paper-plane" size={18} color="#fff" style={{ transform: [{ scaleX: isRTL ? -1 : 1 }] }} />
+                <Ionicons name="paper-plane" size={18} color="#fff" />
               )}
             </TouchableOpacity>
             <TouchableOpacity
@@ -626,7 +627,7 @@ const ChatbotScreen: React.FC<ChatbotScreenProps> = ({
                   ? 'سيتم مسح جميع الرسائل في هذه المحادثة. لا يمكن التراجع عن هذا الإجراء.'
                   : 'All messages in this chat will be cleared. This cannot be undone.'}
               </Text>
-              <View style={[styles.deleteModalActions, isRTL && styles.rowReverse]}>
+              <View style={styles.deleteModalActions}>
                 <TouchableOpacity
                   style={[styles.deleteModalBtnSecondary, { borderColor: chrome.border }]}
                   onPress={() => setShowDeleteModal(false)}
@@ -669,9 +670,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     marginBottom: 10,
-  },
-  rowReverse: {
-    flexDirection: 'row-reverse',
   },
   backBtn: {
     width: 40,

@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 
@@ -47,7 +48,8 @@ export default function CreationMethodScreen({
   onChooseManual,
 }: CreationMethodScreenProps) {
   const { t, i18n } = useTranslation();
-  const { colors } = useTheme();
+  const { colors, theme } = useTheme();
+  const isDark = theme === 'dark';
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const isRTL = i18n.language?.startsWith('ar') ?? false;
@@ -158,24 +160,20 @@ export default function CreationMethodScreen({
     <Animated.View
       style={[
         styles.root,
-        { backgroundColor: '#FFFFFF' },
+        { backgroundColor: colors.background },
         { opacity: screenOpacity, transform: [{ translateY: screenTranslateY }, { scale: screenScale }] },
       ]}
     >
       {/* Top bar: back + centered New Project */}
       <View style={[styles.topBar, { paddingTop: insets.top }]}>
-        <TouchableOpacity onPress={handleBack} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <Ionicons
-            name={isRTL ? 'chevron-forward' : 'chevron-back'}
-            size={22}
-            color="#1A1A1A"
-          />
+        <TouchableOpacity onPress={handleBack} style={[styles.backBtn, { backgroundColor: colors.gray200 }]} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <BackArrowIonicons variant="chevron" size={22} color={colors.text} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
           <View style={[styles.headerBadge, { backgroundColor: colors.primary }]}>
             <Ionicons name="add-circle" size={13} color="#fff" />
           </View>
-          <Text style={styles.headerTitle} numberOfLines={1}>
+          <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
             {t('New Project')}
           </Text>
         </View>
@@ -205,8 +203,8 @@ export default function CreationMethodScreen({
             {subcategoryName}
           </Text>
         </View>
-        <Text style={styles.heroTitle}>{t('How would you like to create your project?')}</Text>
-        <Text style={styles.heroSub}>
+        <Text style={[styles.heroTitle, { color: colors.text }]}>{t('How would you like to create your project?')}</Text>
+        <Text style={[styles.heroSub, { color: colors.textSecondary }]}>
           {t('Choose the method that works best for you')}
         </Text>
       </View>
@@ -222,7 +220,7 @@ export default function CreationMethodScreen({
           ]}
         >
           <TouchableOpacity
-            style={styles.cardAI}
+            style={[styles.cardAI, { backgroundColor: colors.cardBackground }]}
             onPress={handleChooseAI}
             onPressIn={() => pressIn(aiPressScale)}
             onPressOut={() => pressOut(aiPressScale)}
@@ -248,8 +246,8 @@ export default function CreationMethodScreen({
                 </Animated.View>
               </View>
 
-              <Text style={styles.cardTitle}>{t('AI Assistant')}</Text>
-              <Text style={styles.cardDesc} numberOfLines={3}>
+              <Text style={[styles.cardTitle, { color: colors.text }]}>{t('AI Assistant')}</Text>
+              <Text style={[styles.cardDesc, { color: colors.textSecondary }]} numberOfLines={3}>
                 {t('Describe your project in plain words and AI will handle the details — scope, budget and timeline.')}
               </Text>
 
@@ -279,7 +277,7 @@ export default function CreationMethodScreen({
           ]}
         >
           <TouchableOpacity
-            style={[styles.cardManual, { borderColor: '#E5E7EB' }]}
+            style={[styles.cardManual, { borderColor: colors.border, backgroundColor: colors.cardBackground }]}
             onPress={handleChooseManual}
             onPressIn={() => pressIn(manualPressScale)}
             onPressOut={() => pressOut(manualPressScale)}
@@ -287,29 +285,29 @@ export default function CreationMethodScreen({
           >
             <View style={styles.cardInner}>
               <View style={styles.cardTopRow}>
-                <View style={[styles.cardIconWrap, { backgroundColor: '#F5F5F5' }]}>
-                  <Ionicons name="create-outline" size={22} color="#383838" />
+                <View style={[styles.cardIconWrap, { backgroundColor: colors.gray200 }]}>
+                  <Ionicons name="create-outline" size={22} color={colors.text} />
                 </View>
-                <View style={[styles.recommendedBadge, { backgroundColor: '#F5F5F5' }]}>
-                  <Ionicons name="settings-outline" size={11} color="#666666" />
-                  <Text style={[styles.recommendedText, { color: '#666666' }]}>{t('Full Control')}</Text>
+                <View style={[styles.recommendedBadge, { backgroundColor: colors.gray200 }]}>
+                  <Ionicons name="settings-outline" size={11} color={colors.textSecondary} />
+                  <Text style={[styles.recommendedText, { color: colors.textSecondary }]}>{t('Full Control')}</Text>
                 </View>
               </View>
 
-              <Text style={[styles.cardTitle, { color: '#1A1A1A' }]}>{t('Manual Entry')}</Text>
-              <Text style={[styles.cardDesc, { color: '#666666' }]} numberOfLines={3}>
+              <Text style={[styles.cardTitle, { color: colors.text }]}>{t('Manual Entry')}</Text>
+              <Text style={[styles.cardDesc, { color: colors.textSecondary }]} numberOfLines={3}>
                 {t('Fill in all project details yourself — title, budget, timeline and phases at your own pace.')}
               </Text>
 
               <View style={styles.featurePills}>
                 {[t('Precise'), t('Flexible'), t('Custom')].map((f) => (
-                  <View key={f} style={[styles.featurePill, { backgroundColor: '#F0F0F0' }]}>
-                    <Text style={[styles.featurePillText, { color: '#555555' }]}>{f}</Text>
+                  <View key={f} style={[styles.featurePill, { backgroundColor: colors.gray200 }]}>
+                    <Text style={[styles.featurePillText, { color: colors.textSecondary }]}>{f}</Text>
                   </View>
                 ))}
               </View>
 
-              <View style={[styles.cardCta, { backgroundColor: '#1A1A1A' }]}>
+              <View style={[styles.cardCta, { backgroundColor: isDark ? colors.gray300 : '#1A1A1A' }]}>
                 <Text style={styles.cardCtaText}>{t('Enter Manually')}</Text>
                 <Ionicons name={isRTL ? 'arrow-back' : 'arrow-forward'} size={15} color="#fff" />
               </View>

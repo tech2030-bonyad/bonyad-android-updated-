@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,10 +14,12 @@ import {
   Platform,
   TextInput,
   Animated,
+  I18nManager,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { useTranslation } from 'react-i18next';
 import { Ionicons, Feather } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 // import { PieChart, BarChart } from 'react-native-chart-kit';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
@@ -65,6 +67,328 @@ import InProgressSmallTaskScreen from './InProgressSmallTaskScreen';
 import CompletedSmallTaskScreen from './CompletedSmallTaskScreen';
 import AnimatedProjectTypeToggle from '../components/AnimatedProjectTypeToggle';
 import AnimatedLoadingScreen from '../components/AnimatedLoadingScreen';
+import ScreenTourOverlay from '../components/tour/ScreenTourOverlay';
+import { useSimpleScreenTour } from '../hooks/useSimpleScreenTour';
+import { LinearGradient } from 'expo-linear-gradient';
+import ReAnimated, {
+  useSharedValue,
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  interpolate,
+  Extrapolation,
+  SharedValue,
+  withRepeat,
+  withTiming,
+  Easing as ReEasing,
+} from 'react-native-reanimated';
+
+const { width: DEVICE_WIDTH } = Dimensions.get('window');
+const PROJECT_CARD_MARGIN = 16;
+const PROJECT_CARD_ESTIMATED_HEIGHT = 230;
+const PROJECT_CARD_STEP = PROJECT_CARD_ESTIMATED_HEIGHT + PROJECT_CARD_MARGIN;
+
+type ProjectCardItemProps = {
+  project: any;
+  index: number;
+  scrollY: SharedValue<number>;
+  onPress: () => void;
+  colors: any;
+  statusLabel: string;
+  statusColor: string;
+  bidsCount: number;
+  visitsCount: number;
+  formattedDate: string;
+  formattedBudget: string;
+  description: string;
+  riyalLogo: any;
+  t: (key: string) => string;
+};
+
+const ProjectCardItem = React.memo(({
+  project,
+  index,
+  scrollY,
+  onPress,
+  colors,
+  statusLabel,
+  statusColor,
+  bidsCount,
+  visitsCount,
+  formattedDate,
+  formattedBudget,
+  description,
+  riyalLogo,
+  t,
+}: ProjectCardItemProps) => {
+  const cardTop = index * PROJECT_CARD_STEP;
+
+  // Continuously looping shimmer that sweeps across the full card
+  const shimmerX = useSharedValue(-DEVICE_WIDTH);
+  React.useEffect(() => {
+    shimmerX.value = withRepeat(
+      withTiming(DEVICE_WIDTH, {
+        duration: 2000 + index * 150,
+        easing: ReEasing.inOut(ReEasing.sin),
+      }),
+      -1,
+      false
+    );
+  }, []);
+
+  const shimmerStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: shimmerX.value }],
+  }));
+
+  // Subtle scale + fade as the card enters from below
+  const entryStyle = useAnimatedStyle(() => {
+    const scale = interpolate(
+      scrollY.value,
+      [cardTop - PROJECT_CARD_ESTIMATED_HEIGHT, cardTop - 30],
+      [0.94, 1],
+      Extrapolation.CLAMP
+    );
+    const opacity = interpolate(
+      scrollY.value,
+      [cardTop - PROJECT_CARD_ESTIMATED_HEIGHT, cardTop - 30],
+      [0.5, 1],
+      Extrapolation.CLAMP
+    );
+    return { transform: [{ scale }], opacity };
+  });
+
+  return (
+    <ReAnimated.View
+      style={[
+        projectCardStyles.card,
+        { backgroundColor: colors.cardBackground, borderColor: colors.border + '55' },
+        entryStyle,
+      ]}
+    >
+      {/* Shimmer band — slides with scroll like iPhone lock screen depth */}
+      <ReAnimated.View style={[projectCardStyles.shimmerWrap, shimmerStyle]} pointerEvents="none">
+        <LinearGradient
+          colors={['transparent', statusColor + '30', statusColor + '55', statusColor + '30', 'transparent']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={projectCardStyles.shimmerGradient}
+        />
+      </ReAnimated.View>
+
+      {/* Top color accent bar */}
+      <LinearGradient
+        colors={[statusColor, statusColor + '88']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={projectCardStyles.accentBar}
+      />
+
+      <TouchableOpacity onPress={onPress} activeOpacity={0.82} style={projectCardStyles.content}>
+        {/* ID + Status badge */}
+        <View style={projectCardStyles.topRow}>
+          <View style={projectCardStyles.idRow}>
+            <Ionicons name="folder-outline" size={12} color={colors.textSecondary} />
+            <Text style={[projectCardStyles.idText, { color: colors.textSecondary }]}>#{project.id}</Text>
+          </View>
+          <View style={[projectCardStyles.statusBadge, { backgroundColor: statusColor + '18', borderColor: statusColor + '45' }]}>
+            <View style={[projectCardStyles.statusDot, { backgroundColor: statusColor }]} />
+            <Text style={[projectCardStyles.statusLabel, { color: statusColor }]}>{statusLabel}</Text>
+          </View>
+        </View>
+
+        {/* Title */}
+        <Text style={[projectCardStyles.title, { color: colors.text }]} numberOfLines={1}>
+          {project.serviceNameEn || project.serviceNameAr || `${t('projectsScreen.project')} ${project.id}`}
+        </Text>
+
+        {/* Description */}
+        {!!description && (
+          <Text style={[projectCardStyles.description, { color: colors.textSecondary }]} numberOfLines={2}>
+            {description}
+          </Text>
+        )}
+
+        {/* Location */}
+        {!!project.address && (
+          <View style={projectCardStyles.locationRow}>
+            <Ionicons name="location-outline" size={12} color={colors.textSecondary} />
+            <Text style={[projectCardStyles.locationText, { color: colors.textSecondary }]} numberOfLines={1}>
+              {project.address}
+            </Text>
+          </View>
+        )}
+
+        <View style={[projectCardStyles.divider, { backgroundColor: colors.border }]} />
+
+        {/* Footer: budget + chips */}
+        <View style={projectCardStyles.footer}>
+          <View style={projectCardStyles.budgetRow}>
+            <ExpoImage source={riyalLogo} style={projectCardStyles.riyalIcon} contentFit="contain" />
+            <Text style={[projectCardStyles.budgetText, { color: colors.primary }]}>{formattedBudget}</Text>
+          </View>
+
+          <View style={projectCardStyles.chipsRow}>
+            {!!formattedDate && (
+              <View style={[projectCardStyles.metaChip, { backgroundColor: colors.background }]}>
+                <Ionicons name="calendar-outline" size={10} color={colors.textSecondary} />
+                <Text style={[projectCardStyles.metaChipText, { color: colors.textSecondary }]}>{formattedDate}</Text>
+              </View>
+            )}
+            {bidsCount > 0 && (
+              <View style={[projectCardStyles.statChip, { backgroundColor: colors.primary + '15' }]}>
+                <Ionicons name="hand-left-outline" size={10} color={colors.primary} />
+                <Text style={[projectCardStyles.statChipText, { color: colors.primary }]}>{bidsCount}</Text>
+              </View>
+            )}
+            {visitsCount > 0 && (
+              <View style={[projectCardStyles.statChip, { backgroundColor: '#FF950018' }]}>
+                <Ionicons name="eye-outline" size={10} color="#FF9500" />
+                <Text style={[projectCardStyles.statChipText, { color: '#FF9500' }]}>{visitsCount}</Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </TouchableOpacity>
+    </ReAnimated.View>
+  );
+});
+
+const projectCardStyles = StyleSheet.create({
+  card: {
+    borderRadius: 20,
+    marginBottom: PROJECT_CARD_MARGIN,
+    borderWidth: 1,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.09,
+    shadowRadius: 14,
+    elevation: 5,
+  },
+  shimmerWrap: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 0,
+    width: DEVICE_WIDTH,
+  },
+  shimmerGradient: { flex: 1 },
+  accentBar: {
+    height: 3,
+    width: '100%',
+  },
+  content: {
+    padding: 16,
+    zIndex: 1,
+  },
+  topRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  idRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  idText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statusLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  title: {
+    fontSize: 17,
+    fontWeight: '700',
+    marginBottom: 6,
+    letterSpacing: -0.3,
+  },
+  description: {
+    fontSize: 13,
+    lineHeight: 19,
+    marginBottom: 8,
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 10,
+  },
+  locationText: {
+    fontSize: 11,
+    flex: 1,
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    marginBottom: 12,
+    marginTop: 4,
+  },
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  budgetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  riyalIcon: {
+    width: 14,
+    height: 14,
+  },
+  budgetText: {
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  chipsRow: {
+    flexDirection: 'row',
+    gap: 5,
+    alignItems: 'center',
+    flexShrink: 1,
+  },
+  metaChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  metaChipText: {
+    fontSize: 10,
+    fontWeight: '500',
+  },
+  statChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  statChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+});
 
 interface ProjectsScreenProps {
   onBack?: () => void;
@@ -82,6 +406,9 @@ interface ProjectsScreenProps {
   onBookAppointment?: (technicianId: number, technicianName: string, projectId?: number) => void;
   onRequestVisit?: (userId: number, userName: string, projectId?: number) => void;
   onFilterChange?: (filter: 'all' | 'available' | 'running' | 'approved' | 'completed' | 'bid_received' | 'direct_offers') => void;
+  onExposeTourControl?: (c: { startTour: () => void }) => void;
+  /** When FAB opens project type selection, parent can route Info to this tour. */
+  onExposeProjectTypeTourControl?: (c: { startTour: () => void } | null) => void;
 }
 
 interface Project {
@@ -169,15 +496,20 @@ const FIGMA_COLORS = {
   white: '#FFFFFF',
 };
 
-export default function ProjectsScreen({ onBack, filter = 'available', initialServiceCategoryId, initialProject, initialSmallTask, initialProjectType, onOpenChat, onViewTechnician, onBookAppointment, onRequestVisit, onFilterChange }: ProjectsScreenProps) {
+export default function ProjectsScreen({ onBack, filter = 'available', initialServiceCategoryId, initialProject, initialSmallTask, initialProjectType, onOpenChat, onViewTechnician, onBookAppointment, onRequestVisit, onFilterChange, onExposeTourControl, onExposeProjectTypeTourControl }: ProjectsScreenProps) {
   const { t, i18n } = useTranslation();
   const { colors, theme } = useTheme();
-  const { fontFamily, scaledSize } = useFontFamily();
+  const { fontFamily, boldFontFamily, scaledSize } = useFontFamily();
   const insets = useSafeAreaInsets();
 
   const screenWidthForAnimation = Dimensions.get('window').width;
   const screenSlideX = useRef(new Animated.Value(0)).current;
   const screenOpacity = useRef(new Animated.Value(0)).current;
+
+  const projectListScrollY = useSharedValue(0);
+  const projectScrollHandler = useAnimatedScrollHandler((event) => {
+    projectListScrollY.value = event.contentOffset.y;
+  });
 
   useEffect(() => {
     screenSlideX.setValue(-screenWidthForAnimation);
@@ -291,6 +623,34 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
       ]).start();
     });
   }, [projectType]);
+
+  const projectTourSteps = useMemo(() => {
+    if (Platform.OS === 'android' && projectType === 'small') {
+      return [
+        { id: 'typeToggle', i18nSuffix: 'typeToggle' },
+        { id: 'smallBody', i18nSuffix: 'filters' },
+        { id: 'smallBody', i18nSuffix: 'list' },
+      ];
+    }
+    return [
+      { id: 'typeToggle', i18nSuffix: 'typeToggle' },
+      { id: 'filters', i18nSuffix: 'filters' },
+      { id: 'list', i18nSuffix: 'list' },
+    ];
+  }, [projectType]);
+
+  const projectTour = useSimpleScreenTour(projectTourSteps, 'userProjectsTab');
+
+  const startProjectsTour = useCallback(() => {
+    setCurrentPage('list');
+    setSelectedProject(null);
+    setSelectedTechnicianId(null);
+    setTimeout(() => projectTour.startTour(), 220);
+  }, [projectTour.startTour]);
+
+  useEffect(() => {
+    onExposeTourControl?.({ startTour: startProjectsTour });
+  }, [onExposeTourControl, startProjectsTour]);
 
   /** Back from root list only: go to Home when onBack provided, else stay on list. */
   const handleBack = useCallback(() => {
@@ -1066,7 +1426,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
         <View style={[styles.header, styles.headerLTR, { paddingTop: Math.max(insets.top, 50), borderBottomColor: colors.border }]}>
           {onBack ? (
             <TouchableOpacity onPress={handleBackScreen}>
-              <Ionicons name="chevron-back" size={24} color={colors.text} />
+              <BackArrowIonicons variant="chevron" size={24} color={colors.text}/>
             </TouchableOpacity>
           ) : (
             <View style={{ width: 24 }} />
@@ -1462,7 +1822,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
       {Platform.OS === 'android' ? (
         <View style={[styles.androidContainer, { backgroundColor: colors.background }]}>
           {/* Project Type Selector - Toggle (always visible) */}
-          <View style={styles.androidProjectTypeSelector}>
+          <View ref={projectTour.register('typeToggle')} collapsable={false} style={styles.androidProjectTypeSelector}>
             <AnimatedProjectTypeToggle
               selectedType={projectType}
               onTypeChange={handleProjectTypeChange}
@@ -1492,6 +1852,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
                 />
               }
             >
+              <View ref={projectTour.register('smallBody')} collapsable={false} style={{ flex: 1 }}>
               <SmallTasksListScreen
                 onBack={handleBack}
                 isTechnician={userRole?.toUpperCase() === 'TECHNICIAN'}
@@ -1527,11 +1888,12 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
                 filter={localFilter === 'available' ? 'available' : localFilter === 'running' ? 'in-progress' : localFilter === 'completed' ? 'completed' : 'available'}
                 refreshTrigger={smallTasksRefreshTrigger}
               />
+              </View>
             </ScrollView>
           ) : (
             <View style={{ flex: 1 }}>
               {/* Header: title, phase tabs (same as web), service category, search */}
-              <View style={[styles.androidHeaderSection, { backgroundColor: colors.cardBackground }]}>
+              <View ref={projectTour.register('filters')} collapsable={false} style={[styles.androidHeaderSection, { backgroundColor: colors.cardBackground }]}>
                 <View style={styles.androidTitleSection}>
                   <Text style={[styles.androidPageTitle, { color: colors.text }]}>
                     {(() => {
@@ -1785,101 +2147,45 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
               </View>
 
               {/* Project Cards List */}
-              <FlatList
+              <View ref={projectTour.register('list')} collapsable={false} style={{ flex: 1 }}>
+              <ReAnimated.FlatList
                 data={filteredProjects}
                 extraData={[localFilter, selectedCategory, searchQuery]}
-                keyExtractor={(item) => item.id.toString()}
-                renderItem={({ item: project }) => {
-                  const truncateDescription = (text: string): string => {
-                    if (!text) return t('projectsScreen.projectDescription');
-                    const words = text.trim().split(/\s+/);
-                    if (words.length <= 7) return text;
-                    return words.slice(0, 7).join(' ') + '...';
-                  };
+                keyExtractor={(item: any) => item.id.toString()}
+                onScroll={projectScrollHandler}
+                scrollEventThrottle={16}
+                renderItem={({ item: project, index }: { item: any; index: number }) => {
+                  const words = (project.description || '').trim().split(/\s+/);
+                  const description = words.length <= 7 ? project.description || '' : words.slice(0, 7).join(' ') + '...';
                   const statusLabel = getStatusLabel(project.status || '');
                   const statusColor = getStatusColor(project.status || '');
-                  const formatCardDate = (dateString: string) => {
-                    if (!dateString) return '';
-                    try {
-                      return new Date(dateString).toLocaleDateString(i18n.language === 'ar' ? 'ar-SA' : 'en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-                    } catch { return dateString; }
-                  };
-                  const bidsCount = project.bidCount ?? 0;
-                  const visitsCount = project.visitRequestCount ?? 0;
+                  const formattedDate = project.createdAt
+                    ? (() => {
+                        try {
+                          return new Date(project.createdAt).toLocaleDateString(
+                            i18n.language === 'ar' ? 'ar-SA' : 'en-US',
+                            { month: 'short', day: 'numeric', year: 'numeric' }
+                          );
+                        } catch { return ''; }
+                      })()
+                    : '';
                   return (
-                    <TouchableOpacity
-                      style={[
-                        styles.androidProjectCard,
-                        { backgroundColor: colors.cardBackground, borderColor: colors.border },
-                        i18n.language === 'ar' && { direction: 'ltr' },
-                      ]}
+                    <ProjectCardItem
+                      project={project}
+                      index={index}
+                      scrollY={projectListScrollY}
                       onPress={() => handleProjectCardPress(project)}
-                      activeOpacity={0.7}
-                    >
-                      <View style={[styles.androidCardHeaderRow, i18n.language === 'ar' && { justifyContent: 'space-between' }]}>
-                        {i18n.language === 'ar' ? (
-                          <>
-                            <View style={[styles.androidStatusBadge, { backgroundColor: statusColor + '20' }]}>
-                              <Text style={[styles.androidStatusText, { color: statusColor }]}>{statusLabel}</Text>
-                            </View>
-                            <Text style={[styles.androidProjectId, { color: colors.textSecondary }]}>#{project.id}</Text>
-                          </>
-                        ) : (
-                          <>
-                            <Text style={[styles.androidProjectId, { color: colors.textSecondary }]}>#{project.id}</Text>
-                            <View style={[styles.androidStatusBadge, { backgroundColor: statusColor + '20' }]}>
-                              <Text style={[styles.androidStatusText, { color: statusColor }]}>{statusLabel}</Text>
-                            </View>
-                          </>
-                        )}
-                      </View>
-                      <View style={styles.androidCardHeader}>
-                        <Text style={[styles.androidProjectTitle, { color: colors.text }]} numberOfLines={1}>
-                          {project.serviceNameEn || project.serviceNameAr || `${t('projectsScreen.project')} ${project.id}`}
-                        </Text>
-                        <View style={styles.androidPriceContainer}>
-                          <ExpoImage
-                            source={riyalLogo}
-                            style={styles.androidRiyalLogo}
-                            contentFit="contain"
-                          />
-                          <Text style={[styles.androidPriceText, { color: colors.primary }]}>
-                            {formatBudget(project.budget)}
-                          </Text>
-                        </View>
-                      </View>
-                      <Text style={[styles.androidProjectDescription, { color: colors.textSecondary }]} numberOfLines={2}>
-                        {truncateDescription(project.description || '')}
-                      </Text>
-                      {project.address ? (
-                        <View style={styles.androidCardMetaRow}>
-                          <Ionicons name="location-outline" size={14} color={colors.textSecondary} />
-                          <Text style={[styles.androidCardMetaText, { color: colors.textSecondary }]} numberOfLines={1}>
-                            {project.address}
-                          </Text>
-                        </View>
-                      ) : null}
-                      <View style={styles.androidCardMetaRow}>
-                        <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
-                        <Text style={[styles.androidCardMetaText, { color: colors.textSecondary }]}>
-                          {formatCardDate(project.createdAt)}
-                        </Text>
-                      </View>
-                      {(bidsCount > 0 || visitsCount > 0) ? (
-                        <View style={styles.androidCardStatsRow}>
-                          <View style={[styles.androidCardStatItem, { backgroundColor: colors.primary + '15' }]}>
-                            <Ionicons name="hand-left-outline" size={14} color={colors.primary} />
-                            <Text style={[styles.androidCardStatValue, { color: colors.primary }]}>{bidsCount}</Text>
-                            <Text style={[styles.androidCardStatLabel, { color: colors.textSecondary }]}>{t('projectsScreen.bids')}</Text>
-                          </View>
-                          <View style={[styles.androidCardStatItem, { backgroundColor: '#FF9500' + '15' }]}>
-                            <Ionicons name="calendar-outline" size={14} color="#FF9500" />
-                            <Text style={[styles.androidCardStatValue, { color: '#FF9500' }]}>{visitsCount}</Text>
-                            <Text style={[styles.androidCardStatLabel, { color: colors.textSecondary }]}>{t('projectsScreen.visits')}</Text>
-                          </View>
-                        </View>
-                      ) : null}
-                    </TouchableOpacity>
+                      colors={colors}
+                      statusLabel={statusLabel}
+                      statusColor={statusColor}
+                      bidsCount={project.bidCount ?? 0}
+                      visitsCount={project.visitRequestCount ?? 0}
+                      formattedDate={formattedDate}
+                      formattedBudget={formatBudget(project.budget)}
+                      description={description}
+                      riyalLogo={riyalLogo}
+                      t={t}
+                    />
                   );
                 }}
                 ListEmptyComponent={
@@ -1907,6 +2213,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
                   />
                 }
               />
+              </View>
             </View>
             )}
           </Animated.View>
@@ -1928,10 +2235,10 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
       {!IS_LARGE_WEB && (() => {
         const isTechnician = userRole?.toUpperCase() === 'TECHNICIAN';
         return (
-          <View style={[styles.header, styles.headerLTR, { paddingTop: Math.max(insets.top, 50), borderBottomColor: colors.border }]}>
+          <View ref={projectTour.register('typeToggle')} collapsable={false} style={[styles.header, styles.headerLTR, { paddingTop: Math.max(insets.top, 50), borderBottomColor: colors.border }]}>
             {onBack ? (
               <TouchableOpacity onPress={handleBackScreen}>
-                <Ionicons name="chevron-back" size={24} color={colors.text} />
+                <BackArrowIonicons variant="chevron" size={24} color={colors.text}/>
               </TouchableOpacity>
             ) : (
               <View style={{ width: 24 }} />
@@ -1955,7 +2262,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
           {(Platform.OS !== 'android' as any) && (() => {
         const isTechnician = userRole?.toUpperCase() === 'TECHNICIAN';
         return (
-          <View style={[IS_LARGE_WEB ? styles.tabsContainer : styles.mobileTabsContainer, { backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
+          <View ref={projectTour.register('filters')} collapsable={false} style={[IS_LARGE_WEB ? styles.tabsContainer : styles.mobileTabsContainer, { backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
             <ScrollView 
               horizontal 
               showsHorizontalScrollIndicator={false}
@@ -2147,13 +2454,14 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
           {(Platform.OS !== 'android' as any) && (
             <>
       {filteredProjects.length === 0 ? (
-        <View style={styles.emptyContainer}>
+        <View ref={projectTour.register('list')} collapsable={false} style={styles.emptyContainer}>
           <Ionicons name="folder-outline" size={80} color={colors.textSecondary} />
           <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
             No projects found
           </Text>
         </View>
       ) : (
+        <View ref={projectTour.register('list')} collapsable={false} style={{ flex: 1 }}>
         <FlatList
           data={filteredProjects}
           renderItem={renderProjectCard}
@@ -2175,6 +2483,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
             style: { width: '100%' },
           })}
         />
+        </View>
       )}
 
       {/* Floating Action Button - Add New Project (Only for Users, not Technicians) */}
@@ -2191,6 +2500,35 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
           )}
         </>
       )}
+
+          <ScreenTourOverlay
+            visible={projectTour.tourActive}
+            tourStep={projectTour.tourStep}
+            stepRect={projectTour.stepRect}
+            totalSteps={projectTourSteps.length}
+            stepOrder={projectTour.tourStep + 1}
+            stepText={
+              projectTourSteps[projectTour.tourStep]
+                ? t(`tutorial.tab.projects.${projectTourSteps[projectTour.tourStep].i18nSuffix}`)
+                : ''
+            }
+            isFirst={projectTour.tourStep === 0}
+            isLast={projectTour.tourStep === projectTourSteps.length - 1}
+            primaryColor={colors.primary}
+            textColor={colors.text}
+            secondaryTextColor={colors.textSecondary}
+            bgColor={colors.cardBackground}
+            isRTL={i18n.language === 'ar' || I18nManager.isRTL}
+            fontFamily={fontFamily}
+            boldFontFamily={boldFontFamily}
+            onNext={() =>
+              projectTour.setTourStep((s) => Math.min(s + 1, projectTourSteps.length - 1))
+            }
+            onPrev={() => projectTour.setTourStep((s) => Math.max(s - 1, 0))}
+            onSkip={projectTour.endTour}
+            onFinish={projectTour.endTour}
+            t={t}
+          />
 
           </View>
       )}
@@ -2246,6 +2584,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
       {/* Project Type Selection Screen - First screen when clicking New Project */}
       {currentPage === 'project-type-selection' && (
         <ProjectTypeSelectionScreen
+          onExposeTourControl={onExposeProjectTypeTourControl}
           onSelectLarge={() => {
             console.log('🔵 [ProjectsScreen] Selected Large Project');
             setCurrentPage('new-project');

@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { Colors } from '../constants/Colors';
 import { Button, Card, Switch } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -95,7 +96,20 @@ export default function ConversationalAIForm({
   initialSubcategoryName,
 }: ConversationalAIFormProps) {
   const { t, i18n } = useTranslation();
-  const { colors } = useTheme();
+  const { colors, theme } = useTheme();
+  const isDark = theme === 'dark';
+
+  // Theme-aware version of FIGMA_COLORS — use TC in JSX for dark-mode support
+  const TC = {
+    ...FIGMA_COLORS,
+    primary10: isDark ? (colors.primary + '22') : FIGMA_COLORS.primary10,
+    textBody: isDark ? colors.text : FIGMA_COLORS.textBody,
+    textSecondary: isDark ? colors.textSecondary : FIGMA_COLORS.textSecondary,
+    textDividers: isDark ? colors.border : FIGMA_COLORS.textDividers,
+    white: isDark ? colors.cardBackground : FIGMA_COLORS.white,
+    green10: isDark ? (FIGMA_COLORS.green80 + '22') : FIGMA_COLORS.green10,
+    purple10: isDark ? (FIGMA_COLORS.purple100 + '22') : FIGMA_COLORS.purple10,
+  };
   const { fontFamily, scaledSize } = useFontFamily();
   const { arrowBackIcon, backIcon } = useRTL();
   const insets = useSafeAreaInsets();
@@ -976,20 +990,20 @@ export default function ConversationalAIForm({
     return (
       <Animated.View style={{ flex: 1, opacity: screenOpacity, transform: [{ translateY: screenTranslateY }, { scale: screenScale }] }}>
       <KeyboardAvoidingView
-        style={[styles.container, { backgroundColor: '#FFFFFF' }]}
+        style={[styles.container, { backgroundColor: colors.background }]}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
         {/* Header */}
-        <View style={[styles.newHeader, { paddingTop: Math.max(insets.top, 16) }]}>
-          <TouchableOpacity onPress={closeScreenAnimated} style={styles.newHeaderBack}>
-            <Ionicons name={arrowBackIcon} size={22} color="#1A1A1A" />
+        <View style={[styles.newHeader, { paddingTop: Math.max(insets.top, 16), backgroundColor: colors.cardBackground }]}>
+          <TouchableOpacity onPress={closeScreenAnimated} style={[styles.newHeaderBack, { backgroundColor: colors.gray200 }]}>
+            <BackArrowIonicons variant="arrow" size={22} color={colors.text}/>
           </TouchableOpacity>
           <View style={styles.newHeaderCenter}>
-            <View style={styles.newHeaderIconWrap}>
+            <View style={[styles.newHeaderIconWrap, { backgroundColor: colors.primary }]}>
               <Ionicons name="sparkles" size={14} color="#fff" />
             </View>
-            <Text style={styles.newHeaderTitle}>
+            <Text style={[styles.newHeaderTitle, { color: colors.text }]}>
               {currentStep === 'description'
                 ? t('AI Assistant')
                 : currentStep === 'questions'
@@ -1001,12 +1015,13 @@ export default function ConversationalAIForm({
         </View>
 
         {/* Step indicator pills */}
-        <View style={styles.stepPills}>
+        <View style={[styles.stepPills, { backgroundColor: colors.cardBackground }]}>
           {(['description', 'questions', 'review'] as const).map((s, i) => (
             <View
               key={s}
               style={[
                 styles.stepPill,
+                { backgroundColor: colors.gray200 },
                 currentStep === s && styles.stepPillActive,
                 (['description', 'questions'].includes(currentStep) && i === 0 && currentStep !== 'description') ||
                 (currentStep === 'review' && i < 2)
@@ -1037,15 +1052,15 @@ export default function ConversationalAIForm({
               <Animated.View style={[styles.newHeroOrbit, makeOrbitStyle(orbit3Anim, 44)]}>
                 <View style={[styles.newOrbitDot, { backgroundColor: colors.primaryDark || '#003d73', width: 6, height: 6, borderRadius: 3 }]} />
               </Animated.View>
-              <View style={styles.newHeroIcon}>
+              <View style={[styles.newHeroIcon, { backgroundColor: colors.primary + '15' }]}>
                 <Animated.View style={{ transform: [{ rotate: spin }] }}>
                   <Ionicons name="sparkles" size={34} color={colors.primary} />
                 </Animated.View>
               </View>
             </View>
 
-            <Text style={styles.newHeroTitle}>{t('What project do you need?')}</Text>
-            <Text style={styles.newHeroSubtitle}>
+            <Text style={[styles.newHeroTitle, { color: colors.text }]}>{t('What project do you need?')}</Text>
+            <Text style={[styles.newHeroSubtitle, { color: colors.textSecondary }]}>
               {t('Describe your need and AI will define the scope, cost and timeline.')}
             </Text>
 
@@ -1054,7 +1069,7 @@ export default function ConversationalAIForm({
               {currentExamples.slice(0, 2).map((ex, idx) => (
                 <TouchableOpacity
                   key={idx}
-                  style={[styles.newChip, { borderColor: colors.primary + '40' }]}
+                  style={[styles.newChip, { borderColor: colors.primary + '40', backgroundColor: colors.cardBackground }]}
                   onPress={() => setDescription(ex)}
                   activeOpacity={0.7}
                 >
@@ -1067,9 +1082,9 @@ export default function ConversationalAIForm({
             </View>
 
             {/* Input */}
-            <View style={[styles.newInputWrap, { borderColor: description.trim() ? colors.primary : '#E0E0E0' }]}>
+            <View style={[styles.newInputWrap, { borderColor: description.trim() ? colors.primary : colors.border, backgroundColor: colors.gray100 }]}>
               <TextInput
-                style={[styles.newTextInput, { textAlign: isRTL ? 'right' : 'left', color: '#1A1A1A' }]}
+                style={[styles.newTextInput, { textAlign: isRTL ? 'right' : 'left', color: colors.text }]}
                 multiline
                 value={description}
                 onChangeText={setDescription}
@@ -1120,32 +1135,32 @@ export default function ConversationalAIForm({
               <View style={[styles.newQuestionsIconWrap, { backgroundColor: colors.primary + '15' }]}>
                 <Ionicons name="help-buoy" size={28} color={colors.primary} />
               </View>
-              <Text style={[styles.newQuestionsTitle, { color: '#1A1A1A' }]}>
+              <Text style={[styles.newQuestionsTitle, { color: colors.text }]}>
                 {t('A few quick questions')}
               </Text>
-              <Text style={[styles.newQuestionsSubtitle, { color: '#666666' }]}>
+              <Text style={[styles.newQuestionsSubtitle, { color: colors.textSecondary }]}>
                 {t('Help us understand your project better')}
               </Text>
             </View>
 
             {/* Questions */}
             {aiQuestions.map((question, index) => (
-              <View key={index} style={[styles.newQuestionCard, { borderColor: '#E8EFF7' }]}>
+              <View key={index} style={[styles.newQuestionCard, { borderColor: colors.border, backgroundColor: colors.cardBackground }]}>
                 <View style={[styles.newQuestionBadge, { backgroundColor: colors.primary }]}>
                   <Text style={styles.newQuestionBadgeText}>{index + 1}</Text>
                 </View>
-                <Text style={[styles.newQuestionText, { color: '#383838' }]}>{question}</Text>
+                <Text style={[styles.newQuestionText, { color: colors.text }]}>{question}</Text>
               </View>
             ))}
 
             {/* Answer input */}
             <View style={styles.newAnswerSection}>
-              <Text style={[styles.newAnswerLabel, { color: '#1A1A1A' }]}>
+              <Text style={[styles.newAnswerLabel, { color: colors.text }]}>
                 {t('Your answers')}
               </Text>
-              <View style={[styles.newAnswerInputWrap, { borderColor: answersText.trim() ? colors.primary : '#E0E0E0' }]}>
+              <View style={[styles.newAnswerInputWrap, { borderColor: answersText.trim() ? colors.primary : colors.border, backgroundColor: colors.gray100 }]}>
                 <TextInput
-                  style={[styles.newAnswerInput, { color: '#1A1A1A', textAlign: isRTL ? 'right' : 'left' }]}
+                  style={[styles.newAnswerInput, { color: colors.text, textAlign: isRTL ? 'right' : 'left' }]}
                   value={answersText}
                   onChangeText={setAnswersText}
                   placeholder={t('Answer the questions above...')}
@@ -1166,7 +1181,7 @@ export default function ConversationalAIForm({
 
             <View style={styles.newButtonRow}>
               <TouchableOpacity
-                style={[styles.newSecondaryBtn, { borderColor: '#DDDDDD' }]}
+                style={[styles.newSecondaryBtn, { borderColor: colors.border, backgroundColor: colors.cardBackground }]}
                 onPress={() => {
                   setAiQuestions([]);
                   setAnswersText('');
@@ -1174,8 +1189,8 @@ export default function ConversationalAIForm({
                 }}
                 activeOpacity={0.8}
               >
-                <Ionicons name={arrowBackIcon} size={16} color="#383838" />
-                <Text style={[styles.newSecondaryBtnText, { color: '#383838' }]}>{t('Back')}</Text>
+                <BackArrowIonicons variant="arrow" size={16} color={colors.text}/>
+                <Text style={[styles.newSecondaryBtnText, { color: colors.text }]}>{t('Back')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[
@@ -1199,9 +1214,9 @@ export default function ConversationalAIForm({
             {finalProject && (
               <>
                 {/* AI Generated Success Badge */}
-                <View style={styles.aiGeneratedBadge}>
-                  <Ionicons name="checkmark-circle" size={16} color={FIGMA_COLORS.green80} />
-                  <Text style={styles.aiGeneratedBadgeText}>
+                <View style={[styles.aiGeneratedBadge, { backgroundColor: TC.green10, borderColor: TC.green80 }]}>
+                  <Ionicons name="checkmark-circle" size={16} color={TC.green80} />
+                  <Text style={[styles.aiGeneratedBadgeText, { color: TC.green90 }]}>
                     {t('Generated Successfully')}
                   </Text>
                 </View>
@@ -1212,14 +1227,14 @@ export default function ConversationalAIForm({
                 </View>
 
                 {/* Divider */}
-                <View style={[styles.divider, { backgroundColor: FIGMA_COLORS.textDividers }]} />
+                <View style={[styles.divider, { backgroundColor: TC.textDividers }]} />
 
                 {/* Form Header */}
                 <View style={styles.formHeader}>
-                  <Text style={[styles.formTitle, { color: FIGMA_COLORS.primary100 }]}>
+                  <Text style={[styles.formTitle, { color: TC.primary100 }]}>
                     {t('Project Generated Successfully')}
                   </Text>
-                  <Text style={[styles.formSubtitle, { color: FIGMA_COLORS.textBody }]}>
+                  <Text style={[styles.formSubtitle, { color: TC.textBody }]}>
                     {t('Review and edit your project details before submitting. Service providers will send bids once submitted.')}
                   </Text>
                 </View>
@@ -1230,18 +1245,18 @@ export default function ConversationalAIForm({
                     {/* Title Section */}
                     <View style={styles.section}>
                       <View style={styles.sectionHeader}>
-                        <Ionicons name="document-text-outline" size={14} color={FIGMA_COLORS.primary80} />
-                        <Text style={[styles.sectionLabel, { color: FIGMA_COLORS.primary80 }]}>
+                        <Ionicons name="document-text-outline" size={14} color={TC.primary80} />
+                        <Text style={[styles.sectionLabel, { color: TC.primary80 }]}>
                           {t('Title')}
                         </Text>
                       </View>
-                      <View style={[styles.inputContainer, styles.editableInput, { backgroundColor: FIGMA_COLORS.white, borderColor: FIGMA_COLORS.textDividers }]}>
+                      <View style={[styles.inputContainer, styles.editableInput, { backgroundColor: TC.white, borderColor: TC.textDividers }]}>
                         <TextInput
-                          style={[styles.textArea, { color: FIGMA_COLORS.textBody, backgroundColor: FIGMA_COLORS.white, textAlign: isRTL ? 'right' : 'left' }]}
+                          style={[styles.textArea, { color: TC.textBody, backgroundColor: TC.white, textAlign: isRTL ? 'right' : 'left' }]}
                           value={editedProject.title}
                           onChangeText={(text) => handleEditField('title', text)}
                           placeholder={t('Enter project title')}
-                          placeholderTextColor={FIGMA_COLORS.textSecondary}
+                          placeholderTextColor={TC.textSecondary}
                         />
                       </View>
                     </View>
@@ -1249,21 +1264,21 @@ export default function ConversationalAIForm({
                     {/* Description Section */}
                     <View style={styles.section}>
                       <View style={styles.sectionHeader}>
-                        <Ionicons name="document-text-outline" size={14} color={FIGMA_COLORS.primary80} />
-                        <Text style={[styles.sectionLabel, { color: FIGMA_COLORS.primary80 }]}>
+                        <Ionicons name="document-text-outline" size={14} color={TC.primary80} />
+                        <Text style={[styles.sectionLabel, { color: TC.primary80 }]}>
                           {t('Description')} *
                         </Text>
                       </View>
-                      <View style={[styles.inputContainer, styles.editableInput, { backgroundColor: FIGMA_COLORS.white, borderColor: FIGMA_COLORS.textDividers }]}>
+                      <View style={[styles.inputContainer, styles.editableInput, { backgroundColor: TC.white, borderColor: TC.textDividers }]}>
                         <TextInput
-                          style={[styles.textArea, { color: FIGMA_COLORS.textBody, backgroundColor: FIGMA_COLORS.white, minHeight: 120, textAlign: isRTL ? 'right' : 'left' }]}
+                          style={[styles.textArea, { color: TC.textBody, backgroundColor: TC.white, minHeight: 120, textAlign: isRTL ? 'right' : 'left' }]}
                           value={editedProject.description}
                           onChangeText={(text) => handleEditField('description', text)}
                           multiline
                           numberOfLines={6}
                           textAlignVertical="top"
                           placeholder={t('Describe your project needs in detail...')}
-                          placeholderTextColor={FIGMA_COLORS.textSecondary}
+                          placeholderTextColor={TC.textSecondary}
                         />
                       </View>
                     </View>
@@ -1271,28 +1286,28 @@ export default function ConversationalAIForm({
                     {/* Address Section */}
                     <View style={styles.section}>
                       <View style={styles.sectionHeader}>
-                        <Ionicons name="location-outline" size={14} color={FIGMA_COLORS.primary80} />
-                        <Text style={[styles.sectionLabel, { color: FIGMA_COLORS.primary80 }]}>
+                        <Ionicons name="location-outline" size={14} color={TC.primary80} />
+                        <Text style={[styles.sectionLabel, { color: TC.primary80 }]}>
                           {t('Project Address')} ({t('Optional')})
                         </Text>
                       </View>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                         <TouchableOpacity
-                          style={[styles.addressButton, styles.editableInput, { backgroundColor: FIGMA_COLORS.white, borderColor: FIGMA_COLORS.textDividers, flex: 1 }]}
+                          style={[styles.addressButton, styles.editableInput, { backgroundColor: TC.white, borderColor: TC.textDividers, flex: 1 }]}
                           onPress={() => setShowMapPicker(true)}
                         >
-                          <Ionicons name="location" size={18} color={FIGMA_COLORS.primary60} />
+                          <Ionicons name="location" size={18} color={TC.primary60} />
                           <Text 
-                            style={[styles.addressText, { color: editedProject.address ? FIGMA_COLORS.textBody : FIGMA_COLORS.textSecondary }]} 
+                            style={[styles.addressText, { color: editedProject.address ? TC.textBody : TC.textSecondary }]} 
                             numberOfLines={1}
                           >
                             {editedProject.address || t('Select location on map')}
                           </Text>
-                          <Ionicons name="chevron-forward" size={18} color={FIGMA_COLORS.textSecondary} />
+                          <Ionicons name="chevron-forward" size={18} color={TC.textSecondary} />
                         </TouchableOpacity>
                         <TouchableOpacity
                           onPress={() => setShowMapPicker(true)}
-                          style={[styles.mapButtonSmall, { backgroundColor: FIGMA_COLORS.primary60 }]}
+                          style={[styles.mapButtonSmall, { backgroundColor: TC.primary60 }]}
                         >
                           <Ionicons name="map" size={20} color="#fff" />
                         </TouchableOpacity>
@@ -1302,25 +1317,25 @@ export default function ConversationalAIForm({
                     {/* Budget & Duration Row */}
                     <View style={styles.cardsRow}>
                       {/* Budget Card */}
-                      <View style={[styles.statCard, { backgroundColor: FIGMA_COLORS.white, borderColor: FIGMA_COLORS.textDividers, flex: 1, minWidth: 0 }]}>
+                      <View style={[styles.statCard, { backgroundColor: TC.white, borderColor: TC.textDividers, flex: 1, minWidth: 0 }]}>
                         <View style={styles.statCardHeader}>
-                          <Ionicons name="cash-outline" size={14} color={FIGMA_COLORS.primary80} />
-                          <Text style={[styles.statCardLabel, { color: FIGMA_COLORS.primary80 }]}>
+                          <Ionicons name="cash-outline" size={14} color={TC.primary80} />
+                          <Text style={[styles.statCardLabel, { color: TC.primary80 }]}>
                             {t('Budget')} (SAR)
                           </Text>
                         </View>
                         {editedProject.budgetUnspecified ? (
-                          <Text style={[styles.statCardValue, { color: FIGMA_COLORS.textSecondary }]}>
+                          <Text style={[styles.statCardValue, { color: TC.textSecondary }]}>
                             {t('Unspecified')}
                           </Text>
                         ) : (
-                          <View style={[styles.budgetInputWrapper, { backgroundColor: FIGMA_COLORS.primary10, borderColor: FIGMA_COLORS.textDividers }]}>
+                          <View style={[styles.budgetInputWrapper, { backgroundColor: TC.primary10, borderColor: TC.textDividers }]}>
                             <TextInput
-                              style={[styles.budgetInput, { color: FIGMA_COLORS.textBody }]}
+                              style={[styles.budgetInput, { color: TC.textBody }]}
                               value={editedProject.budget?.toString() || ''}
                               onChangeText={(text) => handleEditField('budget', parseFloat(text) || 0)}
                               placeholder={t('Enter amount')}
-                              placeholderTextColor={FIGMA_COLORS.textSecondary}
+                              placeholderTextColor={TC.textSecondary}
                               keyboardType="numeric"
                             />
                           </View>
@@ -1338,29 +1353,29 @@ export default function ConversationalAIForm({
                           <Ionicons
                             name={editedProject.budgetUnspecified ? 'checkbox' : 'checkbox-outline'}
                             size={16}
-                            color={editedProject.budgetUnspecified ? FIGMA_COLORS.primary60 : FIGMA_COLORS.textSecondary}
+                            color={editedProject.budgetUnspecified ? TC.primary60 : TC.textSecondary}
                           />
-                          <Text style={[styles.checkboxText, { color: FIGMA_COLORS.textSecondary }]}>
+                          <Text style={[styles.checkboxText, { color: TC.textSecondary }]}>
                             {t('Unspecified')}
                           </Text>
                         </TouchableOpacity>
                       </View>
 
                       {/* Duration Card */}
-                      <View style={[styles.statCard, { backgroundColor: FIGMA_COLORS.white, borderColor: FIGMA_COLORS.textDividers, flex: 1, minWidth: 0 }]}>
+                      <View style={[styles.statCard, { backgroundColor: TC.white, borderColor: TC.textDividers, flex: 1, minWidth: 0 }]}>
                         <View style={styles.statCardHeader}>
-                          <Ionicons name="time-outline" size={14} color={FIGMA_COLORS.green80} />
-                          <Text style={[styles.statCardLabel, { color: FIGMA_COLORS.green80 }]}>
+                          <Ionicons name="time-outline" size={14} color={TC.green80} />
+                          <Text style={[styles.statCardLabel, { color: TC.green80 }]}>
                             {t('Duration')} ({t('weeks')})
                           </Text>
                         </View>
-                        <View style={[styles.budgetInputWrapper, { backgroundColor: FIGMA_COLORS.green10, borderColor: FIGMA_COLORS.textDividers }]}>
+                        <View style={[styles.budgetInputWrapper, { backgroundColor: TC.green10, borderColor: TC.textDividers }]}>
                           <TextInput
-                            style={[styles.budgetInput, { color: FIGMA_COLORS.textBody }]}
+                            style={[styles.budgetInput, { color: TC.textBody }]}
                             value={editedProject.durationWeeks?.toString() || ''}
                             onChangeText={(text) => handleEditField('durationWeeks', parseInt(text) || 1)}
                             placeholder={t('Enter duration')}
-                            placeholderTextColor={FIGMA_COLORS.textSecondary}
+                            placeholderTextColor={TC.textSecondary}
                             keyboardType="numeric"
                           />
                         </View>
@@ -1370,14 +1385,14 @@ export default function ConversationalAIForm({
                     {/* Bid Deadline */}
                     <View style={styles.section}>
                       <View style={styles.sectionHeader}>
-                        <Ionicons name="time-outline" size={14} color={FIGMA_COLORS.green80} />
-                        <Text style={[styles.sectionLabel, { color: FIGMA_COLORS.green80 }]}>
+                        <Ionicons name="time-outline" size={14} color={TC.green80} />
+                        <Text style={[styles.sectionLabel, { color: TC.green80 }]}>
                           {t('Bid Deadline')} ({t('Optional')})
                         </Text>
                       </View>
                       {editedProject.bidsCloseAt ? (
-                        <View style={[styles.dateValueContainer, { backgroundColor: FIGMA_COLORS.green10, borderColor: FIGMA_COLORS.green80 }]}>
-                          <Text style={[styles.statCardValue, { color: FIGMA_COLORS.textBody, flex: 1 }]} numberOfLines={1}>
+                        <View style={[styles.dateValueContainer, { backgroundColor: TC.green10, borderColor: TC.green80 }]}>
+                          <Text style={[styles.statCardValue, { color: TC.textBody, flex: 1 }]} numberOfLines={1}>
                             {formatDateForDisplay(editedProject.bidsCloseAt)}
                           </Text>
                           <TouchableOpacity onPress={() => handleEditField('bidsCloseAt', '')}>
@@ -1386,15 +1401,15 @@ export default function ConversationalAIForm({
                         </View>
                       ) : (
                         <View style={styles.datePickerRow}>
-                          <TouchableOpacity style={[styles.miniDateButton, { backgroundColor: FIGMA_COLORS.green10 }]} onPress={handlePickDate}>
-                            <Ionicons name="calendar-outline" size={14} color={FIGMA_COLORS.green80} />
-                            <Text style={[styles.miniDateText, { color: FIGMA_COLORS.green80 }]}>
+                          <TouchableOpacity style={[styles.miniDateButton, { backgroundColor: TC.green10 }]} onPress={handlePickDate}>
+                            <Ionicons name="calendar-outline" size={14} color={TC.green80} />
+                            <Text style={[styles.miniDateText, { color: TC.green80 }]}>
                               {t('Date')}
                             </Text>
                           </TouchableOpacity>
-                          <TouchableOpacity style={[styles.miniDateButton, { backgroundColor: FIGMA_COLORS.green10 }]} onPress={handlePickTime}>
-                            <Ionicons name="time-outline" size={14} color={FIGMA_COLORS.green80} />
-                            <Text style={[styles.miniDateText, { color: FIGMA_COLORS.green80 }]}>
+                          <TouchableOpacity style={[styles.miniDateButton, { backgroundColor: TC.green10 }]} onPress={handlePickTime}>
+                            <Ionicons name="time-outline" size={14} color={TC.green80} />
+                            <Text style={[styles.miniDateText, { color: TC.green80 }]}>
                               {t('Time')}
                             </Text>
                           </TouchableOpacity>
@@ -1405,8 +1420,8 @@ export default function ConversationalAIForm({
                     {/* Photos Section */}
                     <View style={styles.section}>
                       <View style={styles.sectionHeader}>
-                        <Ionicons name="images-outline" size={14} color={FIGMA_COLORS.primary80} />
-                        <Text style={[styles.sectionLabel, { color: FIGMA_COLORS.primary80 }]}>
+                        <Ionicons name="images-outline" size={14} color={TC.primary80} />
+                        <Text style={[styles.sectionLabel, { color: TC.primary80 }]}>
                           {t('Photos')} ({photos.length}/5) ({t('Optional')})
                         </Text>
                       </View>
@@ -1418,17 +1433,17 @@ export default function ConversationalAIForm({
                               style={styles.removePhoto}
                               onPress={() => removePhoto(index)}
                             >
-                              <Ionicons name="close-circle" size={22} color={FIGMA_COLORS.white} />
+                              <Ionicons name="close-circle" size={22} color={TC.white} />
                             </TouchableOpacity>
                           </View>
                         ))}
                         {photos.length < 5 && (
                           <TouchableOpacity
-                            style={[styles.addPhotoButton, { borderColor: FIGMA_COLORS.primary60, backgroundColor: FIGMA_COLORS.primary10 }]}
+                            style={[styles.addPhotoButton, { borderColor: TC.primary60, backgroundColor: TC.primary10 }]}
                             onPress={pickImages}
                           >
-                            <Ionicons name="add" size={28} color={FIGMA_COLORS.primary60} />
-                            <Text style={[styles.addPhotoText, { color: FIGMA_COLORS.primary60 }]}>{t('Add')}</Text>
+                            <Ionicons name="add" size={28} color={TC.primary60} />
+                            <Text style={[styles.addPhotoText, { color: TC.primary60 }]}>{t('Add')}</Text>
                           </TouchableOpacity>
                         )}
                       </View>
@@ -1437,15 +1452,15 @@ export default function ConversationalAIForm({
                     {/* Edit Buttons */}
                     <View style={styles.editButtonsRow}>
                       <TouchableOpacity
-                        style={[styles.cancelEditButton, { backgroundColor: FIGMA_COLORS.purple10, borderColor: FIGMA_COLORS.purple100 }]}
+                        style={[styles.cancelEditButton, { backgroundColor: TC.purple10, borderColor: TC.purple100 }]}
                         onPress={() => setIsEditing(false)}
                       >
-                        <Text style={[styles.cancelEditButtonText, { color: FIGMA_COLORS.purple100 }]}>
+                        <Text style={[styles.cancelEditButtonText, { color: TC.purple100 }]}>
                           {t('Cancel')}
                         </Text>
                       </TouchableOpacity>
                       <TouchableOpacity
-                        style={[styles.saveEditButton, { backgroundColor: FIGMA_COLORS.primary60 }]}
+                        style={[styles.saveEditButton, { backgroundColor: TC.primary60 }]}
                         onPress={handleSaveEdits}
                       >
                         <Text style={styles.saveEditButtonText}>
@@ -1459,28 +1474,28 @@ export default function ConversationalAIForm({
                   <View>
                     {/* Project Overview Section */}
                     <View style={styles.section}>
-                      <Text style={[styles.sectionHeaderTitle, { color: FIGMA_COLORS.primary100 }]}>{t('Project Overview')}</Text>
-                      <Text style={[styles.sectionDescription, { color: FIGMA_COLORS.textBody }]}>
+                      <Text style={[styles.sectionHeaderTitle, { color: TC.primary100 }]}>{t('Project Overview')}</Text>
+                      <Text style={[styles.sectionDescription, { color: TC.textBody }]}>
                         {t('Review your project details below. Once submitted, service providers will start sending bids.')}
                       </Text>
                       
                       {/* Budget and Duration Cards */}
                       <View style={styles.statsRow}>
-                        <View style={[styles.statCard, styles.budgetCard, { flex: 1 }]}>
+                        <View style={[styles.statCard, styles.budgetCard, { flex: 1, backgroundColor: TC.primary10, borderColor: TC.primary80 }]}>
                           <View style={styles.statHeader}>
-                            <Ionicons name="cash-outline" size={12} color={FIGMA_COLORS.primary80} />
-                            <Text style={[styles.statTitle, { color: FIGMA_COLORS.primary80 }]}>{t('Total Budget')}</Text>
+                            <Ionicons name="cash-outline" size={12} color={TC.primary80} />
+                            <Text style={[styles.statTitle, { color: TC.primary80 }]}>{t('Total Budget')}</Text>
                           </View>
-                          <Text style={[styles.statValue, { color: FIGMA_COLORS.textSecondary }]}>
+                          <Text style={[styles.statValue, { color: TC.textSecondary }]}>
                             {finalProject?.budgetUnspecified ? t('Unspecified') : `${finalProject?.budget || 0} ${t('SAR')}`}
                           </Text>
                         </View>
-                        <View style={[styles.statCard, styles.durationCard, { flex: 1 }]}>
+                        <View style={[styles.statCard, styles.durationCard, { flex: 1, backgroundColor: TC.green10, borderColor: TC.green80 }]}>
                           <View style={styles.statHeader}>
-                            <Ionicons name="time-outline" size={12} color={FIGMA_COLORS.green90} />
-                            <Text style={[styles.statTitle, { color: FIGMA_COLORS.green90 }]}>{t('Duration')}</Text>
+                            <Ionicons name="time-outline" size={12} color={TC.green90} />
+                            <Text style={[styles.statTitle, { color: TC.green90 }]}>{t('Duration')}</Text>
                           </View>
-                          <Text style={[styles.statValue, { color: FIGMA_COLORS.textSecondary }]}>
+                          <Text style={[styles.statValue, { color: TC.textSecondary }]}>
                             {finalProject?.durationWeeks || 0} {t('weeks')}
                           </Text>
                         </View>
@@ -1490,43 +1505,43 @@ export default function ConversationalAIForm({
                     {/* Description Section */}
                     <View style={styles.section}>
                       <View style={styles.sectionHeader}>
-                        <Ionicons name="document-text-outline" size={12} color={FIGMA_COLORS.primary80} />
-                        <Text style={[styles.sectionLabel, { color: FIGMA_COLORS.primary80 }]}>{t('Description')}</Text>
+                        <Ionicons name="document-text-outline" size={12} color={TC.primary80} />
+                        <Text style={[styles.sectionLabel, { color: TC.primary80 }]}>{t('Description')}</Text>
                       </View>
-                      <View style={styles.descriptionBox}>
-                        <Text style={[styles.descriptionText, { color: FIGMA_COLORS.textBody }]}>{finalProject?.description || ''}</Text>
+                      <View style={[styles.descriptionBox, { borderColor: TC.textDividers, backgroundColor: colors.cardBackground }]}>
+                        <Text style={[styles.descriptionText, { color: TC.textBody }]}>{finalProject?.description || ''}</Text>
                       </View>
                     </View>
 
                     {/* Address Section */}
                     <View style={styles.section}>
                       <View style={styles.sectionHeader}>
-                        <Ionicons name="location-outline" size={12} color={FIGMA_COLORS.primary80} />
-                        <Text style={[styles.sectionLabel, { color: FIGMA_COLORS.primary80 }]}>{t('Address')}</Text>
+                        <Ionicons name="location-outline" size={12} color={TC.primary80} />
+                        <Text style={[styles.sectionLabel, { color: TC.primary80 }]}>{t('Address')}</Text>
                       </View>
                       {finalProject?.address ? (
                         <TouchableOpacity
-                          style={[styles.addressRow, { backgroundColor: FIGMA_COLORS.primary10, borderRadius: 6, padding: 12 }]}
+                          style={[styles.addressRow, { backgroundColor: TC.primary10, borderRadius: 6, padding: 12 }]}
                           onPress={() => setShowMapPicker(true)}
                           activeOpacity={0.7}
                         >
-                          <Ionicons name="location" size={20} color={FIGMA_COLORS.primary60} />
-                          <Text style={[styles.addressText, { color: FIGMA_COLORS.textBody, flex: 1, marginLeft: 8 }]}>
+                          <Ionicons name="location" size={20} color={TC.primary60} />
+                          <Text style={[styles.addressText, { color: TC.textBody, flex: 1, marginLeft: 8 }]}>
                             {finalProject.address}
                           </Text>
-                          <Ionicons name="create-outline" size={18} color={FIGMA_COLORS.primary60} />
+                          <Ionicons name="create-outline" size={18} color={TC.primary60} />
                         </TouchableOpacity>
                       ) : (
                         <TouchableOpacity
-                          style={[styles.addressRow, { backgroundColor: FIGMA_COLORS.primary10, borderRadius: 6, padding: 16, borderWidth: 2, borderColor: FIGMA_COLORS.primary60, borderStyle: 'dashed' }]}
+                          style={[styles.addressRow, { backgroundColor: TC.primary10, borderRadius: 6, padding: 16, borderWidth: 2, borderColor: TC.primary60, borderStyle: 'dashed' }]}
                           onPress={() => setShowMapPicker(true)}
                           activeOpacity={0.7}
                         >
-                          <Ionicons name="map-outline" size={24} color={FIGMA_COLORS.primary60} />
-                          <Text style={[styles.addressText, { color: FIGMA_COLORS.primary60, flex: 1, marginLeft: 8, fontWeight: '600' }]}>
+                          <Ionicons name="map-outline" size={24} color={TC.primary60} />
+                          <Text style={[styles.addressText, { color: TC.primary60, flex: 1, marginLeft: 8, fontWeight: '600' }]}>
                             {t('Tap to add project address')}
                           </Text>
-                          <Ionicons name="chevron-forward" size={20} color={FIGMA_COLORS.primary60} />
+                          <Ionicons name="chevron-forward" size={20} color={TC.primary60} />
                         </TouchableOpacity>
                       )}
                     </View>
@@ -1535,8 +1550,8 @@ export default function ConversationalAIForm({
                     {photos.length > 0 && (
                       <View style={styles.section}>
                         <View style={styles.sectionHeader}>
-                          <Ionicons name="images-outline" size={12} color={FIGMA_COLORS.primary80} />
-                          <Text style={[styles.sectionLabel, { color: FIGMA_COLORS.primary80 }]}>
+                          <Ionicons name="images-outline" size={12} color={TC.primary80} />
+                          <Text style={[styles.sectionLabel, { color: TC.primary80 }]}>
                             {t('Project Photos')} ({photos.length}/5)
                           </Text>
                         </View>
@@ -1564,11 +1579,11 @@ export default function ConversationalAIForm({
                           ))}
                           {photos.length < 5 && (
                             <TouchableOpacity 
-                              style={[styles.addPhotoButton, { borderColor: FIGMA_COLORS.primary60, backgroundColor: FIGMA_COLORS.primary10 }]} 
+                              style={[styles.addPhotoButton, { borderColor: TC.primary60, backgroundColor: TC.primary10 }]} 
                               onPress={pickImages}
                             >
-                              <Ionicons name="add" size={28} color={FIGMA_COLORS.primary60} />
-                              <Text style={[styles.addPhotoText, { color: FIGMA_COLORS.primary60 }]}>{t('Add')}</Text>
+                              <Ionicons name="add" size={28} color={TC.primary60} />
+                              <Text style={[styles.addPhotoText, { color: TC.primary60 }]}>{t('Add')}</Text>
                             </TouchableOpacity>
                           )}
                         </View>
@@ -1579,8 +1594,8 @@ export default function ConversationalAIForm({
                     {(finalProject?.phases || editedPhases).length > 0 && (
                       <View style={styles.section}>
                         <View style={styles.sectionHeader}>
-                          <Ionicons name="document-text-outline" size={12} color={FIGMA_COLORS.primary80} />
-                          <Text style={[styles.sectionLabel, { color: FIGMA_COLORS.primary80 }]}>{t('Work Phases')}</Text>
+                          <Ionicons name="document-text-outline" size={12} color={TC.primary80} />
+                          <Text style={[styles.sectionLabel, { color: TC.primary80 }]}>{t('Work Phases')}</Text>
                         </View>
                         {(editedPhases.length > 0 ? editedPhases : (finalProject?.phases || [])).map((phase, index) => {
                           const formatBudget = (amount: number) => {
@@ -1592,13 +1607,13 @@ export default function ConversationalAIForm({
                           };
 
                           return (
-                            <View key={index} style={styles.unifiedPhaseCard}>
+                            <View key={index} style={[styles.unifiedPhaseCard, { backgroundColor: TC.white, borderColor: TC.primary10 }]}>
                               <View style={styles.unifiedPhaseHeader}>
                                 <View style={styles.unifiedPhaseHeaderLeft}>
-                                  <View style={styles.unifiedPhaseNumberBadge}>
-                                    <Text style={styles.unifiedPhaseNumberText}>{index + 1}</Text>
+                                  <View style={[styles.unifiedPhaseNumberBadge, { backgroundColor: TC.primary10 }]}>
+                                    <Text style={[styles.unifiedPhaseNumberText, { color: TC.primary80 }]}>{index + 1}</Text>
                                   </View>
-                                  <Text style={styles.unifiedPhaseTitle} numberOfLines={2}>
+                                  <Text style={[styles.unifiedPhaseTitle, { color: TC.textBody }]} numberOfLines={2}>
                                     {phase.title}
                                   </Text>
                                 </View>
@@ -1606,21 +1621,21 @@ export default function ConversationalAIForm({
                                   {formatBudget(phase.amount)}
                                 </Text>
                               </View>
-                              
-                              <Text style={styles.unifiedPhaseDescription}>
+
+                              <Text style={[styles.unifiedPhaseDescription, { color: TC.textBody }]}>
                                 {phase.description}
                               </Text>
-                              
+
                               <View style={styles.unifiedPhaseDurationRow}>
-                                <Ionicons name="time-outline" size={12} color={FIGMA_COLORS.textSecondary} />
-                                <Text style={styles.unifiedPhaseDurationText}>
+                                <Ionicons name="time-outline" size={12} color={TC.textSecondary} />
+                                <Text style={[styles.unifiedPhaseDurationText, { color: TC.textSecondary }]}>
                                   {phase.durationWeeks} {t('Week')}
                                 </Text>
                               </View>
 
                               <View style={styles.unifiedPhaseActions}>
                                 <TouchableOpacity
-                                  style={[styles.unifiedPhaseActionButton, { backgroundColor: FIGMA_COLORS.primary60 }]}
+                                  style={[styles.unifiedPhaseActionButton, { backgroundColor: TC.primary60 }]}
                                   onPress={() => {
                                     if (!isEditing) {
                                       if (editedPhases.length === 0 && finalProject?.phases) {
@@ -1660,16 +1675,16 @@ export default function ConversationalAIForm({
                 {!isEditing && finalProject && (
                   <View style={styles.actionButtonsContainer}>
                     <TouchableOpacity
-                      style={[styles.unifiedActionButton, styles.unifiedEditButton]}
+                      style={[styles.unifiedActionButton, styles.unifiedEditButton, { backgroundColor: TC.purple10, borderColor: TC.purple100 }]}
                       onPress={() => setIsEditing(true)}
                     >
-                      <Text style={styles.unifiedActionButtonText}>{t('Edit')}</Text>
+                      <Text style={[styles.unifiedActionButtonText, { color: TC.purple100 }]}>{t('Edit')}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[styles.unifiedActionButton, styles.unifiedSubmitButton]}
                       onPress={() => submitProject(finalProject)}
                     >
-                      <Text style={[styles.unifiedActionButtonText, { color: FIGMA_COLORS.white }]}>
+                      <Text style={[styles.unifiedActionButtonText, { color: TC.white }]}>
                         {technician ? t('Send Deal') : t('Confirm & Submit')}
                       </Text>
                     </TouchableOpacity>
@@ -1683,8 +1698,8 @@ export default function ConversationalAIForm({
 
       {/* AI Thinking Loading Overlay */}
       {isLoading && (
-        <View style={styles.aiThinkingOverlay}>
-          <View style={[styles.aiThinkingCard, { backgroundColor: '#FFFFFF' }]}>
+        <View style={[styles.aiThinkingOverlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.88)' : 'rgba(255,255,255,0.88)' }]}>
+          <View style={[styles.aiThinkingCard, { backgroundColor: colors.cardBackground }]}>
             {/* Orbiting particles */}
             <View style={styles.aiOrbitContainer}>
               <Animated.View style={makeOrbitStyle(orbit1Anim, 40)}>
@@ -1703,10 +1718,10 @@ export default function ConversationalAIForm({
                 </Animated.View>
               </View>
             </View>
-            <Text style={[styles.aiThinkingTitle, { color: '#1A1A1A' }]}>
+            <Text style={[styles.aiThinkingTitle, { color: colors.text }]}>
               {t('AI is thinking')}
             </Text>
-            <Text style={[styles.aiThinkingMsg, { color: '#666666' }]}>
+            <Text style={[styles.aiThinkingMsg, { color: colors.textSecondary }]}>
               {loadingMessages[loadingMsgIdx]}
             </Text>
           </View>
@@ -1719,7 +1734,7 @@ export default function ConversationalAIForm({
           <View style={[styles.loadingCard, { backgroundColor: colors.cardBackground }]}>
             {/* Progress ring */}
             <View style={styles.newProgressRing}>
-              <View style={[styles.newProgressRingBg, { borderColor: '#EEEEEE' }]} />
+              <View style={[styles.newProgressRingBg, { borderColor: colors.gray200 }]} />
               <View
                 style={[
                   styles.newProgressRingFill,
@@ -1858,14 +1873,14 @@ export default function ConversationalAIForm({
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={styles.phaseEditModalContainer}
           >
-            <View style={[styles.phaseEditModalContent, { backgroundColor: FIGMA_COLORS.white }]}>
+            <View style={[styles.phaseEditModalContent, { backgroundColor: TC.white }]}>
               {/* Modal Header */}
-              <View style={styles.phaseEditModalHeader}>
-                <Text style={[styles.phaseEditModalTitle, { color: FIGMA_COLORS.primary100 }]}>
+              <View style={[styles.phaseEditModalHeader, { borderBottomColor: TC.textDividers }]}>
+                <Text style={[styles.phaseEditModalTitle, { color: TC.primary100 }]}>
                   {t('Edit Phase')} {editingPhaseIndex !== null ? editingPhaseIndex + 1 : ''}
                 </Text>
                 <TouchableOpacity onPress={handleCancelPhaseEdit}>
-                  <Ionicons name="close" size={24} color={FIGMA_COLORS.textBody} />
+                  <Ionicons name="close" size={24} color={TC.textBody} />
                 </TouchableOpacity>
               </View>
 
@@ -1874,25 +1889,25 @@ export default function ConversationalAIForm({
                   <View style={styles.phaseEditModalBody}>
                     {/* Title */}
                     <View style={styles.phaseEditModalSection}>
-                      <Text style={[styles.phaseEditModalLabel, { color: FIGMA_COLORS.primary80 }]}>{t('Title')}</Text>
+                      <Text style={[styles.phaseEditModalLabel, { color: TC.primary80 }]}>{t('Title')}</Text>
                       <TextInput
-                        style={[styles.phaseEditModalInput, { backgroundColor: FIGMA_COLORS.primary10, color: FIGMA_COLORS.textBody, borderColor: FIGMA_COLORS.textDividers, textAlign: isRTL ? 'right' : 'left' }]}
+                        style={[styles.phaseEditModalInput, { backgroundColor: TC.primary10, color: TC.textBody, borderColor: TC.textDividers, textAlign: isRTL ? 'right' : 'left' }]}
                         value={editingPhase.title}
                         onChangeText={(text) => handleUpdatePhaseField('title', text)}
                         placeholder={t('Phase title')}
-                        placeholderTextColor={FIGMA_COLORS.textSecondary}
+                        placeholderTextColor={TC.textSecondary}
                       />
                     </View>
 
                     {/* Description */}
                     <View style={styles.phaseEditModalSection}>
-                      <Text style={[styles.phaseEditModalLabel, { color: FIGMA_COLORS.primary80 }]}>{t('Description')}</Text>
+                      <Text style={[styles.phaseEditModalLabel, { color: TC.primary80 }]}>{t('Description')}</Text>
                       <TextInput
-                        style={[styles.phaseEditModalInput, { backgroundColor: FIGMA_COLORS.primary10, color: FIGMA_COLORS.textBody, borderColor: FIGMA_COLORS.textDividers, minHeight: 100, textAlign: isRTL ? 'right' : 'left' }]}
+                        style={[styles.phaseEditModalInput, { backgroundColor: TC.primary10, color: TC.textBody, borderColor: TC.textDividers, minHeight: 100, textAlign: isRTL ? 'right' : 'left' }]}
                         value={editingPhase.description}
                         onChangeText={(text) => handleUpdatePhaseField('description', text)}
                         placeholder={t('Phase description')}
-                        placeholderTextColor={FIGMA_COLORS.textSecondary}
+                        placeholderTextColor={TC.textSecondary}
                         multiline
                         numberOfLines={4}
                         textAlignVertical="top"
@@ -1902,33 +1917,33 @@ export default function ConversationalAIForm({
                     {/* Duration, Amount, Percentage Row */}
                     <View style={styles.phaseEditModalRow}>
                       <View style={[styles.phaseEditModalSection, { flex: 1 }]}>
-                        <Text style={[styles.phaseEditModalLabel, { color: FIGMA_COLORS.primary80 }]}>{t('Duration (weeks)')}</Text>
+                        <Text style={[styles.phaseEditModalLabel, { color: TC.primary80 }]}>{t('Duration (weeks)')}</Text>
                         <TextInput
-                          style={[styles.phaseEditModalInput, { backgroundColor: FIGMA_COLORS.primary10, color: FIGMA_COLORS.textBody, borderColor: FIGMA_COLORS.textDividers }]}
+                          style={[styles.phaseEditModalInput, { backgroundColor: TC.primary10, color: TC.textBody, borderColor: TC.textDividers }]}
                           value={editingPhase.durationWeeks.toString()}
                           onChangeText={(text) => handleUpdatePhaseField('durationWeeks', parseInt(text) || 1)}
                           keyboardType="numeric"
-                          placeholderTextColor={FIGMA_COLORS.textSecondary}
+                          placeholderTextColor={TC.textSecondary}
                         />
                       </View>
                       <View style={[styles.phaseEditModalSection, { flex: 1 }]}>
-                        <Text style={[styles.phaseEditModalLabel, { color: FIGMA_COLORS.primary80 }]}>{t('Amount (SAR)')}</Text>
+                        <Text style={[styles.phaseEditModalLabel, { color: TC.primary80 }]}>{t('Amount (SAR)')}</Text>
                         <TextInput
-                          style={[styles.phaseEditModalInput, { backgroundColor: FIGMA_COLORS.primary10, color: FIGMA_COLORS.textBody, borderColor: FIGMA_COLORS.textDividers }]}
+                          style={[styles.phaseEditModalInput, { backgroundColor: TC.primary10, color: TC.textBody, borderColor: TC.textDividers }]}
                           value={editingPhase.amount.toString()}
                           onChangeText={(text) => handleUpdatePhaseField('amount', parseFloat(text) || 0)}
                           keyboardType="numeric"
-                          placeholderTextColor={FIGMA_COLORS.textSecondary}
+                          placeholderTextColor={TC.textSecondary}
                         />
                       </View>
                       <View style={[styles.phaseEditModalSection, { flex: 1 }]}>
-                        <Text style={[styles.phaseEditModalLabel, { color: FIGMA_COLORS.primary80 }]}>{t('Percentage')}</Text>
+                        <Text style={[styles.phaseEditModalLabel, { color: TC.primary80 }]}>{t('Percentage')}</Text>
                         <TextInput
-                          style={[styles.phaseEditModalInput, { backgroundColor: FIGMA_COLORS.primary10, color: FIGMA_COLORS.textBody, borderColor: FIGMA_COLORS.textDividers }]}
+                          style={[styles.phaseEditModalInput, { backgroundColor: TC.primary10, color: TC.textBody, borderColor: TC.textDividers }]}
                           value={editingPhase.percentage.toString()}
                           onChangeText={(text) => handleUpdatePhaseField('percentage', parseFloat(text) || 0)}
                           keyboardType="numeric"
-                          placeholderTextColor={FIGMA_COLORS.textSecondary}
+                          placeholderTextColor={TC.textSecondary}
                         />
                       </View>
                     </View>
@@ -1937,12 +1952,12 @@ export default function ConversationalAIForm({
               </ScrollView>
 
               {/* Modal Footer */}
-              <View style={styles.phaseEditModalFooter}>
+              <View style={[styles.phaseEditModalFooter, { borderTopColor: TC.textDividers }]}>
                 <TouchableOpacity
-                  style={[styles.phaseEditModalButton, styles.phaseEditModalCancelButton]}
+                  style={[styles.phaseEditModalButton, styles.phaseEditModalCancelButton, { backgroundColor: TC.purple10, borderColor: TC.purple100 }]}
                   onPress={handleCancelPhaseEdit}
                 >
-                  <Text style={[styles.phaseEditModalButtonText, { color: FIGMA_COLORS.purple100 }]}>
+                  <Text style={[styles.phaseEditModalButtonText, { color: TC.purple100 }]}>
                     {t('Cancel')}
                   </Text>
                 </TouchableOpacity>
@@ -1950,7 +1965,7 @@ export default function ConversationalAIForm({
                   style={[styles.phaseEditModalButton, styles.phaseEditModalSaveButton]}
                   onPress={() => editingPhaseIndex !== null && handleSavePhaseEdit(editingPhaseIndex)}
                 >
-                  <Text style={[styles.phaseEditModalButtonText, { color: FIGMA_COLORS.white }]}>
+                  <Text style={[styles.phaseEditModalButtonText, { color: TC.white }]}>
                     {t('Save')}
                   </Text>
                 </TouchableOpacity>
@@ -2292,9 +2307,9 @@ export default function ConversationalAIForm({
             {finalProject && (
               <View>
                 {/* AI Generated Success Badge */}
-                <View style={styles.aiGeneratedBadge}>
-                  <Ionicons name="checkmark-circle" size={16} color={FIGMA_COLORS.green80} />
-                  <Text style={styles.aiGeneratedBadgeText}>
+                <View style={[styles.aiGeneratedBadge, { backgroundColor: TC.green10, borderColor: TC.green80 }]}>
+                  <Ionicons name="checkmark-circle" size={16} color={TC.green80} />
+                  <Text style={[styles.aiGeneratedBadgeText, { color: TC.green90 }]}>
                     {t('Generated Successfully')}
                   </Text>
                 </View>

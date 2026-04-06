@@ -1,4 +1,5 @@
 {
+  "Type a message...": "Type a message...",
   "Customer": "User",
   "Specialized": "Bonyader",
   "Welcome back": "Welcome back",
@@ -432,6 +433,8 @@
   "Manual Project Form": "Manual Project Form",
   "Fill all project details manually": "Fill all project details manually",
   "New Project": "New Project",
+  "New project": "New project",
+  "Small task": "Small task",
   "Create Project": "Create Project",
   "Project Creation": "Project Creation",
   "Fill in the details below to create your project. Service providers will send bids once submitted.": "Fill in the details below to create your project. Service providers will send bids once submitted.",
@@ -2179,6 +2182,132 @@
       "pleaseEnterValidHours": "Please enter valid hours",
       "bidSubmittedSuccess": "Bid submitted successfully",
       "failedToSubmitBid": "Failed to submit bid"
+    }
+  },
+  "chatDetail": {
+    "pleaseLoginViewMessages": "Please login to view messages",
+    "failedLoadMessages": "Failed to load messages",
+    "failedSendMessage": "Failed to send message",
+    "loadingMessages": "Loading messages...",
+    "attachFile": "Attach file",
+    "voiceMessage": "Voice message",
+    "recordingVoiceNotePlaceholder": "Recording voice note...",
+    "recording": "Recording",
+    "loginRequiredAttachments": "You must be logged in to send attachments",
+    "recordingFileNotFound": "Recording file was not found",
+    "recordingEmpty": "Recording is empty — hold to record a bit longer",
+    "failedUploadAttachment": "Failed to upload attachment",
+    "unableAccessFile": "Unable to access selected file",
+    "failedChooseAttachment": "Failed to choose attachment",
+    "failedStartRecording": "Failed to start recording",
+    "failedStopRecording": "Failed to stop recording",
+    "failedSendVoiceNote": "Failed to send voice note",
+    "failedSendAttachment": "Failed to send attachment",
+    "invalidAttachmentPayload": "Invalid attachment payload",
+    "errorNoUserId": "No user ID found",
+    "errorNoAuthToken": "No authentication token found"
+  },
+  "tutorial": {
+    "skip": "Skip",
+    "next": "Next →",
+    "previous": "← Back",
+    "finish": "Done ✓",
+    "stepOf": "Step {{current}} of {{total}}",
+    "projectType": {
+      "header": "You’re creating something new. Use the back arrow to leave, and read the title and short description to confirm you’re in the right place.",
+      "large": "Large project — phased work with contracts, bids, and progress tracking. Tap this card to continue with AI or manual setup.",
+      "small": "Small task — faster flow for simple one-off jobs. Tap this card to pick a task type and submit your request."
+    },
+    "home": {
+      "user": {
+        "topNav": "Your profile, notifications, and app menu are up here. Tap the bell to see updates.",
+        "topNavLogo": "This is the Bonyad logo — your home base. You can always return here from anywhere in the app.",
+        "topNavMessages": "Tap here to open your messages and chat with technicians about your projects.",
+        "topNavInfo": "Get quick help and app information. Tap here to learn more about Bonyad.",
+        "topNavNotifications": "Your notifications appear here. Tap the bell to see updates on your projects and requests.",
+        "search": "Search for services or technicians by name. Results appear as you type with fuzzy matching.",
+        "newProject": "Tap here to create a new project. Describe the work, set a budget, and receive bids from technicians.",
+        "smallTask": "Post a quick small task — perfect for one-off jobs like repairs or installations. Fast and easy.",
+        "appointments": "View and manage all your scheduled appointments and site visits with technicians.",
+        "services": "Browse all available services. Find the right category and connect with skilled technicians.",
+        "projectsSection": "Your active projects appear here. Tap any project to view its status, bids, and details.",
+        "smallTasksSection": "Your small task requests. Quick one-off jobs like repairs — post a request and receive bids from technicians.",
+        "serviceCategories": "Browse all services by category. Tap a category to see subcategories and available technicians.",
+        "chatbot": "Need help? Tap the chatbot button to ask questions or get guided to any part of the app.",
+        "bottomNav": "Use the bottom bar to navigate: Home, Projects, Create, Chat, and Profile.",
+        "bottomNavHome": "Home — return to your main dashboard with projects, services, and quick actions.",
+        "bottomNavProjects": "Projects — view and manage all your active and past projects in one place.",
+        "bottomNavNew": "Tap + to quickly create a new project or post a small task request.",
+        "bottomNavChat": "Chat — message your technicians, share files, and discuss project details.",
+        "bottomNavProfile": "Profile — manage your account, settings, and personal information.",
+        "tabHome": "Home — your main dashboard with services, projects, and quick actions.",
+        "tabProjects": "Projects — view all your active and past projects, track status and bids.",
+        "tabCreate": "Tap + to create a new project or post a small task request.",
+        "tabChat": "Chat — message your technicians, discuss project details, and share files.",
+        "tabProfile": "Profile — manage your account, settings, and personal information."
+      },
+      "technician": {
+        "portfolioSection": "Your portfolio. Create one to show your work to clients, or open it here to manage projects and photos.",
+        "smallTasksSection": "Small task requests from clients. Browse and submit bids for quick jobs in your service areas.",
+        "bottomNav": "Use the bottom bar: Home, Projects, Payments, and Profile. The spotlight matches the bar so navigation is easy to understand."
+      }
+    },
+    "tab": {
+      "projects": {
+        "typeToggle": "Switch between large projects and small tasks. Each mode has its own list and filters.",
+        "filters": "Use the status filters, search, and category options to find the right projects or tasks.",
+        "list": "Open any card to see details, bids, visits, and next steps for that project or task."
+      },
+      "chat": {
+        "searchFilters": "Search chats by name or last message, then use All / Unread / Read to narrow the list.",
+        "list": "Tap a row to open the conversation. Pull down to refresh your inbox."
+      },
+      "profile": {
+        "pageTitle": "This is your profile hub — your name, details, and every account control below start from here.",
+        "profileCard": "Your photo, welcome line, and My Info. Tap the row to edit profile; tap the photo to change your picture.",
+        "menuMyData": "My Data — open to update your personal information and contact details.",
+        "menuPortfolio": "My Portfolio — showcase your work and manage projects clients can see.",
+        "menuSubscription": "My Subscription — view or manage your service provider plan.",
+        "menuAvailability": "Availability — set when you can take jobs or appointments.",
+        "menuServices": "Services — manage the services you offer.",
+        "menuSmallTaskTypes": "Small task types — choose which quick-task categories you’re subscribed to.",
+        "menuWorkingAreas": "Working Areas — set the regions where you offer services.",
+        "menuSupport": "Support Center — get help, open tickets, and contact support.",
+        "menuTransactions": "Transactions — view payments, history, and refunds.",
+        "menuLanguage": "Language — switch between English and Arabic for the app.",
+        "menuFontSize": "Font size — make text smaller or larger for easier reading.",
+        "menuDarkMode": "Dark mode — toggle a darker theme for low light.",
+        "menuDeleteAccount": "Delete account — permanently remove your account (use with care).",
+        "menuLogout": "Log out — end your session securely on this device."
+      },
+      "new": {
+        "overview": "Create a large project with AI or manual flow, or post a small task. Follow the steps on screen — you can go back anytime."
+      },
+      "notifications": {
+        "filters": "Switch between All, Unread, and Read to organize your updates.",
+        "list": "Tap a notification to open the related screen. Long press a row to delete it."
+      }
+    },
+    "appointments": {
+      "calendar": "Use the calendar to pick a day and see when you have visits or bookings.",
+      "filters": "Switch between Today, Pending, Upcoming, and Completed to focus the list.",
+      "list": "Your appointments and time requests appear here. Tap a card for details and actions."
+    },
+    "pending": {
+      "user": {
+        "header": "Your project is pending. Here you can review details and manage the project while waiting for bids.",
+        "projectOverview": "Project overview with budget and duration. Review the details before technicians submit their bids.",
+        "requirements": "Project requirements. Make sure they are clear so technicians can send accurate proposals.",
+        "phases": "Work phases break down the project into milestones. You can edit or delete the project from Quick Actions.",
+        "actions": "Edit or delete your project. Use these actions to update details or cancel the project."
+      },
+      "technician": {
+        "header": "This project is pending. Review the details and submit a bid or request a visit.",
+        "projectOverview": "Project overview with budget and duration. Use this to prepare your bid.",
+        "requirements": "Requirements you must meet. Consider them when pricing your bid.",
+        "phases": "Work phases define the scope. Use them to structure your proposal.",
+        "bidActions": "Request a site visit before bidding, or submit your bid directly. Choose the option that fits best."
+      }
     }
   }
 }

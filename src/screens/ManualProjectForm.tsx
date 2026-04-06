@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -642,7 +643,7 @@ export default function ManualProjectForm({
             onPress={closeScreenAnimated} 
             style={[styles.breadcrumbBack, isLargeWeb && styles.breadcrumbBackLargeWeb]}
           >
-            <Ionicons name={isRTL ? "chevron-forward" : "chevron-back"} size={isLargeWeb ? 40 : 20} color={textPrimary} />
+            <BackArrowIonicons variant="chevron" size={isLargeWeb ? 40 : 20} color={textPrimary} />
           </TouchableOpacity>
           <View style={[styles.breadcrumbTextContainer, isLargeWeb && styles.breadcrumbTextContainerLargeWeb]}>
             <Text style={[styles.breadcrumbTitle, { color: textPrimary }, isLargeWeb && styles.breadcrumbTitleLargeWeb]}>
@@ -659,11 +660,7 @@ export default function ManualProjectForm({
         {isLargeWeb && (
           <View style={styles.titleSectionLargeWeb}>
             <TouchableOpacity onPress={closeScreenAnimated} style={styles.titleBackButton}>
-              <Ionicons 
-                name={isRTL ? "chevron-forward" : "chevron-back"}
-                size={24} 
-                color={textPrimary} 
-              />
+              <BackArrowIonicons variant="chevron" size={24} color={textPrimary} />
             </TouchableOpacity>
             <View style={styles.titleContainer}>
               <Text style={styles.titleMainText}>

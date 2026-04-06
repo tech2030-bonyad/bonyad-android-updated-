@@ -13,6 +13,7 @@ import {
   I18nManager,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTheme } from '../context/ThemeContext';
 
 const SIZE = 67;
 const WAVE_DURATION = 2000;
@@ -24,9 +25,6 @@ const PRIMARY_DARK = '#0078E0';
 const HEAD_W = 44;
 const HEAD_H = 40;
 const HEAD_RADIUS = 12;
-const ANTENNA_W = 4;
-const ANTENNA_H = 10;
-const ANTENNA_TIP = 8;
 const EYE_SIZE = 12;
 const PUPIL_SIZE = 7;
 const MOUTH_W = 16;
@@ -49,6 +47,11 @@ interface ChatbotFabProps {
   primaryDark?: string;
   /** Distance from bottom of screen; prefer `chatbotFabBottomOffset(insets.bottom)` on mobile */
   bottomOffset?: number;
+  /**
+   * When true, fills the parent instead of screen-absolute positioning (e.g. copilot highlight wrapper).
+   * Parent should set size and position (typically 67×67 at bottom corner).
+   */
+  embedInParent?: boolean;
 }
 
 function WaveRing({ delay, primaryColor }: { delay: number; primaryColor: string; primaryDark?: string }) {
@@ -119,11 +122,6 @@ export function ChatbotIcon({
 
   return (
     <View style={iconStyles.robotWrap}>
-      {/* Antenna tip + stem (above head) */}
-      <View style={iconStyles.antennaGroup}>
-        <View style={[iconStyles.antennaTip, { backgroundColor: primaryColor }]} />
-        <View style={[iconStyles.antenna, { backgroundColor: primaryDark }]} />
-      </View>
       {/* Head: rounded rect with gradient */}
       <LinearGradient
         colors={[primaryColor, primaryDark]}
@@ -220,21 +218,6 @@ const iconStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-end',
   },
-  antennaGroup: {
-    alignItems: 'center',
-    marginBottom: 2,
-  },
-  antennaTip: {
-    width: ANTENNA_TIP,
-    height: ANTENNA_TIP,
-    borderRadius: ANTENNA_TIP / 2,
-    marginBottom: 2,
-  },
-  antenna: {
-    width: ANTENNA_W,
-    height: ANTENNA_H,
-    borderRadius: ANTENNA_W / 2,
-  },
   head: {
     width: HEAD_W,
     height: HEAD_H,
@@ -282,8 +265,15 @@ const iconStyles = StyleSheet.create({
   },
 });
 
-export default function ChatbotFab({ onPress, primaryColor = PRIMARY, primaryDark = PRIMARY_DARK, bottomOffset = DEFAULT_BOTTOM }: ChatbotFabProps) {
+export default function ChatbotFab({
+  onPress,
+  primaryColor = PRIMARY,
+  primaryDark = PRIMARY_DARK,
+  bottomOffset = DEFAULT_BOTTOM,
+  embedInParent = false,
+}: ChatbotFabProps) {
   const isRTL = I18nManager.isRTL;
+  const { colors } = useTheme();
   const eyeScaleY = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -306,11 +296,15 @@ export default function ChatbotFab({ onPress, primaryColor = PRIMARY, primaryDar
     return () => clearInterval(interval);
   }, [eyeScaleY]);
 
+  const touchableStyle = embedInParent
+    ? [styles.touchable, styles.touchableEmbedded]
+    : [styles.touchable, { bottom: bottomOffset }, isRTL ? styles.touchableRTL : styles.touchableLTR];
+
   return (
     <TouchableOpacity
       activeOpacity={0.9}
       onPress={onPress}
-      style={[styles.touchable, { bottom: bottomOffset }, isRTL ? styles.touchableRTL : styles.touchableLTR]}
+      style={touchableStyle}
       hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
     >
       <View style={styles.ringsContainer} pointerEvents="none">
@@ -319,7 +313,7 @@ export default function ChatbotFab({ onPress, primaryColor = PRIMARY, primaryDar
         ))}
       </View>
       <View
-        style={[styles.whiteCircle, Platform.OS === 'ios' ? styles.shadowIOS : styles.shadowAndroid]}
+        style={[styles.whiteCircle, { backgroundColor: colors.cardBackground }, Platform.OS === 'ios' ? styles.shadowIOS : styles.shadowAndroid]}
       >
         <ChatbotIcon
           primaryColor={primaryColor}
@@ -340,6 +334,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'visible',
+  },
+  touchableEmbedded: {
+    position: 'relative',
+    width: '100%',
+    height: '100%',
   },
   touchableLTR: { left: 20 },
   touchableRTL: { right: 20 },

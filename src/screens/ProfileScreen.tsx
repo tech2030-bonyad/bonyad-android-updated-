@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Platform,
   Linking,
+  I18nManager,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,6 +23,8 @@ import { storage } from '../utils/storage';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
 import ConfirmationPopup, { useConfirmationPopup } from '../components/ConfirmationPopup';
 import AnimatedLoadingScreen from '../components/AnimatedLoadingScreen';
+import ScreenTourOverlay from '../components/tour/ScreenTourOverlay';
+import { useSimpleScreenTour } from '../hooks/useSimpleScreenTour';
 
 // Figma Design Colors
 const FIGMA_COLORS = {
@@ -52,6 +55,7 @@ interface ProfileScreenProps {
   onNavigateToSmallTaskTypes?: () => void;
   onNavigateToPaymentHistory?: () => void;
   onNavigateToSupportTickets?: () => void;
+  onExposeTourControl?: (c: { startTour: () => void }) => void;
 }
 
 interface UserDetails {
@@ -100,11 +104,12 @@ export default function ProfileScreen({
   onNavigateToSmallTaskTypes,
   onNavigateToPaymentHistory,
   onNavigateToSupportTickets,
+  onExposeTourControl,
 }: ProfileScreenProps) {
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
   const { colors, theme, toggleTheme } = useTheme();
-  const { fontFamily, fontSizeScale, setFontSizeScale, scaledSize } = useFontFamily();
+  const { fontFamily, boldFontFamily, fontSizeScale, setFontSizeScale, scaledSize } = useFontFamily();
   const [userDetails, setUserDetails] = useState<UserDetails | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
@@ -114,6 +119,101 @@ export default function ProfileScreen({
   const { isRTL } = useRTL();
   // In AR, menu arrows point left (chevron-back); in LTR they point right (chevron-forward)
   const menuChevron = isRTL ? 'chevron-back' : 'chevron-forward';
+
+  const isTechnicianRole = userDetails?.role?.toUpperCase() === 'TECHNICIAN';
+
+  const profileTourSteps = useMemo(() => {
+    const prefix = [
+      { id: 'pageTitle', i18nSuffix: 'pageTitle' as const },
+      { id: 'profileCard', i18nSuffix: 'profileCard' as const },
+    ];
+    const technicianMenus = [
+      { id: 'menuPortfolio', i18nSuffix: 'menuPortfolio' as const },
+      { id: 'menuSubscription', i18nSuffix: 'menuSubscription' as const },
+      { id: 'menuAvailability', i18nSuffix: 'menuAvailability' as const },
+      { id: 'menuServices', i18nSuffix: 'menuServices' as const },
+      { id: 'menuSmallTaskTypes', i18nSuffix: 'menuSmallTaskTypes' as const },
+      { id: 'menuWorkingAreas', i18nSuffix: 'menuWorkingAreas' as const },
+    ];
+    const userMenus = [{ id: 'menuMyData', i18nSuffix: 'menuMyData' as const }];
+    const tail = [
+      { id: 'menuSupport', i18nSuffix: 'menuSupport' as const },
+      { id: 'menuTransactions', i18nSuffix: 'menuTransactions' as const },
+      { id: 'menuLanguage', i18nSuffix: 'menuLanguage' as const },
+      { id: 'menuFontSize', i18nSuffix: 'menuFontSize' as const },
+      { id: 'menuDarkMode', i18nSuffix: 'menuDarkMode' as const },
+      { id: 'menuDeleteAccount', i18nSuffix: 'menuDeleteAccount' as const },
+      { id: 'menuLogout', i18nSuffix: 'menuLogout' as const },
+    ];
+    return [...prefix, ...(isTechnicianRole ? technicianMenus : userMenus), ...tail];
+  }, [isTechnicianRole]);
+
+  const [profileTourLayoutTick, setProfileTourLayoutTick] = useState(0);
+  const profileTour = useSimpleScreenTour(profileTourSteps, 'userProfileTab', [profileTourLayoutTick]);
+  const profileScrollRef = useRef<ScrollView>(null);
+
+  /** After ScrollView scroll, bump tick so useSimpleScreenTour re-runs measureInWindow on settled layout. */
+  const bumpProfileTourLayoutMeasure = () => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => setProfileTourLayoutTick((n) => n + 1));
+    });
+  };
+
+  /** Match home tour: scroll so the active ref sits in view before measureInWindow runs. */
+  useLayoutEffect(() => {
+    if (!profileTour.tourActive) return;
+    const step = profileTourSteps[profileTour.tourStep];
+    if (!step) return;
+    const id = step.id;
+    const sv = profileScrollRef.current;
+    if (!sv) return;
+
+    const scrollTop = () => sv.scrollTo({ y: 0, animated: false });
+
+    if (id === 'pageTitle' || id === 'profileCard') {
+      scrollTop();
+      return;
+    }
+    if (id === 'menuDeleteAccount' || id === 'menuLogout') {
+      const target = profileTour.getTargetRef(id);
+      const inner = (sv as ScrollView & { getInnerViewRef?: () => unknown }).getInnerViewRef?.();
+      if (target && inner && typeof (target as any).measureLayout === 'function') {
+        (target as any).measureLayout(
+          inner,
+          (_x: number, y: number) => {
+            sv.scrollTo({ y: Math.max(0, y - 100), animated: false });
+            bumpProfileTourLayoutMeasure();
+          },
+          () => {
+            sv.scrollToEnd({ animated: false });
+            bumpProfileTourLayoutMeasure();
+          },
+        );
+        return;
+      }
+      sv.scrollToEnd({ animated: false });
+      bumpProfileTourLayoutMeasure();
+      return;
+    }
+
+    const target = profileTour.getTargetRef(id);
+    const inner = (sv as ScrollView & { getInnerViewRef?: () => unknown }).getInnerViewRef?.();
+    if (target && inner && typeof (target as any).measureLayout === 'function') {
+      (target as any).measureLayout(
+        inner,
+        (_x: number, y: number) => {
+          sv.scrollTo({ y: Math.max(0, y - 100), animated: false });
+        },
+        scrollTop,
+      );
+      return;
+    }
+    scrollTop();
+  }, [profileTour.tourActive, profileTour.tourStep, profileTourSteps, profileTour.getTargetRef]);
+
+  useEffect(() => {
+    onExposeTourControl?.({ startTour: profileTour.startTour });
+  }, [onExposeTourControl, profileTour.startTour]);
   
   const { alertState, showError, showSuccess, hideAlert } = useAlertPopup();
   const { confirmState, showLogoutConfirmation, showConfirmation, hideConfirmation } = useConfirmationPopup();
@@ -261,7 +361,7 @@ export default function ProfileScreen({
   }
 
   const user = userDetails;
-  const isTechnician = user?.role?.toUpperCase() === 'TECHNICIAN';
+  const isTechnician = isTechnicianRole;
   const isVerified = user?.status === 'APPROVED' || user?.status === 'VERIFIED';
 
   const technicianBioText = ((user?.description || user?.bio) ?? '').trim();
@@ -269,19 +369,24 @@ export default function ProfileScreen({
 
   return (
     <View style={[styles.container, { backgroundColor: bgColor }]}>
-      <ScrollView 
-        showsVerticalScrollIndicator={false} 
+      <ScrollView
+        ref={profileScrollRef}
+        showsVerticalScrollIndicator={false}
         style={styles.scrollView}
         contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 120), paddingTop: 16 }}
         keyboardShouldPersistTaps="handled"
       >
         {/* Page Title */}
-        <View style={styles.pageTitleContainer}>
+        <View ref={profileTour.register('pageTitle')} collapsable={false} style={styles.pageTitleContainer}>
           <Text style={[styles.pageTitle, { color: headerTextColor, fontFamily, fontSize: scaledSize(20) }]}>{t('profile.myProfile')}</Text>
         </View>
 
         {/* Main Profile Card */}
-        <View style={[styles.mainCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}>
+        <View
+          ref={profileTour.register('profileCard')}
+          collapsable={false}
+          style={[styles.mainCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}
+        >
           {/* User Welcome Section - Clickable to open settings */}
           <TouchableOpacity 
             style={styles.userWelcomeSection} 
@@ -459,13 +564,15 @@ export default function ProfileScreen({
           )}
                   </View>
 
-        {/* Settings Section Card */}
-       
         {/* Technician Menu Items – same order as web: Portfolio, Subscription, Availability, Services, Small Task Types, Working Areas */}
         {isTechnician && (
           <>
             {/* My Portfolio */}
-            <View style={[styles.technicianCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}>
+            <View
+              ref={profileTour.register('menuPortfolio')}
+              collapsable={false}
+              style={[styles.technicianCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}
+            >
               <TouchableOpacity
                 style={styles.menuItem}
                 onPress={() => onNavigateToPortfolio?.()}
@@ -487,7 +594,11 @@ export default function ProfileScreen({
             </View>
 
             {/* My Subscription */}
-            <View style={[styles.technicianCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}>
+            <View
+              ref={profileTour.register('menuSubscription')}
+              collapsable={false}
+              style={[styles.technicianCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}
+            >
               <TouchableOpacity
                 style={styles.menuItem}
                 onPress={() => onNavigateToSubscription?.()}
@@ -509,7 +620,11 @@ export default function ProfileScreen({
             </View>
 
             {/* Availability */}
-            <View style={[styles.technicianCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}>
+            <View
+              ref={profileTour.register('menuAvailability')}
+              collapsable={false}
+              style={[styles.technicianCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}
+            >
               <TouchableOpacity
                 style={styles.menuItem}
                 onPress={() => onNavigateToAvailability?.()}
@@ -531,7 +646,11 @@ export default function ProfileScreen({
             </View>
 
             {/* Services */}
-            <View style={[styles.technicianCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}>
+            <View
+              ref={profileTour.register('menuServices')}
+              collapsable={false}
+              style={[styles.technicianCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}
+            >
               <TouchableOpacity
                 style={styles.menuItem}
                 onPress={() => onNavigateToServices?.()}
@@ -553,7 +672,11 @@ export default function ProfileScreen({
             </View>
 
             {/* Small Task Types – ensure clickable with explicit handler and hitSlop */}
-            <View style={[styles.technicianCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}>
+            <View
+              ref={profileTour.register('menuSmallTaskTypes')}
+              collapsable={false}
+              style={[styles.technicianCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}
+            >
               <TouchableOpacity
                 style={styles.menuItem}
                 onPress={() => {
@@ -578,7 +701,11 @@ export default function ProfileScreen({
             </View>
 
             {/* Working Areas – ensure clickable with hitSlop and explicit handler */}
-            <View style={[styles.technicianCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}>
+            <View
+              ref={profileTour.register('menuWorkingAreas')}
+              collapsable={false}
+              style={[styles.technicianCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}
+            >
               <TouchableOpacity
                 style={styles.menuItem}
                 onPress={() => {
@@ -610,7 +737,11 @@ export default function ProfileScreen({
 
         {/* User Menu Items */}
         {!isTechnician && (
-          <View style={[styles.userMenuCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}>
+          <View
+            ref={profileTour.register('menuMyData')}
+            collapsable={false}
+            style={[styles.userMenuCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}
+          >
             <TouchableOpacity 
               style={styles.menuItem}
               onPress={() => onNavigateToEditProfile?.()}
@@ -631,7 +762,11 @@ export default function ProfileScreen({
         )}
 
         {/* Support Center Card */}
-        <View style={[styles.userMenuCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}>
+        <View
+          ref={profileTour.register('menuSupport')}
+          collapsable={false}
+          style={[styles.userMenuCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}
+        >
           <TouchableOpacity 
             style={styles.menuItem}
             onPress={() => {
@@ -665,7 +800,11 @@ export default function ProfileScreen({
         </View>
 
         {/* Transactions (Payment History) – same as web label */}
-        <View style={[styles.userMenuCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}>
+        <View
+          ref={profileTour.register('menuTransactions')}
+          collapsable={false}
+          style={[styles.userMenuCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}
+        >
           <TouchableOpacity 
             style={styles.menuItem}
             onPress={() => onNavigateToPaymentHistory?.()}
@@ -692,10 +831,11 @@ export default function ProfileScreen({
 
          <View style={[styles.settingsCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}>
           {/* Language */}
-          <TouchableOpacity 
-            style={styles.settingItem}
-            onPress={toggleLanguage}
-          >
+          <View ref={profileTour.register('menuLanguage')} collapsable={false}>
+            <TouchableOpacity 
+              style={styles.settingItem}
+              onPress={toggleLanguage}
+            >
             <View style={[styles.settingIconContainer, { backgroundColor: iconBgColor }]}>
               <Ionicons name="globe-outline" size={24} color={isDarkMode ? colors.textSecondary : '#666666'} />
             </View>
@@ -712,13 +852,15 @@ export default function ProfileScreen({
               {language === 'en' ? t('profile.langEn') : t('profile.langAr')}
             </Text>
             </View>
-          </TouchableOpacity>
+            </TouchableOpacity>
+          </View>
 
           {/* Font Size */}
-          <TouchableOpacity 
-            style={styles.settingItem}
-            onPress={cycleFontSize}
-          >
+          <View ref={profileTour.register('menuFontSize')} collapsable={false}>
+            <TouchableOpacity 
+              style={styles.settingItem}
+              onPress={cycleFontSize}
+            >
             <View style={[styles.settingIconContainer, { backgroundColor: iconBgColor }]}>
               <Ionicons name="text-outline" size={24} color={isDarkMode ? colors.textSecondary : '#666666'} />
             </View>
@@ -786,10 +928,12 @@ export default function ProfileScreen({
                 </Text>
               </TouchableOpacity>
             </View>
-          </TouchableOpacity>
+            </TouchableOpacity>
+          </View>
 
           {/* Dark Mode */}
-          <View style={styles.settingItem}>
+          <View ref={profileTour.register('menuDarkMode')} collapsable={false}>
+            <View style={styles.settingItem}>
             <View style={[styles.settingIconContainer, { backgroundColor: iconBgColor }]}>
               <Ionicons name="moon-outline" size={24} color={isDarkMode ? colors.textSecondary : '#666666'} />
             </View>
@@ -814,12 +958,17 @@ export default function ProfileScreen({
                 ]} />
               </View>
             </TouchableOpacity>
+            </View>
           </View>
 
         </View>
 
         {/* Delete Account Card */}
-        <View style={[styles.userMenuCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}>
+        <View
+          ref={profileTour.register('menuDeleteAccount')}
+          collapsable={false}
+          style={[styles.userMenuCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}
+        >
           <TouchableOpacity 
             style={styles.deleteAccountItem}
             onPress={handleDeleteAccount}
@@ -834,7 +983,11 @@ export default function ProfileScreen({
         </View>
 
         {/* Logout Card */}
-        <View style={[styles.logoutCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}>
+        <View
+          ref={profileTour.register('menuLogout')}
+          collapsable={false}
+          style={[styles.logoutCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}
+        >
         <TouchableOpacity 
           style={styles.logoutItem}
           onPress={handleLogout}
@@ -846,6 +999,35 @@ export default function ProfileScreen({
         </TouchableOpacity>
         </View>
       </ScrollView>
+
+      <ScreenTourOverlay
+        visible={profileTour.tourActive}
+        tourStep={profileTour.tourStep}
+        stepRect={profileTour.stepRect}
+        totalSteps={profileTourSteps.length}
+        stepOrder={profileTour.tourStep + 1}
+        stepText={
+          profileTourSteps[profileTour.tourStep]
+            ? t(`tutorial.tab.profile.${profileTourSteps[profileTour.tourStep].i18nSuffix}`)
+            : ''
+        }
+        isFirst={profileTour.tourStep === 0}
+        isLast={profileTour.tourStep === profileTourSteps.length - 1}
+        primaryColor={primaryColor}
+        textColor={textColor}
+        secondaryTextColor={secondaryTextColor}
+        bgColor={cardBgColor}
+        isRTL={isArabic || I18nManager.isRTL}
+        fontFamily={fontFamily}
+        boldFontFamily={boldFontFamily}
+        onNext={() =>
+          profileTour.setTourStep((s) => Math.min(s + 1, profileTourSteps.length - 1))
+        }
+        onPrev={() => profileTour.setTourStep((s) => Math.max(s - 1, 0))}
+        onSkip={profileTour.endTour}
+        onFinish={profileTour.endTour}
+        t={t}
+      />
       
       {/* Alert Popup */}
       <AlertPopup

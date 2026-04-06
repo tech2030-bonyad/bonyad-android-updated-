@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useTheme } from '../context/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRTL } from '../hooks/useRTL';
@@ -61,9 +62,9 @@ export default function RequestModificationScreen({
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { paddingTop: getTopPadding(insets, 8), borderBottomColor: colors.border }]}>
+      <View style={[styles.header, styles.headerLTR, { paddingTop: getTopPadding(insets, 8), borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={onBack}>
-          <Ionicons name={arrowBackIcon} size={24} color={colors.text} />
+          <BackArrowIonicons variant="arrow" size={24} color={colors.text}/>
         </TouchableOpacity>
         <Text style={[styles.title, { color: colors.text }]}>{t('Request modification')}</Text>
         <View style={{ width: 24 }} />

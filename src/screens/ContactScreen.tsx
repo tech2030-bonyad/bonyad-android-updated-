@@ -4,6 +4,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking, Platform
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import { Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useTranslation } from 'react-i18next';
 import { useRTL } from '../hooks/useRTL';
 
@@ -32,7 +33,7 @@ export default function ContactScreen({ onBack }: ContactScreenProps) {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.header}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Ionicons name={arrowBackIcon} size={22} color={colors.text} />
+          <BackArrowIonicons variant="arrow" size={22} color={colors.text}/>
           <Text style={[styles.backText, { color: colors.text, fontSize: scaledSize(16) }]}>{t('Back')}</Text>
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(20) }]}>{t('Contact Us')}</Text>

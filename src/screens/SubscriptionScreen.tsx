@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
@@ -374,7 +375,7 @@ export default function SubscriptionScreen({ onBack }: SubscriptionScreenProps) 
       {/* Header */}
       <View style={[styles.headerContainer, { borderBottomWidth: 1, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={handleBackScreen} style={styles.backButton}>
-          <Ionicons name={backIcon} size={24} color={colors.text} />
+          <BackArrowIonicons variant="chevron" size={24} color={colors.text}/>
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { fontSize: scaledSize(18), color: colors.text }]}>
           {t('My Subscription')}

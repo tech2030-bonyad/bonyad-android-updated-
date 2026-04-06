@@ -18,6 +18,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import { API_ENDPOINTS, buildApiUrlWithParams, buildApiUrl } from '../config/api';
@@ -80,13 +81,13 @@ function dedupeChatMessages(messages: ChatMessage[]): ChatMessage[] {
   return out;
 }
 
-function datePillLabel(iso: string, t: (k: string) => string): string {
+function datePillLabel(iso: string, t: (k: string) => string, locale: string): string {
   const d = new Date(iso);
   const start = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
   const diffDays = Math.round((start(new Date()) - start(d)) / 86400000);
   if (diffDays === 0) return t('Today');
   if (diffDays === 1) return t('Yesterday');
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: d.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined });
+  return d.toLocaleDateString(locale, { month: 'short', day: 'numeric', year: d.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined });
 }
 
 type ChatListRow =
@@ -112,9 +113,10 @@ export default function ChatDetailScreen({
   hasBottomTabBar = false,
 }: ChatDetailScreenProps) {
   const { t, i18n } = useTranslation();
-  const { colors } = useTheme();
+  const { colors, theme } = useTheme();
+  const isDark = theme === 'dark';
   const { fontFamily } = useFontFamily();
-  const headerDirectionStyle = { direction: 'ltr' as const };
+  const isArabic = i18n.language?.startsWith('ar');
   const insets = useSafeAreaInsets();
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -195,12 +197,16 @@ export default function ChatDetailScreen({
       const k = calendarDayKey(m.createdAt);
       if (k !== lastKey) {
         lastKey = k;
-        rows.push({ type: 'date', id: `d-${k}`, label: datePillLabel(m.createdAt, t) });
+        rows.push({
+          type: 'date',
+          id: `d-${k}`,
+          label: datePillLabel(m.createdAt, t, i18n.language?.startsWith('ar') ? 'ar-SA' : 'en-US'),
+        });
       }
       rows.push({ type: 'msg', msg: m });
     });
     return rows;
-  }, [messagesDeduped, t]);
+  }, [messagesDeduped, t, i18n.language]);
 
   useEffect(() => {
     return () => {
@@ -316,7 +322,7 @@ export default function ChatDetailScreen({
       const token = await storage.getAuthToken();
       if (!token) {
         console.error('❌ No auth token found');
-        Alert.alert(t('Error'), t('Please login to view messages'));
+        Alert.alert(t('Error'), t('chatDetail.pleaseLoginViewMessages'));
         setIsLoading(false);
         return;
       }
@@ -381,18 +387,18 @@ export default function ChatDetailScreen({
           if (!silent) console.log('💬 New conversation — no messages yet');
         } else if (!silent) {
           console.error('❌ Failed to load messages - Status:', response.status, body);
-          Alert.alert(t('Error'), t('Failed to load messages'));
+          Alert.alert(t('Error'), t('chatDetail.failedLoadMessages'));
         }
       } else {
         if (!silent) {
           const errorText = await response.text();
           console.error('❌ Failed to load messages - Status:', response.status, errorText);
-          Alert.alert(t('Error'), t('Failed to load messages'));
+          Alert.alert(t('Error'), t('chatDetail.failedLoadMessages'));
         }
       }
     } catch (error: any) {
       console.error('❌ Error loading messages:', error);
-      if (!silent) Alert.alert(t('Error'), error?.message || t('Failed to load messages'));
+      if (!silent) Alert.alert(t('Error'), error?.message || t('chatDetail.failedLoadMessages'));
     } finally {
       if (!silent) setIsLoading(false);
     }
@@ -408,7 +414,7 @@ export default function ChatDetailScreen({
     let optimisticMessage: ChatMessage;
     try {
       const currentUserId = await storage.getUserId();
-      if (!currentUserId) throw new Error('No user ID found');
+      if (!currentUserId) throw new Error(t('chatDetail.errorNoUserId'));
       optimisticMessage = {
         id: -Math.abs(Date.now()),
         roomId,
@@ -432,7 +438,7 @@ export default function ChatDetailScreen({
     try {
       const token = await storage.getAuthToken();
       if (!token) {
-        throw new Error('No authentication token found');
+        throw new Error(t('chatDetail.errorNoAuthToken'));
       }
 
       const url = buildApiUrl(API_ENDPOINTS.CHAT.SEND);
@@ -463,11 +469,11 @@ export default function ChatDetailScreen({
         );
       } else {
         const errorText = await response.text();
-        throw new Error(errorText || 'Failed to send message');
+        throw new Error(errorText || t('chatDetail.failedSendMessage'));
       }
     } catch (error: any) {
       console.error('❌ Failed to send message:', error);
-      Alert.alert(t('Error'), error.message || t('Failed to send message'));
+      Alert.alert(t('Error'), error.message || t('chatDetail.failedSendMessage'));
       setMessages((prev) => prev.filter((msg) => msg.id !== optimisticMessage.id));
       setMessage(messageText);
     } finally {
@@ -525,7 +531,7 @@ export default function ChatDetailScreen({
     try {
       const token = await storage.getAuthToken();
       if (!token) {
-        throw new Error(i18n.language === 'en' ? 'You must be logged in to send attachments' : 'يجب تسجيل الدخول لإرسال المرفقات');
+        throw new Error(t('chatDetail.loginRequiredAttachments'));
       }
 
       setIsUploadingAttachment(true);
@@ -569,25 +575,16 @@ export default function ChatDetailScreen({
           try {
             const info = await FileSystem.getInfoAsync(statUri);
             if (!info.exists) {
-              throw new Error(
-                i18n.language === 'en' ? 'Recording file was not found' : 'لم يُعثر على ملف التسجيل'
-              );
+              throw new Error(t('chatDetail.recordingFileNotFound'));
             }
             const size = (info as { size?: number }).size ?? 0;
             if (size === 0) {
-              throw new Error(
-                i18n.language === 'en'
-                  ? 'Recording is empty — hold to record a bit longer'
-                  : 'التسجيل فارغ — أبقِ الضغط لمدة أطول'
-              );
+              throw new Error(t('chatDetail.recordingEmpty'));
             }
           } catch (e: any) {
             const msg = String(e?.message ?? e ?? '');
             const isOurValidation =
-              msg.includes('Recording file') ||
-              msg.includes('Recording is empty') ||
-              msg.includes('لم يُعثر') ||
-              msg.includes('فارغ');
+              msg === t('chatDetail.recordingFileNotFound') || msg === t('chatDetail.recordingEmpty');
             if (isOurValidation) {
               throw e;
             }
@@ -612,7 +609,7 @@ export default function ChatDetailScreen({
         }
         formData.append('file', filePart as any);
       } else {
-        throw new Error('Invalid attachment payload');
+        throw new Error(t('chatDetail.invalidAttachmentPayload'));
       }
 
       const response = await fetch(buildApiUrl(API_ENDPOINTS.CHAT.SEND_WITH_FILE), {
@@ -628,7 +625,7 @@ export default function ChatDetailScreen({
       if (!response.ok) {
         const errorText = await response.text();
         console.error('❌ [ChatDetailScreen] Attachment upload failed response:', errorText);
-        throw new Error(errorText || 'Failed to send attachment');
+        throw new Error(errorText || t('chatDetail.failedSendAttachment'));
       }
 
       // Reload messages so the new attachment appears (REST-only, no MQTT)
@@ -643,10 +640,7 @@ export default function ChatDetailScreen({
       }
     } catch (error: any) {
       console.error('❌ Attachment upload failed:', error);
-      Alert.alert(
-        t('Error'),
-        error?.message || (i18n.language === 'en' ? 'Failed to upload attachment' : 'فشل رفع المرفق')
-      );
+      Alert.alert(t('Error'), error?.message || t('chatDetail.failedUploadAttachment'));
     } finally {
       setIsUploadingAttachment(false);
     }
@@ -704,7 +698,7 @@ export default function ChatDetailScreen({
       const mimeType = asset?.mimeType ?? (result as any)?.mimeType ?? 'application/octet-stream';
 
       if (!uri) {
-        throw new Error(i18n.language === 'en' ? 'Unable to access selected file' : 'تعذر الوصول إلى الملف المحدد');
+        throw new Error(t('chatDetail.unableAccessFile'));
       }
 
       await uploadAttachment({
@@ -717,10 +711,7 @@ export default function ChatDetailScreen({
         return;
       }
       console.error('❌ Attachment picker error:', error);
-      Alert.alert(
-        t('Error'),
-        i18n.language === 'en' ? 'Failed to choose attachment' : 'فشل اختيار المرفق'
-      );
+      Alert.alert(t('Error'), t('chatDetail.failedChooseAttachment'));
     }
   };
 
@@ -740,10 +731,7 @@ export default function ChatDetailScreen({
       }
     } catch (error: any) {
       console.error('❌ Failed to start recording:', error);
-      Alert.alert(
-        t('Error'),
-        i18n.language === 'en' ? 'Failed to start recording' : 'فشل بدء التسجيل'
-      );
+      Alert.alert(t('Error'), t('chatDetail.failedStartRecording'));
     }
   };
 
@@ -758,10 +746,7 @@ export default function ChatDetailScreen({
       setRecordingDuration(0);
 
       if (!result) {
-        Alert.alert(
-          t('Error'),
-          i18n.language === 'en' ? 'Failed to stop recording' : 'فشل إيقاف التسجيل'
-        );
+        Alert.alert(t('Error'), t('chatDetail.failedStopRecording'));
         return;
       }
 
@@ -825,10 +810,7 @@ export default function ChatDetailScreen({
       console.error('❌ Failed to stop recording:', error);
       setIsRecording(false);
       setRecordingDuration(0);
-      Alert.alert(
-        t('Error'),
-        i18n.language === 'en' ? 'Failed to send voice note' : 'فشل إرسال الرسالة الصوتية'
-      );
+      Alert.alert(t('Error'), t('chatDetail.failedSendVoiceNote'));
     }
   };
 
@@ -853,8 +835,8 @@ export default function ChatDetailScreen({
       if (item.type === 'date') {
         return (
           <View style={styles.datePillWrap}>
-            <View style={styles.datePill}>
-              <Text style={styles.datePillText}>{item.label}</Text>
+            <View style={[styles.datePill, { backgroundColor: isDark ? colors.gray200 : 'rgba(26, 39, 68, 0.07)' }]}>
+              <Text style={[styles.datePillText, { color: colors.textTertiary }]}>{item.label}</Text>
             </View>
           </View>
         );
@@ -873,8 +855,8 @@ export default function ChatDetailScreen({
 
   if (isLoading) {
     return (
-      <View style={[styles.loadingRoot, { backgroundColor: FIGMA.screenBg }]}>
-        <AnimatedLoadingScreen message={t('Loading messages...')} />
+      <View style={[styles.loadingRoot, { backgroundColor: colors.background }]}>
+        <AnimatedLoadingScreen message={t('chatDetail.loadingMessages')} />
       </View>
     );
   }
@@ -886,7 +868,7 @@ export default function ChatDetailScreen({
       style={[
         styles.container,
         {
-          backgroundColor: FIGMA.screenBg,
+          backgroundColor: colors.background,
           paddingBottom: bottomLayout.kavPad,
         },
       ]}
@@ -895,18 +877,24 @@ export default function ChatDetailScreen({
     >
       <View style={styles.chatScreenInner}>
       {/* Figma chat header — not the app shell top nav */}
-      <View style={[styles.chatHeader, { borderBottomColor: FIGMA.border }, headerDirectionStyle]}>
+      <View
+        style={[
+          styles.chatHeader,
+          { backgroundColor: colors.cardBackground, borderBottomColor: colors.border },
+          isArabic && styles.headerRTL,
+        ]}
+      >
         {shouldShowBackButton ? (
           <TouchableOpacity
             onPress={onBack}
             accessibilityRole="button"
-            style={styles.headerIconBox}
+            style={[styles.headerIconBox, { backgroundColor: colors.gray200 }]}
             hitSlop={8}
           >
-            <Ionicons name="chevron-back" size={20} color={FIGMA.azure18} />
+            <BackArrowIonicons variant="chevron" size={20} color={colors.text} forceLtrLayout={!isArabic} />
           </TouchableOpacity>
         ) : (
-          <View style={styles.headerIconBox} />
+          <View style={[styles.headerIconBox, { backgroundColor: colors.gray200 }]} />
         )}
         <LinearGradient
           colors={HEADER_AVATAR_GRADIENT}
@@ -917,7 +905,7 @@ export default function ChatDetailScreen({
           <Text style={styles.headerAvatarLetter}>{peerInitial}</Text>
         </LinearGradient>
         <View style={styles.headerTitleBlock}>
-          <Text style={[styles.headerName, { fontFamily }]} numberOfLines={1}>
+          <Text style={[styles.headerName, { fontFamily, color: colors.text }]} numberOfLines={1}>
             {receiverName}
           </Text>
         </View>
@@ -948,15 +936,15 @@ export default function ChatDetailScreen({
           style={[
             styles.recordingContainer,
             {
-              backgroundColor: FIGMA.white,
-              borderTopColor: FIGMA.border,
+              backgroundColor: colors.cardBackground,
+              borderTopColor: colors.border,
             },
           ]}
         >
           <View style={styles.recordingInfo}>
             <View style={[styles.recordingDot, { backgroundColor: colors.error }]} />
-            <Text style={[styles.recordingText, { color: FIGMA.azure18 }]}>
-              {t('Recording')}... {formatDuration(recordingDuration)}
+            <Text style={[styles.recordingText, { color: colors.text }]}>
+              {t('chatDetail.recording')}... {formatDuration(recordingDuration)}
             </Text>
           </View>
           <View style={styles.recordingActions}>
@@ -968,7 +956,7 @@ export default function ChatDetailScreen({
             </TouchableOpacity>
             <TouchableOpacity
               onPress={handleStopRecording}
-              style={[styles.stopButton, { backgroundColor: FIGMA.azure18 }]}
+              style={[styles.stopButton, { backgroundColor: colors.primary }]}
             >
               <Ionicons name="stop" size={20} color={colors.white} />
             </TouchableOpacity>
@@ -980,8 +968,8 @@ export default function ChatDetailScreen({
         style={[
           styles.inputContainer,
           {
-            backgroundColor: FIGMA.white,
-            borderTopColor: FIGMA.border,
+            backgroundColor: colors.cardBackground,
+            borderTopColor: colors.border,
             paddingBottom: IS_LARGE_WEB ? 12 : bottomLayout.inputPad,
           },
         ]}
@@ -989,22 +977,31 @@ export default function ChatDetailScreen({
         {!isRecording ? (
           <>
             <TouchableOpacity
-              style={styles.composerEmojiBtn}
+              style={[styles.composerEmojiBtn, { backgroundColor: colors.gray200 }]}
               onLongPress={handleAttachmentPress}
               disabled={isUploadingAttachment}
               hitSlop={6}
             >
               {isUploadingAttachment ? (
-                <ActivityIndicator size="small" color={FIGMA.azure18} />
+                <ActivityIndicator size="small" color={colors.text} />
               ) : (
-                <Ionicons name="happy-outline" size={18} color={FIGMA.muted} />
+                <Ionicons name="happy-outline" size={18} color={colors.textTertiary} />
               )}
             </TouchableOpacity>
 
             <TextInput
-              style={[styles.composerInput, { color: FIGMA.azure18, fontFamily }]}
+              style={[
+                styles.composerInput,
+                {
+                  color: colors.text,
+                  fontFamily,
+                  borderColor: colors.border,
+                  backgroundColor: colors.gray100,
+                  textAlign: isArabic ? 'right' : 'left',
+                },
+              ]}
               placeholder={t('Type a message...')}
-              placeholderTextColor={FIGMA.muted}
+              placeholderTextColor={colors.textTertiary}
               value={message}
               onChangeText={setMessage}
               multiline
@@ -1036,22 +1033,22 @@ export default function ChatDetailScreen({
               <View style={styles.composerTrailingActions}>
                 <TouchableOpacity
                   onPress={handleAttachmentPress}
-                  style={styles.composerAttachBtn}
+                  style={[styles.composerAttachBtn, { backgroundColor: colors.gray200, borderColor: colors.border }]}
                   disabled={isUploadingAttachment}
-                  accessibilityLabel={t('Attach file')}
+                  accessibilityLabel={t('chatDetail.attachFile')}
                   hitSlop={4}
                 >
                   {isUploadingAttachment ? (
-                    <ActivityIndicator size="small" color={FIGMA.azure18} />
+                    <ActivityIndicator size="small" color={colors.text} />
                   ) : (
-                    <Ionicons name="attach" size={20} color={FIGMA.azure18} />
+                    <Ionicons name="attach" size={20} color={colors.text} />
                   )}
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={handleStartRecording}
                   style={styles.composerMicBtn}
                   disabled={isUploadingAttachment}
-                  accessibilityLabel={t('Voice message')}
+                  accessibilityLabel={t('chatDetail.voiceMessage')}
                   hitSlop={4}
                 >
                   <Ionicons name="mic" size={15} color="#FFFFFF" />
@@ -1061,8 +1058,8 @@ export default function ChatDetailScreen({
           </>
         ) : (
           <View style={styles.recordingInputPlaceholder}>
-            <Text style={[styles.recordingPlaceholderText, { color: FIGMA.muted }]}>
-              {t('Recording voice note...')}
+            <Text style={[styles.recordingPlaceholderText, { color: colors.textTertiary }]}>
+              {t('chatDetail.recordingVoiceNotePlaceholder')}
             </Text>
           </View>
         )}
@@ -1101,6 +1098,9 @@ const styles = StyleSheet.create({
       },
       android: { elevation: 3 },
     }),
+  },
+  headerRTL: {
+    direction: 'rtl',
   },
   headerIconBox: {
     width: 30,

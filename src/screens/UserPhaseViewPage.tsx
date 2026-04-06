@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import { useRTL } from '../hooks/useRTL';
@@ -43,7 +44,8 @@ export default function UserPhaseViewPage({
   onBack,
   onSuccess,
 }: UserPhaseViewPageProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isArabic = i18n.language?.startsWith('ar');
   const { colors } = useTheme();
   const { fontFamily, scaledSize } = useFontFamily();
   const { arrowBackIcon } = useRTL();
@@ -110,7 +112,7 @@ export default function UserPhaseViewPage({
       {/* Header */}
       <View style={[styles.header, { paddingTop: Math.max(insets.top, 50), borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={onBack}>
-          <Ionicons name={arrowBackIcon} size={24} color={colors.text} />
+          <BackArrowIonicons variant="arrow" size={24} color={colors.text}/>
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>
           {t('View Phases')}
@@ -219,6 +221,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 16,
     borderBottomWidth: 1,
+  },
+  headerLTR: {
+    direction: 'ltr',
+  },
+  headerRTL: {
+    direction: 'rtl',
   },
   headerTitle: {
     fontSize: 18,

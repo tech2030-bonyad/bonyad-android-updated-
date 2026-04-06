@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
@@ -43,7 +44,8 @@ interface EditProfileScreenProps {
 }
 
 export default function EditProfileScreen({ userDetails, onBack, onSave }: EditProfileScreenProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isArabic = i18n.language?.startsWith('ar');
   const insets = useSafeAreaInsets();
   const { colors, theme } = useTheme();
   const { fontFamily, scaledSize } = useFontFamily();
@@ -218,11 +220,7 @@ export default function EditProfileScreen({ userDetails, onBack, onSave }: EditP
       {/* Header */}
       <View style={[styles.headerRow, styles.headerLTR]}>
         <TouchableOpacity onPress={handleBackScreen} style={styles.backButton}>
-          <Ionicons
-            name="chevron-back"
-            size={24}
-            color={headerTextColor}
-          />
+          <BackArrowIonicons variant="chevron" size={24} color={headerTextColor} forceLtrLayout />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: headerTextColor, fontSize: scaledSize(18) }]}>
           {t('editProfile.title')}

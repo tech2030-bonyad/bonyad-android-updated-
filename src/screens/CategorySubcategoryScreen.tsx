@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { getSubcategories, ServiceSubcategory } from '../services/ServiceService';
@@ -51,7 +52,6 @@ export default function CategorySubcategoryScreen({
   const { width } = useWindowDimensions();
   const isRTL = i18n.language === 'ar';
   const isDark = theme === 'dark';
-  const backIcon = 'chevron-back';
 
   const [subcategories, setSubcategories] = useState<ServiceSubcategory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -87,10 +87,10 @@ export default function CategorySubcategoryScreen({
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <TouchableOpacity
           onPress={onBack}
-          style={[styles.backBtn, isRTL && { transform: [{ scaleX: -1 }] }]}
+          style={styles.backBtn}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
-          <Ionicons name={backIcon} size={24} color={colors.text} />
+          <BackArrowIonicons variant="chevron" size={24} color={colors.text}/>
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
           {categoryName}

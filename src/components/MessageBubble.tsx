@@ -17,6 +17,7 @@ import { formatMessageTime } from '../utils/chatUtils';
 import { API_BASE_URL } from '../config/api';
 import ReadReceipt from './ReadReceipt';
 import { useTranslation } from 'react-i18next';
+import { useTheme } from '../context/ThemeContext';
 
 /** Web: HTML5 Audio; native: Expo AV (same as web `MessageBubble`). */
 const WebAudio =
@@ -55,6 +56,8 @@ export default function MessageBubble({
   peerInitial = '?',
 }: MessageBubbleProps) {
   const { t } = useTranslation();
+  const { colors, theme } = useTheme();
+  const isDark = theme === 'dark';
   const normalizedFileType = message.fileType?.toLowerCase?.() ?? '';
   const hasFile = Boolean(message.fileUrl);
   /** Same as web `src/components/others/MessageBubble/MessageBubble.tsx` */
@@ -122,22 +125,22 @@ export default function MessageBubble({
           ) : normalizedFileType.includes('pdf') ? (
             <TouchableOpacity
               onPress={() => Linking.openURL(fullFileUrl)}
-              style={styles.pdfAttachment}
+              style={[styles.pdfAttachment, isDark && { backgroundColor: colors.gray200 }]}
             >
-              <Ionicons name="document-attach" size={24} color="#FF0000" />
-              <Text style={styles.pdfText}>{displayFileName}</Text>
-              <Text style={styles.tapText}>{t('Tap to view')}</Text>
+              <Ionicons name="document-attach" size={24} color={colors.error} />
+              <Text style={[styles.pdfText, { color: colors.text }]}>{displayFileName}</Text>
+              <Text style={[styles.tapText, { color: colors.textSecondary }]}>{t('Tap to view')}</Text>
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
               onPress={() => Linking.openURL(fullFileUrl)}
-              style={styles.genericAttachment}
+              style={[styles.genericAttachment, isDark && { backgroundColor: colors.gray200 }]}
             >
-              <Ionicons name="document-text-outline" size={22} color="#555" />
-              <Text style={styles.genericFileName}>
+              <Ionicons name="document-text-outline" size={22} color={colors.textSecondary} />
+              <Text style={[styles.genericFileName, { color: colors.text }]}>
                 {displayFileName}
               </Text>
-              <Text style={styles.tapText}>{t('Tap to open')}</Text>
+              <Text style={[styles.tapText, { color: colors.textSecondary }]}>{t('Tap to open')}</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -145,8 +148,8 @@ export default function MessageBubble({
 
       {/* Text Content */}
       {shouldShowText && (
-        <View style={[styles.bubble, isMine ? styles.myBubble : styles.theirBubble]}>
-          <Text style={[styles.messageText, isMine ? styles.myText : styles.theirText]}>
+        <View style={[styles.bubble, isMine ? styles.myBubble : styles.theirBubble, !isMine && isDark && { backgroundColor: colors.gray300 }]}>
+          <Text style={[styles.messageText, isMine ? styles.myText : styles.theirText, !isMine && { color: colors.text }]}>
             {message.content}
           </Text>
         </View>
@@ -154,7 +157,7 @@ export default function MessageBubble({
 
       {/* Timestamp and Read Receipt */}
       <View style={styles.footer}>
-        <Text style={styles.timestamp}>{formatMessageTime(message.createdAt)}</Text>
+        <Text style={[styles.timestamp, { color: colors.textTertiary }]}>{formatMessageTime(message.createdAt)}</Text>
         {isMine && <ReadReceipt isRead={message.isRead || false} />}
       </View>
     </View>
@@ -183,9 +186,16 @@ function BonyadMessageBubble({
   isVoiceNote: boolean;
 }) {
   const { t } = useTranslation();
+  const { colors, theme } = useTheme();
+  const isDark = theme === 'dark';
   const [g0, g1] = AVATAR_GRADIENTS[Math.abs(message.senderId || 0) % AVATAR_GRADIENTS.length];
   const letter = peerInitial.charAt(0).toUpperCase();
   const timeLabel = formatMessageTime(message.createdAt);
+
+  // Dynamic dark-mode colors for "their" (incoming) elements
+  const theirBubbleBg = isDark ? colors.cardBackground : FIGMA.bubbleTheir;
+  const theirTextColor = isDark ? colors.text : FIGMA.azure18;
+  const metaTimeColor = isDark ? colors.textTertiary : FIGMA.muted;
 
   const renderAttachment = () => {
     if (!hasFile || !fullFileUrl) return null;
@@ -197,23 +207,23 @@ function BonyadMessageBubble({
     }
     if (normalizedFileType.includes('pdf')) {
       return (
-        <TouchableOpacity onPress={() => Linking.openURL(fullFileUrl)} style={styles.bonyadFileCard}>
-          <Ionicons name="document-attach" size={22} color={FIGMA.azure18} />
-          <Text style={styles.bonyadFileName}>{displayFileName}</Text>
+        <TouchableOpacity onPress={() => Linking.openURL(fullFileUrl)} style={[styles.bonyadFileCard, !isMine && { backgroundColor: theirBubbleBg }]}>
+          <Ionicons name="document-attach" size={22} color={theirTextColor} />
+          <Text style={[styles.bonyadFileName, { color: theirTextColor }]}>{displayFileName}</Text>
         </TouchableOpacity>
       );
     }
     return (
-      <TouchableOpacity onPress={() => Linking.openURL(fullFileUrl)} style={styles.bonyadFileCard}>
-        <Ionicons name="document-text-outline" size={22} color={FIGMA.azure18} />
-        <Text style={styles.bonyadFileName}>{displayFileName}</Text>
+      <TouchableOpacity onPress={() => Linking.openURL(fullFileUrl)} style={[styles.bonyadFileCard, !isMine && { backgroundColor: theirBubbleBg }]}>
+        <Ionicons name="document-text-outline" size={22} color={theirTextColor} />
+        <Text style={[styles.bonyadFileName, { color: theirTextColor }]}>{displayFileName}</Text>
       </TouchableOpacity>
     );
   };
 
   const textBubble = shouldShowText ? (
-    <View style={[styles.bonyadBubble, isMine ? styles.bonyadBubbleMine : styles.bonyadBubbleTheir]}>
-      <Text style={[styles.bonyadBubbleText, isMine ? styles.bonyadBubbleTextMine : styles.bonyadBubbleTextTheir]}>
+    <View style={[styles.bonyadBubble, isMine ? styles.bonyadBubbleMine : [styles.bonyadBubbleTheir, { backgroundColor: theirBubbleBg }]]}>
+      <Text style={[styles.bonyadBubbleText, isMine ? styles.bonyadBubbleTextMine : [styles.bonyadBubbleTextTheir, { color: theirTextColor }]]}>
         {message.content}
       </Text>
     </View>
@@ -321,6 +331,8 @@ function VoiceNotePlayer({
   isMine: boolean;
   bonyad?: boolean;
 }) {
+  const { colors, theme } = useTheme();
+  const isDark = theme === 'dark';
   const [sound, setSound] = useState<ExpoAudio.Sound | null>(null);
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -561,7 +573,9 @@ function VoiceNotePlayer({
     outputRange: ['0%', '100%'],
   });
 
-  const accent = bonyad ? FIGMA.azure18 : '#2196F3';
+  const theirBubbleBg = isDark ? colors.cardBackground : FIGMA.bubbleTheir;
+  const theirAccentColor = isDark ? colors.text : FIGMA.azure18;
+  const accent = bonyad ? theirAccentColor : '#2196F3';
 
   return (
     <TouchableOpacity
@@ -571,7 +585,7 @@ function VoiceNotePlayer({
         styles.voiceNoteContainer,
         isMine ? styles.myVoiceNote : styles.theirVoiceNote,
         bonyad && isMine && { backgroundColor: FIGMA.bubbleMine },
-        bonyad && !isMine && { backgroundColor: FIGMA.bubbleTheir },
+        bonyad && !isMine && { backgroundColor: theirBubbleBg },
         bonyad && { borderRadius: 14, minWidth: 200, maxWidth: 260 },
       ]}
     >
@@ -629,7 +643,7 @@ function VoiceNotePlayer({
           style={[
             styles.voiceNoteDuration,
             isMine && styles.myVoiceNoteText,
-            !isMine && bonyad && { color: FIGMA.azure18 },
+            !isMine && bonyad && { color: theirAccentColor },
           ]}
         >
           {formatTime(displayTime)}

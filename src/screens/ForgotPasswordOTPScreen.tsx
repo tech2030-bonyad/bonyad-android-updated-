@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { Button, TextInput } from 'react-native-paper';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
@@ -175,7 +176,7 @@ export default function OTPVerificationScreen({ phoneNumber, role, onBack, onOTP
           {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={onBack} style={styles.backButton}>
-              <Ionicons name={arrowBackIcon} size={24} color={colors.text} />
+              <BackArrowIonicons variant="arrow" size={24} color={colors.text}/>
             </TouchableOpacity>
             <BonyadLogo size="small" />
             <Text style={[styles.title, { color: colors.text, fontSize: scaledSize(24) }]}>{t('Enter OTP')}</Text>
@@ -272,7 +273,7 @@ export default function OTPVerificationScreen({ phoneNumber, role, onBack, onOTP
           {/* Header */}
           <View style={styles.desktopHeader}>
             <TouchableOpacity onPress={onBack} style={styles.desktopBackButton}>
-              <Ionicons name={arrowBackIcon} size={24} color={colors.text} />
+              <BackArrowIonicons variant="arrow" size={24} color={colors.text}/>
             </TouchableOpacity>
             <BonyadLogo size="medium" />
             <Text style={[styles.desktopTitle, { color: colors.text, fontSize: scaledSize(28) }]}>{t('Enter OTP')}</Text>

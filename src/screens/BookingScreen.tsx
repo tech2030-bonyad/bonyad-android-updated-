@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
@@ -287,7 +288,7 @@ const BookingScreen: React.FC<BookingScreenProps> = ({
             }}
             style={styles.monthNavButton}
           >
-            <Ionicons name={backIcon} size={18} color={colors.primary} />
+            <BackArrowIonicons variant="chevron" size={18} color={colors.primary}/>
           </TouchableOpacity>
           
           <Text style={[styles.monthYearText, { color: colors.text, fontSize: scaledSize(18) }]}>
@@ -399,7 +400,7 @@ const BookingScreen: React.FC<BookingScreenProps> = ({
       {/* Header */}
       <View style={[styles.headerContainer, { backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Ionicons name={arrowBackIcon} size={24} color={colors.text} />
+          <BackArrowIonicons variant="arrow" size={24} color={colors.text}/>
         </TouchableOpacity>
         <Text style={[styles.screenTitle, { color: colors.text, fontSize: scaledSize(18) }]}>{t('Booking')}</Text>
         <View style={styles.backButton} />

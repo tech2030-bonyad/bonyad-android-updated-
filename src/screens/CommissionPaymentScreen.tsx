@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
@@ -216,7 +217,7 @@ export default function CommissionPaymentScreen({
           {onBack && (
             <View style={[styles.header, styles.headerLTR, { borderBottomColor: colors.border }]}>
               <TouchableOpacity onPress={handleBackScreen}>
-                <Ionicons name="chevron-back" size={24} color={colors.text} />
+                <BackArrowIonicons variant="chevron" size={24} color={colors.text}/>
               </TouchableOpacity>
               <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(17) }]}>
                 {t('commissionPayment.title')}

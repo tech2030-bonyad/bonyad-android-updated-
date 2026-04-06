@@ -15,6 +15,7 @@ import {
   Image,
 } from 'react-native';
 import { Feather, Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useLiveAgent } from '../hooks/useLiveAgent';
@@ -595,17 +596,18 @@ const SupportChatScreen: React.FC<SupportChatScreenProps> = ({
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Ionicons
-            name="chevron-back"
-            size={24}
-            color={colors.text}
-          />
+      <View style={[styles.header, {
+        backgroundColor: colors.cardBackground,
+        borderBottomColor: colors.border
+      }]}>
+        <TouchableOpacity onPress={onBack} style={[styles.backButton, language === 'ar' && { marginLeft: 'auto' }]}>
+          <BackArrowIonicons variant="chevron" size={24} color={colors.text} />
         </TouchableOpacity>
 
         <View style={styles.headerCenter}>
-          <View style={[styles.supportIcon, { backgroundColor: colors.success + '20' }]}>
+          <View style={[styles.supportIcon, {
+            backgroundColor: colors.success + '20'
+          }]}>
             <MaterialCommunityIcons name="headset" size={24} color={colors.success} />
           </View>
           <View>
@@ -613,11 +615,13 @@ const SupportChatScreen: React.FC<SupportChatScreenProps> = ({
               {language === 'ar' ? 'Live Support' : 'Live Support'}
             </Text>
             <View style={styles.connectionIndicator}>
-              <View style={[styles.connectionDot, { 
-                backgroundColor: isConnected ? '#10b981' : colors.warning 
+              <View style={[styles.connectionDot, {
+                backgroundColor: isConnected ? '#10b981' : colors.warning
               }]} />
-              <Text style={[styles.connectionText, { color: colors.gray500 }]}>
-                {isConnected 
+              <Text style={[styles.connectionText, {
+                color: colors.gray500
+              }]}>
+                {isConnected
                   ? (language === 'ar' ? 'Connected' : 'Connected')
                   : (language === 'ar' ? 'Connecting...' : 'Connecting...')
                 }
@@ -781,7 +785,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
@@ -806,7 +809,6 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   headerCenter: {
-    flexDirection: 'row',
     alignItems: 'center',
   },
   supportIcon: {
@@ -822,7 +824,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   connectionIndicator: {
-    flexDirection: 'row',
     alignItems: 'center',
     marginTop: 2,
   },

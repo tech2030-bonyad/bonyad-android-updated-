@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import { useRTL } from '../hooks/useRTL';
@@ -47,7 +48,8 @@ export default function UserProjectProgressPage({
   onBookAppointment,
   onSuccess,
 }: UserProjectProgressPageProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isArabic = i18n.language?.startsWith('ar');
   const { colors } = useTheme();
   const { fontFamily, scaledSize } = useFontFamily();
   const { arrowBackIcon } = useRTL();
@@ -206,9 +208,9 @@ export default function UserProjectProgressPage({
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={[styles.header, { paddingTop: Math.max(insets.top, 50), borderBottomColor: colors.border }]}>
+      <View style={[styles.header, isArabic ? styles.headerRTL : styles.headerLTR, { paddingTop: Math.max(insets.top, 50), borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={onBack}>
-          <Ionicons name={arrowBackIcon} size={24} color={colors.text} />
+          <BackArrowIonicons variant="arrow" size={24} color={colors.text} forceLtrLayout={!isArabic} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>
           {t('Project Progress')}
@@ -413,6 +415,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 16,
     borderBottomWidth: 1,
+  },
+  headerLTR: {
+    direction: 'ltr',
+  },
+  headerRTL: {
+    direction: 'rtl',
   },
   headerTitle: {
     fontSize: 18,

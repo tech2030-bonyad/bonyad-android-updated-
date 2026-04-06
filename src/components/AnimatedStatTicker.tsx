@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useTheme } from '../context/ThemeContext';
 
 interface StatItem {
     label: string;
@@ -21,6 +22,8 @@ export const AnimatedStatTicker: React.FC<AnimatedStatTickerProps> = ({
     duration = 500,
     displayDuration = 1500 // Faster cycle
 }) => {
+    const { colors, theme } = useTheme();
+    const isDark = theme === 'dark';
     const [currentIndex, setCurrentIndex] = useState(0);
     const [isVisible, setIsVisible] = useState(true);
     const isExiting = useRef(false);
@@ -122,9 +125,9 @@ export const AnimatedStatTicker: React.FC<AnimatedStatTickerProps> = ({
     const item = stats[currentIndex];
     if (!item) return null;
 
-    // Default to White Card + Dark Blue Text for visibility on Gradient
-    const bgColor = item.bgColor || '#ffffff';
-    const textColor = '#1e3a8a'; // Dark Blue
+    // Default to card background; text adapts to theme
+    const bgColor = item.bgColor || colors.cardBackground;
+    const textColor = isDark ? colors.text : '#1e3a8a';
 
     return (
         <Animated.View style={[styles.wrapper, { height: containerHeight }]}>
@@ -142,7 +145,7 @@ export const AnimatedStatTicker: React.FC<AnimatedStatTickerProps> = ({
                             opacity: contentFade,
                             transform: [{ translateX: contentSlide }],
                             backgroundColor: bgColor,
-                            borderColor: '#e5e7eb', // Subtle border
+                            borderColor: isDark ? colors.gray300 : '#e5e7eb',
                         },
                     ]}
                 >

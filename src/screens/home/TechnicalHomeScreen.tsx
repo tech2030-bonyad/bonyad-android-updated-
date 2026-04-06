@@ -9,6 +9,7 @@ import {
   Dimensions,
   Platform,
 } from 'react-native';
+import { CopilotStep, walkthroughable, useCopilot } from 'react-native-copilot';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
@@ -117,6 +118,10 @@ interface ApiProject {
 const IOS_PRIMARY = '#00A5F4';
 const IOS_CHAT = '#4C9AD5';
 
+const TECH_COPILOT_MAIN_SCROLL_PADDING = 100;
+
+const WalkableView = walkthroughable(View);
+
 interface TechnicalHomeScreenProps {
   userName?: string;
   unreadNotificationCount?: number;
@@ -134,6 +139,7 @@ interface TechnicalHomeScreenProps {
   onPressSchedule?: () => void;
   onPressAnalytics?: () => void;
   onPressSupport?: () => void;
+  copilotStepsActive?: boolean;
 }
 
 export default function TechnicalHomeScreen({
@@ -151,6 +157,7 @@ export default function TechnicalHomeScreen({
   onPressNotifications,
   onPressInfo,
   unreadNotificationCount = 0,
+  copilotStepsActive = true,
 }: TechnicalHomeScreenProps) {
   const { t, i18n } = useTranslation();
   const { colors: themeColors, theme } = useTheme();
@@ -158,6 +165,7 @@ export default function TechnicalHomeScreen({
   const isArabic = i18n.language === 'ar';
   const isDarkMode = theme === 'dark';
   const primaryColor = isDarkMode ? themeColors.primary : IOS_PRIMARY;
+  const { copilotEvents } = useCopilot();
 
   const [projects, setProjects] = useState<ApiProject[]>([]);
   const [smallTasks, setSmallTasks] = useState<SmallTaskRequest[]>([]);
@@ -165,6 +173,7 @@ export default function TechnicalHomeScreen({
   const [loadingTasks, setLoadingTasks] = useState(true);
   const [bannerIndex, setBannerIndex] = useState(0);
   const bannerScrollRef = useRef<ScrollView>(null);
+  const mainScrollRef = useRef<ScrollView>(null);
 
   const fontStyle = { fontFamily: fontFamily || undefined };
   const boldFontStyle = { fontFamily: boldFontFamily || fontFamily || undefined };
@@ -263,10 +272,55 @@ export default function TechnicalHomeScreen({
     return () => clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    const scrollToStep = (step: { name?: string; wrapperRef?: React.RefObject<any> } | undefined) => {
+      const sv = mainScrollRef.current;
+      if (!sv || !step?.name) return;
+      if (
+        step.name !== 'techHomePortfolio' &&
+        step.name !== 'techHomeSmallTasks' &&
+        step.name !== 'technicianTabBar'
+      ) {
+        return;
+      }
+
+      if (step.name === 'technicianTabBar') {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            mainScrollRef.current?.scrollToEnd({ animated: true });
+          });
+        });
+        return;
+      }
+
+      const run = () => {
+        const scrollContent = (sv as ScrollView & { getInnerViewRef?: () => unknown }).getInnerViewRef?.();
+        const target = step.wrapperRef?.current;
+        if (!scrollContent || !target || typeof target.measureLayout !== 'function') return;
+        target.measureLayout(
+          scrollContent,
+          (_x: number, y: number, _w: number, _h: number) => {
+            sv.scrollTo({ y: Math.max(0, y - TECH_COPILOT_MAIN_SCROLL_PADDING), animated: true });
+          },
+          () => {},
+        );
+      };
+
+      requestAnimationFrame(() => {
+        requestAnimationFrame(run);
+      });
+    };
+
+    const handler = (s: unknown) => scrollToStep(s as { name?: string; wrapperRef?: React.RefObject<any> });
+    copilotEvents.on('stepChange', handler);
+    return () => copilotEvents.off('stepChange', handler);
+  }, [copilotEvents]);
+
   return (
     <View style={[styles.container, styles.wrapper, { backgroundColor: isDarkMode ? themeColors.background : COLORS.background }]}>
       {/* iOS-style: single ScrollView, top bar first child so whole page scrolls */}
       <ScrollView
+        ref={mainScrollRef}
         style={styles.scroll}
         contentContainerStyle={[
           styles.scrollContentWrap,
@@ -448,6 +502,8 @@ export default function TechnicalHomeScreen({
       </StaggeredAppearView>
 
       {/* Section 3: Small Tasks */}
+      <CopilotStep text={t('tutorial.home.technician.smallTasksSection')} order={2} name="techHomeSmallTasks" active={copilotStepsActive}>
+        <WalkableView collapsable={false} style={styles.copilotSectionWrap}>
       <StaggeredAppearView index={3}>
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
@@ -527,19 +583,25 @@ export default function TechnicalHomeScreen({
         )}
       </View>
       </StaggeredAppearView>
+        </WalkableView>
+      </CopilotStep>
 
       {/* Section 5: Quick Action Cards */}
       <StaggeredAppearView index={4}>
       <View style={[styles.section, { marginBottom: SECTION_GAP }]}>
         <View style={styles.quickActionsRow}>
-          <PressableScaleView style={[styles.quickActionCard, isDarkMode && { backgroundColor: themeColors.cardBackground, borderWidth: 1, borderColor: themeColors.border }]} onPress={() => onPressPortfolio?.()}>
-            <View style={[styles.quickActionIconWrap, { backgroundColor: isDarkMode ? 'rgba(124, 58, 237, 0.3)' : COLORS.quickActionPurple }]}>
-              <Feather name="folder" size={22} color={isDarkMode ? '#A78BFA' : '#7C3AED'} />
-            </View>
-            <Text style={[styles.quickActionLabel, fontStyle, isDarkMode && { color: themeColors.text }]} numberOfLines={1}>
-              {t('Business gallery')}
-            </Text>
-          </PressableScaleView>
+          <CopilotStep text={t('tutorial.home.technician.portfolioSection')} order={1} name="techHomePortfolio" active={copilotStepsActive}>
+            <WalkableView collapsable={false} style={{ flex: 1, minWidth: 0 }}>
+              <PressableScaleView style={[styles.quickActionCard, isDarkMode && { backgroundColor: themeColors.cardBackground, borderWidth: 1, borderColor: themeColors.border }]} onPress={() => onPressPortfolio?.()}>
+                <View style={[styles.quickActionIconWrap, { backgroundColor: isDarkMode ? 'rgba(124, 58, 237, 0.3)' : COLORS.quickActionPurple }]}>
+                  <Feather name="folder" size={22} color={isDarkMode ? '#A78BFA' : '#7C3AED'} />
+                </View>
+                <Text style={[styles.quickActionLabel, fontStyle, isDarkMode && { color: themeColors.text }]} numberOfLines={1}>
+                  {t('Business gallery')}
+                </Text>
+              </PressableScaleView>
+            </WalkableView>
+          </CopilotStep>
           <PressableScaleView style={[styles.quickActionCard, isDarkMode && { backgroundColor: themeColors.cardBackground, borderWidth: 1, borderColor: themeColors.border }]} onPress={() => onPressAvailableProject?.('in_progress')}>
             <View style={[styles.quickActionIconWrap, { backgroundColor: isDarkMode ? 'rgba(234, 88, 12, 0.3)' : COLORS.quickActionOrange }]}>
               <Feather name="briefcase" size={22} color={isDarkMode ? '#FB923C' : COLORS.orange} />
@@ -584,6 +646,10 @@ export default function TechnicalHomeScreen({
 }
 
 const styles = StyleSheet.create({
+  copilotSectionWrap: {
+    alignSelf: 'stretch',
+    width: '100%',
+  },
   container: { flex: 1 },
   wrapper: { flex: 1 },
   scroll: { flex: 1 },

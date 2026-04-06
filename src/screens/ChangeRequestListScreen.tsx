@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useTheme } from '../context/ThemeContext';
 import { useRTL } from '../hooks/useRTL';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -94,9 +95,9 @@ export default function ChangeRequestListScreen({
   if (loading) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={[styles.header, { paddingTop: getTopPadding(insets, 8), borderBottomColor: colors.border }]}>
+        <View style={[styles.header, styles.headerLTR, { paddingTop: getTopPadding(insets, 8), borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={onBack}>
-            <Ionicons name={arrowBackIcon} size={24} color={colors.text} />
+            <BackArrowIonicons variant="arrow" size={24} color={colors.text}/>
           </TouchableOpacity>
           <Text style={[styles.title, { color: colors.text }]}>{t('Change requests')}</Text>
           <View style={{ width: 24 }} />
@@ -110,9 +111,9 @@ export default function ChangeRequestListScreen({
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { paddingTop: getTopPadding(insets, 8), borderBottomColor: colors.border }]}>
+      <View style={[styles.header, styles.headerLTR, { paddingTop: getTopPadding(insets, 8), borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={onBack}>
-          <Ionicons name={arrowBackIcon} size={24} color={colors.text} />
+          <BackArrowIonicons variant="arrow" size={24} color={colors.text}/>
         </TouchableOpacity>
         <Text style={[styles.title, { color: colors.text }]}>{t('Change requests')}</Text>
         <TouchableOpacity onPress={onCreateRequest}>
@@ -150,6 +151,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
+  },
+  headerLTR: {
+    direction: 'ltr',
   },
   title: { fontSize: 18, fontWeight: '600' },
   list: { padding: 16, paddingBottom: 32 },

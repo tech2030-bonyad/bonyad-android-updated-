@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BonyadLogo from './BonyadLogo';
 import { getAppTopBarPaddingTop } from '../utils/statusBarHelper';
+import { useTheme } from '../context/ThemeContext';
 
 const H_PADDING = 16;
 
@@ -35,6 +36,7 @@ export default function AppTopBar({
 }: AppTopBarProps) {
   const insets = useSafeAreaInsets();
   const isRTL = I18nManager.isRTL;
+  const { colors } = useTheme();
 
   const icons = (
     <>
@@ -51,7 +53,7 @@ export default function AppTopBar({
             <View>
               <Ionicons name="notifications-outline" size={24} color={primaryColor} />
               {unreadNotificationCount > 0 && (
-                <View style={[styles.badge, { backgroundColor: '#FF3B30' }]} />
+                <View style={[styles.badge, { backgroundColor: colors.error }]} />
               )}
             </View>
           ),
@@ -61,7 +63,7 @@ export default function AppTopBar({
           <View>
             <Ionicons name="notifications-outline" size={24} color={primaryColor} />
             {unreadNotificationCount > 0 && (
-              <View style={[styles.badge, { backgroundColor: '#FF3B30' }]} />
+              <View style={[styles.badge, { backgroundColor: colors.error }]} />
             )}
           </View>
         </TouchableOpacity>

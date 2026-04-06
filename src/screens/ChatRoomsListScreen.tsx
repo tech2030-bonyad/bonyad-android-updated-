@@ -13,9 +13,11 @@ import {
   Dimensions,
   TextInput,
   ListRenderItem,
+  I18nManager,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   Easing,
@@ -34,6 +36,8 @@ import { getAppTopBarPaddingTop } from '../utils/statusBarHelper';
 import { ChatRoom } from '../types/chat';
 import { formatRelativeTime } from '../utils/chatUtils';
 import AnimatedLoadingScreen from '../components/AnimatedLoadingScreen';
+import ScreenTourOverlay from '../components/tour/ScreenTourOverlay';
+import { useSimpleScreenTour } from '../hooks/useSimpleScreenTour';
 
 /** Figma node 61:2060 — CHAT LIST VIEW (Bonyad file) */
 const FIGMA = {
@@ -72,6 +76,7 @@ interface ChatRoomsListScreenProps {
   onOpenChat?: (roomId: string, receiverId: number, receiverName: string, projectId?: number | null) => void;
   /** When true, AppTopBar is already above this screen — skip extra header top inset. */
   stackedUnderAppTopBar?: boolean;
+  onExposeTourControl?: (c: { startTour: () => void }) => void;
 }
 
 type ChatRowProps = {
@@ -82,6 +87,7 @@ type ChatRowProps = {
 };
 
 const ChatRow = memo(function ChatRow({ item, fontStyle, onOpenRow, t }: ChatRowProps) {
+  const { colors } = useTheme();
   const scale = useSharedValue(1);
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
@@ -111,7 +117,7 @@ const ChatRow = memo(function ChatRow({ item, fontStyle, onOpenRow, t }: ChatRow
   return (
     <Animated.View style={animatedStyle}>
       <TouchableOpacity
-        style={styles.row}
+        style={[styles.row, { backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}
         onPressIn={onPressIn}
         onPressOut={onPressOut}
         onPress={onPress}
@@ -126,20 +132,20 @@ const ChatRow = memo(function ChatRow({ item, fontStyle, onOpenRow, t }: ChatRow
               <Text style={[styles.avatarLetter, fontStyle]}>{initial}</Text>
             </LinearGradient>
           )}
-          <View style={[styles.onlineDot, styles.onlineDotLTR]} />
+          <View style={[styles.onlineDot, styles.onlineDotLTR, { borderColor: colors.cardBackground }]} />
         </View>
 
         <View style={styles.rowBody}>
           <View style={styles.rowTop}>
-            <Text style={[styles.nameText, { color: FIGMA.titleText }, fontStyle]} numberOfLines={1}>
+            <Text style={[styles.nameText, { color: colors.text }, fontStyle]} numberOfLines={1}>
               {item.otherUserName}
             </Text>
-            <Text style={[styles.timeText, { color: FIGMA.muted }, fontStyle]} numberOfLines={1}>
+            <Text style={[styles.timeText, { color: colors.textTertiary }, fontStyle]} numberOfLines={1}>
               {formatRelativeTime(item.lastMessageAt)}
             </Text>
           </View>
           <View style={styles.rowBottom}>
-            <Text style={[styles.previewText, { color: FIGMA.muted }, fontStyle]} numberOfLines={1}>
+            <Text style={[styles.previewText, { color: colors.textTertiary }, fontStyle]} numberOfLines={1}>
               {item.lastMessage || t('No messages yet')}
             </Text>
             {unread ? (
@@ -156,10 +162,15 @@ const ChatRow = memo(function ChatRow({ item, fontStyle, onOpenRow, t }: ChatRow
   );
 });
 
-export default function ChatRoomsListScreen({ onBack, onOpenChat, stackedUnderAppTopBar = false }: ChatRoomsListScreenProps) {
-  const { t } = useTranslation();
+export default function ChatRoomsListScreen({
+  onBack,
+  onOpenChat,
+  stackedUnderAppTopBar = false,
+  onExposeTourControl,
+}: ChatRoomsListScreenProps) {
+  const { t, i18n } = useTranslation();
   const { colors } = useTheme();
-  const { fontFamily } = useFontFamily();
+  const { fontFamily, boldFontFamily } = useFontFamily();
   const insets = useSafeAreaInsets();
   const [chatRooms, setChatRooms] = useState<ChatRoom[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -167,6 +178,39 @@ export default function ChatRoomsListScreen({ onBack, onOpenChat, stackedUnderAp
   const [searchQuery, setSearchQuery] = useState('');
   const [filterChip, setFilterChip] = useState<FilterChip>('all');
   const appState = useRef(AppState.currentState);
+
+  const chatTourSteps = useMemo(
+    () => [
+      { id: 'searchFilters', i18nSuffix: 'searchFilters' },
+      { id: 'list', i18nSuffix: 'list' },
+    ],
+    [],
+  );
+  const chatTour = useSimpleScreenTour(chatTourSteps, 'userChatTab');
+  const flatListRef = useRef<FlatList<ChatRoom>>(null);
+
+  useEffect(() => {
+    onExposeTourControl?.({ startTour: chatTour.startTour });
+  }, [onExposeTourControl, chatTour.startTour]);
+
+  /** Scroll before measure so header + row refs lay out on-screen. Coalesce rapid step changes to avoid layout thrash. */
+  const tourScrollGen = useRef(0);
+  useLayoutEffect(() => {
+    if (!chatTour.tourActive) return;
+    tourScrollGen.current += 1;
+    const gen = tourScrollGen.current;
+    requestAnimationFrame(() => {
+      if (gen !== tourScrollGen.current) return;
+      flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
+    });
+  }, [chatTour.tourActive, chatTour.tourStep]);
+
+  /** Neutral list motion while the tour measures / shows — avoids wrong rects from UI-thread translateY. */
+  useEffect(() => {
+    if (!chatTour.tourActive) return;
+    listOpacity.value = 1;
+    listTranslateY.value = 0;
+  }, [chatTour.tourActive, listOpacity, listTranslateY]);
 
   const listOpacity = useSharedValue(1);
   const listTranslateY = useSharedValue(0);
@@ -350,96 +394,96 @@ export default function ChatRoomsListScreen({ onBack, onOpenChat, stackedUnderAp
   );
 
   const renderChatRow: ListRenderItem<ChatRoom> = useCallback(
-    ({ item }) => (
-      <ChatRow
-        item={item}
-        fontStyle={fontStyle}
-        onOpenRow={handleChatRoomPress}
-        t={t}
-      />
-    ),
-    [fontStyle, handleChatRoomPress, t]
+    ({ item, index }) => {
+      const row = (
+        <ChatRow
+          item={item}
+          fontStyle={fontStyle}
+          onOpenRow={handleChatRoomPress}
+          t={t}
+        />
+      );
+      if (index === 0) {
+        return (
+          <View ref={chatTour.register('list')} collapsable={false}>
+            {row}
+          </View>
+        );
+      }
+      return row;
+    },
+    [chatTour.register, fontStyle, handleChatRoomPress, t]
   );
 
-  const renderListHeader = useCallback(
+  /**
+   * Keep search / filters OUTSIDE FlatList. measureInWindow for tour refs inside
+   * VirtualizedList headers is unreliable on Android (often 0×0).
+   */
+  const chatListHeader = useMemo(
     () => (
-      <View style={[styles.listHeaderBlock, { borderBottomColor: FIGMA.border }]}>
+      <View style={[styles.listHeaderBlock, { borderBottomColor: colors.border, backgroundColor: colors.cardBackground }]}>
         <View style={styles.chatsTitleRow}>
           <View style={styles.titleLeft}>
             {shouldShowBackButton ? (
               <TouchableOpacity onPress={onBack} accessibilityRole="button" style={styles.backBtn}>
-                <Ionicons name="arrow-back" size={24} color={FIGMA.titleText} />
+                <BackArrowIonicons variant="arrow" size={24} color={colors.text} />
               </TouchableOpacity>
             ) : null}
-            <Text style={[styles.chatsHeading, { color: FIGMA.titleText }, fontStyle]}>{t('Chats')}</Text>
+            <Text style={[styles.chatsHeading, { color: colors.text }, fontStyle]}>{t('Chats')}</Text>
           </View>
         </View>
 
-        <View style={[styles.searchBox, { backgroundColor: FIGMA.searchBg, borderColor: FIGMA.border }]}>
-          <Ionicons name="search" size={13} color={FIGMA.placeholder} />
-          <TextInput
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholder={t('Search chats...')}
-            placeholderTextColor={FIGMA.placeholder}
-            style={[styles.searchInput, { color: colors.text }, fontStyle]}
-            returnKeyType="search"
-            {...(Platform.OS === 'ios' ? { clearButtonMode: 'while-editing' as const } : {})}
-          />
-        </View>
+        {/* One tour rect for search + filters so the spotlight sits lower and covers both controls */}
+        <View ref={chatTour.register('searchFilters')} collapsable={false} style={styles.searchFiltersTourWrap}>
+          <View style={[styles.searchBox, { backgroundColor: colors.gray100, borderColor: colors.border }]}>
+            <Ionicons name="search" size={13} color={colors.textTertiary} />
+            <TextInput
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder={t('Search chats...')}
+              placeholderTextColor={colors.textTertiary}
+              style={[styles.searchInput, { color: colors.text }, fontStyle]}
+              returnKeyType="search"
+              {...(Platform.OS === 'ios' ? { clearButtonMode: 'while-editing' as const } : {})}
+            />
+          </View>
 
-        <View style={styles.chipRow}>
-          <TouchableOpacity
-            onPress={() => onChipPress('all')}
-            style={[styles.chip, filterChip === 'all' ? styles.chipActive : styles.chipInactive]}
-            activeOpacity={0.85}
-          >
-            <Text
-              style={[
-                styles.chipLabel,
-                { color: filterChip === 'all' ? FIGMA.white : FIGMA.muted },
-                fontStyle,
-              ]}
-            >
-              {`${t('All')} (${chatRooms.length})`}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => onChipPress('unread')}
-            style={[styles.chip, filterChip === 'unread' ? styles.chipActive : styles.chipInactive]}
-            activeOpacity={0.85}
-          >
-            <Text
-              style={[
-                styles.chipLabel,
-                { color: filterChip === 'unread' ? FIGMA.white : FIGMA.muted },
-                fontStyle,
-              ]}
-            >
-              {t('Unread')}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => onChipPress('read')}
-            style={[styles.chip, filterChip === 'read' ? styles.chipActive : styles.chipInactive]}
-            activeOpacity={0.85}
-          >
-            <Text
-              style={[
-                styles.chipLabel,
-                { color: filterChip === 'read' ? FIGMA.white : FIGMA.muted },
-                fontStyle,
-              ]}
-            >
-              {t('Read')}
-            </Text>
-          </TouchableOpacity>
+          <View style={styles.chipRow}>
+            {(['all', 'unread', 'read'] as FilterChip[]).map((chip) => {
+              const isActive = filterChip === chip;
+              const label =
+                chip === 'all' ? `${t('All')} (${chatRooms.length})` : chip === 'unread' ? t('Unread') : t('Read');
+              return (
+                <TouchableOpacity
+                  key={chip}
+                  onPress={() => onChipPress(chip)}
+                  style={[
+                    styles.chip,
+                    isActive
+                      ? { backgroundColor: colors.primary, borderColor: colors.primary }
+                      : { backgroundColor: colors.cardBackground, borderColor: colors.border },
+                  ]}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[styles.chipLabel, { color: isActive ? '#FFFFFF' : colors.textTertiary }, fontStyle]}>
+                    {label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         </View>
       </View>
     ),
     [
       chatRooms.length,
+      chatTour.register,
+      colors.border,
+      colors.cardBackground,
+      colors.gray100,
+      colors.primary,
       colors.text,
+      colors.textTertiary,
       filterChip,
       fontStyle,
       onBack,
@@ -452,7 +496,7 @@ export default function ChatRoomsListScreen({ onBack, onOpenChat, stackedUnderAp
 
   if (isLoading) {
     return (
-      <View style={[styles.screenRoot, { backgroundColor: FIGMA.contentBg, paddingTop: headerTopPadding }]}>
+      <View style={[styles.screenRoot, { backgroundColor: colors.background, paddingTop: headerTopPadding }]}>
         <AnimatedLoadingScreen message={t('Loading chats...')} />
       </View>
     );
@@ -468,8 +512,8 @@ export default function ChatRoomsListScreen({ onBack, onOpenChat, stackedUnderAp
       : t('Try a different search or filter');
 
   const emptyComponent = (
-    <View style={styles.emptyWrap}>
-      <Ionicons name="chatbubbles-outline" size={80} color={FIGMA.border} />
+    <View ref={chatTour.register('list')} collapsable={false} style={styles.emptyWrap}>
+      <Ionicons name="chatbubbles-outline" size={80} color={colors.gray300} />
       <Text style={[styles.emptyTitle, { color: colors.text }, fontStyle]}>{emptyTitle}</Text>
       <Text style={[styles.emptyText, { color: colors.textSecondary }, fontStyle]}>{emptySubtitle}</Text>
     </View>
@@ -480,17 +524,20 @@ export default function ChatRoomsListScreen({ onBack, onOpenChat, stackedUnderAp
       style={[
         styles.screenRoot,
         {
-          backgroundColor: FIGMA.contentBg,
+          backgroundColor: colors.background,
           paddingTop: headerTopPadding,
         },
       ]}
     >
+      {/* Header outside Reanimated translateY — measureInWindow for the tour must match pixels on screen */}
+      {chatListHeader}
       <Animated.View style={[styles.listWrap, listAnimatedStyle]}>
         <FlatList
+          ref={flatListRef}
+          style={{ flex: 1 }}
           data={filteredRooms}
           renderItem={renderChatRow}
           keyExtractor={(item) => String(item.id)}
-          ListHeaderComponent={renderListHeader}
           ListEmptyComponent={emptyComponent}
           contentContainerStyle={[
             styles.listContent,
@@ -501,9 +548,38 @@ export default function ChatRoomsListScreen({ onBack, onOpenChat, stackedUnderAp
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
           }
           showsVerticalScrollIndicator={false}
-          removeClippedSubviews={Platform.OS === 'android'}
+          removeClippedSubviews={Platform.OS === 'android' && !chatTour.tourActive}
         />
       </Animated.View>
+
+      <ScreenTourOverlay
+        visible={chatTour.tourActive}
+        tourStep={chatTour.tourStep}
+        stepRect={chatTour.stepRect}
+        totalSteps={chatTourSteps.length}
+        stepOrder={chatTour.tourStep + 1}
+        stepText={
+          chatTourSteps[chatTour.tourStep]
+            ? t(`tutorial.tab.chat.${chatTourSteps[chatTour.tourStep].i18nSuffix}`)
+            : ''
+        }
+        isFirst={chatTour.tourStep === 0}
+        isLast={chatTour.tourStep === chatTourSteps.length - 1}
+        primaryColor={colors.primary}
+        textColor={colors.text}
+        secondaryTextColor={colors.textSecondary}
+        bgColor={colors.cardBackground}
+        isRTL={i18n.language === 'ar' || I18nManager.isRTL}
+        fontFamily={fontFamily}
+        boldFontFamily={boldFontFamily}
+        onNext={() =>
+          chatTour.setTourStep((s) => Math.min(s + 1, chatTourSteps.length - 1))
+        }
+        onPrev={() => chatTour.setTourStep((s) => Math.max(s - 1, 0))}
+        onSkip={chatTour.endTour}
+        onFinish={chatTour.endTour}
+        t={t}
+      />
     </View>
   );
 }
@@ -529,6 +605,10 @@ const styles = StyleSheet.create({
     paddingBottom: 11,
     gap: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  /** Groups search row + chip row for tour measure (single spotlight below the title) */
+  searchFiltersTourWrap: {
+    gap: 10,
   },
   chatsTitleRow: {
     flexDirection: 'row',

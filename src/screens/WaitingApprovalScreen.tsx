@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useTheme } from '../context/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getTopPadding } from '../utils/statusBarHelper';
@@ -407,7 +408,7 @@ export default function WaitingApprovalScreen({
       <View style={[styles.topBar, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
         {onBack ? (
           <TouchableOpacity onPress={onBack} style={styles.topBarBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <Ionicons name={isRTL ? 'chevron-forward' : 'chevron-back'} size={22} color={textPrimary} />
+            <BackArrowIonicons variant="chevron" size={22} color={textPrimary} />
           </TouchableOpacity>
         ) : <View style={styles.topBarBtn} />}
 
