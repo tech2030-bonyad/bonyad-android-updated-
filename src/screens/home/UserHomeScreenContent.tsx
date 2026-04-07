@@ -42,6 +42,9 @@ import SearchResultsDropdown from '../../components/SearchResultsDropdown';
 import ScreenTourOverlay from '../../components/tour/ScreenTourOverlay';
 import type { CategoryInfo } from '../CategorySubcategoryScreen';
 import { coachMarksStorage } from '../../utils/coachMarks';
+import FlowingBorderCard from '../../components/FlowingBorderCard';
+import { getMyTickets } from '../../services/SupportTicketService';
+import type { SupportTicket } from '../../types/chat';
 
 export type { CategoryInfo };
 
@@ -148,13 +151,13 @@ export interface ApiProject {
   [key: string]: unknown;
 }
 
-// Feature banners matching iOS AdvertisementComponent (5 items) – light and dark gradients
-const FEATURE_BANNERS = [
-  { icon: 'people' as const, titleKey: 'Find experts', descKey: 'Connect with verified technicians', colors: ['#FFFFFF', '#E3F2FD', '#BBDEFB'] as const, colorsDark: ['#1A1A2E', '#16213E', '#0F3460'] as const },
-  { icon: 'hammer' as const, titleKey: 'Post project', descKey: 'Get competitive offers', colors: ['#FFFFFF', '#E8F5E9', '#C8E6C9'] as const, colorsDark: ['#1B2D1B', '#2D4A2D', '#1E3A1E'] as const },
-  { icon: 'calendar' as const, titleKey: 'Book appointments', descKey: 'Schedule visits easily', colors: ['#FFFFFF', '#FFF3E0', '#FFE0B2'] as const, colorsDark: ['#2D2416', '#3D2E1A', '#4A3822'] as const },
-  { icon: 'shield-checkmark' as const, titleKey: 'Verified', descKey: 'Trusted professionals', colors: ['#FFFFFF', '#F3E5F5', '#E1BEE7'] as const, colorsDark: ['#2A1B2E', '#3D2A42', '#2E1F33'] as const },
-  { icon: 'sparkles' as const, titleKey: 'AI assistant', descKey: 'Smart recommendations', colors: ['#FFFFFF', '#E0F7FA', '#B2EBF2'] as const, colorsDark: ['#0D2137', '#143250', '#1A4060'] as const },
+// Feature banners matching iOS AdvertisementComponent (5 PNG images)
+const BANNER_IMAGES = [
+  require('../../../assets/banner1.png'),
+  require('../../../assets/banner2.png'),
+  require('../../../assets/banner3.png'),
+  require('../../../assets/banner4.png'),
+  require('../../../assets/banner5.png'),
 ];
 
 export interface UserHomeScreenContentProps {
@@ -187,6 +190,11 @@ export interface UserHomeScreenContentProps {
   onPressMySmallTasks?: () => void;
   onPressSmallTask?: (task: SmallTaskRequest) => void;
   onPressAppointments?: () => void;
+  onPressMyContracts?: () => void;
+  onPressContract?: (contractId: number) => void;
+  onPressSupportTickets?: () => void;
+  onPressSupportTicket?: (ticketId: number) => void;
+  onPressCreateSupportTicket?: () => void;
   unreadNotificationCount?: number;
   onExposeControl?: (ctrl: { startTour: () => void }) => void;
 }
@@ -211,6 +219,11 @@ export default function UserHomeScreenContent({
   onPressMySmallTasks,
   onPressSmallTask,
   onPressAppointments,
+  onPressMyContracts,
+  onPressContract,
+  onPressSupportTickets,
+  onPressSupportTicket,
+  onPressCreateSupportTicket,
   onPressNotifications,
   onPressMessages,
   onPressInfo,
@@ -296,6 +309,14 @@ export default function UserHomeScreenContent({
   const [loadingProjects, setLoadingProjects] = useState(true);
   const [loadingTasks, setLoadingTasks] = useState(true);
 
+  // Contracts
+  interface HomeContract { id: number; projectId?: number; type?: string; status?: string; otherPartyName?: string; description?: string; signedDocumentUrl?: string | null; createdAt?: string; amount?: number; budget?: number; startDate?: string; projectTitle?: string; }
+  const [contracts, setContracts] = useState<HomeContract[]>([]);
+  const [loadingContracts, setLoadingContracts] = useState(true);
+  // Support tickets
+  const [supportTickets, setSupportTickets] = useState<SupportTicket[]>([]);
+  const [loadingTickets, setLoadingTickets] = useState(true);
+
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(true);
   const [selectedCategoryForModal, setSelectedCategoryForModal] = useState<ServiceCategory | null>(null);
@@ -355,10 +376,34 @@ export default function UserHomeScreenContent({
     }
   }, []);
 
+  const loadContracts = useCallback(async () => {
+    try {
+      const token = await storage.getAuthToken();
+      if (!token) { setContracts([]); return; }
+      const url = buildApiUrl(API_ENDPOINTS.CONTRACTS.MY);
+      const res = await fetch(url, { method: 'GET', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
+      if (!res.ok) { setContracts([]); return; }
+      const data = await res.json();
+      const list = Array.isArray(data) ? data : (data?.contracts ?? data?.data ?? []);
+      setContracts(Array.isArray(list) ? list.slice(0, 6) : []);
+    } catch { setContracts([]); }
+    finally { setLoadingContracts(false); }
+  }, []);
+
+  const loadSupportTickets = useCallback(async () => {
+    try {
+      const tickets = await getMyTickets('OPEN');
+      setSupportTickets(tickets.slice(0, 3));
+    } catch { setSupportTickets([]); }
+    finally { setLoadingTickets(false); }
+  }, []);
+
   useEffect(() => {
     loadProjects();
     loadSmallTasks();
-  }, [loadProjects, loadSmallTasks]);
+    loadContracts();
+    loadSupportTickets();
+  }, [loadProjects, loadSmallTasks, loadContracts, loadSupportTickets]);
 
   const loadCategories = useCallback(async () => {
     setLoadingCategories(true);
@@ -650,7 +695,7 @@ export default function UserHomeScreenContent({
     const x = e.nativeEvent.contentOffset.x;
     const w = e.nativeEvent.layoutMeasurement.width;
     const index = Math.round(x / w);
-    if (index >= 0 && index < FEATURE_BANNERS.length) setBannerIndex(index);
+    if (index >= 0 && index < BANNER_IMAGES.length) setBannerIndex(index);
   };
 
   const primaryColor = isDark ? colors.primary : IOS_PRIMARY;
@@ -773,7 +818,7 @@ export default function UserHomeScreenContent({
         keyboardShouldPersistTaps="handled"
       >
 
-      {/* 2. Advertisement / feature banners carousel (iOS height 140, capsule dots) */}
+      {/* 2. Advertisement / feature banners carousel (iOS AdvertisementComponent) */}
       <StaggeredAppearView index={1} style={{ marginTop: SECTION_SPACING }}>
         <ScrollView
           ref={bannerScrollRef}
@@ -781,29 +826,21 @@ export default function UserHomeScreenContent({
           pagingEnabled
           showsHorizontalScrollIndicator={false}
           onMomentumScrollEnd={handleBannerScroll}
-          style={[styles.bannerScroll, { height: 160 }]}
+          style={styles.bannerScroll}
           contentContainerStyle={styles.bannerContent}
           nestedScrollEnabled={true}
           scrollEventThrottle={16}
         >
-          {FEATURE_BANNERS.map((banner, i) => (
+          {BANNER_IMAGES.map((img, i) => (
             <View key={i} style={[styles.bannerPage, { width: SCREEN_WIDTH }]}>
-              <LinearGradient colors={isDark ? [...banner.colorsDark] : [...banner.colors]} style={styles.bannerCard}>
-                <View style={styles.bannerRow}>
-                  <View style={[styles.bannerIconCircle, { backgroundColor: isDark ? `${primaryColor}40` : `${primaryColor}20` }]}>
-                    <Ionicons name={banner.icon} size={28} color={primaryColor} />
-                  </View>
-                  <View style={styles.bannerTextWrap}>
-                    <Text style={[styles.bannerTitle, { color: colors.text }, boldStyle]}>{t(banner.titleKey)}</Text>
-                    <Text style={[styles.bannerDesc, { color: colors.textSecondary }, fontStyle]}>{t(banner.descKey)}</Text>
-                  </View>
-                </View>
-              </LinearGradient>
+              <View style={[styles.bannerCard, { backgroundColor: isDark ? colors.cardBackground : '#FFFFFF' }]}>
+                <Image source={img} style={styles.bannerImage} resizeMode="stretch" />
+              </View>
             </View>
           ))}
         </ScrollView>
         <View style={styles.dots}>
-          {FEATURE_BANNERS.map((_, i) => (
+          {BANNER_IMAGES.map((_, i) => (
             <View
               key={i}
               style={[
@@ -818,8 +855,13 @@ export default function UserHomeScreenContent({
       </StaggeredAppearView>
 
       {/* 3. Quick actions - circular icons (iOS QuickActionsSection) with press scale */}
-      <View style={{ marginTop: SECTION_SPACING }}>
-        <View style={styles.quickActions}>
+      <FlowingBorderCard
+        accent="#007AFF"
+        cornerRadius={18}
+        cardBackground={isDark ? colors.cardBackground : colors.background}
+        style={{ marginTop: SECTION_SPACING }}
+      >
+        <View style={[styles.quickActions, { paddingVertical: 8 }]}>
           <View ref={(el) => { stepViewRefs.current['newProject'] = el; }} collapsable={false}>
             <PressableScaleView style={styles.quickActionItem} onPress={() => onPressCreateProject?.(0)}>
               <View style={[styles.quickActionCircle, { backgroundColor: `${primaryColor}18` }]}>
@@ -853,75 +895,82 @@ export default function UserHomeScreenContent({
             </PressableScaleView>
           </View>
         </View>
-      </View>
+      </FlowingBorderCard>
 
       {/* 4. Service Categories – web-style: horizontal scroll, square cards, image area + title + chevron when selected */}
-      <View
-        ref={(el) => { stepViewRefs.current['serviceCategories'] = el; }}
-        collapsable={false}
+      <FlowingBorderCard
+        accent="#00A5F4"
+        cornerRadius={18}
+        cardBackground={isDark ? colors.cardBackground : colors.background}
         style={{ marginTop: SECTION_SPACING }}
       >
-        <View style={styles.sectionHeader}>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.sectionTitle, { color: colors.text }, { fontSize: scaledSize(18) }, boldStyle]}>{t('Service Categories')}</Text>
-            <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }, fontStyle]}>{t('Browse services by category')}</Text>
+        <View
+          ref={(el) => { stepViewRefs.current['serviceCategories'] = el; }}
+          collapsable={false}
+          style={{ paddingVertical: 8 }}
+        >
+          <View style={styles.sectionHeader}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.sectionTitle, { color: colors.text }, { fontSize: scaledSize(18) }, boldStyle]}>{t('Service Categories')}</Text>
+              <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }, fontStyle]}>{t('Browse services by category')}</Text>
+            </View>
           </View>
-        </View>
-        {loadingCategories ? (
-          <View style={[styles.categoriesLoadingWrap, { backgroundColor: colors.cardBackground }]}>
-            <ActivityIndicator size="small" color={primaryColor} />
-            <Text style={[styles.categoriesLoadingText, { color: colors.textSecondary }, fontStyle]}>{t('Loading categories...')}</Text>
-          </View>
-        ) : categories.length === 0 ? (
-          <View style={[styles.categoriesEmptyWrap, { backgroundColor: colors.cardBackground }]}>
-            <Ionicons name="grid-outline" size={32} color={colors.textSecondary} />
-            <Text style={[styles.categoriesEmptyText, { color: colors.textSecondary }, fontStyle]}>{t('No categories available')}</Text>
-          </View>
-        ) : (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.categoriesRowContent}
-          >
-            {categories.map((cat) => {
-              const name = isArabic && cat.nameAr ? cat.nameAr : cat.nameEn;
-              const imgSrc = resolveServiceImage(cat);
-              const isSelected = selectedCategoryForModal?.id === cat.id;
-              return (
-                <PressableScaleView
-                  key={cat.id}
-                  style={[
-                    styles.categoryCardWeb,
-                    { backgroundColor: colors.cardBackground, borderColor: isSelected ? primaryColor : colors.border, borderWidth: isSelected ? 2 : 1 },
-                  ]}
-                  onPress={() => handleCategoryPress(cat)}
-                >
-                  <View style={[styles.categoryCardWebImageWrap, { backgroundColor: iconBg }]}>
-                    {imgSrc ? (
-                      imgSrc.isSvg ? (
-                        <SvgUriImage
-                          uri={imgSrc.uri}
-                          width={36}
-                          height={36}
-                          style={styles.categoryCardImage}
-                          fallbackColor={iconFg}
-                        />
+          {loadingCategories ? (
+            <View style={[styles.categoriesLoadingWrap, { backgroundColor: colors.cardBackground }]}>
+              <ActivityIndicator size="small" color={primaryColor} />
+              <Text style={[styles.categoriesLoadingText, { color: colors.textSecondary }, fontStyle]}>{t('Loading categories...')}</Text>
+            </View>
+          ) : categories.length === 0 ? (
+            <View style={[styles.categoriesEmptyWrap, { backgroundColor: colors.cardBackground }]}>
+              <Ionicons name="grid-outline" size={32} color={colors.textSecondary} />
+              <Text style={[styles.categoriesEmptyText, { color: colors.textSecondary }, fontStyle]}>{t('No categories available')}</Text>
+            </View>
+          ) : (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.categoriesRowContent}
+            >
+              {categories.map((cat) => {
+                const name = isArabic && cat.nameAr ? cat.nameAr : cat.nameEn;
+                const imgSrc = resolveServiceImage(cat);
+                const isSelected = selectedCategoryForModal?.id === cat.id;
+                return (
+                  <PressableScaleView
+                    key={cat.id}
+                    style={[
+                      styles.categoryCardWeb,
+                      { backgroundColor: colors.cardBackground, borderColor: isSelected ? primaryColor : colors.border, borderWidth: isSelected ? 2 : 1 },
+                    ]}
+                    onPress={() => handleCategoryPress(cat)}
+                  >
+                    <View style={[styles.categoryCardWebImageWrap, { backgroundColor: iconBg }]}>
+                      {imgSrc ? (
+                        imgSrc.isSvg ? (
+                          <SvgUriImage
+                            uri={imgSrc.uri}
+                            width={36}
+                            height={36}
+                            style={styles.categoryCardImage}
+                            fallbackColor={iconFg}
+                          />
+                        ) : (
+                          <Image source={imgSrc} style={styles.categoryCardImage} resizeMode="contain" />
+                        )
                       ) : (
-                        <Image source={imgSrc} style={styles.categoryCardImage} resizeMode="contain" />
-                      )
-                    ) : (
-                      <Ionicons name={getCategoryIconName(cat.nameEn)} size={36} color={iconFg} />
-                    )}
-                  </View>
-                  <View style={styles.categoryCardWebContent}>
-                    <Text style={[styles.categoryCardTitleWeb, { color: colors.text }, fontStyle]}>{name}</Text>
-                  </View>
-                </PressableScaleView>
-              );
-            })}
-          </ScrollView>
-        )}
-      </View>
+                        <Ionicons name={getCategoryIconName(cat.nameEn)} size={36} color={iconFg} />
+                      )}
+                    </View>
+                    <View style={styles.categoryCardWebContent}>
+                      <Text style={[styles.categoryCardTitleWeb, { color: colors.text }, fontStyle]}>{name}</Text>
+                    </View>
+                  </PressableScaleView>
+                );
+              })}
+            </ScrollView>
+          )}
+        </View>
+      </FlowingBorderCard>
 
       {/* Inline subcategories – same as web: slide in from side, "Subcategories – [Name]", gradient line, horizontal cards with stagger */}
       {selectedCategoryForModal && (
@@ -1001,98 +1050,259 @@ export default function UserHomeScreenContent({
       )}
 
       {/* 5. My Projects section - horizontal strip with real cards (iOS press scale) */}
-      <View
-        ref={(el) => { stepViewRefs.current['projectsSection'] = el; }}
-        collapsable={false}
+      <FlowingBorderCard
+        accent="#00A5F4"
+        cornerRadius={20}
+        cardBackground={isDark ? colors.cardBackground : colors.background}
         style={{ marginTop: SECTION_SPACING }}
       >
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: colors.text }, { fontSize: scaledSize(18) }, boldStyle]}>{t('My Projects')}</Text>
-          <TouchableOpacity onPress={onPressMyProjects} activeOpacity={0.8}>
-            <Text style={[styles.viewAll, { color: primaryColor }, fontStyle]}>{t('View All')} ←</Text>
-          </TouchableOpacity>
-        </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
-          {loadingProjects ? (
-            <View style={[styles.homeCard, { backgroundColor: colors.cardBackground, width: CARD_WIDTH, minHeight: 100, justifyContent: 'center', alignItems: 'center' }]}>
-              <ActivityIndicator size="small" color={primaryColor} />
-            </View>
-          ) : projects.length === 0 ? (
-            <PressableScaleView style={[styles.homeCard, { backgroundColor: colors.cardBackground, width: CARD_WIDTH }]} onPress={() => onPressMyProjects?.()}>
-              <Ionicons name="folder-open-outline" size={32} color={primaryColor} />
-              <Text style={[styles.placeholderLabel, { color: colors.textSecondary }, fontStyle]}>{t('View your projects')}</Text>
-            </PressableScaleView>
-          ) : (
-            projects.map((project) => (
-              <PressableScaleView
-                key={project.id}
-                style={[styles.homeCard, { backgroundColor: colors.cardBackground }]}
-                onPress={() => onPressProject?.(project)}
-              >
-                <View style={styles.homeCardRow}>
-                  <View style={[styles.homeCardIconWrap, { backgroundColor: `${primaryColor}18` }]}>
-                    <Ionicons name="folder-open" size={20} color={primaryColor} />
-                  </View>
-                  <Text style={[styles.homeCardTitle, { color: colors.text }, boldStyle]} numberOfLines={1}>#{project.id}</Text>
-                </View>
-                <Text style={[styles.homeCardSub, { color: colors.textSecondary }, fontStyle]} numberOfLines={2}>
-                  {(project.description || project.address || '').trim() || t('Project')}
-                </Text>
-                <Text style={[styles.homeCardStatus, { color: primaryColor }, fontStyle]}>
-                  {project.status ?? '—'}
-                </Text>
+        <View
+          ref={(el) => { stepViewRefs.current['projectsSection'] = el; }}
+          collapsable={false}
+          style={{ paddingVertical: 8 }}
+        >
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: colors.text }, { fontSize: scaledSize(18) }, boldStyle]}>{t('My Projects')}</Text>
+            <TouchableOpacity onPress={onPressMyProjects} activeOpacity={0.8}>
+              <Text style={[styles.viewAll, { color: primaryColor }, fontStyle]}>{t('View All')} ←</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
+            {loadingProjects ? (
+              <View style={[styles.homeCard, { backgroundColor: colors.cardBackground, width: CARD_WIDTH, minHeight: 100, justifyContent: 'center', alignItems: 'center' }]}>
+                <ActivityIndicator size="small" color={primaryColor} />
+              </View>
+            ) : projects.length === 0 ? (
+              <PressableScaleView style={[styles.homeCard, { backgroundColor: colors.cardBackground, width: CARD_WIDTH }]} onPress={() => onPressMyProjects?.()}>
+                <Ionicons name="folder-open-outline" size={32} color={primaryColor} />
+                <Text style={[styles.placeholderLabel, { color: colors.textSecondary }, fontStyle]}>{t('View your projects')}</Text>
               </PressableScaleView>
-            ))
-          )}
-        </ScrollView>
-      </View>
+            ) : (
+              projects.map((project) => (
+                <PressableScaleView
+                  key={project.id}
+                  style={[styles.homeCard, { backgroundColor: colors.cardBackground }]}
+                  onPress={() => onPressProject?.(project)}
+                >
+                  <View style={styles.homeCardRow}>
+                    <View style={[styles.homeCardIconWrap, { backgroundColor: `${primaryColor}18` }]}>
+                      <Ionicons name="folder-open" size={20} color={primaryColor} />
+                    </View>
+                    <Text style={[styles.homeCardTitle, { color: colors.text }, boldStyle]} numberOfLines={1}>#{project.id}</Text>
+                  </View>
+                  <Text style={[styles.homeCardSub, { color: colors.textSecondary }, fontStyle]} numberOfLines={2}>
+                    {(project.description || project.address || '').trim() || t('Project')}
+                  </Text>
+                  <Text style={[styles.homeCardStatus, { color: primaryColor }, fontStyle]}>
+                    {project.status ?? '—'}
+                  </Text>
+                </PressableScaleView>
+              ))
+            )}
+          </ScrollView>
+        </View>
+      </FlowingBorderCard>
 
       {/* 6. My Small Tasks section - horizontal strip with real cards (iOS press scale) */}
-      <View
-        ref={(el) => { stepViewRefs.current['smallTasksSection'] = el; }}
-        collapsable={false}
+      <FlowingBorderCard
+        accent="#FF9500"
+        cornerRadius={20}
+        cardBackground={isDark ? colors.cardBackground : colors.background}
         style={{ marginTop: SECTION_SPACING }}
       >
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: colors.text }, { fontSize: scaledSize(18) }, boldStyle]}>{t('My Small Tasks')}</Text>
-          <TouchableOpacity onPress={onPressMySmallTasks} activeOpacity={0.8}>
-            <Text style={[styles.viewAll, { color: primaryColor }, fontStyle]}>{t('View All')} ←</Text>
-          </TouchableOpacity>
-        </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
-          {loadingTasks ? (
-            <View style={[styles.homeCard, { backgroundColor: colors.cardBackground, justifyContent: 'center', alignItems: 'center' }]}>
-              <ActivityIndicator size="small" color="#FF9500" />
-            </View>
-          ) : smallTasks.length === 0 ? (
-            <PressableScaleView style={[styles.homeCard, { backgroundColor: colors.cardBackground, width: CARD_WIDTH }]} onPress={() => onPressMySmallTasks?.()}>
-              <Ionicons name="flash-outline" size={32} color="#FF9500" />
-              <Text style={[styles.placeholderLabel, { color: colors.textSecondary }, fontStyle]}>{t('View your small tasks')}</Text>
-            </PressableScaleView>
-          ) : (
-            smallTasks.map((task) => (
-              <PressableScaleView
-                key={task.id}
-                style={[styles.homeCard, { backgroundColor: colors.cardBackground }]}
-                onPress={() => onPressSmallTask ? onPressSmallTask(task) : onPressMySmallTasks?.()}
-              >
-                <View style={[styles.homeCardIconWrap, { backgroundColor: 'rgba(255,149,0,0.18)', marginBottom: 8 }]}>
-                  <Ionicons name="flash" size={20} color="#FF9500" />
-                </View>
-                <Text style={[styles.homeCardTitle, { color: colors.text }, boldStyle]}>
-                  {getTaskTypeName(task) || `#${task.id}`}
-                </Text>
-                <Text style={[styles.homeCardSub, { color: colors.textSecondary }, fontStyle]}>
-                  {task.description?.trim() || task.address || '—'}
-                </Text>
-                <Text style={[styles.homeCardStatus, { color: '#FF9500' }, fontStyle]}>
-                  {task.status ?? '—'}
-                </Text>
+        <View
+          ref={(el) => { stepViewRefs.current['smallTasksSection'] = el; }}
+          collapsable={false}
+          style={{ paddingVertical: 8 }}
+        >
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: colors.text }, { fontSize: scaledSize(18) }, boldStyle]}>{t('My Small Tasks')}</Text>
+            <TouchableOpacity onPress={onPressMySmallTasks} activeOpacity={0.8}>
+              <Text style={[styles.viewAll, { color: primaryColor }, fontStyle]}>{t('View All')} ←</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
+            {loadingTasks ? (
+              <View style={[styles.homeCard, { backgroundColor: colors.cardBackground, justifyContent: 'center', alignItems: 'center' }]}>
+                <ActivityIndicator size="small" color="#FF9500" />
+              </View>
+            ) : smallTasks.length === 0 ? (
+              <PressableScaleView style={[styles.homeCard, { backgroundColor: colors.cardBackground, width: CARD_WIDTH }]} onPress={() => onPressMySmallTasks?.()}>
+                <Ionicons name="flash-outline" size={32} color="#FF9500" />
+                <Text style={[styles.placeholderLabel, { color: colors.textSecondary }, fontStyle]}>{t('View your small tasks')}</Text>
               </PressableScaleView>
-            ))
+            ) : (
+              smallTasks.map((task) => (
+                <PressableScaleView
+                  key={task.id}
+                  style={[styles.homeCard, { backgroundColor: colors.cardBackground }]}
+                  onPress={() => onPressSmallTask ? onPressSmallTask(task) : onPressMySmallTasks?.()}
+                >
+                  <View style={[styles.homeCardIconWrap, { backgroundColor: 'rgba(255,149,0,0.18)', marginBottom: 8 }]}>
+                    <Ionicons name="flash" size={20} color="#FF9500" />
+                  </View>
+                  <Text style={[styles.homeCardTitle, { color: colors.text }, boldStyle]}>
+                    {getTaskTypeName(task) || `#${task.id}`}
+                  </Text>
+                  <Text style={[styles.homeCardSub, { color: colors.textSecondary }, fontStyle]}>
+                    {task.description?.trim() || task.address || '—'}
+                  </Text>
+                  <Text style={[styles.homeCardStatus, { color: '#FF9500' }, fontStyle]}>
+                    {task.status ?? '—'}
+                  </Text>
+                </PressableScaleView>
+              ))
+            )}
+          </ScrollView>
+        </View>
+      </FlowingBorderCard>
+
+      {/* 7. My Contracts section (iOS HomeContractsSection) */}
+      <FlowingBorderCard
+        accent="#5856D6"
+        cornerRadius={20}
+        cardBackground={isDark ? colors.cardBackground : colors.background}
+        style={{ marginTop: SECTION_SPACING }}
+      >
+        <View style={{ paddingVertical: 8 }}>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: colors.text }, { fontSize: scaledSize(18) }, boldStyle]}>{t('My Contracts')}</Text>
+            <TouchableOpacity onPress={onPressMyContracts} activeOpacity={0.8}>
+              <Text style={[styles.viewAll, { color: '#5856D6' }, fontStyle]}>{t('View All')} ←</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
+            {loadingContracts ? (
+              <View style={[styles.homeCard, { backgroundColor: colors.cardBackground, justifyContent: 'center', alignItems: 'center' }]}>
+                <ActivityIndicator size="small" color="#5856D6" />
+              </View>
+            ) : contracts.length === 0 ? (
+              <PressableScaleView style={[styles.homeCard, { backgroundColor: colors.cardBackground, width: CARD_WIDTH }]} onPress={() => onPressMyContracts?.()}>
+                <Ionicons name="document-text-outline" size={32} color="#5856D6" />
+                <Text style={[styles.placeholderLabel, { color: colors.textSecondary }, fontStyle]}>{t('No contracts yet')}</Text>
+              </PressableScaleView>
+            ) : (
+              contracts.map((c) => {
+                const contractAmount = c.amount ?? c.budget;
+                const formattedAmount = contractAmount
+                  ? new Intl.NumberFormat(isArabic ? 'ar-SA' : 'en-SA', { maximumFractionDigits: 0 }).format(contractAmount)
+                  : null;
+                const dateStr = c.createdAt
+                  ? new Date(c.createdAt).toLocaleDateString(isArabic ? 'ar-SA' : 'en-US', { month: 'short', day: 'numeric' })
+                  : null;
+                return (
+                  <PressableScaleView
+                    key={c.id}
+                    style={[styles.homeCard, { backgroundColor: colors.cardBackground, height: 180 }]}
+                    onPress={() => onPressContract?.(c.id)}
+                  >
+                    <View style={styles.homeCardRow}>
+                      <View style={[styles.homeCardIconWrap, { backgroundColor: 'rgba(88,86,214,0.15)' }]}>
+                        <Ionicons name="document-text" size={20} color="#5856D6" />
+                      </View>
+                      <Text style={[styles.homeCardTitle, { color: colors.text }, boldStyle]} numberOfLines={1}>#{c.id}</Text>
+                    </View>
+                    {c.signedDocumentUrl ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#34C759' }} />
+                        <Text style={[{ color: '#34C759', fontSize: 11, fontWeight: '600' }, fontStyle]}>{t('Signed')}</Text>
+                      </View>
+                    ) : (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#FF9500' }} />
+                        <Text style={[{ color: '#FF9500', fontSize: 11, fontWeight: '600' }, fontStyle]}>{t(c.status || 'Pending')}</Text>
+                      </View>
+                    )}
+                    <Text style={[styles.homeCardSub, { color: colors.textSecondary, marginTop: 6 }, fontStyle]} numberOfLines={2}>
+                      {c.projectTitle || c.description || c.otherPartyName || t('Contract')}
+                    </Text>
+                    {formattedAmount && (
+                      <Text style={[{ color: '#5856D6', fontSize: 14, fontWeight: '700', marginTop: 4 }, boldStyle]} numberOfLines={1}>
+                        {formattedAmount} {t('SAR')}
+                      </Text>
+                    )}
+                    {dateStr && (
+                      <Text style={[{ color: colors.textTertiary, fontSize: 11, marginTop: 2 }, fontStyle]}>
+                        {dateStr}
+                      </Text>
+                    )}
+                  </PressableScaleView>
+                );
+              })
+            )}
+          </ScrollView>
+        </View>
+      </FlowingBorderCard>
+
+      {/* 8. Support Tickets section (iOS HomeSupportSection) */}
+      <FlowingBorderCard
+        accent="#34C759"
+        cornerRadius={20}
+        cardBackground={isDark ? colors.cardBackground : colors.background}
+        style={{ marginTop: SECTION_SPACING }}
+      >
+        <View style={{ paddingVertical: 8 }}>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: colors.text }, { fontSize: scaledSize(18) }, boldStyle]}>{t('Support')}</Text>
+            <TouchableOpacity onPress={onPressSupportTickets} activeOpacity={0.8}>
+              <Text style={[styles.viewAll, { color: '#34C759' }, fontStyle]}>{t('View All')} ←</Text>
+            </TouchableOpacity>
+          </View>
+          {loadingTickets ? (
+            <View style={{ padding: 20, alignItems: 'center' }}>
+              <ActivityIndicator size="small" color="#34C759" />
+            </View>
+          ) : supportTickets.length === 0 ? (
+            <TouchableOpacity
+              style={{ flexDirection: 'row', alignItems: 'center', padding: 16, gap: 12 }}
+              onPress={onPressCreateSupportTicket}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.homeCardIconWrap, { backgroundColor: 'rgba(52,199,89,0.15)' }]}>
+                <Ionicons name="chatbubble-ellipses" size={20} color="#34C759" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[{ fontSize: 15, fontWeight: '600' }, { color: colors.text }, boldStyle]}>{t('Open Support Ticket')}</Text>
+                <Text style={[{ fontSize: 12, marginTop: 2 }, { color: colors.textSecondary }, fontStyle]}>{t('Get help from our team')}</Text>
+              </View>
+              <Ionicons name={isArabic ? 'chevron-back' : 'chevron-forward'} size={18} color={colors.textSecondary} />
+            </TouchableOpacity>
+          ) : (
+            <View style={{ paddingHorizontal: 12 }}>
+              {supportTickets.map((ticket, idx) => {
+                const statusColor = ticket.status === 'OPEN' || ticket.status === 'PENDING' ? '#FF9500' : ticket.status === 'IN_PROGRESS' ? '#007AFF' : '#8E8E93';
+                return (
+                  <TouchableOpacity
+                    key={ticket.id}
+                    style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, gap: 12, borderTopWidth: idx > 0 ? StyleSheet.hairlineWidth : 0, borderTopColor: colors.border }}
+                    onPress={() => onPressSupportTicket?.(ticket.id)}
+                    activeOpacity={0.8}
+                  >
+                    <View style={[styles.homeCardIconWrap, { backgroundColor: `${statusColor}20` }]}>
+                      <Ionicons name="ticket" size={18} color={statusColor} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[{ fontSize: 14, fontWeight: '600' }, { color: colors.text }, boldStyle]} numberOfLines={1}>{ticket.subject}</Text>
+                    </View>
+                    <View style={{ backgroundColor: `${statusColor}20`, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 }}>
+                      <Text style={[{ fontSize: 10, fontWeight: '700', color: statusColor }, fontStyle]}>{ticket.status}</Text>
+                    </View>
+                    <Ionicons name={isArabic ? 'chevron-back' : 'chevron-forward'} size={16} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                );
+              })}
+              <TouchableOpacity
+                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 12, gap: 6, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}
+                onPress={onPressCreateSupportTicket}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="add-circle" size={18} color="#34C759" />
+                <Text style={[{ fontSize: 13, fontWeight: '600', color: '#34C759' }, fontStyle]}>{t('New Ticket')}</Text>
+              </TouchableOpacity>
+            </View>
           )}
-        </ScrollView>
-      </View>
+        </View>
+      </FlowingBorderCard>
 
       </ScrollView>
       {/* iOS-style Chatbot FAB: fixed bottom-left, wave rings + white circle + robot */}
@@ -1227,25 +1437,21 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, fontSize: 16, paddingVertical: 0 },
   bannerScroll: { marginHorizontal: -H_PADDING },
   bannerContent: {},
-  bannerPage: { paddingHorizontal: H_PADDING, width: SCREEN_WIDTH, height: 160 },
+  bannerPage: { paddingHorizontal: H_PADDING, width: SCREEN_WIDTH, justifyContent: 'center' },
   bannerCard: {
     borderRadius: 16,
-    padding: 20,
-    minHeight: 140,
-    justifyContent: 'center',
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(0,165,244,0.15)',
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8 },
+      android: { elevation: 3 },
+    }),
   },
-  bannerRow: { flexDirection: 'row', alignItems: 'center' },
-  bannerIconCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginEnd: 24,
+  bannerImage: {
+    width: '100%',
+    height: 160,
   },
-  bannerTextWrap: { flex: 1 },
-  bannerTitle: { fontSize: 18, fontWeight: '700', marginBottom: 4 },
-  bannerDesc: { fontSize: 13 },
   dots: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 12, gap: 8 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   dotActive: { width: 24, height: 8, borderRadius: 4 },

@@ -14,7 +14,49 @@ export interface ProfileUpdateData {
   description?: string;
   yearsOfExperience?: number;
   regionIds?: number[];
+  isCompany?: boolean;
+  companyName?: string;
+  crNumber?: string;
 }
+
+export interface WathqVerifyResponse {
+  authorized: boolean;
+  isCrFound?: boolean;
+  isNidFound?: boolean;
+  message?: string;
+}
+
+/**
+ * Verify company CR number via Wathq (Signit) API.
+ * POST /api/wathq/verify
+ */
+export const verifyWathq = async (nationalId: string, crNumber: string): Promise<WathqVerifyResponse> => {
+  const token = await storage.getAuthToken();
+  if (!token) throw new Error('No authentication token');
+
+  const url = buildApiUrl('/wathq/verify');
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ nationalId, crNumber }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(data.message || data.error || `Wathq verification failed: ${response.status}`);
+  }
+
+  return {
+    authorized: data.authorized ?? false,
+    isCrFound: data.isCrFound,
+    isNidFound: data.isNidFound,
+    message: data.message,
+  };
+};
 
 /**
  * Update user profile information

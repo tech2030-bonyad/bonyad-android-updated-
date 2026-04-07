@@ -19,12 +19,33 @@ export interface ChatbotMessage {
     params?: Record<string, unknown>;
     description?: string;
   }>;
+  /** SOW document attached to this message (project suggestion from chatbot) */
+  sow?: SOWDocument;
+}
+
+/** SOW (Statement of Work) document from chatbot for project creation */
+export interface SOWDocument {
+  projectTitle?: string;
+  projectDescription?: string;
+  projectType?: string;
+  propertyType?: string;
+  location?: string;
+  scopeOfWork?: string[];
+  materials?: string[];
+  timeline?: string;
+  durationDays?: number;
+  grandTotal?: number;
+  budgetMin?: number;
+  budgetMax?: number;
+  milestones?: { title: string; description?: string; amount?: number }[];
+  workDisciplines?: string[];
 }
 
 export interface ChatbotResponse {
   response: string;
   conversationId: string;
   timestamp: string;
+  sow?: SOWDocument;
 }
 
 // AI Conversation History for Live Agent context

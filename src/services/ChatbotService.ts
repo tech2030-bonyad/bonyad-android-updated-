@@ -59,6 +59,7 @@ class ChatbotService {
         response: rawData.response || rawData.message || rawData.text || rawData.answer || 'No response',
         conversationId: rawData.conversationId || rawData.conversation_id || rawData.id || '',
         timestamp: rawData.timestamp || rawData.created_at || new Date().toISOString(),
+        sow: rawData.sow || rawData.sowDocument || undefined,
       };
       
       console.log('✅ Chatbot parsed response:', data);

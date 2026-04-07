@@ -33,6 +33,7 @@ import { renderChatbotInlineText } from '../utils/chatbotAndroidRichText';
 import { ChatbotRobotFace } from '../components/ChatbotFab';
 import { getGlassTabBarOverlayHeight } from '../components/GlassTabBar';
 import ChatbotService from '../services/ChatbotService';
+import SOWProjectCard from '../components/SOWProjectCard';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const MAX_BUBBLE_W = Math.min(320, SCREEN_W * 0.78);
@@ -152,7 +153,8 @@ const ChatBubble: React.FC<{
   colors: { primary: string; primaryLight: string; primaryDark: string; text: string };
   chrome: ChatChrome;
   onNavPress?: (action: NavigationAction) => void;
-}> = ({ message, colors, chrome, onNavPress }) => {
+  onProjectCreated?: (projectId: number) => void;
+}> = ({ message, colors, chrome, onNavPress, onProjectCreated }) => {
   const isUser = message.isUser;
   const noopNav = () => {};
   const botBody =
@@ -203,6 +205,13 @@ const ChatBubble: React.FC<{
           {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </Text>
       </View>
+      {/* SOW Project Card — shown below bot bubble when chatbot suggests a project */}
+      {!isUser && message.sow && (
+        <SOWProjectCard
+          sow={message.sow}
+          onProjectCreated={onProjectCreated}
+        />
+      )}
     </View>
   );
 };
@@ -257,6 +266,7 @@ const ChatbotScreen: React.FC<ChatbotScreenProps> = ({
 
   const {
     messages,
+    setMessages,
     loading,
     error,
     sendMessage,
@@ -371,6 +381,23 @@ const ChatbotScreen: React.FC<ChatbotScreenProps> = ({
     [sendQuickQuestion]
   );
 
+  const handleSOWProjectCreated = useCallback(
+    (projectId: number) => {
+      const successMsg: ChatbotMessage = {
+        id: `sow-success-${Date.now()}`,
+        text:
+          language === 'ar'
+            ? `تم إضافة المشروع بنجاح إلى مشاريعي! (رقم المشروع: ${projectId})`
+            : `Project successfully added to My Projects! (ID: ${projectId})`,
+        isUser: false,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, successMsg]);
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 120);
+    },
+    [language]
+  );
+
   const confirmDeleteChat = useCallback(() => {
     resetChat();
     setShowDeleteModal(false);
@@ -405,9 +432,9 @@ const ChatbotScreen: React.FC<ChatbotScreenProps> = ({
           </View>
         );
       }
-      return <ChatBubble message={item.msg} colors={colors} chrome={chrome} onNavPress={runNavAction} />;
+      return <ChatBubble message={item.msg} colors={colors} chrome={chrome} onNavPress={runNavAction} onProjectCreated={handleSOWProjectCreated} />;
     },
-    [colors, chrome, runNavAction]
+    [colors, chrome, runNavAction, handleSOWProjectCreated]
   );
 
   const keyExtractor = useCallback((item: ListRow) => {

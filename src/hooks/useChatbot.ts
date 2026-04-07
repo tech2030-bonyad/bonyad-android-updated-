@@ -72,6 +72,7 @@ export const useChatbot = (options: UseChatbotOptions = {}) => {
         navigationActions: parsed.actions.length > 0 ? parsed.actions : undefined,
         isUser: false,
         timestamp: response.timestamp ? new Date(response.timestamp) : new Date(),
+        sow: response.sow,
       };
       
       console.log('🤖 Bot message created:', botMessage);
@@ -160,6 +161,7 @@ export const useChatbot = (options: UseChatbotOptions = {}) => {
 
   return {
     messages,
+    setMessages,
     loading,
     error,
     conversationId,

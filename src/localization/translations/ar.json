@@ -2239,5 +2239,33 @@
         "bidActions": "اطلب زيارة موقع قبل المزايدة، أو قدم عرضك مباشرة. اختر الخيار الأنسب."
       }
     }
-  }
+  },
+  "My Contracts": "عقودي",
+  "No contracts yet": "لا توجد عقود بعد",
+  "Open Support Ticket": "فتح تذكرة دعم",
+  "Get help from our team": "احصل على مساعدة من فريقنا",
+  "New Ticket": "تذكرة جديدة",
+  "Project Suggestion": "اقتراح مشروع",
+  "Estimated Total": "التكلفة التقديرية",
+  "Show Details": "عرض التفاصيل",
+  "Show Less": "إخفاء التفاصيل",
+  "Scope of Work": "نطاق العمل",
+  "Milestones": "المراحل",
+  "Added to My Projects!": "تمت الإضافة إلى مشاريعي!",
+  "Add to My Projects": "إضافة إلى مشاريعي",
+  "Failed to create project": "فشل في إنشاء المشروع",
+  "Switch to Company": "التحويل إلى حساب شركة",
+  "National ID": "رقم الهوية الوطنية",
+  "Company Name": "اسم الشركة",
+  "Enter company name": "أدخل اسم الشركة",
+  "CR Number": "رقم السجل التجاري",
+  "10-digit CR number": "رقم السجل التجاري (10 أرقام)",
+  "CR number must be 10 digits": "رقم السجل التجاري يجب أن يكون 10 أرقام",
+  "Verify & Switch": "تحقق وحوّل",
+  "Your National ID will be verified against the Commercial Registration via Wathq to confirm authorization.": "سيتم التحقق من هويتك الوطنية مقابل السجل التجاري عبر واثق لتأكيد التفويض.",
+  "Account Type": "نوع الحساب",
+  "Company Account": "حساب شركة",
+  "Individual Account": "حساب فردي",
+  "Company": "شركة",
+  "Individual": "فردي"
 }

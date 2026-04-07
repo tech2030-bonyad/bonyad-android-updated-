@@ -30,7 +30,7 @@ if (__DEV__) {
 export function getChatbotBaseUrl(): string {
   const raw = (ENV.CHATBOT_API_URL || '').trim();
   if (!raw) {
-    return Platform.OS === 'android' ? 'http://10.0.2.2:7860' : 'http://localhost:7860';
+    return 'https://glynda-unvexatious-felisa.ngrok-free.dev';
   }
   return raw
     .replace(/\/$/, '')

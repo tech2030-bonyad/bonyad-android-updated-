@@ -18,7 +18,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import { useRTL } from '../hooks/useRTL';
-import { getUserProfile, uploadProfileImage, deleteAccount } from '../services/ProfileService';
+import { getUserProfile, uploadProfileImage, deleteAccount, updateProfile, verifyWathq } from '../services/ProfileService';
+import CompanyRegistrationModal from '../components/CompanyRegistrationModal';
 import { storage } from '../utils/storage';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
 import ConfirmationPopup, { useConfirmationPopup } from '../components/ConfirmationPopup';
@@ -90,6 +91,10 @@ interface UserDetails {
   propertiesCount?: number;
   appointmentsCount?: number;
   ticketsCount?: number;
+  isCompany?: boolean;
+  companyName?: string;
+  crNumber?: string;
+  nationalId?: string;
 }
 
 export default function ProfileScreen({ 
@@ -114,6 +119,9 @@ export default function ProfileScreen({
   const [isLoading, setIsLoading] = useState(true);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [language, setLanguage] = useState(i18n.language);
+  const [isCompanyMode, setIsCompanyMode] = useState(false);
+  const [isSwitchingCompany, setIsSwitchingCompany] = useState(false);
+  const [showCompanySheet, setShowCompanySheet] = useState(false);
   const isDarkMode = theme === 'dark';
   const isArabic = i18n.language === 'ar';
   const { isRTL } = useRTL();
@@ -242,11 +250,62 @@ export default function ProfileScreen({
     try {
       const profile = await getUserProfile();
       setUserDetails(profile);
+      setIsCompanyMode(profile?.isCompany ?? false);
     } catch (error) {
       console.error('Error fetching profile:', error);
       showError(t('Failed to load profile'), t('Error'));
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleToggleCompanyMode = () => {
+    if (isSwitchingCompany) return;
+    if (isCompanyMode) {
+      // Switch back to individual – no Wathq needed
+      switchToIndividual();
+    } else {
+      // Show company registration sheet for CR + name
+      setShowCompanySheet(true);
+    }
+  };
+
+  const switchToIndividual = async () => {
+    setIsSwitchingCompany(true);
+    try {
+      await updateProfile({ isCompany: false });
+      setIsCompanyMode(false);
+      await fetchUserProfile();
+    } catch (error: any) {
+      showError(error.message || t('Failed to update profile'), t('Error'));
+    } finally {
+      setIsSwitchingCompany(false);
+    }
+  };
+
+  const handleCompanyConfirm = async (companyName: string, crNumber: string) => {
+    setShowCompanySheet(false);
+    const nationalId = userDetails?.nationalId ?? '';
+    if (!nationalId) {
+      showError(t('National ID is required for company verification'), t('Error'));
+      return;
+    }
+    setIsSwitchingCompany(true);
+    try {
+      // Step 1: Verify via Wathq
+      const result = await verifyWathq(nationalId, crNumber);
+      if (!result.authorized) {
+        showError(result.message || t('Wathq verification failed. Your National ID is not authorized for this CR.'), t('Verification Failed'));
+        return;
+      }
+      // Step 2: Update profile to company mode
+      await updateProfile({ isCompany: true, companyName, crNumber, nationalId });
+      setIsCompanyMode(true);
+      await fetchUserProfile();
+    } catch (error: any) {
+      showError(error.message || t('Failed to verify company'), t('Error'));
+    } finally {
+      setIsSwitchingCompany(false);
     }
   };
 
@@ -563,6 +622,66 @@ export default function ProfileScreen({
                   </View>
           )}
                   </View>
+
+        {/* Account Type Toggle — Company / Individual (matches iOS CompanyModeToggleView) */}
+        <View style={[styles.companyToggleCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}>
+          <View style={styles.companyToggleRow}>
+            <View style={[styles.companyToggleIcon, { backgroundColor: isCompanyMode ? 'rgba(52,199,89,0.15)' : 'rgba(255,149,0,0.12)' }]}>
+              <Ionicons
+                name={isCompanyMode ? 'business' : 'person'}
+                size={18}
+                color={isCompanyMode ? '#34C759' : '#FF9500'}
+              />
+            </View>
+            <View style={styles.companyToggleText}>
+              <Text style={[styles.companyToggleTitle, { color: textColor, fontFamily: boldFontFamily, fontSize: scaledSize(16) }]}>
+                {t('Account Type')}
+              </Text>
+              <Text style={[styles.companyToggleSubtitle, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(12) }]}>
+                {isCompanyMode ? t('Company Account') : t('Individual Account')}
+              </Text>
+            </View>
+            {isSwitchingCompany ? (
+              <ActivityIndicator size="small" color={primaryColor} />
+            ) : (
+              <TouchableOpacity onPress={handleToggleCompanyMode} activeOpacity={0.8}>
+                <View style={[styles.companyToggleCapsule, { backgroundColor: isCompanyMode ? '#34C759' : '#FF9500' }]}>
+                  <Ionicons
+                    name={isCompanyMode ? 'business' : 'person'}
+                    size={11}
+                    color="#FFFFFF"
+                  />
+                  <Text style={[styles.companyToggleCapsuleText, { fontFamily: boldFontFamily }]}>
+                    {isCompanyMode ? t('Company') : t('Individual')}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            )}
+          </View>
+          {isCompanyMode && userDetails?.companyName ? (
+            <>
+              <View style={[styles.companyToggleDivider, { backgroundColor: dividerColor }]} />
+              <View style={styles.companyInfoRow}>
+                <Ionicons name="checkmark-circle" size={14} color="#34C759" />
+                <View style={styles.companyInfoText}>
+                  <Text style={[{ color: textColor, fontFamily: boldFontFamily, fontSize: scaledSize(14) }]}>
+                    {userDetails.companyName}
+                  </Text>
+                  {userDetails.crNumber ? (
+                    <Text style={[{ color: secondaryTextColor, fontFamily, fontSize: scaledSize(12) }]}>
+                      CR: {userDetails.crNumber}
+                    </Text>
+                  ) : null}
+                </View>
+                <View style={styles.companyVerifiedBadge}>
+                  <Text style={[styles.companyVerifiedText, { fontFamily: boldFontFamily }]}>
+                    {t('Verified')}
+                  </Text>
+                </View>
+              </View>
+            </>
+          ) : null}
+        </View>
 
         {/* Technician Menu Items – same order as web: Portfolio, Subscription, Availability, Services, Small Task Types, Working Areas */}
         {isTechnician && (
@@ -1052,6 +1171,14 @@ export default function ProfileScreen({
         onConfirm={confirmState.onConfirm}
         onCancel={hideConfirmation}
       />
+
+      {/* Company Registration Sheet (Wathq verification) */}
+      <CompanyRegistrationModal
+        visible={showCompanySheet}
+        nationalId={userDetails?.nationalId ?? ''}
+        onConfirm={handleCompanyConfirm}
+        onCancel={() => setShowCompanySheet(false)}
+      />
     </View>
   );
 }
@@ -1325,6 +1452,78 @@ const styles = StyleSheet.create({
     gap: 16,
     zIndex: 10,
     elevation: 5,
+  },
+
+  // Company Toggle
+  companyToggleCard: {
+    marginHorizontal: 16,
+    marginBottom: 12,
+    borderRadius: 15,
+    borderWidth: 1,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 5 },
+      android: { elevation: 2 },
+    }),
+  },
+  companyToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    gap: 12,
+  },
+  companyToggleIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  companyToggleText: {
+    flex: 1,
+  },
+  companyToggleTitle: {
+    fontWeight: '700',
+  },
+  companyToggleSubtitle: {
+    marginTop: 2,
+  },
+  companyToggleCapsule: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+  },
+  companyToggleCapsuleText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  companyToggleDivider: {
+    height: 1,
+    marginHorizontal: 16,
+  },
+  companyInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 12,
+  },
+  companyInfoText: {
+    flex: 1,
+  },
+  companyVerifiedBadge: {
+    backgroundColor: 'rgba(52,199,89,0.12)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  companyVerifiedText: {
+    color: '#34C759',
+    fontSize: 10,
+    fontWeight: '700',
   },
 
   // Menu Items

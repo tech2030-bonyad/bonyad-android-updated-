@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Dimensions,
   Platform,
+  Image,
 } from 'react-native';
 import { CopilotStep, walkthroughable, useCopilot } from 'react-native-copilot';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -26,12 +27,15 @@ import { storage } from '../../utils/storage';
 import { getAppTopBarPaddingTop } from '../../utils/statusBarHelper';
 import { getAvailableRequests } from '../../services/SmallTaskService';
 import type { SmallTaskRequest } from '../../types/smallTasks';
+import FlowingBorderCard from '../../components/FlowingBorderCard';
+import { getMyTickets } from '../../services/SupportTicketService';
+import type { SupportTicket } from '../../types/chat';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 /** Extra space below the status / safe area so the home top bar sits lower (technician home tab). */
 const TECH_HOME_TOP_BAR_EXTRA_INSET = 14;
 const H_PADDING = 20;
-const BANNER_PAGE_WIDTH = SCREEN_WIDTH - H_PADDING * 2;
+// Banner pages are full SCREEN_WIDTH (negative margin on wrapper, H_PADDING on each page)
 const SECTION_GAP = 16;
 const CARD_GAP = 12;
 const CARD_RADIUS = 18;
@@ -77,19 +81,13 @@ const COLORS = {
   quickActionLabel: '#374151',
 };
 
-// 5 feature banners (matches iOS AdvertisementComponent)
-const BANNERS: Array<{
-  icon: string;
-  titleKey: string;
-  descKey: string;
-  gradientLight: readonly [string, string, ...string[]];
-  gradientDark: readonly [string, string, ...string[]];
-}> = [
-  { icon: 'account-group', titleKey: 'banner_find_experts_title', descKey: 'banner_find_experts_desc', gradientLight: ['#FFFFFF', '#E3F2FD', '#BBDEFB'], gradientDark: ['#1A1A2E', '#16213E', '#0F3460'] },
-  { icon: 'hammer', titleKey: 'banner_post_projects_title', descKey: 'banner_post_projects_desc', gradientLight: ['#FFFFFF', '#E8F5E9', '#C8E6C9'], gradientDark: ['#1B2D1B', '#2D4A2D', '#1E3A1E'] },
-  { icon: 'calendar-clock', titleKey: 'banner_book_appointments_title', descKey: 'banner_book_appointments_desc', gradientLight: ['#FFFFFF', '#FFF3E0', '#FFE0B2'], gradientDark: ['#2D2416', '#3D2E1A', '#4A3822'] },
-  { icon: 'shield-check', titleKey: 'banner_verified_technicians_title', descKey: 'banner_verified_technicians_desc', gradientLight: ['#FFFFFF', '#F3E5F5', '#E1BEE7'], gradientDark: ['#2A1B2E', '#3D2A42', '#2E1F33'] },
-  { icon: 'robot', titleKey: 'banner_ai_assistant_title', descKey: 'banner_ai_assistant_desc', gradientLight: ['#FFFFFF', '#E0F7FA', '#B2EBF2'], gradientDark: ['#0D2137', '#143250', '#1A4060'] },
+// 5 feature banners matching iOS AdvertisementComponent (PNG images)
+const BANNER_IMAGES = [
+  require('../../../assets/banner1.png'),
+  require('../../../assets/banner2.png'),
+  require('../../../assets/banner3.png'),
+  require('../../../assets/banner4.png'),
+  require('../../../assets/banner5.png'),
 ];
 
 type ProjectStatus =
@@ -139,6 +137,11 @@ interface TechnicalHomeScreenProps {
   onPressSchedule?: () => void;
   onPressAnalytics?: () => void;
   onPressSupport?: () => void;
+  onPressMyContracts?: () => void;
+  onPressContract?: (contractId: number) => void;
+  onPressSupportTickets?: () => void;
+  onPressSupportTicket?: (ticketId: number) => void;
+  onPressCreateSupportTicket?: () => void;
   copilotStepsActive?: boolean;
 }
 
@@ -153,6 +156,11 @@ export default function TechnicalHomeScreen({
   onPressSchedule,
   onPressAnalytics,
   onPressSupport,
+  onPressMyContracts,
+  onPressContract,
+  onPressSupportTickets,
+  onPressSupportTicket,
+  onPressCreateSupportTicket,
   onPressChat,
   onPressNotifications,
   onPressInfo,
@@ -171,6 +179,12 @@ export default function TechnicalHomeScreen({
   const [smallTasks, setSmallTasks] = useState<SmallTaskRequest[]>([]);
   const [loadingProjects, setLoadingProjects] = useState(true);
   const [loadingTasks, setLoadingTasks] = useState(true);
+  // Contracts & support
+  interface HomeContract { id: number; projectId?: number; type?: string; status?: string; otherPartyName?: string; description?: string; signedDocumentUrl?: string | null; createdAt?: string; amount?: number; budget?: number; startDate?: string; projectTitle?: string; }
+  const [contracts, setContracts] = useState<HomeContract[]>([]);
+  const [loadingContracts, setLoadingContracts] = useState(true);
+  const [supportTickets, setSupportTickets] = useState<SupportTicket[]>([]);
+  const [loadingTickets, setLoadingTickets] = useState(true);
   const [bannerIndex, setBannerIndex] = useState(0);
   const bannerScrollRef = useRef<ScrollView>(null);
   const mainScrollRef = useRef<ScrollView>(null);
@@ -232,10 +246,34 @@ export default function TechnicalHomeScreen({
     }
   }, []);
 
+  const loadContracts = useCallback(async () => {
+    try {
+      const token = await storage.getAuthToken();
+      if (!token) { setContracts([]); return; }
+      const url = buildApiUrl(API_ENDPOINTS.CONTRACTS.TECHNICIAN_MY);
+      const res = await fetch(url, { method: 'GET', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
+      if (!res.ok) { setContracts([]); return; }
+      const data = await res.json();
+      const list = Array.isArray(data) ? data : (data?.contracts ?? data?.data ?? []);
+      setContracts(Array.isArray(list) ? list.slice(0, 6) : []);
+    } catch { setContracts([]); }
+    finally { setLoadingContracts(false); }
+  }, []);
+
+  const loadSupportTickets = useCallback(async () => {
+    try {
+      const tickets = await getMyTickets('OPEN');
+      setSupportTickets(tickets.slice(0, 3));
+    } catch { setSupportTickets([]); }
+    finally { setLoadingTickets(false); }
+  }, []);
+
   useEffect(() => {
     loadProjects();
     loadSmallTasks();
-  }, [loadProjects, loadSmallTasks]);
+    loadContracts();
+    loadSupportTickets();
+  }, [loadProjects, loadSmallTasks, loadContracts, loadSupportTickets]);
 
   const formatBudget = (budget: number | null | undefined, budgetUnspecified?: boolean) => {
     if (budgetUnspecified || budget == null) return t('Flexible');
@@ -256,16 +294,16 @@ export default function TechnicalHomeScreen({
 
   const onBannerScroll = (e: { nativeEvent: { contentOffset: { x: number }; layoutMeasurement: { width: number } } }) => {
     const x = e.nativeEvent.contentOffset.x;
-    const w = e.nativeEvent.layoutMeasurement.width || BANNER_PAGE_WIDTH;
+    const w = e.nativeEvent.layoutMeasurement.width || SCREEN_WIDTH;
     const index = Math.round(x / w);
-    if (index >= 0 && index < BANNERS.length) setBannerIndex(index);
+    if (index >= 0 && index < BANNER_IMAGES.length) setBannerIndex(index);
   };
 
   useEffect(() => {
     const timer = setInterval(() => {
       setBannerIndex((prev) => {
-        const next = (prev + 1) % BANNERS.length;
-        bannerScrollRef.current?.scrollTo({ x: next * BANNER_PAGE_WIDTH, animated: true });
+        const next = (prev + 1) % BANNER_IMAGES.length;
+        bannerScrollRef.current?.scrollTo({ x: next * SCREEN_WIDTH, animated: true });
         return next;
       });
     }, 4000);
@@ -356,8 +394,7 @@ export default function TechnicalHomeScreen({
         {/* Main content — same horizontal padding as iOS */}
         <View style={styles.content}>
       {/* Section 1: Horizontal banner carousel (5 cards, swipe left/right — matches iOS AdvertisementComponent) */}
-      <StaggeredAppearView index={0}>
-        <View style={[styles.section, { marginBottom: SECTION_GAP }]}>
+      <StaggeredAppearView index={0} style={{ marginBottom: SECTION_GAP, marginHorizontal: -H_PADDING }}>
           <ScrollView
             ref={bannerScrollRef}
             horizontal
@@ -366,39 +403,19 @@ export default function TechnicalHomeScreen({
             onMomentumScrollEnd={onBannerScroll}
             onScroll={onBannerScroll}
             scrollEventThrottle={32}
-            style={styles.bannerScroll}
             contentContainerStyle={styles.bannerScrollContent}
             decelerationRate="fast"
           >
-            {BANNERS.map((banner, index) => (
-              <View key={index} style={[styles.bannerPage, { width: BANNER_PAGE_WIDTH }]}>
-                <TouchableOpacity activeOpacity={0.95} style={styles.bannerTouchable}>
-                  <LinearGradient
-                    colors={isDarkMode ? [...banner.gradientDark] : [...banner.gradientLight]}
-                    style={styles.bannerCard}
-                  >
-                    <View style={styles.bannerContent}>
-                      <View style={styles.bannerIconWrap}>
-                        <View style={[styles.bannerIconGradient, { backgroundColor: isDarkMode ? 'rgba(0,165,244,0.25)' : 'rgba(0,165,244,0.15)' }]}>
-                          <MaterialCommunityIcons name={banner.icon as any} size={26} color={IOS_PRIMARY} />
-                        </View>
-                      </View>
-                      <View style={styles.bannerTextWrap}>
-                        <Text style={[styles.bannerTitle, fontStyle, isDarkMode && { color: COLORS.bannerTitleDark }]} numberOfLines={1}>
-                          {t(banner.titleKey)}
-                        </Text>
-                        <Text style={[styles.bannerSubtitle, fontStyle, isDarkMode && { color: COLORS.bannerSubtitleDark }]} numberOfLines={2}>
-                          {t(banner.descKey)}
-                        </Text>
-                      </View>
-                    </View>
-                  </LinearGradient>
-                </TouchableOpacity>
+            {BANNER_IMAGES.map((img, index) => (
+              <View key={index} style={[styles.bannerPage, { width: SCREEN_WIDTH }]}>
+                <View style={[styles.bannerCard, { backgroundColor: isDarkMode ? '#1A1A2E' : '#FFFFFF' }]}>
+                  <Image source={img} style={styles.bannerImage} resizeMode="stretch" />
+                </View>
               </View>
             ))}
           </ScrollView>
           <View style={styles.paginationDots}>
-            {BANNERS.map((_, i) => (
+            {BANNER_IMAGES.map((_, i) => (
               <View
                 key={i}
                 style={[
@@ -410,7 +427,6 @@ export default function TechnicalHomeScreen({
               />
             ))}
           </View>
-        </View>
       </StaggeredAppearView>
 
       {/* Section 2: Title "Available Opportunities" */}
@@ -428,7 +444,12 @@ export default function TechnicalHomeScreen({
 
       {/* Section 2: Available Projects */}
       <StaggeredAppearView index={2}>
-      <View style={styles.section}>
+      <FlowingBorderCard
+        accent="#00A5F4"
+        cornerRadius={20}
+        cardBackground={isDarkMode ? themeColors.cardBackground : COLORS.background}
+      >
+      <View style={[styles.section, { paddingVertical: 8 }]}>
         <View style={styles.sectionHeader}>
           <View style={styles.sectionTitleRow}>
             <View style={[styles.sectionIcon, { backgroundColor: 'rgba(37, 99, 235, 0.12)' }]}>
@@ -453,59 +474,63 @@ export default function TechnicalHomeScreen({
           <View style={styles.cardsRow}>
             <ActivityIndicator size="small" color={isDarkMode ? themeColors.primary : COLORS.blue} />
           </View>
+        ) : projectCards.length === 0 ? (
+          <Text style={[styles.emptyText, { color: isDarkMode ? themeColors.textSecondary : COLORS.gray }, fontStyle]}>
+            {t('No projects found')}
+          </Text>
         ) : (
-          <View style={styles.cardsRow}>
-            {projectCards.length === 0 ? (
-              <Text style={[styles.emptyText, { color: isDarkMode ? themeColors.textSecondary : COLORS.gray }, fontStyle]}>
-                {t('No projects found')}
-              </Text>
-            ) : (
-              projectCards.map((project) => (
-                <PressableScaleView key={project.id} style={styles.cardWrapper} onPress={() => onPressProject?.(project)}>
-                  <LinearGradient
-                    colors={isDarkMode ? [...COLORS.projectCardGradientDark] : COLORS.projectCardGradient}
-                    style={[styles.projectCard, isDarkMode && styles.cardBorderDark]}
-                  >
-                    <View style={[styles.cardBorder, { borderColor: isDarkMode ? themeColors.border : COLORS.blueBorder }]} />
-                    <View style={styles.cardInner}>
-                      <View style={styles.cardTopRow}>
-                        <Text style={[styles.projectNumber, { color: isDarkMode ? themeColors.text : COLORS.sectionTitle }, fontStyle]}>
-                          #{project.id}
-                        </Text>
-                        <View style={[styles.orangePill, isDarkMode && { backgroundColor: 'rgba(234, 88, 12, 0.25)' }]}>
-                          <Text style={[styles.orangePillText, fontStyle, isDarkMode && { color: '#F97316' }]}>{t('Bidding')} 🟠</Text>
-                        </View>
-                      </View>
-                      <View style={styles.budgetRow}>
-                        <View style={[styles.greenCircle, isDarkMode && { backgroundColor: 'rgba(34, 197, 94, 0.25)' }]}>
-                          <RialIcon size={14} variant={isDarkMode ? 'light' : 'dark'} />
-                        </View>
-                        <Text style={[styles.budgetText, boldFontStyle, isDarkMode && { color: '#4ADE80' }]}>{formatBudget(project.budget, project.budgetUnspecified)}</Text>
-                      </View>
-                      <Text style={[styles.username, { color: isDarkMode ? themeColors.textSecondary : COLORS.gray }, fontStyle]} numberOfLines={1}>
-                        {getProjectUsername(project)}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
+            {projectCards.map((project) => (
+              <PressableScaleView key={project.id} style={styles.cardWrapper} onPress={() => onPressProject?.(project)}>
+                <LinearGradient
+                  colors={isDarkMode ? [...COLORS.projectCardGradientDark] : COLORS.projectCardGradient}
+                  style={[styles.projectCard, isDarkMode && styles.cardBorderDark]}
+                >
+                  <View style={[styles.cardBorder, { borderColor: isDarkMode ? themeColors.border : COLORS.blueBorder }]} />
+                  <View style={styles.cardInner}>
+                    <View style={styles.cardTopRow}>
+                      <Text style={[styles.projectNumber, { color: isDarkMode ? themeColors.text : COLORS.sectionTitle }, fontStyle]}>
+                        #{project.id}
                       </Text>
-                      <View style={styles.locationRow}>
-                        <Ionicons name="information-circle" size={14} color={isDarkMode ? themeColors.primary : COLORS.blue} />
-                        <Text style={[styles.locationText, { color: isDarkMode ? themeColors.textSecondary : COLORS.gray }, fontStyle]} numberOfLines={1}>
-                          {project.address || '—'}
-                        </Text>
+                      <View style={[styles.orangePill, isDarkMode && { backgroundColor: 'rgba(234, 88, 12, 0.25)' }]}>
+                        <Text style={[styles.orangePillText, fontStyle, isDarkMode && { color: '#F97316' }]}>{t('Bidding')} 🟠</Text>
                       </View>
                     </View>
-                  </LinearGradient>
-                </PressableScaleView>
-              ))
-            )}
-          </View>
+                    <View style={styles.budgetRow}>
+                      <View style={[styles.greenCircle, isDarkMode && { backgroundColor: 'rgba(34, 197, 94, 0.25)' }]}>
+                        <RialIcon size={14} variant={isDarkMode ? 'light' : 'dark'} />
+                      </View>
+                      <Text style={[styles.budgetText, boldFontStyle, isDarkMode && { color: '#4ADE80' }]}>{formatBudget(project.budget, project.budgetUnspecified)}</Text>
+                    </View>
+                    <Text style={[styles.username, { color: isDarkMode ? themeColors.textSecondary : COLORS.gray }, fontStyle]} numberOfLines={1}>
+                      {getProjectUsername(project)}
+                    </Text>
+                    <View style={styles.locationRow}>
+                      <Ionicons name="information-circle" size={14} color={isDarkMode ? themeColors.primary : COLORS.blue} />
+                      <Text style={[styles.locationText, { color: isDarkMode ? themeColors.textSecondary : COLORS.gray }, fontStyle]} numberOfLines={1}>
+                        {project.address || '—'}
+                      </Text>
+                    </View>
+                  </View>
+                </LinearGradient>
+              </PressableScaleView>
+            ))}
+          </ScrollView>
         )}
       </View>
+      </FlowingBorderCard>
       </StaggeredAppearView>
 
       {/* Section 3: Small Tasks */}
       <CopilotStep text={t('tutorial.home.technician.smallTasksSection')} order={2} name="techHomeSmallTasks" active={copilotStepsActive}>
         <WalkableView collapsable={false} style={styles.copilotSectionWrap}>
       <StaggeredAppearView index={3}>
-      <View style={styles.section}>
+      <FlowingBorderCard
+        accent="#FF9500"
+        cornerRadius={20}
+        cardBackground={isDarkMode ? themeColors.cardBackground : COLORS.background}
+      >
+      <View style={[styles.section, { paddingVertical: 8 }]}>
         <View style={styles.sectionHeader}>
           <View style={styles.sectionTitleRow}>
             <View style={[styles.sectionIcon, { backgroundColor: 'rgba(251, 191, 36, 0.25)' }]}>
@@ -530,65 +555,70 @@ export default function TechnicalHomeScreen({
           <View style={styles.cardsRow}>
             <ActivityIndicator size="small" color={isDarkMode ? themeColors.warning : COLORS.orange} />
           </View>
+        ) : taskCards.length === 0 ? (
+          <Text style={[styles.emptyText, { color: isDarkMode ? themeColors.textSecondary : COLORS.gray }, fontStyle]}>
+            {t('No available small tasks at the moment.')}
+          </Text>
         ) : (
-          <View style={styles.cardsRow}>
-            {taskCards.length === 0 ? (
-              <Text style={[styles.emptyText, { color: isDarkMode ? themeColors.textSecondary : COLORS.gray }, fontStyle]}>
-                {t('No available small tasks at the moment.')}
-              </Text>
-            ) : (
-              taskCards.map((task) => (
-                <PressableScaleView key={task.id} style={styles.cardWrapper} onPress={() => onPressSmallTask?.(task)}>
-                  <LinearGradient
-                    colors={isDarkMode ? [...COLORS.smallTaskCardGradientDark] : COLORS.smallTaskCardGradient}
-                    style={[styles.smallTaskCard, isDarkMode && styles.cardBorderDark]}
-                  >
-                    <View style={[styles.cardBorder, { borderColor: isDarkMode ? themeColors.border : COLORS.yellowBorder }]} />
-                    <View style={styles.cardInner}>
-                      <View style={styles.cardTopRow}>
-                        <View style={styles.peopleCountRow}>
-                          <Ionicons name="people-outline" size={14} color={isDarkMode ? themeColors.textSecondary : COLORS.gray} />
-                          <Text style={[styles.peopleCount, { color: isDarkMode ? themeColors.textSecondary : COLORS.gray }, fontStyle]}>
-                            {task.bidsCount ?? task.bidCount ?? 0}
-                          </Text>
-                        </View>
-                        <View style={[styles.orangePill, isDarkMode && { backgroundColor: 'rgba(234, 88, 12, 0.25)' }]}>
-                          <Text style={[styles.orangePillText, fontStyle, isDarkMode && { color: '#F97316' }]}>⚡ {t('Quick task')}</Text>
-                        </View>
-                      </View>
-                      <Text style={[styles.taskTitle, { color: isDarkMode ? themeColors.text : COLORS.sectionTitle }, boldFontStyle]} numberOfLines={2}>
-                        {getTaskTypeName(task) || task.description || '—'}
-                      </Text>
-                      <View style={styles.budgetRow}>
-                        <View style={[styles.greenCircle, isDarkMode && { backgroundColor: 'rgba(34, 197, 94, 0.25)' }]}>
-                          <RialIcon size={14} variant={isDarkMode ? 'light' : 'dark'} />
-                        </View>
-                        <Text style={[styles.budgetTextSmallTask, fontStyle, isDarkMode && { color: themeColors.textSecondary }]}>{t('Flexible')}</Text>
-                      </View>
-                      <Text style={[styles.username, { color: isDarkMode ? themeColors.textSecondary : COLORS.gray }, fontStyle]} numberOfLines={1}>
-                        {task.userName ?? '—'}
-                      </Text>
-                      <View style={styles.locationRow}>
-                        <Ionicons name="warning" size={14} color={isDarkMode ? '#F97316' : COLORS.orange} />
-                        <Text style={[styles.locationText, { color: isDarkMode ? themeColors.textSecondary : COLORS.gray }, fontStyle]} numberOfLines={1}>
-                          {task.address || '—'}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
+            {taskCards.map((task) => (
+              <PressableScaleView key={task.id} style={styles.cardWrapper} onPress={() => onPressSmallTask?.(task)}>
+                <LinearGradient
+                  colors={isDarkMode ? [...COLORS.smallTaskCardGradientDark] : COLORS.smallTaskCardGradient}
+                  style={[styles.smallTaskCard, isDarkMode && styles.cardBorderDark]}
+                >
+                  <View style={[styles.cardBorder, { borderColor: isDarkMode ? themeColors.border : COLORS.yellowBorder }]} />
+                  <View style={styles.cardInner}>
+                    <View style={styles.cardTopRow}>
+                      <View style={styles.peopleCountRow}>
+                        <Ionicons name="people-outline" size={14} color={isDarkMode ? themeColors.textSecondary : COLORS.gray} />
+                        <Text style={[styles.peopleCount, { color: isDarkMode ? themeColors.textSecondary : COLORS.gray }, fontStyle]}>
+                          {task.bidsCount ?? task.bidCount ?? 0}
                         </Text>
                       </View>
+                      <View style={[styles.orangePill, isDarkMode && { backgroundColor: 'rgba(234, 88, 12, 0.25)' }]}>
+                        <Text style={[styles.orangePillText, fontStyle, isDarkMode && { color: '#F97316' }]}>⚡ {t('Quick task')}</Text>
+                      </View>
                     </View>
-                  </LinearGradient>
-                </PressableScaleView>
-              ))
-            )}
-          </View>
+                    <Text style={[styles.taskTitle, { color: isDarkMode ? themeColors.text : COLORS.sectionTitle }, boldFontStyle]} numberOfLines={2}>
+                      {getTaskTypeName(task) || task.description || '—'}
+                    </Text>
+                    <View style={styles.budgetRow}>
+                      <View style={[styles.greenCircle, isDarkMode && { backgroundColor: 'rgba(34, 197, 94, 0.25)' }]}>
+                        <RialIcon size={14} variant={isDarkMode ? 'light' : 'dark'} />
+                      </View>
+                      <Text style={[styles.budgetTextSmallTask, fontStyle, isDarkMode && { color: themeColors.textSecondary }]}>{t('Flexible')}</Text>
+                    </View>
+                    <Text style={[styles.username, { color: isDarkMode ? themeColors.textSecondary : COLORS.gray }, fontStyle]} numberOfLines={1}>
+                      {task.userName ?? '—'}
+                    </Text>
+                    <View style={styles.locationRow}>
+                      <Ionicons name="warning" size={14} color={isDarkMode ? '#F97316' : COLORS.orange} />
+                      <Text style={[styles.locationText, { color: isDarkMode ? themeColors.textSecondary : COLORS.gray }, fontStyle]} numberOfLines={1}>
+                        {task.address || '—'}
+                      </Text>
+                    </View>
+                  </View>
+                </LinearGradient>
+              </PressableScaleView>
+            ))}
+          </ScrollView>
         )}
       </View>
+      </FlowingBorderCard>
       </StaggeredAppearView>
         </WalkableView>
       </CopilotStep>
 
       {/* Section 5: Quick Action Cards */}
       <StaggeredAppearView index={4}>
-      <View style={[styles.section, { marginBottom: SECTION_GAP }]}>
+      <FlowingBorderCard
+        accent="#007AFF"
+        cornerRadius={18}
+        cardBackground={isDarkMode ? themeColors.cardBackground : COLORS.background}
+        style={{ marginBottom: SECTION_GAP }}
+      >
+      <View style={[styles.section, { paddingVertical: 8 }]}>
         <View style={styles.quickActionsRow}>
           <CopilotStep text={t('tutorial.home.technician.portfolioSection')} order={1} name="techHomePortfolio" active={copilotStepsActive}>
             <WalkableView collapsable={false} style={{ flex: 1, minWidth: 0 }}>
@@ -620,7 +650,156 @@ export default function TechnicalHomeScreen({
           </PressableScaleView>
         </View>
       </View>
+      </FlowingBorderCard>
       </StaggeredAppearView>
+
+      {/* Section 6: My Contracts */}
+      <FlowingBorderCard
+        accent="#5856D6"
+        cornerRadius={20}
+        cardBackground={isDarkMode ? themeColors.cardBackground : COLORS.background}
+        style={{ marginBottom: SECTION_GAP }}
+      >
+        <View style={[styles.section, { paddingVertical: 8 }]}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionTitleRow}>
+              <View style={[styles.sectionIcon, { backgroundColor: 'rgba(88,86,214,0.12)' }]}>
+                <Ionicons name="document-text" size={18} color="#5856D6" />
+              </View>
+              <Text style={[styles.sectionHeading, { color: isDarkMode ? themeColors.text : COLORS.sectionTitle }, boldFontStyle]}>
+                {t('My Contracts')}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.viewAllBtn, { backgroundColor: isDarkMode ? themeColors.cardBackground : 'rgba(88,86,214,0.1)', borderWidth: isDarkMode ? 1 : 0, borderColor: isDarkMode ? themeColors.border : 'transparent' }]}
+              onPress={() => onPressMyContracts?.()}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.viewAllText, { color: isDarkMode ? themeColors.text : '#5856D6' }, fontStyle]}>{t('View All')} ←</Text>
+            </TouchableOpacity>
+          </View>
+          {loadingContracts ? (
+            <View style={styles.cardsRow}><ActivityIndicator size="small" color="#5856D6" /></View>
+          ) : contracts.length === 0 ? (
+            <Text style={[styles.emptyText, { color: isDarkMode ? themeColors.textSecondary : COLORS.gray }, fontStyle]}>{t('No contracts yet')}</Text>
+          ) : (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
+              {contracts.slice(0, 2).map((c) => {
+                const contractAmount = c.amount ?? c.budget;
+                const formattedAmount = contractAmount
+                  ? new Intl.NumberFormat(isArabic ? 'ar-SA' : 'en-SA', { maximumFractionDigits: 0 }).format(contractAmount)
+                  : null;
+                const dateStr = c.createdAt
+                  ? new Date(c.createdAt).toLocaleDateString(isArabic ? 'ar-SA' : 'en-US', { month: 'short', day: 'numeric' })
+                  : null;
+                return (
+                  <PressableScaleView key={c.id} style={styles.cardWrapper} onPress={() => onPressContract?.(c.id)}>
+                    <LinearGradient
+                      colors={isDarkMode ? ['#1E1B3A', '#2D2A4E'] : ['#F0EEFF', '#E8E5FF']}
+                      style={[styles.projectCard, isDarkMode && styles.cardBorderDark]}
+                    >
+                      <View style={[styles.cardBorder, { borderColor: isDarkMode ? themeColors.border : '#C5C0FF' }]} />
+                      <View style={styles.cardInner}>
+                        <View style={styles.cardTopRow}>
+                          <Text style={[styles.projectNumber, { color: isDarkMode ? themeColors.text : COLORS.sectionTitle }, fontStyle]}>#{c.id}</Text>
+                          {c.signedDocumentUrl ? (
+                            <View style={[styles.orangePill, { backgroundColor: 'rgba(52,199,89,0.15)' }]}>
+                              <Text style={[styles.orangePillText, fontStyle, { color: '#34C759' }]}>{t('Signed')}</Text>
+                            </View>
+                          ) : (
+                            <View style={[styles.orangePill, { backgroundColor: 'rgba(255,149,0,0.15)' }]}>
+                              <Text style={[styles.orangePillText, fontStyle, { color: '#FF9500' }]}>{t(c.status || 'Pending')}</Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text style={[styles.username, { color: isDarkMode ? themeColors.textSecondary : COLORS.gray }, fontStyle]} numberOfLines={2}>
+                          {c.projectTitle || c.description || c.otherPartyName || t('Contract')}
+                        </Text>
+                        {formattedAmount ? (
+                          <Text style={[styles.budgetText, { color: '#5856D6', fontWeight: '700' }, fontStyle]}>{formattedAmount} {t('SAR')}</Text>
+                        ) : (
+                          <Text style={[styles.budgetText, { color: '#5856D6' }, fontStyle]}>{c.status ?? c.type ?? '—'}</Text>
+                        )}
+                        {dateStr && (
+                          <Text style={[{ color: isDarkMode ? themeColors.textTertiary : COLORS.gray, fontSize: 11, marginTop: 2 }, fontStyle]}>{dateStr}</Text>
+                        )}
+                      </View>
+                    </LinearGradient>
+                  </PressableScaleView>
+                );
+              })}
+            </ScrollView>
+          )}
+        </View>
+      </FlowingBorderCard>
+
+      {/* Section 7: Support */}
+      <FlowingBorderCard
+        accent="#34C759"
+        cornerRadius={20}
+        cardBackground={isDarkMode ? themeColors.cardBackground : COLORS.background}
+        style={{ marginBottom: SECTION_GAP }}
+      >
+        <View style={[styles.section, { paddingVertical: 8 }]}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionTitleRow}>
+              <View style={[styles.sectionIcon, { backgroundColor: 'rgba(52,199,89,0.12)' }]}>
+                <Ionicons name="chatbubble-ellipses" size={18} color="#34C759" />
+              </View>
+              <Text style={[styles.sectionHeading, { color: isDarkMode ? themeColors.text : COLORS.sectionTitle }, boldFontStyle]}>
+                {t('Support')}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.viewAllBtn, { backgroundColor: isDarkMode ? themeColors.cardBackground : 'rgba(52,199,89,0.1)', borderWidth: isDarkMode ? 1 : 0, borderColor: isDarkMode ? themeColors.border : 'transparent' }]}
+              onPress={() => onPressSupportTickets?.()}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.viewAllText, { color: isDarkMode ? themeColors.text : '#34C759' }, fontStyle]}>{t('View All')} ←</Text>
+            </TouchableOpacity>
+          </View>
+          {loadingTickets ? (
+            <View style={styles.cardsRow}><ActivityIndicator size="small" color="#34C759" /></View>
+          ) : supportTickets.length === 0 ? (
+            <TouchableOpacity
+              style={{ flexDirection: 'row', alignItems: 'center', padding: 12, gap: 12 }}
+              onPress={onPressCreateSupportTicket}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.sectionIcon, { backgroundColor: 'rgba(52,199,89,0.15)' }]}>
+                <Ionicons name="chatbubble-ellipses" size={18} color="#34C759" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[{ fontSize: 14, fontWeight: '600' }, { color: isDarkMode ? themeColors.text : COLORS.sectionTitle }, boldFontStyle]}>{t('Open Support Ticket')}</Text>
+                <Text style={[{ fontSize: 12, marginTop: 2 }, { color: isDarkMode ? themeColors.textSecondary : COLORS.gray }, fontStyle]}>{t('Get help from our team')}</Text>
+              </View>
+              <Ionicons name={isArabic ? 'chevron-back' : 'chevron-forward'} size={18} color={isDarkMode ? themeColors.textSecondary : COLORS.gray} />
+            </TouchableOpacity>
+          ) : (
+            <View style={{ paddingHorizontal: 8 }}>
+              {supportTickets.map((ticket, idx) => {
+                const statusColor = ticket.status === 'OPEN' || ticket.status === 'PENDING' ? '#FF9500' : ticket.status === 'IN_PROGRESS' ? '#007AFF' : '#8E8E93';
+                return (
+                  <TouchableOpacity
+                    key={ticket.id}
+                    style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, gap: 10, borderTopWidth: idx > 0 ? StyleSheet.hairlineWidth : 0, borderTopColor: isDarkMode ? themeColors.border : COLORS.dotInactive }}
+                    onPress={() => onPressSupportTicket?.(ticket.id)}
+                    activeOpacity={0.8}
+                  >
+                    <View style={[styles.sectionIcon, { backgroundColor: `${statusColor}20` }]}>
+                      <Ionicons name="ticket" size={16} color={statusColor} />
+                    </View>
+                    <Text style={[{ flex: 1, fontSize: 13, fontWeight: '600' }, { color: isDarkMode ? themeColors.text : COLORS.sectionTitle }, boldFontStyle]} numberOfLines={1}>{ticket.subject}</Text>
+                    <View style={{ backgroundColor: `${statusColor}20`, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8 }}>
+                      <Text style={[{ fontSize: 10, fontWeight: '700', color: statusColor }, fontStyle]}>{ticket.status}</Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+        </View>
+      </FlowingBorderCard>
 
         </View>
       </ScrollView>
@@ -679,74 +858,26 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   // Banner carousel
-  bannerScroll: {
-    width: BANNER_PAGE_WIDTH,
-    alignSelf: 'center',
-  },
   bannerScrollContent: {
     flexDirection: 'row',
   },
   bannerPage: {
-    paddingHorizontal: 0,
-  },
-  bannerTouchable: {
-    borderRadius: 20,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#16A34A',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.12,
-        shadowRadius: 8,
-      },
-      android: { elevation: 4 },
-    }),
+    paddingHorizontal: H_PADDING,
+    justifyContent: 'center',
   },
   bannerCard: {
-    borderRadius: 20,
-    padding: 20,
+    borderRadius: 16,
     overflow: 'hidden',
-  },
-  bannerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  bannerIconWrap: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(0,165,244,0.15)',
     ...Platform.select({
-      ios: {
-        shadowColor: '#16A34A',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.3,
-        shadowRadius: 6,
-      },
-      android: { elevation: 4 },
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8 },
+      android: { elevation: 3 },
     }),
   },
-  bannerIconGradient: {
+  bannerImage: {
     width: '100%',
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bannerTextWrap: {
-    flex: 1,
-    minWidth: 0,
-    justifyContent: 'center',
-  },
-  bannerTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: COLORS.bannerTitle,
-    marginBottom: 4,
-  },
-  bannerSubtitle: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: COLORS.bannerSubtitle,
+    height: 160,
   },
   paginationDots: {
     flexDirection: 'row',
@@ -844,6 +975,10 @@ const styles = StyleSheet.create({
   cardsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    gap: CARD_GAP,
+  },
+  hScroll: {
+    paddingRight: 8,
     gap: CARD_GAP,
   },
   cardWrapper: {

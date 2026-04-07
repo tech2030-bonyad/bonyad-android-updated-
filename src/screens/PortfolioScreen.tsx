@@ -561,6 +561,7 @@ export default function PortfolioScreen({
           }}
           boldFontFamily={boldFontFamily || undefined}
           fontFamily={fontFamily || undefined}
+          avatarUrl={userProfile?.avatar || userProfile?.profileImage}
           onEditProfile={handleEditProfilePress}
           onShare={handleShare}
           onMenu={handleHeaderMenu}

@@ -191,32 +191,16 @@ function TabItem({
 }) {
   const scale = useRef(new Animated.Value(1)).current;
   const iconScale = useRef(new Animated.Value(isSelected ? 1 : 0.92)).current;
-  const labelOpacity = useRef(new Animated.Value(isSelected ? 1 : 0)).current;
-  const labelTranslate = useRef(new Animated.Value(isSelected ? 0 : 6)).current;
   const rippleScale = useRef(new Animated.Value(0)).current;
   const rippleOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.spring(iconScale, {
-        toValue: isSelected ? 1 : 0.92,
-        tension: 350,
-        friction: 12,
-        useNativeDriver: true,
-      }),
-      Animated.timing(labelOpacity, {
-        toValue: isSelected ? 1 : 0,
-        duration: isSelected ? 250 : 150,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.spring(labelTranslate, {
-        toValue: isSelected ? 0 : 6,
-        tension: 340,
-        friction: 14,
-        useNativeDriver: true,
-      }),
-    ]).start();
+    Animated.spring(iconScale, {
+      toValue: isSelected ? 1 : 0.92,
+      tension: 350,
+      friction: 12,
+      useNativeDriver: true,
+    }).start();
   }, [isSelected]);
 
   const fireRipple = () => {
@@ -279,9 +263,8 @@ function TabItem({
           style={[
             styles.label,
             {
-              color: primaryColor,
-              opacity: labelOpacity,
-              transform: [{ translateY: labelTranslate }],
+              color: isSelected ? primaryColor : inactiveColor,
+              fontWeight: isSelected ? '700' : '400',
             },
           ]}
         >

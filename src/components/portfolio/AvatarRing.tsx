@@ -1,32 +1,20 @@
-import React, { useEffect, useId, useRef } from 'react';
-import { Animated, View, StyleSheet, Easing } from 'react-native';
+import React, { useId } from 'react';
+import { View, Image, StyleSheet } from 'react-native';
 import Svg, { Defs, LinearGradient, Stop, Circle } from 'react-native-svg';
 import { useTheme } from '../../context/ThemeContext';
 
-export const AvatarRing = ({ children }: { children: React.ReactNode }) => {
+interface AvatarRingProps {
+  children: React.ReactNode;
+  avatarUrl?: string | null;
+}
+
+export const AvatarRing = ({ children, avatarUrl }: AvatarRingProps) => {
   const { colors } = useTheme();
   const gradId = `ringGrad_${useId().replace(/[^a-zA-Z0-9_]/g, '_')}`;
-  const rotation = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.loop(
-      Animated.timing(rotation, {
-        toValue: 1,
-        duration: 3000,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      }),
-    ).start();
-  }, [rotation]);
-
-  const rotate = rotation.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
 
   return (
     <View style={styles.container}>
-      <Animated.View style={[styles.ringWrapper, { transform: [{ rotate }] }]}>
+      <View style={styles.ringWrapper}>
         <Svg width={96} height={96} viewBox="0 0 96 96" style={StyleSheet.absoluteFillObject}>
           <Defs>
             <LinearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="100%">
@@ -39,9 +27,13 @@ export const AvatarRing = ({ children }: { children: React.ReactNode }) => {
           <Circle cx="48" cy="48" r="46" stroke={`url(#${gradId})`} strokeWidth="3" fill="none" />
         </Svg>
         <View style={[styles.innerAvatar, { backgroundColor: colors.primaryDark, borderColor: colors.background }]}>
-          {children}
+          {avatarUrl ? (
+            <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+          ) : (
+            children
+          )}
         </View>
-      </Animated.View>
+      </View>
     </View>
   );
 };
@@ -67,5 +59,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
+  },
+  avatarImage: {
+    width: 78,
+    height: 78,
+    borderRadius: 39,
   },
 });

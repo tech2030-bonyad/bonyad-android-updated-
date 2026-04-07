@@ -691,7 +691,7 @@ export default function TechnicianHomeScreen({
               setProjectsInitialProjectType('small');
               setActiveTab('projects');
             }}
-            onPressChatbot={onShowChatbot}
+            onPressChatbot={onShowChatbot ?? (() => setActiveTab('chatbot'))}
             onPressPortfolio={() => {
               setPortfolioSource('home');
               setProfileSubView('portfolio');
@@ -1255,7 +1255,7 @@ export default function TechnicianHomeScreen({
               setProjectsInitialProjectType('small');
               setActiveTab('projects');
             }}
-            onPressChatbot={onShowChatbot}
+            onPressChatbot={onShowChatbot ?? (() => setActiveTab('chatbot'))}
             onPressPortfolio={() => {
               setPortfolioSource('home');
               setProfileSubView('portfolio');

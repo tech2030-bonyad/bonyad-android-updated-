@@ -16,6 +16,7 @@ type Props = {
   labels: { projects: string; rating: string; active: string };
   boldFontFamily?: string;
   fontFamily?: string;
+  avatarUrl?: string | null;
   onEditProfile: () => void;
   onShare: () => void;
   onMenu: () => void;
@@ -34,6 +35,7 @@ export function ProfileSection({
   labels,
   boldFontFamily,
   fontFamily,
+  avatarUrl,
   onEditProfile,
   onShare,
   onMenu,
@@ -60,7 +62,7 @@ export function ProfileSection({
   return (
     <>
       <View style={[styles.profileOuter, { flexDirection: 'row' }]}>
-        <AvatarRing>
+        <AvatarRing avatarUrl={avatarUrl}>
           <Text
             style={{
               fontSize: 32,
