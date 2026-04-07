@@ -2265,6 +2265,8 @@
   "Your National ID will be verified against the Commercial Registration via Wathq to confirm authorization.": "سيتم التحقق من هويتك الوطنية مقابل السجل التجاري عبر واثق لتأكيد التفويض.",
   "Account Type": "نوع الحساب",
   "Company Account": "حساب شركة",
+  "Verified by Wathq": "موثّق من واثق",
+  "Wathq": "واثق",
   "Individual Account": "حساب فردي",
   "Company": "شركة",
   "Individual": "فردي"

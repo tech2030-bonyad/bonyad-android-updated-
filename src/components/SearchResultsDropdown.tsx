@@ -26,6 +26,7 @@ import { HighlightedText } from './ui/HighlightedText';
 import { getServerBaseUrl } from '../config/api';
 import type { ScoredSearchResults, Region, TechnicianSearchResult, ServiceCategory } from '../utils/searchService';
 import type { ScoredMatch } from '../utils/smartSearch';
+import WathqBadge from './WathqBadge';
 
 const { width: SW, height: SH } = Dimensions.get('window');
 const H_PAD = 12;
@@ -167,12 +168,15 @@ function TechnicianRow({ scored, onPress, isRTL }: { scored: ScoredMatch<Technic
           </View>
       }
       <View style={{ flex: 1, marginHorizontal: 12 }}>
-        <HighlightedText
-          parts={scored.highlightParts}
-          style={[styles.rowTitle, { color: colors.text }]}
-          highlightStyle={{ backgroundColor: colors.primary + '28', borderRadius: 3 }}
-          numberOfLines={1}
-        />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+          <HighlightedText
+            parts={scored.highlightParts}
+            style={[styles.rowTitle, { color: colors.text, flexShrink: 1 }]}
+            highlightStyle={{ backgroundColor: colors.primary + '28', borderRadius: 3 }}
+            numberOfLines={1}
+          />
+          {tech.isCompany && <WathqBadge variant="inline" />}
+        </View>
         <View style={styles.techMeta}>
           <Ionicons name="star" size={11} color="#F59E0B" />
           <Text style={[styles.rowSub, { color: colors.textSecondary }]}>

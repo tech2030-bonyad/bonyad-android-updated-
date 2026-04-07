@@ -31,6 +31,9 @@ export interface TechnicianSearchResult {
   averageRating: number;
   totalReviews: number;
   profilePicture?: string;
+  isCompany?: boolean;
+  companyName?: string | null;
+  crNumber?: string | null;
   services?: { id: number; nameEn: string; nameAr?: string }[];
   regions?: { id: number; nameEn: string; nameAr?: string }[];
 }
@@ -157,6 +160,9 @@ function normalizeTechnician(t: any, searchQuery?: string): TechnicianSearchResu
     averageRating: Number(t?.averageRating ?? t?.rating ?? 0),
     totalReviews: Number(t?.totalReviews ?? t?.reviewsCount ?? 0),
     profilePicture: t?.profilePicture ?? t?.profileImage ?? t?.imageUrl,
+    isCompany: t?.isCompany ?? false,
+    companyName: t?.companyName ?? null,
+    crNumber: t?.crNumber ?? null,
     services: services.length ? services : undefined,
     regions: t?.regions ?? t?.zones,
   };
