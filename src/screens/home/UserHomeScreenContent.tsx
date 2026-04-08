@@ -43,6 +43,7 @@ import ScreenTourOverlay from '../../components/tour/ScreenTourOverlay';
 import type { CategoryInfo } from '../CategorySubcategoryScreen';
 import { coachMarksStorage } from '../../utils/coachMarks';
 import FlowingBorderCard from '../../components/FlowingBorderCard';
+import PulsingStatusDot from '../../components/PulsingStatusDot';
 import { getMyTickets } from '../../services/SupportTicketService';
 import type { SupportTicket } from '../../types/chat';
 
@@ -1203,13 +1204,13 @@ export default function UserHomeScreenContent({
                       <Text style={[styles.homeCardTitle, { color: colors.text }, boldStyle]} numberOfLines={1}>#{c.id}</Text>
                     </View>
                     {c.signedDocumentUrl ? (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
-                        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#34C759' }} />
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4 }}>
+                        <PulsingStatusDot color="#34C759" size={6} />
                         <Text style={[{ color: '#34C759', fontSize: 11, fontWeight: '600' }, fontStyle]}>{t('Signed')}</Text>
                       </View>
                     ) : (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
-                        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#FF9500' }} />
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4 }}>
+                        <PulsingStatusDot color="#FF9500" size={6} />
                         <Text style={[{ color: '#FF9500', fontSize: 11, fontWeight: '600' }, fontStyle]}>{t(c.status || 'Pending')}</Text>
                       </View>
                     )}

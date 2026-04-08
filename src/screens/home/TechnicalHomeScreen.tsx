@@ -28,6 +28,7 @@ import { getAppTopBarPaddingTop } from '../../utils/statusBarHelper';
 import { getAvailableRequests } from '../../services/SmallTaskService';
 import type { SmallTaskRequest } from '../../types/smallTasks';
 import FlowingBorderCard from '../../components/FlowingBorderCard';
+import PulsingStatusDot from '../../components/PulsingStatusDot';
 import { getMyTickets } from '../../services/SupportTicketService';
 import type { SupportTicket } from '../../types/chat';
 
@@ -493,7 +494,8 @@ export default function TechnicalHomeScreen({
                         #{project.id}
                       </Text>
                       <View style={[styles.orangePill, isDarkMode && { backgroundColor: 'rgba(234, 88, 12, 0.25)' }]}>
-                        <Text style={[styles.orangePillText, fontStyle, isDarkMode && { color: '#F97316' }]}>{t('Bidding')} 🟠</Text>
+                        <PulsingStatusDot color={isDarkMode ? '#F97316' : COLORS.orange} size={6} />
+                        <Text style={[styles.orangePillText, fontStyle, isDarkMode && { color: '#F97316' }]}>{t('Bidding')}</Text>
                       </View>
                     </View>
                     <View style={styles.budgetRow}>
@@ -577,7 +579,8 @@ export default function TechnicalHomeScreen({
                         </Text>
                       </View>
                       <View style={[styles.orangePill, isDarkMode && { backgroundColor: 'rgba(234, 88, 12, 0.25)' }]}>
-                        <Text style={[styles.orangePillText, fontStyle, isDarkMode && { color: '#F97316' }]}>⚡ {t('Quick task')}</Text>
+                        <PulsingStatusDot color={isDarkMode ? '#FBBF24' : COLORS.yellow} size={6} />
+                        <Text style={[styles.orangePillText, fontStyle, isDarkMode && { color: '#F97316' }]}>{t('Quick task')}</Text>
                       </View>
                     </View>
                     <Text style={[styles.taskTitle, { color: isDarkMode ? themeColors.text : COLORS.sectionTitle }, boldFontStyle]} numberOfLines={2}>
@@ -704,10 +707,12 @@ export default function TechnicalHomeScreen({
                           <Text style={[styles.projectNumber, { color: isDarkMode ? themeColors.text : COLORS.sectionTitle }, fontStyle]}>#{c.id}</Text>
                           {c.signedDocumentUrl ? (
                             <View style={[styles.orangePill, { backgroundColor: 'rgba(52,199,89,0.15)' }]}>
+                              <PulsingStatusDot color="#34C759" size={6} />
                               <Text style={[styles.orangePillText, fontStyle, { color: '#34C759' }]}>{t('Signed')}</Text>
                             </View>
                           ) : (
                             <View style={[styles.orangePill, { backgroundColor: 'rgba(255,149,0,0.15)' }]}>
+                              <PulsingStatusDot color="#FF9500" size={6} />
                               <Text style={[styles.orangePillText, fontStyle, { color: '#FF9500' }]}>{t(c.status || 'Pending')}</Text>
                             </View>
                           )}
@@ -1039,6 +1044,9 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   orangePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     backgroundColor: 'rgba(234, 88, 12, 0.15)',
     paddingHorizontal: 8,
     paddingVertical: 4,
