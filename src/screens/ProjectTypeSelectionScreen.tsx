@@ -15,8 +15,6 @@ import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import ScreenTourOverlay from '../components/tour/ScreenTourOverlay';
-import { useSimpleScreenTour } from '../hooks/useSimpleScreenTour';
 import { LinearGradient } from 'expo-linear-gradient';
 import ReAnimated, {
   useSharedValue,
@@ -109,8 +107,8 @@ interface ProjectTypeSelectionScreenProps {
   onSelectLarge: () => void;
   onSelectSmall: () => void;
   onBack?: () => void;
-  /** Wired from shells so Info can restart this screen’s tour (large vs small task cards). */
-  onExposeTourControl?: (c: { startTour: () => void } | null) => void;
+  /** Optional: allow parent (UserHomeScreen) to store a tour control handle. */
+  onExposeTourControl?: (control: { startTour: () => void } | null) => void;
 }
 
 export default function ProjectTypeSelectionScreen({
@@ -124,22 +122,6 @@ export default function ProjectTypeSelectionScreen({
   const { fontFamily, boldFontFamily } = useFontFamily();
   const insets = useSafeAreaInsets();
 
-  const typeTourSteps = useMemo(
-    () => [
-      ...(onBack ? [{ id: 'header', i18nSuffix: 'header' }] : []),
-      { id: 'large', i18nSuffix: 'large' },
-      { id: 'small', i18nSuffix: 'small' },
-    ],
-    [onBack],
-  );
-  const typeTour = useSimpleScreenTour(typeTourSteps, 'userProjectTypeSelection');
-
-  useEffect(() => {
-    if (!onExposeTourControl) return;
-    onExposeTourControl({ startTour: typeTour.startTour });
-    return () => onExposeTourControl(null);
-  }, [onExposeTourControl, typeTour.startTour]);
-
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(40)).current;
 
@@ -149,6 +131,12 @@ export default function ProjectTypeSelectionScreen({
       Animated.spring(slideAnim, { toValue: 0, tension: 55, friction: 8, useNativeDriver: true }),
     ]).start();
   }, []);
+
+  useEffect(() => {
+    // No dedicated project-type selection tour yet; expose a no-op control for compatibility.
+    onExposeTourControl?.({ startTour: () => {} });
+    return () => onExposeTourControl?.(null);
+  }, [onExposeTourControl]);
 
   const handleSelect = (callback: () => void) => {
     Animated.parallel([
@@ -162,7 +150,6 @@ export default function ProjectTypeSelectionScreen({
       {/* Header */}
       {onBack && (
         <View
-          ref={typeTour.register('header')}
           collapsable={false}
           style={[styles.header, { paddingTop: Math.max(insets.top, 20) }]}
         >
@@ -188,7 +175,7 @@ export default function ProjectTypeSelectionScreen({
         >
           {/* Cards */}
           <View style={styles.cardsContainer}>
-            <View ref={typeTour.register('large')} collapsable={false}>
+            <View collapsable={false}>
               <OptionCard
                 icon="business-outline"
                 title={t('Large Project')}
@@ -202,7 +189,7 @@ export default function ProjectTypeSelectionScreen({
               />
             </View>
 
-            <View ref={typeTour.register('small')} collapsable={false}>
+            <View collapsable={false}>
               <OptionCard
                 icon="construct-outline"
                 title={t('Small Task')}
@@ -219,32 +206,6 @@ export default function ProjectTypeSelectionScreen({
         </ScrollView>
       </Animated.View>
 
-      <ScreenTourOverlay
-        visible={typeTour.tourActive}
-        tourStep={typeTour.tourStep}
-        stepRect={typeTour.stepRect}
-        totalSteps={typeTourSteps.length}
-        stepOrder={typeTour.tourStep + 1}
-        stepText={
-          typeTourSteps[typeTour.tourStep]
-            ? t(`tutorial.projectType.${typeTourSteps[typeTour.tourStep].i18nSuffix}`)
-            : ''
-        }
-        isFirst={typeTour.tourStep === 0}
-        isLast={typeTour.tourStep === typeTourSteps.length - 1}
-        primaryColor={colors.primary}
-        textColor={colors.text}
-        secondaryTextColor={colors.textSecondary}
-        bgColor={colors.cardBackground}
-        isRTL={i18n.language === 'ar' || I18nManager.isRTL}
-        fontFamily={fontFamily}
-        boldFontFamily={boldFontFamily}
-        onNext={() => typeTour.setTourStep((s: number) => Math.min(s + 1, typeTourSteps.length - 1))}
-        onPrev={() => typeTour.setTourStep((s: number) => Math.max(s - 1, 0))}
-        onSkip={typeTour.endTour}
-        onFinish={typeTour.endTour}
-        t={t}
-      />
     </View>
   );
 }

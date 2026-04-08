@@ -25,8 +25,6 @@ import { notificationService } from '../services/NotificationService';
 import type { Notification } from '../services/NotificationService';
 import { normalizeNotificationFromApi } from '../utils/normalizeNotificationPayload';
 import AnimatedLoadingScreen from '../components/AnimatedLoadingScreen';
-import ScreenTourOverlay from '../components/tour/ScreenTourOverlay';
-import { useSimpleScreenTour } from '../hooks/useSimpleScreenTour';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const FILTER_ANIMATION_DURATION = 280;
@@ -107,7 +105,8 @@ interface NotificationsScreenProps {
   onNavigateToPhase?: (projectId: number, phaseId?: number) => void;
   onNavigateToBid?: (projectId: number, bidId: number) => void;
   onUnreadCountChange?: (count: number) => void;
-  onExposeTourControl?: (c: { startTour: () => void }) => void;
+  /** Optional: allow parent (UserHomeScreen) to store a tour control handle. */
+  onExposeTourControl?: (control: { startTour: () => void }) => void;
 }
 
 export default function NotificationsScreen({
@@ -124,18 +123,6 @@ export default function NotificationsScreen({
   const { scaledSize, fontFamily, boldFontFamily } = useFontFamily();
   const isDarkMode = theme === 'dark';
 
-  const notifTourSteps = useMemo(
-    () => [
-      { id: 'filters', i18nSuffix: 'filters' },
-      { id: 'list', i18nSuffix: 'list' },
-    ],
-    [],
-  );
-  const notifTour = useSimpleScreenTour(notifTourSteps, 'userNotificationsTab');
-
-  useEffect(() => {
-    onExposeTourControl?.({ startTour: notifTour.startTour });
-  }, [onExposeTourControl, notifTour.startTour]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -166,6 +153,11 @@ export default function NotificationsScreen({
   useEffect(() => {
     fetchNotifications();
   }, []);
+
+  useEffect(() => {
+    // No dedicated notifications tour yet; expose a no-op control for compatibility.
+    onExposeTourControl?.({ startTour: () => {} });
+  }, [onExposeTourControl]);
 
   useEffect(() => {
     Animated.timing(screenSlideAnim, {
@@ -358,8 +350,6 @@ export default function NotificationsScreen({
       </View>
 
       <View
-        ref={notifTour.register('filters')}
-        collapsable={false}
         style={[styles.filterTabs, { backgroundColor: colors.background, paddingBottom: 16, paddingHorizontal: 16, gap: 8 }]}
       >
         <TouchableOpacity
@@ -389,8 +379,6 @@ export default function NotificationsScreen({
       </View>
 
       <Animated.View
-        ref={notifTour.register('list')}
-        collapsable={false}
         style={[
           styles.listWrapper,
           {
@@ -435,34 +423,6 @@ export default function NotificationsScreen({
         />
       </Animated.View>
 
-      <ScreenTourOverlay
-        visible={notifTour.tourActive}
-        tourStep={notifTour.tourStep}
-        stepRect={notifTour.stepRect}
-        totalSteps={notifTourSteps.length}
-        stepOrder={notifTour.tourStep + 1}
-        stepText={
-          notifTourSteps[notifTour.tourStep]
-            ? t(`tutorial.tab.notifications.${notifTourSteps[notifTour.tourStep].i18nSuffix}`)
-            : ''
-        }
-        isFirst={notifTour.tourStep === 0}
-        isLast={notifTour.tourStep === notifTourSteps.length - 1}
-        primaryColor={colors.primary}
-        textColor={colors.text}
-        secondaryTextColor={colors.textSecondary}
-        bgColor={colors.cardBackground}
-        isRTL={i18n.language === 'ar' || I18nManager.isRTL}
-        fontFamily={fontFamily}
-        boldFontFamily={boldFontFamily}
-        onNext={() =>
-          notifTour.setTourStep((s) => Math.min(s + 1, notifTourSteps.length - 1))
-        }
-        onPrev={() => notifTour.setTourStep((s) => Math.max(s - 1, 0))}
-        onSkip={notifTour.endTour}
-        onFinish={notifTour.endTour}
-        t={t}
-      />
     </Animated.View>
   );
 }

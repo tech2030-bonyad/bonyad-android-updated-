@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useLayoutEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -24,8 +24,7 @@ import { storage } from '../utils/storage';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
 import ConfirmationPopup, { useConfirmationPopup } from '../components/ConfirmationPopup';
 import AnimatedLoadingScreen from '../components/AnimatedLoadingScreen';
-import ScreenTourOverlay from '../components/tour/ScreenTourOverlay';
-import { useSimpleScreenTour } from '../hooks/useSimpleScreenTour';
+import { useTour, type TourStepDef } from '../components/tour/TourProvider';
 
 // Figma Design Colors
 const FIGMA_COLORS = {
@@ -56,7 +55,8 @@ interface ProfileScreenProps {
   onNavigateToSmallTaskTypes?: () => void;
   onNavigateToPaymentHistory?: () => void;
   onNavigateToSupportTickets?: () => void;
-  onExposeTourControl?: (c: { startTour: () => void }) => void;
+  /** Expose { startTour } so the parent (UserHomeScreen) can trigger the tour via the info button */
+  onExposeTourControl?: (control: { startTour: () => void }) => void;
 }
 
 interface UserDetails {
@@ -97,13 +97,13 @@ interface UserDetails {
   nationalId?: string;
 }
 
-export default function ProfileScreen({ 
-  onLogout, 
-  onBack, 
-  onNavigateToEditProfile, 
-  onNavigateToPortfolio, 
-  onNavigateToSubscription, 
-  onNavigateToServices, 
+export default function ProfileScreen({
+  onLogout,
+  onBack,
+  onNavigateToEditProfile,
+  onNavigateToPortfolio,
+  onNavigateToSubscription,
+  onNavigateToServices,
   onNavigateToAvailability,
   onNavigateToRegions,
   onNavigateToSmallTaskTypes,
@@ -130,98 +130,91 @@ export default function ProfileScreen({
 
   const isTechnicianRole = userDetails?.role?.toUpperCase() === 'TECHNICIAN';
 
-  const profileTourSteps = useMemo(() => {
-    const prefix = [
-      { id: 'pageTitle', i18nSuffix: 'pageTitle' as const },
-      { id: 'profileCard', i18nSuffix: 'profileCard' as const },
-    ];
-    const technicianMenus = [
-      { id: 'menuPortfolio', i18nSuffix: 'menuPortfolio' as const },
-      { id: 'menuSubscription', i18nSuffix: 'menuSubscription' as const },
-      { id: 'menuAvailability', i18nSuffix: 'menuAvailability' as const },
-      { id: 'menuServices', i18nSuffix: 'menuServices' as const },
-      { id: 'menuSmallTaskTypes', i18nSuffix: 'menuSmallTaskTypes' as const },
-      { id: 'menuWorkingAreas', i18nSuffix: 'menuWorkingAreas' as const },
-    ];
-    const userMenus = [{ id: 'menuMyData', i18nSuffix: 'menuMyData' as const }];
-    const tail = [
-      { id: 'menuSupport', i18nSuffix: 'menuSupport' as const },
-      { id: 'menuTransactions', i18nSuffix: 'menuTransactions' as const },
-      { id: 'menuLanguage', i18nSuffix: 'menuLanguage' as const },
-      { id: 'menuFontSize', i18nSuffix: 'menuFontSize' as const },
-      { id: 'menuDarkMode', i18nSuffix: 'menuDarkMode' as const },
-      { id: 'menuDeleteAccount', i18nSuffix: 'menuDeleteAccount' as const },
-      { id: 'menuLogout', i18nSuffix: 'menuLogout' as const },
-    ];
-    return [...prefix, ...(isTechnicianRole ? technicianMenus : userMenus), ...tail];
-  }, [isTechnicianRole]);
-
-  const [profileTourLayoutTick, setProfileTourLayoutTick] = useState(0);
-  const profileTour = useSimpleScreenTour(profileTourSteps, 'userProfileTab', [profileTourLayoutTick]);
   const profileScrollRef = useRef<ScrollView>(null);
 
-  /** After ScrollView scroll, bump tick so useSimpleScreenTour re-runs measureInWindow on settled layout. */
-  const bumpProfileTourLayoutMeasure = () => {
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => setProfileTourLayoutTick((n) => n + 1));
-    });
-  };
+  /* ── Tour ──────────────────────────────────────────────────────────────── */
+  const { tourRef, startTour: startContextTour } = useTour();
 
-  /** Match home tour: scroll so the active ref sits in view before measureInWindow runs. */
-  useLayoutEffect(() => {
-    if (!profileTour.tourActive) return;
-    const step = profileTourSteps[profileTour.tourStep];
-    if (!step) return;
-    const id = step.id;
-    const sv = profileScrollRef.current;
-    if (!sv) return;
-
-    const scrollTop = () => sv.scrollTo({ y: 0, animated: false });
-
-    if (id === 'pageTitle' || id === 'profileCard') {
-      scrollTop();
-      return;
-    }
-    if (id === 'menuDeleteAccount' || id === 'menuLogout') {
-      const target = profileTour.getTargetRef(id);
-      const inner = (sv as ScrollView & { getInnerViewRef?: () => unknown }).getInnerViewRef?.();
-      if (target && inner && typeof (target as any).measureLayout === 'function') {
-        (target as any).measureLayout(
-          inner,
-          (_x: number, y: number) => {
-            sv.scrollTo({ y: Math.max(0, y - 100), animated: false });
-            bumpProfileTourLayoutMeasure();
-          },
-          () => {
-            sv.scrollToEnd({ animated: false });
-            bumpProfileTourLayoutMeasure();
-          },
-        );
-        return;
-      }
-      sv.scrollToEnd({ animated: false });
-      bumpProfileTourLayoutMeasure();
-      return;
-    }
-
-    const target = profileTour.getTargetRef(id);
-    const inner = (sv as ScrollView & { getInnerViewRef?: () => unknown }).getInnerViewRef?.();
-    if (target && inner && typeof (target as any).measureLayout === 'function') {
-      (target as any).measureLayout(
-        inner,
-        (_x: number, y: number) => {
-          sv.scrollTo({ y: Math.max(0, y - 100), animated: false });
-        },
-        scrollTop,
+  // Tour steps — all cards, role-aware
+  const profileTourSteps = useMemo((): TourStepDef[] => {
+    const steps: TourStepDef[] = [
+      { spotId: 'profileCard',        text: t('tutorial.tab.profile.profileCard') },
+      { spotId: 'profileAccountType', text: t('tutorial.tab.profile.accountTypeCard') },
+    ];
+    if (isTechnicianRole) {
+      steps.push(
+        { spotId: 'profileMenuPortfolio',      text: t('tutorial.tab.profile.menuPortfolio') },
+        { spotId: 'profileMenuSubscription',   text: t('tutorial.tab.profile.menuSubscription') },
+        { spotId: 'profileMenuAvailability',   text: t('tutorial.tab.profile.menuAvailability') },
+        { spotId: 'profileMenuServices',       text: t('tutorial.tab.profile.menuServices') },
+        { spotId: 'profileMenuSmallTaskTypes', text: t('tutorial.tab.profile.menuSmallTaskTypes') },
+        { spotId: 'profileMenuWorkingAreas',   text: t('tutorial.tab.profile.menuWorkingAreas') },
       );
-      return;
+    } else {
+      steps.push(
+        { spotId: 'profileStats',      text: t('tutorial.tab.profile.statsCard') },
+        { spotId: 'profileMenuMyData', text: t('tutorial.tab.profile.menuMyData') },
+      );
     }
-    scrollTop();
-  }, [profileTour.tourActive, profileTour.tourStep, profileTourSteps, profileTour.getTargetRef]);
+    steps.push(
+      { spotId: 'profileMenuSupport',       text: t('tutorial.tab.profile.menuSupport') },
+      { spotId: 'profileMenuTransactions',  text: t('tutorial.tab.profile.menuTransactions') },
+      { spotId: 'profileSettings',          text: t('tutorial.tab.profile.menuLanguage') },
+      { spotId: 'profileDeleteAccount',     text: t('tutorial.tab.profile.menuDeleteAccount') },
+      { spotId: 'profileMenuLogout',        text: t('tutorial.tab.profile.menuLogout') },
+    );
+    return steps;
+  }, [isTechnicianRole, t]);
 
+  // Track scroll offset so smart delta-scrolling works
+  const lastProfileScrollY = useRef(0);
+
+  // Scroll handler — supports smart delta from TourProvider + fallback positions
+  const handleTourScroll = useCallback((_stepIndex: number, spotId: string, scrollDelta?: number): boolean => {
+    // Smart scroll: TourProvider measured the element and computed exact delta
+    if (scrollDelta !== undefined) {
+      const newY = Math.max(0, lastProfileScrollY.current + Math.round(scrollDelta));
+      profileScrollRef.current?.scrollTo({ y: newY, animated: false });
+      lastProfileScrollY.current = newY;
+      return true;
+    }
+
+    // Fallback: hardcoded approximate positions (only used when element can't be measured)
+    const scrollMap: Record<string, number> = {
+      profileCard: 0,
+      profileAccountType: 0,
+      profileStats: 0,
+      profileMenuMyData: 0,
+      profileMenuPortfolio: 0,
+      profileMenuSubscription: 200,
+      profileMenuAvailability: 300,
+      profileMenuServices: 400,
+      profileMenuSmallTaskTypes: 500,
+      profileMenuWorkingAreas: 600,
+      profileMenuSupport: isTechnicianRole ? 700 : 350,
+      profileMenuTransactions: isTechnicianRole ? 800 : 420,
+      profileSettings: isTechnicianRole ? 900 : 500,
+      profileDeleteAccount: isTechnicianRole ? 1100 : 700,
+      profileMenuLogout: isTechnicianRole ? 1200 : 780,
+    };
+    const targetY = scrollMap[spotId] ?? 0;
+    profileScrollRef.current?.scrollTo({ y: targetY, animated: false });
+    lastProfileScrollY.current = targetY;
+    return true;
+  }, [isTechnicianRole]);
+
+  // Expose startTour to parent (UserHomeScreen) so the info button can trigger it
   useEffect(() => {
-    onExposeTourControl?.({ startTour: profileTour.startTour });
-  }, [onExposeTourControl, profileTour.startTour]);
+    onExposeTourControl?.({
+      startTour: () => {
+        startContextTour({
+          steps: profileTourSteps,
+          screenKey: 'userProfileTab',
+          onScrollToStep: handleTourScroll,
+        });
+      },
+    });
+  }, [onExposeTourControl, profileTourSteps, startContextTour, handleTourScroll]);
   
   const { alertState, showError, showSuccess, hideAlert } = useAlertPopup();
   const { confirmState, showLogoutConfirmation, showConfirmation, hideConfirmation } = useConfirmationPopup();
@@ -436,13 +429,13 @@ export default function ProfileScreen({
         keyboardShouldPersistTaps="handled"
       >
         {/* Page Title */}
-        <View ref={profileTour.register('pageTitle')} collapsable={false} style={styles.pageTitleContainer}>
+        <View collapsable={false} style={styles.pageTitleContainer}>
           <Text style={[styles.pageTitle, { color: headerTextColor, fontFamily, fontSize: scaledSize(20) }]}>{t('profile.myProfile')}</Text>
         </View>
 
         {/* Main Profile Card */}
         <View
-          ref={profileTour.register('profileCard')}
+          ref={tourRef('profileCard')}
           collapsable={false}
           style={[styles.mainCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}
         >
@@ -606,7 +599,7 @@ export default function ProfileScreen({
 
           {/* Stats — property/user metrics; less relevant on technician home profile */}
           {!isTechnician && (
-          <View style={styles.statsContainer}>
+          <View ref={tourRef('profileStats')} collapsable={false} style={styles.statsContainer}>
             <View style={[styles.statCard, { backgroundColor: statBgColor, borderColor: statBorderColor }]}>
               <Text style={[styles.statNumber, { color: textColor, fontFamily, fontSize: scaledSize(14) }]}>{user?.propertiesCount ?? 0}</Text>
               <Text style={[styles.statLabel, { color: textColor, fontFamily, fontSize: scaledSize(14) }]}>{t('profile.properties')}</Text>
@@ -624,7 +617,11 @@ export default function ProfileScreen({
                   </View>
 
         {/* Account Type Toggle — Company / Individual (matches iOS CompanyModeToggleView) */}
-        <View style={[styles.companyToggleCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}>
+        <View
+          ref={tourRef('profileAccountType')}
+          collapsable={false}
+          style={[styles.companyToggleCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}
+        >
           <View style={styles.companyToggleRow}>
             <View style={[styles.companyToggleIcon, { backgroundColor: isCompanyMode ? 'rgba(52,199,89,0.15)' : 'rgba(255,149,0,0.12)' }]}>
               <Ionicons
@@ -688,7 +685,7 @@ export default function ProfileScreen({
           <>
             {/* My Portfolio */}
             <View
-              ref={profileTour.register('menuPortfolio')}
+              ref={tourRef('profileMenuPortfolio')}
               collapsable={false}
               style={[styles.technicianCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}
             >
@@ -714,7 +711,7 @@ export default function ProfileScreen({
 
             {/* My Subscription */}
             <View
-              ref={profileTour.register('menuSubscription')}
+              ref={tourRef('profileMenuSubscription')}
               collapsable={false}
               style={[styles.technicianCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}
             >
@@ -740,7 +737,7 @@ export default function ProfileScreen({
 
             {/* Availability */}
             <View
-              ref={profileTour.register('menuAvailability')}
+              ref={tourRef('profileMenuAvailability')}
               collapsable={false}
               style={[styles.technicianCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}
             >
@@ -766,7 +763,7 @@ export default function ProfileScreen({
 
             {/* Services */}
             <View
-              ref={profileTour.register('menuServices')}
+              ref={tourRef('profileMenuServices')}
               collapsable={false}
               style={[styles.technicianCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}
             >
@@ -792,7 +789,7 @@ export default function ProfileScreen({
 
             {/* Small Task Types – ensure clickable with explicit handler and hitSlop */}
             <View
-              ref={profileTour.register('menuSmallTaskTypes')}
+              ref={tourRef('profileMenuSmallTaskTypes')}
               collapsable={false}
               style={[styles.technicianCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}
             >
@@ -821,7 +818,7 @@ export default function ProfileScreen({
 
             {/* Working Areas – ensure clickable with hitSlop and explicit handler */}
             <View
-              ref={profileTour.register('menuWorkingAreas')}
+              ref={tourRef('profileMenuWorkingAreas')}
               collapsable={false}
               style={[styles.technicianCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}
             >
@@ -857,7 +854,7 @@ export default function ProfileScreen({
         {/* User Menu Items */}
         {!isTechnician && (
           <View
-            ref={profileTour.register('menuMyData')}
+            ref={tourRef('profileMenuMyData')}
             collapsable={false}
             style={[styles.userMenuCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}
           >
@@ -882,7 +879,7 @@ export default function ProfileScreen({
 
         {/* Support Center Card */}
         <View
-          ref={profileTour.register('menuSupport')}
+          ref={tourRef('profileMenuSupport')}
           collapsable={false}
           style={[styles.userMenuCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}
         >
@@ -920,7 +917,7 @@ export default function ProfileScreen({
 
         {/* Transactions (Payment History) – same as web label */}
         <View
-          ref={profileTour.register('menuTransactions')}
+          ref={tourRef('profileMenuTransactions')}
           collapsable={false}
           style={[styles.userMenuCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}
         >
@@ -948,9 +945,9 @@ export default function ProfileScreen({
           </TouchableOpacity>
         </View>
 
-         <View style={[styles.settingsCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}>
+         <View ref={tourRef('profileSettings')} collapsable={false} style={[styles.settingsCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}>
           {/* Language */}
-          <View ref={profileTour.register('menuLanguage')} collapsable={false}>
+          <View collapsable={false}>
             <TouchableOpacity 
               style={styles.settingItem}
               onPress={toggleLanguage}
@@ -975,7 +972,7 @@ export default function ProfileScreen({
           </View>
 
           {/* Font Size */}
-          <View ref={profileTour.register('menuFontSize')} collapsable={false}>
+          <View collapsable={false}>
             <TouchableOpacity 
               style={styles.settingItem}
               onPress={cycleFontSize}
@@ -1051,7 +1048,7 @@ export default function ProfileScreen({
           </View>
 
           {/* Dark Mode */}
-          <View ref={profileTour.register('menuDarkMode')} collapsable={false}>
+          <View  collapsable={false}>
             <View style={styles.settingItem}>
             <View style={[styles.settingIconContainer, { backgroundColor: iconBgColor }]}>
               <Ionicons name="moon-outline" size={24} color={isDarkMode ? colors.textSecondary : '#666666'} />
@@ -1084,7 +1081,7 @@ export default function ProfileScreen({
 
         {/* Delete Account Card */}
         <View
-          ref={profileTour.register('menuDeleteAccount')}
+          ref={tourRef('profileDeleteAccount')}
           collapsable={false}
           style={[styles.userMenuCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}
         >
@@ -1103,7 +1100,7 @@ export default function ProfileScreen({
 
         {/* Logout Card */}
         <View
-          ref={profileTour.register('menuLogout')}
+          ref={tourRef('profileMenuLogout')}
           collapsable={false}
           style={[styles.logoutCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}
         >
@@ -1119,35 +1116,6 @@ export default function ProfileScreen({
         </View>
       </ScrollView>
 
-      <ScreenTourOverlay
-        visible={profileTour.tourActive}
-        tourStep={profileTour.tourStep}
-        stepRect={profileTour.stepRect}
-        totalSteps={profileTourSteps.length}
-        stepOrder={profileTour.tourStep + 1}
-        stepText={
-          profileTourSteps[profileTour.tourStep]
-            ? t(`tutorial.tab.profile.${profileTourSteps[profileTour.tourStep].i18nSuffix}`)
-            : ''
-        }
-        isFirst={profileTour.tourStep === 0}
-        isLast={profileTour.tourStep === profileTourSteps.length - 1}
-        primaryColor={primaryColor}
-        textColor={textColor}
-        secondaryTextColor={secondaryTextColor}
-        bgColor={cardBgColor}
-        isRTL={isArabic || I18nManager.isRTL}
-        fontFamily={fontFamily}
-        boldFontFamily={boldFontFamily}
-        onNext={() =>
-          profileTour.setTourStep((s) => Math.min(s + 1, profileTourSteps.length - 1))
-        }
-        onPrev={() => profileTour.setTourStep((s) => Math.max(s - 1, 0))}
-        onSkip={profileTour.endTour}
-        onFinish={profileTour.endTour}
-        t={t}
-      />
-      
       {/* Alert Popup */}
       <AlertPopup
         visible={alertState.visible}

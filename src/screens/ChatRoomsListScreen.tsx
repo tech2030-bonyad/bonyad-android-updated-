@@ -36,8 +36,6 @@ import { getAppTopBarPaddingTop } from '../utils/statusBarHelper';
 import { ChatRoom } from '../types/chat';
 import { formatRelativeTime } from '../utils/chatUtils';
 import AnimatedLoadingScreen from '../components/AnimatedLoadingScreen';
-import ScreenTourOverlay from '../components/tour/ScreenTourOverlay';
-import { useSimpleScreenTour } from '../hooks/useSimpleScreenTour';
 
 /** Figma node 61:2060 — CHAT LIST VIEW (Bonyad file) */
 const FIGMA = {
@@ -76,7 +74,8 @@ interface ChatRoomsListScreenProps {
   onOpenChat?: (roomId: string, receiverId: number, receiverName: string, projectId?: number | null) => void;
   /** When true, AppTopBar is already above this screen — skip extra header top inset. */
   stackedUnderAppTopBar?: boolean;
-  onExposeTourControl?: (c: { startTour: () => void }) => void;
+  /** Optional: allow parent (UserHomeScreen) to store a tour control handle. */
+  onExposeTourControl?: (control: { startTour: () => void }) => void;
 }
 
 type ChatRowProps = {
@@ -178,39 +177,12 @@ export default function ChatRoomsListScreen({
   const [searchQuery, setSearchQuery] = useState('');
   const [filterChip, setFilterChip] = useState<FilterChip>('all');
   const appState = useRef(AppState.currentState);
-
-  const chatTourSteps = useMemo(
-    () => [
-      { id: 'searchFilters', i18nSuffix: 'searchFilters' },
-      { id: 'list', i18nSuffix: 'list' },
-    ],
-    [],
-  );
-  const chatTour = useSimpleScreenTour(chatTourSteps, 'userChatTab');
   const flatListRef = useRef<FlatList<ChatRoom>>(null);
 
   useEffect(() => {
-    onExposeTourControl?.({ startTour: chatTour.startTour });
-  }, [onExposeTourControl, chatTour.startTour]);
-
-  /** Scroll before measure so header + row refs lay out on-screen. Coalesce rapid step changes to avoid layout thrash. */
-  const tourScrollGen = useRef(0);
-  useLayoutEffect(() => {
-    if (!chatTour.tourActive) return;
-    tourScrollGen.current += 1;
-    const gen = tourScrollGen.current;
-    requestAnimationFrame(() => {
-      if (gen !== tourScrollGen.current) return;
-      flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
-    });
-  }, [chatTour.tourActive, chatTour.tourStep]);
-
-  /** Neutral list motion while the tour measures / shows — avoids wrong rects from UI-thread translateY. */
-  useEffect(() => {
-    if (!chatTour.tourActive) return;
-    listOpacity.value = 1;
-    listTranslateY.value = 0;
-  }, [chatTour.tourActive, listOpacity, listTranslateY]);
+    // No dedicated chat list tour yet; expose a no-op control for compatibility.
+    onExposeTourControl?.({ startTour: () => {} });
+  }, [onExposeTourControl]);
 
   const listOpacity = useSharedValue(1);
   const listTranslateY = useSharedValue(0);
@@ -395,7 +367,7 @@ export default function ChatRoomsListScreen({
 
   const renderChatRow: ListRenderItem<ChatRoom> = useCallback(
     ({ item, index }) => {
-      const row = (
+      return (
         <ChatRow
           item={item}
           fontStyle={fontStyle}
@@ -403,16 +375,8 @@ export default function ChatRoomsListScreen({
           t={t}
         />
       );
-      if (index === 0) {
-        return (
-          <View ref={chatTour.register('list')} collapsable={false}>
-            {row}
-          </View>
-        );
-      }
-      return row;
     },
-    [chatTour.register, fontStyle, handleChatRoomPress, t]
+    [fontStyle, handleChatRoomPress, t]
   );
 
   /**
@@ -433,8 +397,8 @@ export default function ChatRoomsListScreen({
           </View>
         </View>
 
-        {/* One tour rect for search + filters so the spotlight sits lower and covers both controls */}
-        <View ref={chatTour.register('searchFilters')} collapsable={false} style={styles.searchFiltersTourWrap}>
+        {/* Search and filters */}
+        <View style={styles.searchFiltersTourWrap}>
           <View style={[styles.searchBox, { backgroundColor: colors.gray100, borderColor: colors.border }]}>
             <Ionicons name="search" size={13} color={colors.textTertiary} />
             <TextInput
@@ -477,7 +441,6 @@ export default function ChatRoomsListScreen({
     ),
     [
       chatRooms.length,
-      chatTour.register,
       colors.border,
       colors.cardBackground,
       colors.gray100,
@@ -512,7 +475,7 @@ export default function ChatRoomsListScreen({
       : t('Try a different search or filter');
 
   const emptyComponent = (
-    <View ref={chatTour.register('list')} collapsable={false} style={styles.emptyWrap}>
+    <View style={styles.emptyWrap}>
       <Ionicons name="chatbubbles-outline" size={80} color={colors.gray300} />
       <Text style={[styles.emptyTitle, { color: colors.text }, fontStyle]}>{emptyTitle}</Text>
       <Text style={[styles.emptyText, { color: colors.textSecondary }, fontStyle]}>{emptySubtitle}</Text>
@@ -548,38 +511,9 @@ export default function ChatRoomsListScreen({
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
           }
           showsVerticalScrollIndicator={false}
-          removeClippedSubviews={Platform.OS === 'android' && !chatTour.tourActive}
         />
       </Animated.View>
 
-      <ScreenTourOverlay
-        visible={chatTour.tourActive}
-        tourStep={chatTour.tourStep}
-        stepRect={chatTour.stepRect}
-        totalSteps={chatTourSteps.length}
-        stepOrder={chatTour.tourStep + 1}
-        stepText={
-          chatTourSteps[chatTour.tourStep]
-            ? t(`tutorial.tab.chat.${chatTourSteps[chatTour.tourStep].i18nSuffix}`)
-            : ''
-        }
-        isFirst={chatTour.tourStep === 0}
-        isLast={chatTour.tourStep === chatTourSteps.length - 1}
-        primaryColor={colors.primary}
-        textColor={colors.text}
-        secondaryTextColor={colors.textSecondary}
-        bgColor={colors.cardBackground}
-        isRTL={i18n.language === 'ar' || I18nManager.isRTL}
-        fontFamily={fontFamily}
-        boldFontFamily={boldFontFamily}
-        onNext={() =>
-          chatTour.setTourStep((s) => Math.min(s + 1, chatTourSteps.length - 1))
-        }
-        onPrev={() => chatTour.setTourStep((s) => Math.max(s - 1, 0))}
-        onSkip={chatTour.endTour}
-        onFinish={chatTour.endTour}
-        t={t}
-      />
     </View>
   );
 }

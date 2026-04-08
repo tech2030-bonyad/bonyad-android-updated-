@@ -35,11 +35,6 @@ import ProjectCreationFlow from '../components/ProjectCreationFlow';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
 import ConfirmationPopup, { useConfirmationPopup } from '../components/ConfirmationPopup';
 import BookAppointmentModal from '../components/BookAppointmentModal';
-import { CopilotStep, walkthroughable, useCopilot } from 'react-native-copilot';
-import { coachMarksStorage } from '../utils/coachMarks';
-import { setTutorialCompletionKey } from '../utils/tutorialSession';
-
-const WalkableView = walkthroughable(View);
 
 // ===== DESIGN TOKENS FROM FIGMA =====
 const COLORS = {
@@ -522,45 +517,9 @@ export default function PendingProjectScreen({
   // Custom popup hooks
   const { alertState, showError, showSuccess, showInfo, hideAlert } = useAlertPopup();
   const { confirmState, showDeleteConfirmation, showConfirmation, hideConfirmation } = useConfirmationPopup();
-  const { start: startCopilotTour } = useCopilot();
-
-  const pendingHeaderText = isTechnician
-    ? t('tutorial.pending.technician.header')
-    : t('tutorial.pending.user.header');
-  const pendingOverviewText = isTechnician
-    ? t('tutorial.pending.technician.projectOverview')
-    : t('tutorial.pending.user.projectOverview');
-  const pendingReqText = isTechnician
-    ? t('tutorial.pending.technician.requirements')
-    : t('tutorial.pending.user.requirements');
-  const pendingPhasesText = isTechnician
-    ? t('tutorial.pending.technician.phases')
-    : t('tutorial.pending.user.phases');
-  const pendingActionsText = isTechnician
-    ? t('tutorial.pending.technician.bidActions')
-    : t('tutorial.pending.user.actions');
-
   useEffect(() => {
     loadData();
   }, [project]);
-
-  useEffect(() => {
-    if (isLoading) return;
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    (async () => {
-      const seen = await coachMarksStorage.hasSeenTutorial('pending');
-      if (cancelled || seen || !project?.id) return;
-      setTutorialCompletionKey('pending');
-      timer = setTimeout(() => {
-        void startCopilotTour();
-      }, 700);
-    })();
-    return () => {
-      cancelled = true;
-      if (timer) clearTimeout(timer);
-    };
-  }, [isLoading, project?.id, startCopilotTour]);
 
   const loadData = async () => {
     if (!project?.id) {
@@ -757,23 +716,19 @@ export default function PendingProjectScreen({
     <View style={[styles.container, { backgroundColor: c.bgWhite, paddingTop: IS_LARGE_WEB ? 0 : insets.top }]}>
       {/* ── Header ── */}
       {!IS_LARGE_WEB && (
-        <CopilotStep text={pendingHeaderText} order={1} name="pendingHeader">
-          <WalkableView collapsable={false}>
-            <View style={[styles.header, isArabic ? styles.headerRTL : styles.headerLTR]}>
-              <TouchableOpacity onPress={onBack} style={styles.backButton}>
-                <BackArrowIonicons variant="chevron" size={24} color={c.textBody} forceLtrLayout={!isArabic} />
-              </TouchableOpacity>
-              <View style={styles.headerTitleContainer}>
-                <Text style={[styles.headerTitle, { fontSize: scaledSize(15) }]} numberOfLines={1}>
-                  {serviceName || t('Project')}
-                </Text>
-                <Text style={[styles.headerSubtitle, { fontSize: scaledSize(10) }]}>
-                  {t('Pending Project')}
-                </Text>
-              </View>
-            </View>
-          </WalkableView>
-        </CopilotStep>
+        <View style={[styles.header, isArabic ? styles.headerRTL : styles.headerLTR]}>
+          <TouchableOpacity onPress={onBack} style={styles.backButton}>
+            <BackArrowIonicons variant="chevron" size={24} color={c.textBody} forceLtrLayout={!isArabic} />
+          </TouchableOpacity>
+          <View style={styles.headerTitleContainer}>
+            <Text style={[styles.headerTitle, { fontSize: scaledSize(15) }]} numberOfLines={1}>
+              {serviceName || t('Project')}
+            </Text>
+            <Text style={[styles.headerSubtitle, { fontSize: scaledSize(10) }]}>
+              {t('Pending Project')}
+            </Text>
+          </View>
+        </View>
       )}
 
       {/* Content */}
@@ -794,23 +749,19 @@ export default function PendingProjectScreen({
 
         {/* Title Section - Large Web */}
         {IS_LARGE_WEB && (
-          <CopilotStep text={pendingHeaderText} order={1} name="pendingHeader">
-            <WalkableView collapsable={false}>
-              <View style={[styles.titleSectionLargeWeb, isArabic ? styles.headerRTL : styles.headerLTR]}>
-                <TouchableOpacity onPress={onBack} style={styles.titleBackButton}>
-                  <BackArrowIonicons variant="chevron" size={24} color={c.textHeader} forceLtrLayout={!isArabic} />
-                </TouchableOpacity>
-                <View style={styles.titleContainer}>
-                  <Text style={[styles.titleMainText, { fontSize: scaledSize(42) }]}>
-                    {serviceName || t('Project')}
-                  </Text>
-                  <Text style={[styles.titleSubtext, { fontSize: scaledSize(20) }]}>
-                    {t('Pending Project')}
-                  </Text>
-                </View>
-              </View>
-            </WalkableView>
-          </CopilotStep>
+          <View style={[styles.titleSectionLargeWeb, isArabic ? styles.headerRTL : styles.headerLTR]}>
+            <TouchableOpacity onPress={onBack} style={styles.titleBackButton}>
+              <BackArrowIonicons variant="chevron" size={24} color={c.textHeader} forceLtrLayout={!isArabic} />
+            </TouchableOpacity>
+            <View style={styles.titleContainer}>
+              <Text style={[styles.titleMainText, { fontSize: scaledSize(42) }]}>
+                {serviceName || t('Project')}
+              </Text>
+              <Text style={[styles.titleSubtext, { fontSize: scaledSize(20) }]}>
+                {t('Pending Project')}
+              </Text>
+            </View>
+          </View>
         )}
 
         {/* Status Stepper */}
@@ -822,81 +773,68 @@ export default function PendingProjectScreen({
         <View style={[styles.divider, IS_LARGE_WEB && styles.dividerLargeWeb]} />
         {/* Project Overview Section */}
         <View style={styles.section}>
-          <CopilotStep text={pendingOverviewText} order={2} name="pendingOverview">
-            <WalkableView collapsable={false}>
-              <Text style={[styles.sectionHeaderTitle, { fontSize: scaledSize(16) }]}>{t('Project Overview')}</Text>
-              <View style={[styles.requestIdCreatedRow, { flexDirection: i18n.language === 'ar' ? 'row-reverse' : 'row' }]}>
-                <Text style={[styles.requestIdText, { color: c.textSecondary }]}>#{project.id}</Text>
-                {project.createdAt ? (
-                  <Text style={[styles.createdText, { color: c.textSecondary }]}>
-                    {t('Created')}: {formatDate(project.createdAt)}
-                  </Text>
-                ) : null}
-              </View>
-              <Text style={[styles.sectionDescription, { fontSize: scaledSize(14) }]}>
-                {isTechnician 
-                  ? t('Review the project details below. You can request a visit or submit a bid.')
-                  : t('Review your project details below. Once submitted, service providers will start sending bids.')
-                }
+          <Text style={[styles.sectionHeaderTitle, { fontSize: scaledSize(16) }]}>{t('Project Overview')}</Text>
+          <View style={[styles.requestIdCreatedRow, { flexDirection: i18n.language === 'ar' ? 'row-reverse' : 'row' }]}>
+            <Text style={[styles.requestIdText, { color: c.textSecondary }]}>#{project.id}</Text>
+            {project.createdAt ? (
+              <Text style={[styles.createdText, { color: c.textSecondary }]}>
+                {t('Created')}: {formatDate(project.createdAt)}
               </Text>
-              
-              {/* Budget and Duration Cards */}
-              <View style={[styles.statsRow, IS_LARGE_WEB && styles.statsRowLargeWeb]}>
-                <View style={[styles.statCard, styles.budgetCard, IS_LARGE_WEB && styles.statCardLargeWeb]}>
-                  <View style={[styles.statHeader, IS_LARGE_WEB && styles.statHeaderLargeWeb]}>
-                    <Ionicons name="cash-outline" size={IS_LARGE_WEB ? 20 : 12} color={c.primary80} />
-                    <Text style={[styles.statTitle, IS_LARGE_WEB && styles.statTitleLargeWeb]}>
-                      {t('Total Budget')}
-                    </Text>
-                  </View>
-                  <Text style={[styles.statValue, IS_LARGE_WEB && styles.statValueLargeWeb]}>
-                    {formatBudget(project.budget)}
-                  </Text>
-                </View>
-                <View style={[styles.statCard, styles.durationCard, IS_LARGE_WEB && styles.statCardLargeWeb]}>
-                  <View style={[styles.statHeader, IS_LARGE_WEB && styles.statHeaderLargeWeb]}>
-                    <Ionicons name="time-outline" size={IS_LARGE_WEB ? 20 : 12} color={c.green90} />
-                    <Text style={[styles.statTitle, { color: c.green90 }, IS_LARGE_WEB && styles.statTitleLargeWeb]}>
-                      {t('Duration')}
-                    </Text>
-                  </View>
-                  <Text style={[styles.statValue, IS_LARGE_WEB && styles.statValueLargeWeb]}>
-                    {formatDuration()}
-                  </Text>
-                </View>
+            ) : null}
+          </View>
+          <Text style={[styles.sectionDescription, { fontSize: scaledSize(14) }]}>
+            {isTechnician
+              ? t('Review the project details below. You can request a visit or submit a bid.')
+              : t('Review your project details below. Once submitted, service providers will start sending bids.')
+            }
+          </Text>
+
+          {/* Budget and Duration Cards */}
+          <View style={[styles.statsRow, IS_LARGE_WEB && styles.statsRowLargeWeb]}>
+            <View style={[styles.statCard, styles.budgetCard, IS_LARGE_WEB && styles.statCardLargeWeb]}>
+              <View style={[styles.statHeader, IS_LARGE_WEB && styles.statHeaderLargeWeb]}>
+                <Ionicons name="cash-outline" size={IS_LARGE_WEB ? 20 : 12} color={c.primary80} />
+                <Text style={[styles.statTitle, IS_LARGE_WEB && styles.statTitleLargeWeb]}>
+                  {t('Total Budget')}
+                </Text>
               </View>
-            </WalkableView>
-          </CopilotStep>
+              <Text style={[styles.statValue, IS_LARGE_WEB && styles.statValueLargeWeb]}>
+                {formatBudget(project.budget)}
+              </Text>
+            </View>
+            <View style={[styles.statCard, styles.durationCard, IS_LARGE_WEB && styles.statCardLargeWeb]}>
+              <View style={[styles.statHeader, IS_LARGE_WEB && styles.statHeaderLargeWeb]}>
+                <Ionicons name="time-outline" size={IS_LARGE_WEB ? 20 : 12} color={c.green90} />
+                <Text style={[styles.statTitle, { color: c.green90 }, IS_LARGE_WEB && styles.statTitleLargeWeb]}>
+                  {t('Duration')}
+                </Text>
+              </View>
+              <Text style={[styles.statValue, IS_LARGE_WEB && styles.statValueLargeWeb]}>
+                {formatDuration()}
+              </Text>
+            </View>
+          </View>
 
           {/* Work phases (inside overview — matches list data + API) */}
-          <CopilotStep
-            text={pendingPhasesText}
-            order={4}
-            name="pendingPhases"
-            active={displayPhases.length > 0}
-          >
-            <WalkableView collapsable={false}>
-              {displayPhases.length > 0 ? (
-                <>
-                  <View style={[styles.overviewPhasesHeader, IS_LARGE_WEB && styles.overviewPhasesHeaderLargeWeb]}>
-                    <Ionicons name="layers-outline" size={IS_LARGE_WEB ? 22 : 12} color={c.primary80} />
-                    <Text style={[styles.sectionLabel, IS_LARGE_WEB && styles.sectionLabelLargeWeb]}>
-                      {t('Work Phases')}
-                    </Text>
-                  </View>
-                  {displayPhases.map((phase) => (
-                    <PhaseCard
-                      key={phase.id}
-                      phase={phase}
-                      formatBudget={formatBudget}
-                    />
-                  ))}
-                </>
-              ) : (
-                <View />
-              )}
-            </WalkableView>
-          </CopilotStep>
+          {displayPhases.length > 0 ? (
+            <>
+              <View style={[styles.overviewPhasesHeader, IS_LARGE_WEB && styles.overviewPhasesHeaderLargeWeb]}>
+                <Ionicons name="layers-outline" size={IS_LARGE_WEB ? 22 : 12} color={c.primary80} />
+                <Text style={[styles.sectionLabel, IS_LARGE_WEB && styles.sectionLabelLargeWeb]}>
+                  {t('Work Phases')}
+                </Text>
+              </View>
+              {displayPhases.map((phase) => (
+                <PhaseCard
+                  key={phase.id}
+                  phase={phase}
+                  formatBudget={formatBudget}
+                />
+              ))}
+            </>
+          ) : (
+            <View />
+          )}
         </View>
         
         {/* Description Section */}
@@ -1094,42 +1032,31 @@ export default function PendingProjectScreen({
         )}
         
         {/* Requirements Section */}
-        <CopilotStep
-          text={pendingReqText}
-          order={3}
-          name="pendingRequirements"
-          active={(project.requirements?.length ?? 0) > 0}
-        >
-          <WalkableView collapsable={false}>
-            {project.requirements && project.requirements.length > 0 ? (
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <Ionicons name="document-text-outline" size={12} color={c.primary80} />
-                  <Text style={styles.sectionLabel}>{t('Requirements')}</Text>
+        {project.requirements && project.requirements.length > 0 ? (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="document-text-outline" size={12} color={c.primary80} />
+              <Text style={styles.sectionLabel}>{t('Requirements')}</Text>
+            </View>
+            <View style={styles.descriptionBox}>
+              {project.requirements.map((req, index) => (
+                <View key={index} style={styles.requirementItem}>
+                  <Text style={styles.bulletPoint}>•</Text>
+                  <Text style={styles.requirementText}>{req}</Text>
                 </View>
-                <View style={styles.descriptionBox}>
-                  {project.requirements.map((req, index) => (
-                    <View key={index} style={styles.requirementItem}>
-                      <Text style={styles.bulletPoint}>•</Text>
-                      <Text style={styles.requirementText}>{req}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            ) : (
-              <View />
-            )}
-          </WalkableView>
-        </CopilotStep>
+              ))}
+            </View>
+          </View>
+        ) : (
+          <View />
+        )}
         
         {/* Action Buttons - Different for User vs Technician */}
-        <CopilotStep text={pendingActionsText} order={5} name="pendingActions">
-          <WalkableView collapsable={false}>
         <View style={[styles.actionButtons, IS_LARGE_WEB && styles.actionButtonsLargeWeb]}>
           {isTechnician ? (
             // Technician View: Ask for Visit & Bid Now
             <>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.primaryButton, IS_LARGE_WEB && styles.primaryButtonLargeWeb]}
                 onPress={handleAskForVisit}
               >
@@ -1137,7 +1064,7 @@ export default function PendingProjectScreen({
                   {t('Ask for Visit')}
                 </Text>
               </TouchableOpacity>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.secondaryButton, IS_LARGE_WEB && styles.secondaryButtonLargeWeb]}
                 onPress={handleBidNow}
               >
@@ -1149,7 +1076,7 @@ export default function PendingProjectScreen({
           ) : (
             // User View: Edit & Delete Project
             <>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.primaryButton, IS_LARGE_WEB && styles.primaryButtonLargeWeb]}
                 onPress={onEditProject}
               >
@@ -1157,7 +1084,7 @@ export default function PendingProjectScreen({
                   {t('Edit Project')}
                 </Text>
               </TouchableOpacity>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.secondaryButton, IS_LARGE_WEB && styles.secondaryButtonLargeWeb]}
                 onPress={handleDeleteProject}
               >
@@ -1168,8 +1095,6 @@ export default function PendingProjectScreen({
             </>
           )}
         </View>
-          </WalkableView>
-        </CopilotStep>
         
         {/* Bottom Padding */}
         <View style={{ height: insets.bottom + 70 }} />

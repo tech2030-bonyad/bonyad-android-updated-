@@ -2233,6 +2233,8 @@
         "projectsSection": "Your active projects appear here. Tap any project to view its status, bids, and details.",
         "smallTasksSection": "Your small task requests. Quick one-off jobs like repairs — post a request and receive bids from technicians.",
         "serviceCategories": "Browse all services by category. Tap a category to see subcategories and available technicians.",
+        "contractsSection": "Your contracts appear here. Track signed documents, amounts, and project agreements.",
+        "supportSection": "Need help? Open support tickets, track existing ones, or contact our team directly.",
         "chatbot": "Need help? Tap the chatbot button to ask questions or get guided to any part of the app.",
         "bottomNav": "Use the bottom bar to navigate: Home, Projects, Create, Chat, and Profile.",
         "bottomNavHome": "Home — return to your main dashboard with projects, services, and quick actions.",
@@ -2265,6 +2267,8 @@
       "profile": {
         "pageTitle": "This is your profile hub — your name, details, and every account control below start from here.",
         "profileCard": "Your photo, welcome line, and My Info. Tap the row to edit profile; tap the photo to change your picture.",
+        "statsCard": "Your activity at a glance — total properties, appointments, and support tickets you've created.",
+        "accountTypeCard": "Switch between Individual and Company account here. Company mode requires CR verification via Wathq.",
         "menuMyData": "My Data — open to update your personal information and contact details.",
         "menuPortfolio": "My Portfolio — showcase your work and manage projects clients can see.",
         "menuSubscription": "My Subscription — view or manage your service provider plan.",

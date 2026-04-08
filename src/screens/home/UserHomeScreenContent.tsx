@@ -39,10 +39,9 @@ import {
 } from '../../utils/searchService';
 import type { ScoredSearchResults, Region } from '../../utils/searchService';
 import SearchResultsDropdown from '../../components/SearchResultsDropdown';
-import ScreenTourOverlay from '../../components/tour/ScreenTourOverlay';
 import type { CategoryInfo } from '../CategorySubcategoryScreen';
-import { coachMarksStorage } from '../../utils/coachMarks';
 import FlowingBorderCard from '../../components/FlowingBorderCard';
+import { useTour, type TourStepDef } from '../../components/tour/TourProvider';
 import { getMyTickets } from '../../services/SupportTicketService';
 import type { SupportTicket } from '../../types/chat';
 
@@ -226,7 +225,6 @@ export default function UserHomeScreenContent({
   onPressCreateSupportTicket,
   onPressNotifications,
   onPressMessages,
-  onPressInfo,
   unreadNotificationCount = 0,
   onExposeControl,
 }: UserHomeScreenContentProps) {
@@ -325,6 +323,69 @@ export default function UserHomeScreenContent({
 
   const fontStyle = { fontFamily: fontFamily || undefined };
   const boldStyle = { fontFamily: boldFontFamily || fontFamily || undefined };
+
+  // ─── Tour guide (new context-based system) ─────────────────────────────
+  const { tourRef, startTour } = useTour();
+
+  const homeTourSteps: TourStepDef[] = [
+    { spotId: 'logo', text: t('tutorial.home.user.topNavLogo') },
+    { spotId: 'messagesBtn', text: t('tutorial.home.user.topNavMessages') },
+    { spotId: 'infoBtn', text: t('tutorial.home.user.topNavInfo') },
+    { spotId: 'notificationsBtn', text: t('tutorial.home.user.topNavNotifications') },
+    { spotId: 'searchBar', text: t('tutorial.home.user.search') },
+    { spotId: 'newProject', text: t('tutorial.home.user.newProject') },
+    { spotId: 'smallTask', text: t('tutorial.home.user.smallTask') },
+    { spotId: 'appointments', text: t('tutorial.home.user.appointments') },
+    { spotId: 'services', text: t('tutorial.home.user.services') },
+    { spotId: 'categories', text: t('tutorial.home.user.serviceCategories') },
+    { spotId: 'projectsSection', text: t('tutorial.home.user.projectsSection') },
+    { spotId: 'smallTasksSection', text: t('tutorial.home.user.smallTasksSection') },
+    { spotId: 'contractsSection', text: t('tutorial.home.user.contractsSection') },
+    { spotId: 'supportSection', text: t('tutorial.home.user.supportSection') },
+    { spotId: 'chatbot', text: t('tutorial.home.user.chatbot') },
+  ];
+
+  const lastScrollY = useRef(0);
+  const handleTourScroll = useCallback((stepIndex: number, spotId: string, scrollDelta?: number): boolean => {
+    // Corrective scroll: adjust current position by delta
+    if (scrollDelta !== undefined) {
+      const newY = Math.max(0, lastScrollY.current + scrollDelta);
+      mainListScrollRef.current?.scrollTo({ y: newY, animated: false });
+      lastScrollY.current = newY;
+      return true;
+    }
+
+    const fixedElements = ['logo', 'messagesBtn', 'infoBtn', 'notificationsBtn', 'searchBar'];
+    if (fixedElements.includes(spotId)) {
+      if (lastScrollY.current !== 0) {
+        mainListScrollRef.current?.scrollTo({ y: 0, animated: false });
+        lastScrollY.current = 0;
+        return true;
+      }
+      return false;
+    }
+    const scrollMap: Record<string, number> = {
+      newProject: 0, smallTask: 0, appointments: 0, services: 0,
+      categories: 200, projectsSection: 450, smallTasksSection: 750,
+      contractsSection: 1050, supportSection: 1350, chatbot: 0,
+    };
+    const targetY = scrollMap[spotId];
+    if (targetY !== undefined) {
+      const needsScroll = Math.abs(lastScrollY.current - targetY) > 30;
+      mainListScrollRef.current?.scrollTo({ y: targetY, animated: false });
+      lastScrollY.current = targetY;
+      return needsScroll;
+    }
+    return false;
+  }, []);
+
+  const handleStartTour = useCallback(() => {
+    startTour({
+      steps: homeTourSteps,
+      screenKey: 'userHome',
+      onScrollToStep: handleTourScroll,
+    });
+  }, [startTour, homeTourSteps, handleTourScroll]);
 
   const loadProjects = useCallback(async () => {
     try {
@@ -546,133 +607,14 @@ export default function UserHomeScreenContent({
     isArabic ? (task.taskTypeNameAr ?? task.taskType?.nameAr ?? task.taskTypeNameEn) : (task.taskTypeNameEn ?? task.taskType?.nameEn ?? task.taskTypeNameAr);
   const topSpacing = Platform.OS === 'android' ? Math.max(insets.top, 50) : Math.max(insets.top, 12);
 
-  // ─── Web-style tour guide ──────────────────────────────────────────────────
-  const TOUR_STEPS = React.useMemo(() => [
-    { id: 'topNavLogo',          order: 1,  name: 'topNavLogo' as const },
-    { id: 'topNavMessages',      order: 2,  name: 'topNavMessages' as const },
-    { id: 'topNavInfo',          order: 3,  name: 'topNavInfo' as const },
-    { id: 'topNavNotifications', order: 4,  name: 'topNavNotifications' as const },
-    { id: 'search',              order: 5,  name: 'search' as const },
-    { id: 'newProject',          order: 6,  name: 'newProject' as const },
-    { id: 'smallTask',           order: 7,  name: 'smallTask' as const },
-    { id: 'appointments',        order: 8,  name: 'appointments' as const },
-    { id: 'services',            order: 9,  name: 'services' as const },
-    { id: 'serviceCategories',   order: 10, name: 'serviceCategories' as const },
-    { id: 'projectsSection',     order: 11, name: 'projectsSection' as const },
-    { id: 'smallTasksSection',   order: 12, name: 'smallTasksSection' as const },
-    { id: 'chatbot',             order: 13, name: 'chatbot' as const },
-    { id: 'bottomNavHome',       order: 14, name: 'bottomNavHome' as const },
-    { id: 'bottomNavProjects',   order: 15, name: 'bottomNavProjects' as const },
-    { id: 'bottomNavNew',        order: 16, name: 'bottomNavNew' as const },
-    { id: 'bottomNavChat',       order: 17, name: 'bottomNavChat' as const },
-    { id: 'bottomNavProfile',    order: 18, name: 'bottomNavProfile' as const },
-  ], []);
-
-  const [tourActive, setTourActive] = useState(false);
-  const [tourStep, setTourStep] = useState(0);
-  const [stepRect, setStepRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
-  const stepViewRefs = useRef<{ [k: string]: View | null }>({});
-
-  const measureStep = useCallback((stepName: string) => {
-    const ref = stepViewRefs.current[stepName];
-    if (!ref) { setStepRect(null); return; }
-    ref.measure((_fx, _fy, width, height, pageX, pageY) => {
-      const PAD = 8;
-      setStepRect({ x: pageX - PAD, y: pageY - PAD, w: width + PAD * 2, h: height + PAD * 2 });
-    });
-  }, []);
-
-  const scrollAndMeasure = useCallback((stepName: string) => {
-    const sv = mainListScrollRef.current;
-    const ref = stepViewRefs.current[stepName];
-
-    // Bottom nav tabs: computed from screen dimensions (GlassTabBar is outside UserHomeScreenContent)
-    if (stepName.startsWith('bottomNav')) {
-      sv?.scrollToEnd({ animated: false });
-      setTimeout(() => {
-        const { height: SH, width: SW } = Dimensions.get('window');
-        // GlassTabBar: outer paddingTop=6, row paddingVertical=8, tabSlot height=52, paddingBottom=max(inset,10)
-        const outerH = 6 + 8 * 2 + 52 + Math.max(insets.bottom, 10);
-        const pillY = SH - outerH + 6; // pill top on screen
-        const rowY = pillY + 8;        // row inner top
-        const tabH = 52;
-        const PAD = 6;
-        // Slot widths mirror GlassTabBar indicator calc: slotW = (barWidth - 8) / 5
-        const barW = SW - 32; // outer paddingHorizontal=16 each side
-        const slotW = (barW - 8) / 5; // row paddingHorizontal=4 each side
-        const rowX = 16 + 4; // outer padding + row padding
-        const tabIndex: Record<string, number> = {
-          bottomNavHome: 0,
-          bottomNavProjects: 1,
-          bottomNavNew: 2,
-          bottomNavChat: 3,
-          bottomNavProfile: 4,
-        };
-        const idx = tabIndex[stepName] ?? 0;
-        const slotX = rowX + idx * slotW;
-        setStepRect({ x: slotX - PAD, y: rowY - PAD, w: slotW + PAD * 2, h: tabH + PAD * 2 });
-      }, 250);
-      return;
-    }
-
-    if (!ref) { setStepRect(null); return; }
-
-    // Top bar icons and search: scroll to top, then measure directly
-    if (stepName.startsWith('topNav') || stepName === 'search') {
-      sv?.scrollTo({ y: 0, animated: false });
-      setTimeout(() => measureStep(stepName), 150);
-      return;
-    }
-
-    // chatbot FAB: scroll to end first, then measure
-    if (stepName === 'chatbot') {
-      sv?.scrollToEnd({ animated: false });
-      setTimeout(() => measureStep(stepName), 250);
-      return;
-    }
-
-    // Content inside ScrollView: use measureLayout for accurate scroll-to
-    if (sv) {
-      const scrollContent = (sv as ScrollView & { getInnerViewRef?: () => unknown }).getInnerViewRef?.();
-      if (scrollContent && typeof (ref as any).measureLayout === 'function') {
-        (ref as any).measureLayout(
-          scrollContent,
-          (_x: number, y: number) => {
-            sv.scrollTo({ y: Math.max(0, y - 100), animated: false });
-            setTimeout(() => measureStep(stepName), 200);
-          },
-          () => { measureStep(stepName); },
-        );
-        return;
-      }
-    }
-    measureStep(stepName);
-  }, [measureStep, insets.bottom]);
-
-  useEffect(() => {
-    if (!tourActive) { setStepRect(null); return; }
-    const name = TOUR_STEPS[tourStep]?.name;
-    if (!name) return;
-    requestAnimationFrame(() => requestAnimationFrame(() => scrollAndMeasure(name)));
-  }, [tourActive, tourStep, TOUR_STEPS, scrollAndMeasure]);
-
-  const handleTourEnd = useCallback(async () => {
-    setTourActive(false);
-    setTourStep(0);
-    setStepRect(null);
-    await coachMarksStorage.markTutorialComplete('userHome');
-  }, []);
 
   // Expose start function to parent
   useEffect(() => {
     onExposeControl?.({
-      startTour: () => {
-        setTourStep(0);
-        setTourActive(true);
-      },
+      startTour: handleStartTour,
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [handleStartTour]);
 
   const handleSearchChange = useCallback((query: string) => {
     setSearchText(query);
@@ -714,12 +656,12 @@ export default function UserHomeScreenContent({
       <View style={{ paddingTop: topSpacing, zIndex: 200, backgroundColor: colors.background }}>
         {/* Top bar */}
         <View collapsable={false} style={styles.iosTopBar}>
-          <View ref={(el) => { stepViewRefs.current['topNavLogo'] = el; }} collapsable={false} style={styles.iosTopBarLogo}>
+          <View ref={tourRef('logo')} collapsable={false} style={styles.iosTopBarLogo}>
             <BonyadLogo size="small" responsive={false} variant={isDark ? 'light' : 'dark'} />
           </View>
           <View style={styles.iosTopBarIcons}>
             <View
-              ref={(el) => { stepViewRefs.current['topNavMessages'] = el; }}
+              ref={tourRef('messagesBtn')}
               collapsable={false}
               style={styles.iosTopBarIconBtn}
             >
@@ -734,13 +676,13 @@ export default function UserHomeScreenContent({
               </TouchableOpacity>
             </View>
             <View
-              ref={(el) => { stepViewRefs.current['topNavInfo'] = el; }}
+              ref={tourRef('infoBtn')}
               collapsable={false}
               style={styles.iosTopBarIconBtn}
             >
               <TouchableOpacity
                 style={StyleSheet.absoluteFillObject}
-                onPress={onPressInfo}
+                onPress={handleStartTour}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
@@ -749,7 +691,7 @@ export default function UserHomeScreenContent({
               </TouchableOpacity>
             </View>
             <View
-              ref={(el) => { stepViewRefs.current['topNavNotifications'] = el; }}
+              ref={tourRef('notificationsBtn')}
               collapsable={false}
               style={styles.iosTopBarIconBtn}
             >
@@ -773,7 +715,7 @@ export default function UserHomeScreenContent({
 
         {/* Search bar */}
         <View
-          ref={(el) => { stepViewRefs.current['search'] = el; }}
+          ref={tourRef('searchBar')}
           collapsable={false}
           style={styles.searchBarWrap}
         >
@@ -862,7 +804,7 @@ export default function UserHomeScreenContent({
         style={{ marginTop: SECTION_SPACING }}
       >
         <View style={[styles.quickActions, { paddingVertical: 8 }]}>
-          <View ref={(el) => { stepViewRefs.current['newProject'] = el; }} collapsable={false}>
+          <View ref={tourRef('newProject')} collapsable={false}>
             <PressableScaleView style={styles.quickActionItem} onPress={() => onPressCreateProject?.(0)}>
               <View style={[styles.quickActionCircle, { backgroundColor: `${primaryColor}18` }]}>
                 <Feather name="folder-plus" size={24} color={primaryColor} />
@@ -870,7 +812,7 @@ export default function UserHomeScreenContent({
               <Text style={[styles.quickActionLabel, { color: colors.text }, fontStyle]} numberOfLines={1}>{t('New project')}</Text>
             </PressableScaleView>
           </View>
-          <View ref={(el) => { stepViewRefs.current['smallTask'] = el; }} collapsable={false}>
+          <View ref={tourRef('smallTask')} collapsable={false}>
             <PressableScaleView style={styles.quickActionItem} onPress={() => onPressCreateSmallTask?.(0)}>
               <View style={[styles.quickActionCircle, { backgroundColor: 'rgba(255,149,0,0.18)' }]}>
                 <Ionicons name="flash" size={24} color="#FF9500" />
@@ -878,7 +820,7 @@ export default function UserHomeScreenContent({
               <Text style={[styles.quickActionLabel, { color: colors.text }, fontStyle]} numberOfLines={1}>{t('Small task')}</Text>
             </PressableScaleView>
           </View>
-          <View ref={(el) => { stepViewRefs.current['appointments'] = el; }} collapsable={false}>
+          <View ref={tourRef('appointments')} collapsable={false}>
             <PressableScaleView style={styles.quickActionItem} onPress={() => { onPressAppointments ? onPressAppointments() : onPressProjectStatus?.('running'); }}>
               <View style={[styles.quickActionCircle, { backgroundColor: 'rgba(52,199,89,0.18)' }]}>
                 <Ionicons name="calendar" size={24} color="#34C759" />
@@ -886,7 +828,7 @@ export default function UserHomeScreenContent({
               <Text style={[styles.quickActionLabel, { color: colors.text }, fontStyle]} numberOfLines={1}>{t('Appointments')}</Text>
             </PressableScaleView>
           </View>
-          <View ref={(el) => { stepViewRefs.current['services'] = el; }} collapsable={false}>
+          <View ref={tourRef('services')} collapsable={false}>
             <PressableScaleView style={styles.quickActionItem} onPress={() => onPressOpenServices?.()}>
               <View style={[styles.quickActionCircle, { backgroundColor: 'rgba(175,82,222,0.18)' }]}>
                 <Feather name="grid" size={24} color="#AF52DE" />
@@ -905,7 +847,7 @@ export default function UserHomeScreenContent({
         style={{ marginTop: SECTION_SPACING }}
       >
         <View
-          ref={(el) => { stepViewRefs.current['serviceCategories'] = el; }}
+          ref={tourRef('categories')}
           collapsable={false}
           style={{ paddingVertical: 8 }}
         >
@@ -1057,7 +999,7 @@ export default function UserHomeScreenContent({
         style={{ marginTop: SECTION_SPACING }}
       >
         <View
-          ref={(el) => { stepViewRefs.current['projectsSection'] = el; }}
+          ref={tourRef('projectsSection')}
           collapsable={false}
           style={{ paddingVertical: 8 }}
         >
@@ -1111,7 +1053,7 @@ export default function UserHomeScreenContent({
         style={{ marginTop: SECTION_SPACING }}
       >
         <View
-          ref={(el) => { stepViewRefs.current['smallTasksSection'] = el; }}
+          ref={tourRef('smallTasksSection')}
           collapsable={false}
           style={{ paddingVertical: 8 }}
         >
@@ -1164,7 +1106,7 @@ export default function UserHomeScreenContent({
         cardBackground={isDark ? colors.cardBackground : colors.background}
         style={{ marginTop: SECTION_SPACING }}
       >
-        <View style={{ paddingVertical: 8 }}>
+        <View ref={tourRef('contractsSection')} collapsable={false} style={{ paddingVertical: 8 }}>
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: colors.text }, { fontSize: scaledSize(18) }, boldStyle]}>{t('My Contracts')}</Text>
             <TouchableOpacity onPress={onPressMyContracts} activeOpacity={0.8}>
@@ -1241,7 +1183,7 @@ export default function UserHomeScreenContent({
         cardBackground={isDark ? colors.cardBackground : colors.background}
         style={{ marginTop: SECTION_SPACING }}
       >
-        <View style={{ paddingVertical: 8 }}>
+        <View ref={tourRef('supportSection')} collapsable={false} style={{ paddingVertical: 8 }}>
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: colors.text }, { fontSize: scaledSize(18) }, boldStyle]}>{t('Support')}</Text>
             <TouchableOpacity onPress={onPressSupportTickets} activeOpacity={0.8}>
@@ -1307,7 +1249,7 @@ export default function UserHomeScreenContent({
       </ScrollView>
       {/* iOS-style Chatbot FAB: fixed bottom-left, wave rings + white circle + robot */}
       {onPressChatbot && (
-        <View ref={(el) => { stepViewRefs.current['chatbot'] = el; }} collapsable={false} style={{ position: 'absolute', bottom: chatbotFabBottomOffset(insets.bottom), left: I18nManager.isRTL ? undefined : 20, right: I18nManager.isRTL ? 20 : undefined, width: 67, height: 67 }} pointerEvents="box-none">
+        <View ref={tourRef('chatbot')} collapsable={false} style={{ position: 'absolute', bottom: chatbotFabBottomOffset(insets.bottom), left: I18nManager.isRTL ? undefined : 20, right: I18nManager.isRTL ? 20 : undefined, width: 67, height: 67 }} pointerEvents="box-none">
           <ChatbotFab
             embedInParent
             onPress={onPressChatbot}
@@ -1349,28 +1291,6 @@ export default function UserHomeScreenContent({
         }}
       />
 
-      <ScreenTourOverlay
-        visible={tourActive}
-        tourStep={tourStep}
-        stepRect={stepRect}
-        totalSteps={TOUR_STEPS.length}
-        stepOrder={TOUR_STEPS[tourStep]?.order ?? 1}
-        stepText={TOUR_STEPS[tourStep] ? t(`tutorial.home.user.${TOUR_STEPS[tourStep].name}`) : ''}
-        isFirst={tourStep === 0}
-        isLast={tourStep === TOUR_STEPS.length - 1}
-        primaryColor={primaryColor}
-        textColor={colors.text}
-        secondaryTextColor={colors.textSecondary}
-        bgColor={colors.cardBackground}
-        isRTL={isArabic || I18nManager.isRTL}
-        fontFamily={fontFamily}
-        boldFontFamily={boldFontFamily}
-        onNext={() => setTourStep((s) => s + 1)}
-        onPrev={() => setTourStep((s) => s - 1)}
-        onSkip={handleTourEnd}
-        onFinish={handleTourEnd}
-        t={t}
-      />
     </View>
   );
 }
@@ -1379,16 +1299,6 @@ const styles = StyleSheet.create({
   searchBarWrap: {
     marginHorizontal: 16,
     alignSelf: 'stretch',
-  },
-  tourBackdrop: {
-    position: 'absolute',
-    backgroundColor: 'rgba(0,0,0,0.65)',
-  },
-  tourHighlight: {
-    position: 'absolute',
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.5)',
   },
   container: { flex: 1 },
   wrapper: { flex: 1 },

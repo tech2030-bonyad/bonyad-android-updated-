@@ -30,6 +30,7 @@ import AnimatedLoadingScreen from '../components/AnimatedLoadingScreen';
 import { coachMarksStorage } from '../utils/coachMarks';
 import ScreenTourOverlay from '../components/tour/ScreenTourOverlay';
 import { useSimpleScreenTour } from '../hooks/useSimpleScreenTour';
+import { TourProvider } from '../components/tour/TourProvider';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 
@@ -373,8 +374,9 @@ export default function UserHomeScreen({
 
   // Info button: restart the tour for whichever main tab is currently open (same overlay style as Home).
   const handleRestartCoachTour = async () => {
+    // doubleRAF is enough — screen is already rendered, no need for 150ms setTimeout
     const delayStart = (fn: () => void) => {
-      requestAnimationFrame(() => setTimeout(fn, 150));
+      requestAnimationFrame(() => requestAnimationFrame(fn));
     };
 
     if (activeTab === 'home') {
@@ -995,6 +997,7 @@ export default function UserHomeScreen({
   if (shouldRenderMobile) {
     const isHomeTabOnly = activeTab === 'home' && !selectedCategory;
     return (
+      <TourProvider>
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         {/* Top bar — same as home screen (logo + Chat | Info | Notifications) */}
         {!isHomeTabOnly && (
@@ -1178,7 +1181,7 @@ export default function UserHomeScreen({
         {activeTab === 'appointments' && (
           <View style={{ flex: 1 }}>
             <AppointmentsScreen
-              onExposeTourControl={(c) => {
+              onExposeTourControl={(c: { startTour: () => void }) => {
                 appointmentsTourControl.current = c;
               }}
             />
@@ -1351,7 +1354,7 @@ export default function UserHomeScreen({
             <NotificationsScreen
               onUnreadCountChange={setUnreadNotificationCount}
               onNavigateFromNotification={onNavigateFromNotification}
-              onExposeTourControl={(c) => {
+              onExposeTourControl={(c: { startTour: () => void }) => {
                 notificationsTourControl.current = c;
               }}
             />
@@ -1650,7 +1653,7 @@ export default function UserHomeScreen({
             textColor={colors.text}
             secondaryTextColor={colors.textSecondary}
             bgColor={colors.cardBackground}
-            isRTL={i18n.language === 'ar' || I18nManager.isRTL}
+
             fontFamily={fontFamily}
             boldFontFamily={boldFontFamily}
             onNext={() =>
@@ -1749,11 +1752,13 @@ export default function UserHomeScreen({
           </View>
         </Modal>
       </View>
+      </TourProvider>
     );
   }
 
   // Render desktop layout for large web screens
   return (
+    <TourProvider>
     <View style={[styles.desktopContainer, { backgroundColor: colors.background }]}>
       {/* New Horizontal Navigation Bar - Figma Design */}
       <View style={[styles.desktopNavBar, {
@@ -2113,7 +2118,7 @@ export default function UserHomeScreen({
           >
             <View style={styles.mainContentWrapper}>
               <AppointmentsScreen
-                onExposeTourControl={(c) => {
+                onExposeTourControl={(c: { startTour: () => void }) => {
                   appointmentsTourControl.current = c;
                 }}
               />
@@ -2270,7 +2275,7 @@ export default function UserHomeScreen({
               <NotificationsScreen
                 onUnreadCountChange={setUnreadNotificationCount}
                 onNavigateFromNotification={onNavigateFromNotification}
-                onExposeTourControl={(c) => {
+                onExposeTourControl={(c: { startTour: () => void }) => {
                   notificationsTourControl.current = c;
                 }}
               />
@@ -2592,7 +2597,6 @@ export default function UserHomeScreen({
           textColor={colors.text}
           secondaryTextColor={colors.textSecondary}
           bgColor={colors.cardBackground}
-          isRTL={i18n.language === 'ar' || I18nManager.isRTL}
           fontFamily={fontFamily}
           boldFontFamily={boldFontFamily}
           onNext={() =>
@@ -2621,6 +2625,7 @@ export default function UserHomeScreen({
         </View>
       )}
     </View>
+    </TourProvider>
   );
 }
 

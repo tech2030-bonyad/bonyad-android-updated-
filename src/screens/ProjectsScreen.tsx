@@ -2518,7 +2518,6 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
             textColor={colors.text}
             secondaryTextColor={colors.textSecondary}
             bgColor={colors.cardBackground}
-            isRTL={i18n.language === 'ar' || I18nManager.isRTL}
             fontFamily={fontFamily}
             boldFontFamily={boldFontFamily}
             onNext={() =>

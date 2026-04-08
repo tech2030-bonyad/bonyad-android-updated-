@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, RefreshControl, StyleSheet, ScrollView } from 'react-native';
-import { CopilotStep, useCopilot } from 'react-native-copilot';
 import { Ionicons } from '@expo/vector-icons';
 import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useTheme } from '../context/ThemeContext';
@@ -16,9 +15,6 @@ import ConfirmationPopup, { useConfirmationPopup } from '../components/Confirmat
 import AppointmentCard from '../components/AppointmentCard';
 import { getTopPadding } from '../utils/statusBarHelper';
 import AnimatedLoadingScreen from '../components/AnimatedLoadingScreen';
-import { WalkableView } from '../components/CoachMarkProvider';
-import { coachMarksStorage } from '../utils/coachMarks';
-import { setTutorialCompletionKey } from '../utils/tutorialSession';
 
 export interface Appointment {
   id: number;
@@ -48,10 +44,9 @@ type AppointmentFilter = 'today' | 'pending' | 'upcoming' | 'completed';
 
 interface AppointmentsScreenProps {
   onBack?: () => void;
-  onExposeTourControl?: (c: { startTour: () => void }) => void;
+  /** Optional: allow parent (UserHomeScreen) to store a tour control handle. */
+  onExposeTourControl?: (control: { startTour: () => void }) => void;
 }
-
-const APPOINTMENTS_TOUR_SCROLL_PAD = 88;
 
 const INSETS_FALLBACK: EdgeInsets = initialWindowMetrics?.insets ?? {
   top: 0,
@@ -107,72 +102,14 @@ export default function AppointmentsScreen({ onBack, onExposeTourControl }: Appo
   const [isTechnician, setIsTechnician] = useState<boolean | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  const { start: startCoachTour, visible: copilotVisible, copilotEvents } = useCopilot();
-  const startCoachTourRef = useRef(startCoachTour);
-  const copilotVisibleRef = useRef(copilotVisible);
-  startCoachTourRef.current = startCoachTour;
-  copilotVisibleRef.current = copilotVisible;
   const mainScrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
-    onExposeTourControl?.({
-      startTour: () => {
-        setTutorialCompletionKey('appointments');
-        requestAnimationFrame(() => startCoachTour());
-      },
-    });
-  }, [onExposeTourControl, startCoachTour]);
+    // This screen does not currently implement a tour, but we expose a no-op handle
+    // so parent screens can keep a consistent API without TS errors.
+    onExposeTourControl?.({ startTour: () => {} });
+  }, [onExposeTourControl]);
 
-  useEffect(() => {
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    (async () => {
-      try {
-        const seen = await coachMarksStorage.hasSeenTutorial('appointments');
-        if (cancelled || seen) return;
-        timer = setTimeout(() => {
-          if (cancelled || copilotVisibleRef.current) return;
-          setTutorialCompletionKey('appointments');
-          startCoachTourRef.current?.();
-        }, 1800);
-      } catch {
-        /* ignore */
-      }
-    })();
-    return () => {
-      cancelled = true;
-      if (timer) clearTimeout(timer);
-    };
-  }, []);
-
-  useEffect(() => {
-    const scrollToStep = (step: { name?: string; wrapperRef?: React.RefObject<any> } | undefined) => {
-      const sv = mainScrollRef.current;
-      if (!sv || !step?.name?.startsWith('appt')) return;
-      const run = () => {
-        if (step.name === 'apptCalendar') {
-          sv.scrollTo({ y: 0, animated: true });
-          return;
-        }
-        const scrollContent = (sv as ScrollView & { getInnerViewRef?: () => unknown }).getInnerViewRef?.();
-        const target = step.wrapperRef?.current;
-        if (!scrollContent || !target || typeof target.measureLayout !== 'function') return;
-        target.measureLayout(
-          scrollContent,
-          (_x: number, y: number) => {
-            sv.scrollTo({ y: Math.max(0, y - APPOINTMENTS_TOUR_SCROLL_PAD), animated: true });
-          },
-          () => {},
-        );
-      };
-      requestAnimationFrame(() => {
-        requestAnimationFrame(run);
-      });
-    };
-    const handler = (s: unknown) => scrollToStep(s as { name?: string; wrapperRef?: React.RefObject<any> });
-    copilotEvents.on('stepChange', handler);
-    return () => copilotEvents.off('stepChange', handler);
-  }, [copilotEvents]);
 
   // Calendar state
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -679,9 +616,7 @@ export default function AppointmentsScreen({ onBack, onExposeTourControl }: Appo
         }
       >
         {/* Calendar Section */}
-        <CopilotStep text={t('tutorial.appointments.calendar')} order={101} name="apptCalendar">
-          <WalkableView collapsable={false} style={styles.copilotWalkable}>
-            <View style={[styles.calendarSection, { backgroundColor: colors.cardBackground }]}>
+        <View style={[styles.calendarSection, { backgroundColor: colors.cardBackground }]}>
           {/* Month Navigation */}
           <View style={styles.monthNavigation}>
             <TouchableOpacity onPress={() => navigateMonth('prev')} style={styles.navArrow}>
@@ -716,25 +651,17 @@ export default function AppointmentsScreen({ onBack, onExposeTourControl }: Appo
               {renderCalendar()}
             </View>
           </View>
-            </View>
-          </WalkableView>
-        </CopilotStep>
+        </View>
 
         {/* Filter Tabs */}
-        <CopilotStep text={t('tutorial.appointments.filters')} order={102} name="apptFilters">
-          <WalkableView collapsable={false} style={styles.copilotWalkable}>
-            <View style={styles.filterTabsContainer}>
+        <View style={styles.filterTabsContainer}>
               {renderFilterTab('today', t('Today'))}
               {renderFilterTab('pending', t('Pending'))}
               {renderFilterTab('upcoming', t('Upcoming'))}
               {renderFilterTab('completed', t('Completed'))}
             </View>
-          </WalkableView>
-        </CopilotStep>
 
-        <CopilotStep text={t('tutorial.appointments.list')} order={103} name="apptList">
-          <WalkableView collapsable={false} style={styles.copilotWalkable}>
-            <View style={styles.apptListCopilotInner}>
+        <View style={styles.apptListCopilotInner}>
               {/* Section Header */}
               <View style={styles.sectionHeader}>
                 <View style={[styles.sectionIndicator, { backgroundColor: getFilterColor() }]} />
@@ -772,8 +699,6 @@ export default function AppointmentsScreen({ onBack, onExposeTourControl }: Appo
                 </View>
               )}
             </View>
-          </WalkableView>
-        </CopilotStep>
 
         {/* Bottom spacing */}
         <View style={{ height: 120 }} />
@@ -807,10 +732,6 @@ export default function AppointmentsScreen({ onBack, onExposeTourControl }: Appo
 }
 
 const styles = StyleSheet.create({
-  copilotWalkable: {
-    alignSelf: 'stretch',
-    width: '100%',
-  },
   apptListCopilotInner: {
     alignSelf: 'stretch',
     width: '100%',
