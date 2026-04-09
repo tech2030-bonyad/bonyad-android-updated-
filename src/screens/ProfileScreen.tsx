@@ -56,6 +56,7 @@ interface ProfileScreenProps {
   onNavigateToSmallTaskTypes?: () => void;
   onNavigateToPaymentHistory?: () => void;
   onNavigateToSupportTickets?: () => void;
+  onNavigateToIntroToApp?: () => void;
   onExposeTourControl?: (c: { startTour: () => void }) => void;
 }
 
@@ -109,6 +110,7 @@ export default function ProfileScreen({
   onNavigateToSmallTaskTypes,
   onNavigateToPaymentHistory,
   onNavigateToSupportTickets,
+  onNavigateToIntroToApp,
   onExposeTourControl,
 }: ProfileScreenProps) {
   const { t, i18n } = useTranslation();
@@ -1081,6 +1083,32 @@ export default function ProfileScreen({
           </View>
 
         </View>
+
+        {/* Show Onboarding Card */}
+        {!!onNavigateToIntroToApp && (
+          <View
+            style={[styles.userMenuCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}
+          >
+            <TouchableOpacity
+              style={styles.settingItem}
+              onPress={() => onNavigateToIntroToApp?.()}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.settingIconContainer, { backgroundColor: iconBgColor }]}>
+                <Ionicons name="compass-outline" size={24} color={isDarkMode ? colors.textSecondary : '#666666'} />
+              </View>
+              <View style={styles.settingTextContainer}>
+                <Text style={[styles.settingTitle, { color: textColor, fontFamily, fontSize: scaledSize(16) }]}>
+                  {t('profile.showOnboarding')}
+                </Text>
+                <Text style={[styles.settingSubtitle, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }]}>
+                  {t('profile.showOnboardingSub')}
+                </Text>
+              </View>
+              <Ionicons name={menuChevron} size={24} color={primaryColor} />
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Delete Account Card */}
         <View

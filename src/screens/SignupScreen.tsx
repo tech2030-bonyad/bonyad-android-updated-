@@ -25,6 +25,7 @@ import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
 import AnimatedRoleToggle from '../components/AnimatedRoleToggle';
 import { PhoneInput, NameInput, EmailInput, PasswordInput, CustomCheckbox } from '../components/CustomInput';
 import { useSignupValidation } from '../validation/useSignupValidation';
+import { normalizePhoneToEnglish } from '../utils/phoneUtils';
 import TermsScreen from './TermsScreen';
 
 type FocusableField = 'phone' | 'name' | 'email' | 'password' | 'confirm';
@@ -147,8 +148,8 @@ export default function SignupScreen({
   };
 
   const handlePhoneChange = (value: string) => {
-    const digitsOnly = value.replace(/\D/g, '').slice(0, 9);
-    setPhone(digitsOnly);
+    // PhoneInput component already filters/trims to 10 Saudi digits
+    setPhone(value);
   };
 
   const handlePasswordChange = (value: string) => {
@@ -267,12 +268,15 @@ export default function SignupScreen({
 
   const performSignup = async (formattedPhone: string) => {
     const apiURL = buildApiUrl(API_ENDPOINTS.AUTH.REGISTER);
-    const phoneOnly = String(formattedPhone).replace(/\D/g, '').slice(0, 9);
-    if (phoneOnly.length !== 9 || !phoneOnly.startsWith('5')) {
+    // Normalize Arabic digits → English, validate 10-digit Saudi format (05XXXXXXXX)
+    const phoneNormalized = normalizePhoneToEnglish(String(formattedPhone)).replace(/\D/g, '').slice(0, 10);
+    if (phoneNormalized.length !== 10 || !phoneNormalized.startsWith('0')) {
       showError(t('signup.validation.phone'), t('validation_failed'));
       setIsLoading(false);
       return;
     }
+    // Strip leading 0 for API (API expects 9-digit: 5XXXXXXXX)
+    const phoneOnly = phoneNormalized.replace(/^0/, '');
 
     // USER sends entered email; TECHNICIAN sends basic registration fields.
     const requestBody: Record<string, string> =

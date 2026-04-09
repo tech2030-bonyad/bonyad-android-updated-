@@ -16,10 +16,10 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons, Feather } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import { useFontFamily } from '../../context/FontContext';
-import { LinearGradient } from 'expo-linear-gradient';
 import StaggeredAppearView from '../../components/StaggeredAppearView';
 import PressableScaleView from '../../components/PressableScaleView';
 import BonyadLogo from '../../components/BonyadLogo';
@@ -152,13 +152,20 @@ export interface ApiProject {
   [key: string]: unknown;
 }
 
-// Feature banners matching iOS AdvertisementComponent (5 PNG images)
-const BANNER_IMAGES = [
+// Feature banners matching iOS AdvertisementComponent (5 PNG images, per language)
+const BANNER_IMAGES_AR = [
   require('../../../assets/banner1.png'),
   require('../../../assets/banner2.png'),
   require('../../../assets/banner3.png'),
   require('../../../assets/banner4.png'),
   require('../../../assets/banner5.png'),
+];
+const BANNER_IMAGES_EN = [
+  require('../../../assets/banner1-en.png'),
+  require('../../../assets/banner2-en.png'),
+  require('../../../assets/banner3-en.png'),
+  require('../../../assets/banner4-en.png'),
+  require('../../../assets/banner5-en.png'),
 ];
 
 export interface UserHomeScreenContentProps {
@@ -198,6 +205,7 @@ export interface UserHomeScreenContentProps {
   onPressCreateSupportTicket?: () => void;
   unreadNotificationCount?: number;
   onExposeControl?: (ctrl: { startTour: () => void }) => void;
+  onPressIntroToApp?: () => void;
 }
 
 export default function UserHomeScreenContent({
@@ -230,15 +238,18 @@ export default function UserHomeScreenContent({
   onPressInfo,
   unreadNotificationCount = 0,
   onExposeControl,
+  onPressIntroToApp,
 }: UserHomeScreenContentProps) {
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
   const { colors, theme } = useTheme();
   const { fontFamily, boldFontFamily, scaledSize } = useFontFamily();
   const isArabic = i18n.language === 'ar';
+  const bannerImages = isArabic ? BANNER_IMAGES_AR : BANNER_IMAGES_EN;
   const isDark = theme === 'dark';
 
   const [searchText, setSearchText] = useState('');
+  const [showOnboardingCard, setShowOnboardingCard] = useState(true);
 
   // ─── Unified search state ──────────────────────────────────────────────────
   const [searchResults, setSearchResults] = useState<ScoredSearchResults>(EMPTY_SCORED_RESULTS);
@@ -696,7 +707,7 @@ export default function UserHomeScreenContent({
     const x = e.nativeEvent.contentOffset.x;
     const w = e.nativeEvent.layoutMeasurement.width;
     const index = Math.round(x / w);
-    if (index >= 0 && index < BANNER_IMAGES.length) setBannerIndex(index);
+    if (index >= 0 && index < bannerImages.length) setBannerIndex(index);
   };
 
   const primaryColor = isDark ? colors.primary : IOS_PRIMARY;
@@ -832,16 +843,16 @@ export default function UserHomeScreenContent({
           nestedScrollEnabled={true}
           scrollEventThrottle={16}
         >
-          {BANNER_IMAGES.map((img, i) => (
+          {bannerImages.map((img, i) => (
             <View key={i} style={[styles.bannerPage, { width: SCREEN_WIDTH }]}>
               <View style={[styles.bannerCard, { backgroundColor: isDark ? colors.cardBackground : '#FFFFFF' }]}>
-                <Image source={img} style={styles.bannerImage} resizeMode="stretch" />
+                <Image source={img} style={styles.bannerImage} resizeMode="cover" />
               </View>
             </View>
           ))}
         </ScrollView>
         <View style={styles.dots}>
-          {BANNER_IMAGES.map((_, i) => (
+          {bannerImages.map((_, i) => (
             <View
               key={i}
               style={[
@@ -854,6 +865,37 @@ export default function UserHomeScreenContent({
           ))}
         </View>
       </StaggeredAppearView>
+
+      {/* Onboarding intro card — dismissible */}
+      {showOnboardingCard && !!onPressIntroToApp && (
+        <TouchableOpacity
+          activeOpacity={0.88}
+          onPress={onPressIntroToApp}
+          style={{ marginTop: SECTION_SPACING }}
+        >
+          <LinearGradient
+            colors={isDark ? ['#003867', '#005DAC'] : ['#0080E0', '#1A6DB4']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.onboardingCard}
+          >
+            <View style={styles.onboardingCardIcon}>
+              <Ionicons name="play-circle" size={34} color="rgba(255,255,255,0.95)" />
+            </View>
+            <View style={styles.onboardingCardBody}>
+              <Text style={styles.onboardingCardTitle}>{t('home.seeOnboarding')}</Text>
+              <Text style={styles.onboardingCardSub}>{t('home.seeOnboardingSub')}</Text>
+            </View>
+            <TouchableOpacity
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              onPress={(e) => { e.stopPropagation(); setShowOnboardingCard(false); }}
+              style={styles.onboardingCardClose}
+            >
+              <Ionicons name="close" size={18} color="rgba(255,255,255,0.8)" />
+            </TouchableOpacity>
+          </LinearGradient>
+        </TouchableOpacity>
+      )}
 
       {/* 3. Quick actions - circular icons (iOS QuickActionsSection) with press scale */}
       <FlowingBorderCard
@@ -1451,11 +1493,17 @@ const styles = StyleSheet.create({
   },
   bannerImage: {
     width: '100%',
-    height: 160,
+    aspectRatio: 400 / 140,
   },
   dots: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 12, gap: 8 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   dotActive: { width: 24, height: 8, borderRadius: 4 },
+  onboardingCard: { flexDirection: 'row', alignItems: 'center', borderRadius: 16, paddingVertical: 14, paddingHorizontal: 16, gap: 12, overflow: 'hidden' },
+  onboardingCardIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.18)', justifyContent: 'center', alignItems: 'center' },
+  onboardingCardBody: { flex: 1 },
+  onboardingCardTitle: { fontSize: 15, fontWeight: '700', color: '#fff', marginBottom: 2 },
+  onboardingCardSub: { fontSize: 12, color: 'rgba(255,255,255,0.75)', lineHeight: 16 },
+  onboardingCardClose: { padding: 4 },
   quickActions: { flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 },
   quickActionItem: { alignItems: 'center', minWidth: 72 },
   quickActionCircle: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },

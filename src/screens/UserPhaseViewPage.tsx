@@ -18,6 +18,7 @@ import { API_ENDPOINTS, buildApiUrlWithParams } from '../config/api';
 import { storage } from '../utils/storage';
 import { showError } from '../utils/alert';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
+import RialIcon from '../components/RialIcon';
 
 interface UserPhaseViewPageProps {
   project: any;
@@ -179,7 +180,7 @@ export default function UserPhaseViewPage({
 
                 <View style={styles.phaseDetails}>
                   <View style={styles.phaseDetailItem}>
-                    <Ionicons name="cash-outline" size={16} color="#10B981" />
+                    <RialIcon size={16} variant="primary" color={"#10B981"} />
                     <Text style={[styles.phaseDetailText, { color: colors.text }]}>
                       {formatBudget(phase.moneySpent)} {t('SAR')}
                     </Text>

@@ -21,6 +21,7 @@ import SmallTaskBidFormModal from '../components/SmallTaskBidFormModal';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
 import { getBidsOnRequest, acceptBid, rejectBid, updateRequestStatus } from '../services/SmallTaskService';
 import { SmallTaskRequest, SmallTaskBid } from '../types/smallTasks';
+import RialIcon from '../components/RialIcon';
 
 interface SmallTaskDetailScreenProps {
   task: SmallTaskRequest;
@@ -325,7 +326,7 @@ t('smallTasks.updateStatus'),
           {(taskDetails?.budget || taskDetails?.amount) && (
             <View style={[styles.section, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
               <View style={styles.sectionHeader}>
-                <Ionicons name="cash-outline" size={18} color={colors.primary} />
+                <RialIcon size={18} variant="primary" color={colors.primary} />
                 <Text style={[styles.sectionTitle, { color: colors.text }]}>
                   {t('smallTasks.budget')}
                 </Text>

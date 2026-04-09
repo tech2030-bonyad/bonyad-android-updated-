@@ -143,8 +143,8 @@ export default function LoginScreen({
     setIsLoading(true);
 
     try {
-      // Get phone number as typed (no formatting)
-      const formattedPhone = phone.trim();
+      // Normalize Arabic → English digits, strip leading 0 for API (API expects 9-digit: 5XXXXXXXX)
+      const formattedPhone = phone.trim().replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).replace(/\D/g, '').replace(/^0/, '');
 
       // Validation
       if (!formattedPhone || !password) {

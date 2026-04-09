@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ProjectCreationFlow from '../components/ProjectCreationFlow';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
 import ConfirmationPopup, { useConfirmationPopup } from '../components/ConfirmationPopup';
+import RialIcon from '../components/RialIcon';
 
 // ===== DESIGN TOKENS FROM FIGMA =====
 const COLORS = {
@@ -725,7 +726,7 @@ export default function ProjectDetailScreen({
         <View style={styles.statsRow}>
           <View style={[styles.statCard, styles.budgetCard]}>
             <View style={styles.statHeader}>
-              <Ionicons name="cash-outline" size={12} color={COLORS.primary80} />
+              <RialIcon size={12} variant="primary" color={COLORS.primary80} />
               <Text style={styles.statTitle}>{t('Total Budget')}</Text>
             </View>
             <Text style={styles.statValue}>{formatBudget(project.budget)}</Text>

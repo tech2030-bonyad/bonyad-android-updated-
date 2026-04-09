@@ -53,11 +53,14 @@ import { buildApiUrl, API_ENDPOINTS, getServerBaseUrl } from '../config/api';
 import { storage } from '../utils/storage';
 import { checkHasPortfolio } from '../services/PortfolioService';
 import TechnicalHomeScreenContent from './home/TechnicalHomeScreen';
+import ContractViewerModal from './ContractViewerModal';
 import ChatbotScreen from './ChatbotScreen';
 import { SmallTaskRequest } from '../types/smallTasks';
 import type { HomeShellFromChatbotPayload } from '../utils/chatbotNavigateAndroid';
 import { coachMarksStorage } from '../utils/coachMarks';
 import { setTutorialCompletionKey } from '../utils/tutorialSession';
+import InteractiveDemoOverlay from '../components/tour/InteractiveDemoOverlay';
+import { TECHNICIAN_HOME_DEMOS } from '../components/tour/demoDefinitions';
 
 interface TechnicianHomeScreenProps {
   onShowProfile: () => void;
@@ -89,6 +92,7 @@ interface TechnicianHomeScreenProps {
   onNavigateToAvailability?: () => void;
   projectsFilter?: 'available' | 'running' | 'completed' | 'bid_received' | 'direct_offers';
   onNavigateFromNotification?: (notification: any) => void | Promise<void>;
+  onNavigateToIntroToApp?: () => void;
   initialProjectToOpen?: any;
   initialSmallTaskToOpen?: any;
   profileNavFromChatbot?: { id: number; subView: 'myData' | 'paymentHistory' | 'smallTaskTypes' | 'regions' } | null;
@@ -106,6 +110,9 @@ export default function TechnicianHomeScreen({
   onShowNotifications,
   onShowAppointments,
   onShowChatbot,
+  onChatbotNavigateToTab,
+  onChatbotNavigateToScreen,
+  onChatbotRequestLiveAgent,
   onShowSupportTickets,
   onShowServiceProviders,
   onShowCommissionPayment,
@@ -119,6 +126,7 @@ export default function TechnicianHomeScreen({
   onNavigateToAvailability,
   projectsFilter = 'available',
   onNavigateFromNotification,
+  onNavigateToIntroToApp,
   initialProjectToOpen,
   initialSmallTaskToOpen,
   profileNavFromChatbot,
@@ -133,6 +141,29 @@ export default function TechnicianHomeScreen({
   const [activeTab, setActiveTab] = useState(openProfileOnMount ? 'profile' : 'home');
   const [currentProjectsFilter, setCurrentProjectsFilter] = useState<'available' | 'running' | 'completed' | 'bid_received' | 'direct_offers'>(projectsFilter || 'available');
   const [profileSubView, setProfileSubView] = useState<'myData' | 'editProfile' | 'portfolio' | 'subscription' | 'services' | 'availability' | 'regions' | 'smallTaskTypes' | 'paymentHistory' | 'changePassword' | 'changePhone' | 'verifyPhoneChange' | 'serviceSuggestions' | null>(null);
+
+  // Responsive state — declared early so useEffects below can depend on IS_LARGE_WEB
+  const [screenWidth, setScreenWidth] = useState(Dimensions.get('window').width);
+  useEffect(() => {
+    const subscription = Dimensions.addEventListener('change', ({ window }) => {
+      setScreenWidth(window.width);
+    });
+    return () => { subscription?.remove(); };
+  }, []);
+  const IS_WEB = Platform.OS === 'web';
+  const IS_LARGE_WEB = IS_WEB && screenWidth >= 1200;
+
+  // Chat state + helper — declared early so homeShellFromChatbot effect can depend on openEmbeddedChatFromProjects
+  const [selectedChat, setSelectedChat] = useState<{ roomId: string; receiverId: number; receiverName: string; projectId?: number | null } | null>(null);
+  const [showChatList, setShowChatList] = useState(true);
+  const openEmbeddedChatFromProjects = useCallback(
+    (roomId: string, receiverId: number, receiverName: string, projectId?: number | null) => {
+      setActiveTab('chat');
+      setSelectedChat({ roomId, receiverId, receiverName, projectId: projectId ?? undefined });
+      setShowChatList(IS_LARGE_WEB);
+    },
+    [IS_LARGE_WEB],
+  );
 
   useEffect(() => {
     if (!profileNavFromChatbot) return;
@@ -201,8 +232,6 @@ export default function TechnicianHomeScreen({
   /** When true, show AppointmentsScreen within home tab so nav bar stays visible */
   const [showAppointmentsView, setShowAppointmentsView] = useState(false);
   const [phoneChangeNumber, setPhoneChangeNumber] = useState<string>('');
-  const [selectedChat, setSelectedChat] = useState<{ roomId: string; receiverId: number; receiverName: string; projectId?: number | null } | null>(null);
-  const [showChatList, setShowChatList] = useState(true);
   const insets = useSafeAreaInsets();
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [isInHomeTransitionLoading, setIsInHomeTransitionLoading] = useState(false);
@@ -237,14 +266,13 @@ export default function TechnicianHomeScreen({
   startCoachTourRef.current = startCoachTour;
   copilotVisibleRef.current = copilotVisible;
 
+  // Interactive demo overlay state
+  const [demoOverlayVisible, setDemoOverlayVisible] = useState(false);
+  const [contractViewerProjectId, setContractViewerProjectId] = useState<number | null>(null);
+
+  /** Opens the interactive demo overlay instead of the old copilot spotlight tour. */
   const restartTechnicianHomeTour = useCallback(async () => {
-    await coachMarksStorage.clearTutorial('technicianHome');
-    setShowAppointmentsView(false);
-    setActiveTab('home');
-    setTimeout(() => {
-      setTutorialCompletionKey('technicianHome');
-      startCoachTourRef.current?.();
-    }, 650);
+    setDemoOverlayVisible(true);
   }, []);
 
   // Auto-start the coach tour ONLY on the Home tab (prevents tour showing on other tabs/screens).
@@ -390,23 +418,7 @@ export default function TechnicianHomeScreen({
     homeTransitionTimerRef.current = setTimeout(() => setIsInHomeTransitionLoading(false), 240);
   }, [activeTab, profileSubView]);
 
-  // Responsive state - updates on window resize
-  const [screenWidth, setScreenWidth] = useState(Dimensions.get('window').width);
-
-  // Update screen width on resize
-  useEffect(() => {
-    const subscription = Dimensions.addEventListener('change', ({ window }) => {
-      setScreenWidth(window.width);
-    });
-
-    return () => {
-      subscription?.remove();
-    };
-  }, []);
-
-  // Calculate responsive breakpoints
-  const IS_WEB = Platform.OS === 'web';
-  const IS_LARGE_WEB = IS_WEB && screenWidth >= 1200;
+  // Calculate remaining responsive breakpoints
   const IS_MEDIUM_WEB = IS_WEB && screenWidth >= 768 && screenWidth < 1200;
   const IS_SMALL_WEB = IS_WEB && screenWidth < 768;
   const shouldRenderMobile = !IS_WEB || IS_SMALL_WEB;
@@ -415,15 +427,6 @@ export default function TechnicianHomeScreen({
   const chatEnterTy = useRef(new Animated.Value(0)).current;
   const chatDetailOpac = useRef(new Animated.Value(0)).current;
   const chatDetailTy = useRef(new Animated.Value(0)).current;
-
-  const openEmbeddedChatFromProjects = useCallback(
-    (roomId: string, receiverId: number, receiverName: string, projectId?: number | null) => {
-      setActiveTab('chat');
-      setSelectedChat({ roomId, receiverId, receiverName, projectId: projectId ?? undefined });
-      setShowChatList(IS_LARGE_WEB);
-    },
-    [IS_LARGE_WEB],
-  );
 
   useEffect(() => {
     if (activeTab !== 'chat') {
@@ -706,8 +709,18 @@ export default function TechnicianHomeScreen({
             onPressSupport={() => {
               onShowSupportTickets?.();
             }}
+            onPressContract={(projectId) => setContractViewerProjectId(projectId)}
+            onPressIntroToApp={onNavigateToIntroToApp}
           />
         </View>
+
+        {/* Contract Viewer Modal */}
+        <ContractViewerModal
+          visible={contractViewerProjectId !== null}
+          projectId={contractViewerProjectId ?? 0}
+          onClose={() => setContractViewerProjectId(null)}
+          isTechnician
+        />
 
         {/* Appointments Screen - shown within home tab so nav bar stays visible */}
         {activeTab === 'home' && showAppointmentsView && (
@@ -923,6 +936,7 @@ export default function TechnicianHomeScreen({
                   setProfileSubView(null);
                   onShowSupportTickets?.();
                 }}
+                onNavigateToIntroToApp={onNavigateToIntroToApp}
               />
             ) : profileSubView === 'myData' ? (
               <MyDataScreen
@@ -1051,6 +1065,22 @@ export default function TechnicianHomeScreen({
           </CopilotStep>
         </View>
 
+        {/* Interactive Demo Overlay — mobile layout */}
+        <InteractiveDemoOverlay
+          visible={demoOverlayVisible}
+          demos={TECHNICIAN_HOME_DEMOS}
+          primaryColor={colors.primary || '#00A5F4'}
+          textColor={colors.text}
+          secondaryTextColor={colors.textSecondary}
+          bgColor={colors.background}
+          cardBgColor={colors.cardBackground}
+          borderColor={colors.border}
+          isRTL={isRTL}
+          isDark={theme === 'dark'}
+          fontFamily={fontFamily}
+          onClose={() => setDemoOverlayVisible(false)}
+          t={t}
+        />
       </View>
     );
   }
@@ -1270,6 +1300,7 @@ export default function TechnicianHomeScreen({
             onPressSupport={() => {
               onShowSupportTickets?.();
             }}
+            onPressContract={(projectId) => setContractViewerProjectId(projectId)}
           />
         </View>
 
@@ -1458,6 +1489,7 @@ export default function TechnicianHomeScreen({
                     setProfileSubView(null);
                     onShowSupportTickets?.();
                   }}
+                  onNavigateToIntroToApp={onNavigateToIntroToApp}
                 />
               ) : profileSubView === 'myData' ? (
                 <MyDataScreen
@@ -1562,6 +1594,23 @@ export default function TechnicianHomeScreen({
       >
         <Ionicons name="chatbubbles" size={28} color="#fff" />
       </TouchableOpacity>
+
+      {/* Interactive Demo Overlay — replaces old copilot spotlight tour */}
+      <InteractiveDemoOverlay
+        visible={demoOverlayVisible}
+        demos={TECHNICIAN_HOME_DEMOS}
+        primaryColor={colors.primary || '#00A5F4'}
+        textColor={colors.text}
+        secondaryTextColor={colors.textSecondary}
+        bgColor={colors.background}
+        cardBgColor={colors.cardBackground}
+        borderColor={colors.border}
+        isRTL={isRTL}
+        isDark={theme === 'dark'}
+        fontFamily={fontFamily}
+        onClose={() => setDemoOverlayVisible(false)}
+        t={t}
+      />
 
       {/* Local transition loader for tab/subview switches (bottom nav / top nav / profile subviews) */}
       {isInHomeTransitionLoading && (

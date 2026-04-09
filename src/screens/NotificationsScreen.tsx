@@ -482,7 +482,7 @@ function NotificationCard({ notification, onTap, onDelete, colors, isDarkMode, t
   const getIconName = (type: string): string => {
     switch (type) {
       case 'BID_RECEIVED':
-      case 'BID_ACCEPTED': return 'cash-outline';
+      case 'BID_ACCEPTED': return 'wallet-outline';
       case 'VISIT_REQUEST': return 'home-outline';
       case 'PHASE_COMPLETED':
       case 'PHASE_CREATED':

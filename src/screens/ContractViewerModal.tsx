@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
   Linking,
   Platform,
   TextInput,
+  Dimensions,
+  Animated as RNAnimated,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,8 +23,49 @@ import { storage } from '../utils/storage';
 import { formatMessageTime } from '../utils/chatUtils';
 import { Asset } from 'expo-asset';
 import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system/legacy';
 import { showError } from '../utils/alert';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
+import Pdf from 'react-native-pdf';
+import { WebView } from 'react-native-webview';
+
+// Streaming letter-by-letter text animation
+const StreamingText = ({ text, color, fontSize = 15 }: { text: string; color: string; fontSize?: number }) => {
+  const [visibleCount, setVisibleCount] = useState(0);
+  const cursorOpacity = useRef(new RNAnimated.Value(1)).current;
+
+  useEffect(() => {
+    setVisibleCount(0);
+    const interval = setInterval(() => {
+      setVisibleCount(prev => {
+        if (prev >= text.length) {
+          clearInterval(interval);
+          return prev;
+        }
+        return prev + 1;
+      });
+    }, 40);
+    return () => clearInterval(interval);
+  }, [text]);
+
+  useEffect(() => {
+    const blink = RNAnimated.loop(
+      RNAnimated.sequence([
+        RNAnimated.timing(cursorOpacity, { toValue: 0, duration: 400, useNativeDriver: true }),
+        RNAnimated.timing(cursorOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
+      ])
+    );
+    blink.start();
+    return () => blink.stop();
+  }, []);
+
+  return (
+    <Text style={{ color, fontSize, fontWeight: '500' }}>
+      {text.substring(0, visibleCount)}
+      <RNAnimated.Text style={{ opacity: cursorOpacity, color }}>|</RNAnimated.Text>
+    </Text>
+  );
+};
 
 interface ContractViewerModalProps {
   visible: boolean;
@@ -217,39 +260,118 @@ export default function ContractViewerModal({
     return null;
   };
 
+  const [pdfLocalUri, setPdfLocalUri] = useState<string | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadingText, setDownloadingText] = useState('');
+
+  // View PDF — opens immediately in WebView (fast, no download needed)
   const viewPdfContract = async () => {
     setIsLoadingPdf(true);
     try {
       const generatedPdfUrl = await getPdfUrl();
-      
       if (!generatedPdfUrl) {
         showError(t('Could not load PDF'), t('Error'));
         return;
       }
-
       setPdfUrl(generatedPdfUrl);
-
-      if (Platform.OS === 'web') {
-        // On web, show inline viewer
-        setShowPdfViewer(true);
-      } else {
-        // On mobile, download and share the PDF
-        if (await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(generatedPdfUrl, {
-            mimeType: 'application/pdf',
-            dialogTitle: t('Contract'),
-            UTI: 'com.adobe.pdf',
-          });
-        } else {
-          showError(t('Sharing is not available on this device'), t('Error'));
-        }
-      }
+      setShowPdfViewer(true);
     } catch (error) {
       console.error('❌ Error opening PDF:', error);
       showError(t('Could not open PDF contract'), t('Error'));
     } finally {
       setIsLoadingPdf(false);
     }
+  };
+
+  // Download PDF — downloads to device then opens share sheet
+  const downloadPdfContract = async () => {
+    setIsDownloading(true);
+    setDownloadingText(i18n.language === 'ar'
+      ? 'جاري تحميل العقد بصيغة PDF...'
+      : 'Downloading your contract PDF...');
+    try {
+      let url = pdfUrl;
+      if (!url) {
+        url = await getPdfUrl();
+        if (url) setPdfUrl(url);
+      }
+      if (!url) {
+        showError(t('Could not load PDF'), t('Error'));
+        return;
+      }
+
+      const cacheDir = FileSystem.cacheDirectory || FileSystem.documentDirectory;
+      if (!cacheDir) {
+        await Linking.openURL(url);
+        return;
+      }
+
+      const fileName = `contract_${projectId}_${Date.now()}.pdf`;
+      const localUri = `${cacheDir}${fileName}`;
+      const token = await storage.getAuthToken();
+
+      setDownloadingText(i18n.language === 'ar'
+        ? 'جاري حفظ الملف على جهازك...'
+        : 'Saving the file to your device...');
+
+      const downloadResult = await FileSystem.downloadAsync(url, localUri, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+
+      if (downloadResult.status !== 200) {
+        console.warn('⚠️ PDF download status:', downloadResult.status);
+        await Linking.openURL(url);
+        return;
+      }
+
+      setPdfLocalUri(downloadResult.uri);
+
+      setDownloadingText(i18n.language === 'ar'
+        ? 'تم التحميل! جاري فتح خيارات المشاركة...'
+        : 'Downloaded! Opening share options...');
+
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(downloadResult.uri, {
+          mimeType: 'application/pdf',
+          dialogTitle: t('Contract'),
+          UTI: 'com.adobe.pdf',
+        });
+      } else {
+        await Linking.openURL(url);
+      }
+    } catch (error) {
+      console.error('❌ Error downloading PDF:', error);
+      if (pdfUrl) {
+        try { await Linking.openURL(pdfUrl); } catch {}
+      }
+      showError(t('Could not download PDF'), t('Error'));
+    } finally {
+      setIsDownloading(false);
+      setDownloadingText('');
+    }
+  };
+
+  // Share from PDF viewer (reuses downloaded file or downloads fresh)
+  const sharePdf = async () => {
+    if (!pdfUrl) return;
+    try {
+      let fileUri = pdfLocalUri;
+      if (!fileUri) {
+        const cacheDir = FileSystem.cacheDirectory || FileSystem.documentDirectory;
+        if (!cacheDir) { await Linking.openURL(pdfUrl); return; }
+        const fileName = `contract_${projectId}_${Date.now()}.pdf`;
+        const token = await storage.getAuthToken();
+        const result = await FileSystem.downloadAsync(pdfUrl, `${cacheDir}${fileName}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        });
+        if (result.status === 200) fileUri = result.uri;
+      }
+      if (fileUri && await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(fileUri, { mimeType: 'application/pdf', dialogTitle: t('Contract'), UTI: 'com.adobe.pdf' });
+      } else {
+        await Linking.openURL(pdfUrl);
+      }
+    } catch { await Linking.openURL(pdfUrl); }
   };
 
   const formatBudget = (budget: number) => {
@@ -367,16 +489,51 @@ export default function ContractViewerModal({
                 </View>
               )}
 
-              {/* Download Contract Button */}
-              <TouchableOpacity
-                style={[styles.downloadContractButton, { borderColor: '#1A73E8' }]}
-                onPress={viewPdfContract}
-              >
-                <Ionicons name="download-outline" size={20} color="#1A73E8" />
-                <Text style={[styles.downloadContractButtonText, { color: '#1A73E8' }]}>
-                  {t('Download Contract')} (PDF)
-                </Text>
-              </TouchableOpacity>
+              {/* View & Download Buttons */}
+              <View style={styles.contractButtonsRow}>
+                <TouchableOpacity
+                  style={[styles.viewPdfButton, { backgroundColor: '#1A73E8' }]}
+                  onPress={viewPdfContract}
+                  disabled={isLoadingPdf || isDownloading}
+                >
+                  {isLoadingPdf ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <>
+                      <Ionicons name="eye-outline" size={20} color="#fff" />
+                      <Text style={styles.viewPdfButtonText}>{t('View PDF')}</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.downloadPdfButton, { borderColor: '#1A73E8' }]}
+                  onPress={downloadPdfContract}
+                  disabled={isLoadingPdf || isDownloading}
+                >
+                  {isDownloading ? (
+                    <ActivityIndicator size="small" color="#1A73E8" />
+                  ) : (
+                    <>
+                      <Ionicons name="download-outline" size={20} color="#1A73E8" />
+                      <Text style={[styles.downloadPdfButtonText, { color: '#1A73E8' }]}>
+                        {t('Download')}
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              {/* Streaming download status */}
+              {isDownloading && downloadingText !== '' && (
+                <View style={styles.downloadingStatusContainer}>
+                  <StreamingText
+                    text={downloadingText}
+                    color={colors.primary}
+                    fontSize={13}
+                  />
+                </View>
+              )}
             </View>
 
             {/* Email Signature Sent Info - Figma style */}
@@ -461,57 +618,105 @@ export default function ContractViewerModal({
       {/* PDF Viewer Modal */}
       <Modal
         visible={showPdfViewer}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowPdfViewer(false)}
+        transparent={false}
+        animationType="slide"
+        onRequestClose={() => { setShowPdfViewer(false); setPdfLocalUri(null); }}
       >
-        <View style={styles.pdfModalOverlay}>
-          <View style={[styles.pdfModalContainer, { backgroundColor: colors.background }]}>
-            <View style={[styles.pdfHeader, { borderBottomColor: colors.border }]}>
-              <Text style={[styles.pdfHeaderTitle, { color: colors.text, fontSize: scaledSize(20) }]}>
-                {t('Contract')}
-              </Text>
-              <TouchableOpacity onPress={() => setShowPdfViewer(false)}>
-                <Ionicons name="close" size={28} color={colors.text} />
-              </TouchableOpacity>
-            </View>
-            <View style={styles.pdfViewer}>
-              {Platform.OS === 'web' ? (
-                (() => {
-                  if (!pdfUrl) {
-                    return (
-                      <View style={styles.pdfUnavailableContainer}>
-                        <Ionicons name="document-text-outline" size={80} color={colors.textSecondary} />
-                        <Text style={[styles.pdfUnavailableText, { color: colors.text }]}>
-                          {t('PDF Preview Unavailable')}
-                        </Text>
-                        <Text style={[styles.pdfUnavailableSubtext, { color: colors.textSecondary }]}>
-                          {t('Please use the browser to view PDF files')}
-                        </Text>
-                      </View>
-                    );
-                  }
-                  return (
-                    <div
-                      style={{ width: '100%', height: '100%' }}
-                      dangerouslySetInnerHTML={{
-                        __html: `<iframe src="${pdfUrl}" style="width:100%;height:100%;border:none;" />`
-                      }}
-                    />
-                  );
-                })()
-              ) : (
-                <View style={styles.pdfUnavailableContainer}>
-                  <Ionicons name="document-text-outline" size={80} color={colors.textSecondary} />
-                  <Text style={[styles.pdfUnavailableText, { color: colors.text }]}>
-                    {t('PDF Preview Unavailable')}
-                  </Text>
-                  <Text style={[styles.pdfUnavailableSubtext, { color: colors.textSecondary }]}>
-                    {t('Please use the browser to view PDF files')}
-                  </Text>
-                </View>
+        <View style={[styles.pdfModalContainer, { backgroundColor: colors.background }]}>
+          {/* Header */}
+          <View style={[styles.pdfHeader, { borderBottomColor: colors.border }]}>
+            <TouchableOpacity
+              onPress={() => { setShowPdfViewer(false); setPdfLocalUri(null); }}
+              style={styles.pdfHeaderBackBtn}
+            >
+              <Ionicons name="arrow-back" size={24} color={colors.text} />
+            </TouchableOpacity>
+            <Text style={[styles.pdfHeaderTitle, { color: colors.text, fontSize: scaledSize(18), flex: 1 }]} numberOfLines={1}>
+              {t('Contract')} #{projectId}
+            </Text>
+            <View style={styles.pdfHeaderActions}>
+              {Platform.OS !== 'web' && (
+                <>
+                  <TouchableOpacity onPress={downloadPdfContract} style={styles.pdfHeaderActionBtn} disabled={isDownloading}>
+                    {isDownloading ? (
+                      <ActivityIndicator size="small" color={colors.primary} />
+                    ) : (
+                      <Ionicons name="download-outline" size={22} color={colors.primary} />
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={sharePdf} style={styles.pdfHeaderActionBtn}>
+                    <Ionicons name="share-outline" size={22} color={colors.primary} />
+                  </TouchableOpacity>
+                </>
+              )}
+              {pdfUrl && (
+                <TouchableOpacity onPress={() => pdfUrl && Linking.openURL(pdfUrl)} style={styles.pdfHeaderActionBtn}>
+                  <Ionicons name="open-outline" size={22} color={colors.primary} />
+                </TouchableOpacity>
               )}
             </View>
+          </View>
+
+          {/* PDF Content */}
+          <View style={styles.pdfViewer}>
+            {Platform.OS === 'web' ? (
+              pdfUrl ? (
+                <div
+                  style={{ width: '100%', height: '100%' }}
+                  dangerouslySetInnerHTML={{
+                    __html: `<iframe src="${pdfUrl}" style="width:100%;height:100%;border:none;" />`
+                  }}
+                />
+              ) : (
+                <View style={styles.pdfUnavailableContainer}>
+                  <ActivityIndicator size="large" color={colors.primary} />
+                </View>
+              )
+            ) : (
+              // Native: try react-native-pdf with local file, fallback to WebView
+              pdfLocalUri ? (
+                <Pdf
+                  source={{ uri: pdfLocalUri }}
+                  trustAllCerts={false}
+                  style={styles.pdfRendererFull}
+                  onLoadComplete={(numberOfPages) => {
+                    console.log(`✅ PDF loaded: ${numberOfPages} pages`);
+                  }}
+                  onError={(error) => {
+                    console.error('❌ react-native-pdf error:', error);
+                    // Fallback: clear local URI to trigger WebView
+                    setPdfLocalUri(null);
+                  }}
+                  enablePaging={false}
+                  spacing={8}
+                />
+              ) : pdfUrl ? (
+                // WebView fallback using Google Docs viewer
+                <WebView
+                  source={{ uri: `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(pdfUrl)}` }}
+                  style={styles.pdfRendererFull}
+                  startInLoadingState
+                  renderLoading={() => (
+                    <View style={styles.pdfLoadingOverlay}>
+                      <ActivityIndicator size="large" color={colors.primary} />
+                      <Text style={[styles.pdfLoadingText, { color: colors.textSecondary }]}>
+                        {t('Loading PDF...')}
+                      </Text>
+                    </View>
+                  )}
+                  onError={() => {
+                    console.error('❌ WebView PDF load failed');
+                  }}
+                />
+              ) : (
+                <View style={styles.pdfUnavailableContainer}>
+                  <ActivityIndicator size="large" color={colors.primary} />
+                  <Text style={[styles.pdfLoadingText, { color: colors.textSecondary }]}>
+                    {t('Loading PDF...')}
+                  </Text>
+                </View>
+              )
+            )}
           </View>
         </View>
       </Modal>
@@ -647,20 +852,45 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     flex: 1,
   },
-  downloadContractButton: {
+  contractButtonsRow: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginBottom: 8,
+    gap: 10,
+  },
+  viewPdfButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 14,
-    marginHorizontal: 16,
-    marginBottom: 16,
+    paddingVertical: 13,
+    borderRadius: 12,
+    gap: 8,
+  },
+  viewPdfButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  downloadPdfButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 13,
     borderRadius: 12,
     borderWidth: 1.5,
     gap: 8,
   },
-  downloadContractButtonText: {
+  downloadPdfButtonText: {
     fontSize: 15,
     fontWeight: '600',
+  },
+  downloadingStatusContainer: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
   },
   // Email Signature Info Card - Figma style
   emailSignatureInfoCard: {
@@ -920,26 +1150,48 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff',
   },
-  pdfModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.9)',
-  },
   pdfModalContainer: {
     flex: 1,
   },
   pdfHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 14,
     borderBottomWidth: 1,
+    gap: 8,
+  },
+  pdfHeaderBackBtn: {
+    padding: 6,
   },
   pdfHeaderTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  pdfHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  pdfHeaderActionBtn: {
+    padding: 8,
   },
   pdfViewer: {
     flex: 1,
+  },
+  pdfRendererFull: {
+    flex: 1,
+    width: Dimensions.get('window').width,
+  },
+  pdfLoadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+  },
+  pdfLoadingText: {
+    fontSize: 14,
+    marginTop: 8,
   },
   pdfUnavailableContainer: {
     flex: 1,
@@ -956,17 +1208,6 @@ const styles = StyleSheet.create({
   pdfUnavailableSubtext: {
     fontSize: 16,
     textAlign: 'center',
-  },
-  pdfOpenButton: {
-    marginTop: 20,
-    paddingVertical: 14,
-    paddingHorizontal: 30,
-    borderRadius: 8,
-  },
-  pdfOpenButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
   },
   confirmModalOverlay: {
     flex: 1,

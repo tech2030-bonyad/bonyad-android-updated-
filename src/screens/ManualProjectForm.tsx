@@ -32,6 +32,7 @@ import { searchUserByPhone, type UserSearchResult } from '../services/UserServic
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
 import { globalAlertManager } from '../utils/globalAlertManager';
 import { getCategories, getSubcategories, ServiceCategory as ApiServiceCategory, ServiceSubcategory } from '../services/ServiceService';
+import RialIcon from '../components/RialIcon';
 
 interface ManualProjectFormProps {
   technician?: any;
@@ -940,7 +941,7 @@ export default function ManualProjectForm({
             }
           ]}>
             <View style={styles.statCardHeader}>
-              <Ionicons name="cash-outline" size={14} color={FIGMA_COLORS.bluePrimary80} />
+              <RialIcon size={14} variant="primary" color={FIGMA_COLORS.bluePrimary80} />
               <Text style={[styles.statCardLabel, { color: FIGMA_COLORS.bluePrimary80 }]}>
                 {t('Budget')} (SAR)
               </Text>

@@ -29,6 +29,8 @@ import GlassTabBar, { type UserTabId } from '../components/GlassTabBar';
 import AnimatedLoadingScreen from '../components/AnimatedLoadingScreen';
 import { coachMarksStorage } from '../utils/coachMarks';
 import ScreenTourOverlay from '../components/tour/ScreenTourOverlay';
+import InteractiveDemoOverlay from '../components/tour/InteractiveDemoOverlay';
+import { USER_HOME_DEMOS } from '../components/tour/demoDefinitions';
 import { useSimpleScreenTour } from '../hooks/useSimpleScreenTour';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
@@ -61,6 +63,7 @@ import CreationMethodScreen from './CreationMethodScreen';
 import ServiceTechniciansScreen from './ServiceTechniciansScreen';
 import TechnicianProfileView from './TechnicianProfileView';
 import CategoryTechniciansScreen from './CategoryTechniciansScreen';
+import ContractViewerModal from './ContractViewerModal';
 import Footer from '../components/Footer';
 import { buildApiUrl, API_ENDPOINTS, getApiUrl, getServerBaseUrl } from '../config/api';
 import { storage } from '../utils/storage';
@@ -109,6 +112,7 @@ interface UserHomeScreenProps {
   onNavigateToManualForm?: () => void;
   onPressCategory?: (category: CategoryInfo) => void;
   onNavigateFromNotification?: (notification: any) => void | Promise<void>;
+  onNavigateToIntroToApp?: () => void;
 }
 
 export default function UserHomeScreen({
@@ -144,6 +148,7 @@ export default function UserHomeScreen({
   onNavigateToManualForm,
   onPressCategory,
   onNavigateFromNotification,
+  onNavigateToIntroToApp,
 }: UserHomeScreenProps) {
   // Responsive state - updates on window resize
   const [screenWidth, setScreenWidth] = useState(Dimensions.get('window').width);
@@ -230,6 +235,8 @@ export default function UserHomeScreen({
     subcategoryNameAr?: string;
   } | null>(null);
   const insets = useSafeAreaInsets();
+  const [demoOverlayVisible, setDemoOverlayVisible] = useState(false);
+  const [contractViewerProjectId, setContractViewerProjectId] = useState<number | null>(null);
   const homeContentControl = useRef<{ startTour: () => void } | null>(null);
   const projectsTourControl = useRef<{ startTour: () => void } | null>(null);
   const chatTourControl = useRef<{ startTour: () => void } | null>(null);
@@ -372,73 +379,9 @@ export default function UserHomeScreen({
   }, []);
 
   // Info button: restart the tour for whichever main tab is currently open (same overlay style as Home).
+  /** Opens the interactive demo overlay instead of the step-by-step spotlight tour. */
   const handleRestartCoachTour = async () => {
-    const delayStart = (fn: () => void) => {
-      requestAnimationFrame(() => setTimeout(fn, 150));
-    };
-
-    if (activeTab === 'home') {
-      await coachMarksStorage.clearTutorial('userHome');
-      setSelectedCategory(null);
-      delayStart(() => homeContentControl.current?.startTour());
-      return;
-    }
-
-    if (activeTab === 'projects') {
-      const projectTypeTour = projectTypeSelectionTourControl.current;
-      if (projectTypeTour) {
-        await coachMarksStorage.clearTutorial('userProjectTypeSelection');
-        delayStart(() => projectTypeTour.startTour());
-      } else {
-        await coachMarksStorage.clearTutorial('userProjectsTab');
-        delayStart(() => projectsTourControl.current?.startTour());
-      }
-      return;
-    }
-
-    if (activeTab === 'chat') {
-      await coachMarksStorage.clearTutorial('userChatTab');
-      setSelectedChat(null);
-      setShowChatList(true);
-      let started = false;
-      const runChatTour = () => {
-        if (started) return;
-        started = true;
-        requestAnimationFrame(() => chatTourControl.current?.startTour());
-      };
-      InteractionManager.runAfterInteractions(runChatTour);
-      setTimeout(runChatTour, 420);
-      return;
-    }
-
-    if (activeTab === 'profile' && profileSubView === null) {
-      await coachMarksStorage.clearTutorial('userProfileTab');
-      delayStart(() => profileTourControl.current?.startTour());
-      return;
-    }
-
-    if (activeTab === 'new') {
-      if (newProjectSubView === 'project-type-selection') {
-        await coachMarksStorage.clearTutorial('userProjectTypeSelection');
-        delayStart(() => projectTypeSelectionTourControl.current?.startTour());
-      } else {
-        await coachMarksStorage.clearTutorial('userNewTab');
-        delayStart(() => newTabTour.startTour());
-      }
-      return;
-    }
-
-    if (activeTab === 'notifications') {
-      await coachMarksStorage.clearTutorial('userNotificationsTab');
-      delayStart(() => notificationsTourControl.current?.startTour());
-      return;
-    }
-
-    if (activeTab === 'appointments') {
-      await coachMarksStorage.clearTutorial('appointments');
-      delayStart(() => appointmentsTourControl.current?.startTour());
-      return;
-    }
+    setDemoOverlayVisible(true);
   };
 
   // Sync currentProjectsFilter when projectsFilter prop changes
@@ -1134,6 +1077,11 @@ export default function UserHomeScreen({
                 setActiveTab('projects');
                 setCurrentProjectsFilter('available');
               }}
+              onPressContract={(projectId) => setContractViewerProjectId(projectId)}
+              onPressMyContracts={() => {
+                setActiveTab('projects');
+                setCurrentProjectsFilter('running');
+              }}
             />
           )}
         </View>
@@ -1378,6 +1326,7 @@ export default function UserHomeScreen({
                   setProfileSubView(null);
                   onShowSupportTickets?.();
                 }}
+                onNavigateToIntroToApp={onNavigateToIntroToApp}
               />
             ) : profileSubView === 'myData' ? (
               <MyDataScreen
@@ -1662,6 +1611,31 @@ export default function UserHomeScreen({
             t={t}
           />
         )}
+
+        {/* Interactive Demo Overlay — replaces old step-by-step tour */}
+        <InteractiveDemoOverlay
+          visible={demoOverlayVisible}
+          demos={USER_HOME_DEMOS}
+          primaryColor={colors.primary || '#00A5F4'}
+          textColor={colors.text}
+          secondaryTextColor={colors.textSecondary}
+          bgColor={colors.background}
+          cardBgColor={colors.cardBackground}
+          borderColor={colors.border}
+          isRTL={i18n.language === 'ar' || I18nManager.isRTL}
+          isDark={theme === 'dark'}
+          fontFamily={fontFamily}
+          boldFontFamily={boldFontFamily}
+          onClose={() => setDemoOverlayVisible(false)}
+          t={t}
+        />
+
+        {/* Contract Viewer Modal */}
+        <ContractViewerModal
+          visible={contractViewerProjectId !== null}
+          projectId={contractViewerProjectId ?? 0}
+          onClose={() => setContractViewerProjectId(null)}
+        />
 
         <Modal
           visible={showServicesList}
@@ -2062,6 +2036,12 @@ export default function UserHomeScreen({
                 setActiveTab('projects');
                 setCurrentProjectsFilter('available');
               }}
+              onPressContract={(projectId) => setContractViewerProjectId(projectId)}
+              onPressMyContracts={() => {
+                setActiveTab('projects');
+                setCurrentProjectsFilter('running');
+              }}
+              onPressIntroToApp={onNavigateToIntroToApp}
             />
           )}
         </View>
@@ -2304,6 +2284,7 @@ export default function UserHomeScreen({
                     setProfileSubView(null);
                     onShowSupportTickets?.();
                   }}
+                  onNavigateToIntroToApp={onNavigateToIntroToApp}
                 />
               ) : profileSubView === 'myData' ? (
                 <MyDataScreen
@@ -2613,6 +2594,24 @@ export default function UserHomeScreen({
       >
         <Ionicons name="chatbubbles" size={28} color="#fff" />
       </TouchableOpacity>
+
+      {/* Interactive Demo Overlay — desktop layout */}
+      <InteractiveDemoOverlay
+        visible={demoOverlayVisible}
+        demos={USER_HOME_DEMOS}
+        primaryColor={colors.primary || '#00A5F4'}
+        textColor={colors.text}
+        secondaryTextColor={colors.textSecondary}
+        bgColor={colors.background}
+        cardBgColor={colors.cardBackground}
+        borderColor={colors.border}
+        isRTL={i18n.language === 'ar' || I18nManager.isRTL}
+        isDark={theme === 'dark'}
+        fontFamily={fontFamily}
+        boldFontFamily={boldFontFamily}
+        onClose={() => setDemoOverlayVisible(false)}
+        t={t}
+      />
 
       {/* Local transition loader for tab/subview switches (bottom nav / top nav / profile subviews) */}
       {isInHomeTransitionLoading && (

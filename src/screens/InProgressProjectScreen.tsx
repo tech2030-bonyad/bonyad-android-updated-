@@ -8,9 +8,7 @@ import {
   ActivityIndicator,
   Platform,
   Dimensions,
-  Linking,
-  AppState,
-  AppStateStatus,
+  TextInput,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,11 +21,11 @@ import { storage } from '../utils/storage';
 import { showError, showSuccess } from '../utils/alert';
 import ProjectCreationFlow from '../components/ProjectCreationFlow';
 import AppBottomSheetModal from '../components/AppBottomSheetModal';
-import { createCheckout, getPaymentStatus } from '../services/PaymentService';
+import { CreateCheckoutRequest } from '../services/PaymentService';
 import { getUserProfile } from '../services/ProfileService';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import PaymentCheckoutScreen from './PaymentCheckoutScreen';
 
-const PENDING_PHASE_PAYMENT_KEY = 'PENDING_PHASE_PAYMENT';
+// Removed PENDING_PHASE_PAYMENT_KEY – no longer using Linking / AppState polling
 
 // ===== DESIGN TOKENS (matching Figma design) =====
 const COLORS = {
@@ -74,7 +72,15 @@ interface Phase {
   description: string;
   timeSpentDays: number;
   moneySpent: number;
+  /** PENDING | REQUESTED_PAYMENT | PARTIALLY_PAID | PAID */
   paymentStatus: string;
+  amountPaid?: number;
+  remainingAmount?: number;
+  percentagePaid?: number;
+  /** Amount the technician specifically requested (may differ from moneySpent) */
+  requestedPaymentAmount?: number | null;
+  paymentRequestReason?: string | null;
+  paymentRequestedAt?: string | null;
   paidAt?: string;
   approved: boolean;
   completed: boolean;
@@ -82,7 +88,12 @@ interface Phase {
   updatedAt: string;
 }
 
-type PhaseStatus = 'paid' | 'ready_for_payment' | 'awaiting_approval' | 'locked';
+type PhaseStatus =
+  | 'paid'
+  | 'partially_paid'     // PARTIALLY_PAID – some paid, remainder still due
+  | 'ready_for_payment'  // REQUESTED_PAYMENT – technician requested, user can pay
+  | 'pending_request'    // PENDING – waiting for technician to request payment
+  | 'locked';            // PENDING – previous phase not yet fully paid
 
 export default function InProgressProjectScreen({
   project,
@@ -129,6 +140,17 @@ export default function InProgressProjectScreen({
   const [payingPhaseId, setPayingPhaseId] = useState<number | null>(null);
   const [completingPhaseId, setCompletingPhaseId] = useState<number | null>(null);
   const [completingProject, setCompletingProject] = useState(false);
+
+  // Technician: request-payment in-flight tracking
+  const [requestingPaymentPhaseId, setRequestingPaymentPhaseId] = useState<number | null>(null);
+
+  // Payment amount selection modal
+  const [paymentModalPhase, setPaymentModalPhase] = useState<Phase | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState('');
+
+  // PaymentCheckoutScreen inline overlay (native only)
+  const [paymentCheckoutPhase, setPaymentCheckoutPhase] = useState<Phase | null>(null);
+  const [paymentCheckoutRequest, setPaymentCheckoutRequest] = useState<CreateCheckoutRequest | null>(null);
 
   // Custom confirmation modal state
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -194,86 +216,173 @@ export default function InProgressProjectScreen({
   };
 
   // ===== PAYMENT FUNCTIONS =====
+
+  /**
+   * Open the payment amount modal.
+   * Defaults to requestedPaymentAmount (if technician specified one) or the remaining/full amount.
+   */
   const handlePayPhase = (phase: Phase) => {
     console.log('🔘 [InProgressProjectScreen] Pay button clicked for phase:', phase.id);
-
-    setConfirmTitle(t('Pay for Phase'));
-    setConfirmMessage(
-      t('Pay {{amount}} SAR for "{{description}}"?', {
-        amount: formatBudget(phase.moneySpent),
-        description: phase.description,
-      })
-    );
-    setConfirmButtonText(t('Pay Now'));
-    setConfirmOnConfirm(() => () => {
-      payForPhase(phase.id);
-    });
-    setShowConfirmModal(true);
+    const ps = (phase.paymentStatus || '').toUpperCase();
+    const remaining = ps === 'PARTIALLY_PAID'
+      ? (phase.remainingAmount ?? Math.max(phase.moneySpent - (phase.amountPaid ?? 0), 0))
+      : phase.moneySpent;
+    // Prefer the amount the technician explicitly requested
+    const defaultAmount = phase.requestedPaymentAmount ?? remaining;
+    setPaymentAmount(String(defaultAmount));
+    setPaymentModalPhase(phase);
   };
 
-  const payForPhase = async (phaseId: number) => {
-    setShowConfirmModal(false);
-    setPayingPhaseId(phaseId);
-    const phase = phases.find((p) => p.id === phaseId);
-    if (!phase) {
-      setPayingPhaseId(null);
+  /**
+   * API 2: Technician requests payment from owner.
+   * POST /api/phases/{phaseId}/request-payment
+   * Changes paymentStatus: PENDING → REQUESTED_PAYMENT
+   * Owner receives a push notification.
+   */
+  const handleRequestPayment = async (phase: Phase) => {
+    console.log('🔘 [InProgressProjectScreen] Request payment for phase:', phase.id);
+    setRequestingPaymentPhaseId(phase.id);
+    try {
+      const token = await storage.getAuthToken();
+      if (!token) { showError(t('Please login again')); return; }
+
+      const url = buildApiUrlWithParams(API_ENDPOINTS.PHASES.REQUEST_PAYMENT, { phaseId: phase.id });
+      console.log('📤 [InProgressProjectScreen] POST request-payment:', url);
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      });
+
+      console.log('📥 [InProgressProjectScreen] request-payment status:', response.status);
+      const body = await response.json().catch(() => ({})) as any;
+      console.log('📥 [InProgressProjectScreen] request-payment body:', JSON.stringify(body));
+
+      if (response.ok || response.status === 201) {
+        console.log('✅ [InProgressProjectScreen] Payment requested successfully');
+        showSuccess(t('Payment request sent to owner'));
+        loadPhases();
+      } else {
+        // API error field may be 'error', 'message', or inside 'data'
+        const errMsg = body.error || body.message || body.data?.message || t('Failed to request payment');
+        console.error('❌ [InProgressProjectScreen] request-payment failed:', errMsg);
+        showError(errMsg);
+      }
+    } catch (error: any) {
+      console.error('❌ [InProgressProjectScreen] request-payment exception:', error.message);
+      showError(error.message || t('Failed to request payment'));
+    } finally {
+      setRequestingPaymentPhaseId(null);
+    }
+  };
+
+  /**
+   * Called when user confirms amount in the modal.
+   * On native: build checkout request → show PaymentCheckoutScreen overlay.
+   * On web: fall back to direct POST /phases/:id/pay.
+   */
+  const submitPayment = async (phase: Phase) => {
+    const amount = parseFloat(paymentAmount.replace(/,/g, ''));
+    const maxAmount = (phase.paymentStatus || '').toUpperCase() === 'PARTIALLY_PAID'
+      ? (phase.remainingAmount ?? (phase.moneySpent - (phase.amountPaid ?? 0)))
+      : phase.moneySpent;
+
+    if (!amount || amount <= 0 || amount > maxAmount) {
+      showError(t('Please enter a valid amount (1 – {{max}} SAR)', { max: formatBudget(maxAmount) }));
       return;
     }
 
+    setPaymentModalPhase(null);
+
+    // Web: direct server-side pay
+    if (Platform.OS === 'web') {
+      await payForPhaseWeb(phase.id);
+      return;
+    }
+
+    // Native: launch HyperPay WebView overlay
+    setPayingPhaseId(phase.id);
+    try {
+      const profile = await getUserProfile().catch(() => ({})) as any;
+      const checkoutReq: CreateCheckoutRequest = {
+        phaseId: phase.id,
+        amount,
+        currency: 'SAR',
+        paymentType: 'DB',
+        paymentBrand: 'MADA',
+        merchantTransactionId: `PHASE-${phase.id}-${Date.now()}`,
+        customer: {
+          email: profile?.email || 'user@bonyad.app',
+          givenName: profile?.firstName || profile?.name?.split(' ')[0] || 'User',
+          surname: profile?.lastName || profile?.name?.split(' ').slice(1).join(' ') || '',
+        },
+        billing: {
+          street1: profile?.address || 'King Fahd Road',
+          city: profile?.city || 'Riyadh',
+          state: profile?.state || 'Riyadh',
+          country: 'SA',
+          postcode: profile?.postcode || '12345',
+        },
+      };
+      setPaymentCheckoutRequest(checkoutReq);
+      setPaymentCheckoutPhase(phase);
+    } catch (error: any) {
+      showError(error.message || t('Failed to start payment'));
+    } finally {
+      setPayingPhaseId(null);
+    }
+  };
+
+  /**
+   * Called by PaymentCheckoutScreen.onSuccess after HyperPay confirms payment.
+   * Calls POST /phases/{phaseId}/pay to record the payment on the backend.
+   */
+  const handleCheckoutSuccess = async (_transactionId: number, phaseId: number) => {
+    console.log('✅ [InProgressProjectScreen] Checkout success for phase:', phaseId);
+    setPaymentCheckoutPhase(null);
+    setPaymentCheckoutRequest(null);
+    setPayingPhaseId(phaseId);
     try {
       const token = await storage.getAuthToken();
       if (!token) {
         showError(t('Please login again'));
-        setPayingPhaseId(null);
         return;
       }
+      const url = buildApiUrlWithParams(API_ENDPOINTS.PHASES.PAY, { phaseId });
+      console.log('📤 [InProgressProjectScreen] POST phase pay:', url);
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (response.ok || response.status === 201) {
+        showSuccess(t('Payment successful'));
+        setTimeout(() => {
+          loadPhases();
+          onSuccess?.();
+        }, 1000);
+      } else {
+        const err = await response.json().catch(() => ({}));
+        showError((err as any).message || t('Failed to confirm payment'));
+      }
+    } catch (error: any) {
+      showError(error.message || t('Payment verification failed'));
+    } finally {
+      setPayingPhaseId(null);
+    }
+  };
 
-      // Use create-checkout + redirect on native (same as web / HyperPay)
-      if (Platform.OS !== 'web') {
-        const profile = await getUserProfile().catch(() => ({}));
-        const paymentData = {
-          phaseId: phase.id,
-          amount: phase.moneySpent,
-          currency: 'SAR',
-          paymentType: 'DB' as const,
-          paymentBrand: 'MADA' as const,
-          merchantTransactionId: `PHASE-${phase.id}-${Date.now()}`,
-          customer: {
-            email: profile?.email || 'user@bonyad.app',
-            givenName: profile?.firstName || profile?.name?.split(' ')[0] || 'User',
-            surname: profile?.lastName || profile?.name?.split(' ').slice(1).join(' ') || '',
-          },
-          billing: {
-            street1: profile?.address || 'King Fahd Road',
-            city: profile?.city || 'Riyadh',
-            state: profile?.state || 'Riyadh',
-            country: 'SA',
-            postcode: profile?.postcode || '12345',
-          },
-        };
-        const result = await createCheckout(paymentData);
-        const checkoutId = result?.checkoutId || result?.id;
-        let redirectUrl = result?.redirectUrl || result?.shopperUrl;
-        if (!redirectUrl && checkoutId) {
-          const isProduction = String(checkoutId).includes('prod');
-          redirectUrl = isProduction
-            ? `https://eu-prod.oppwa.com/v1/checkouts/${checkoutId}`
-            : `https://eu-test.oppwa.com/v1/checkouts/${checkoutId}`;
-        }
-        if (redirectUrl) {
-          await AsyncStorage.setItem(
-            PENDING_PHASE_PAYMENT_KEY,
-            JSON.stringify({ checkoutId: String(checkoutId), phaseId, projectId: project?.id })
-          );
-          await Linking.openURL(redirectUrl);
-        } else {
-          showError(t('No payment URL received'));
-        }
-        setPayingPhaseId(null);
+  /** Web fallback – direct POST /phases/:id/pay (no HyperPay widget available). */
+  const payForPhaseWeb = async (phaseId: number) => {
+    setPayingPhaseId(phaseId);
+    try {
+      const token = await storage.getAuthToken();
+      if (!token) {
+        showError(t('Please login again'));
         return;
       }
-
-      // Web or fallback: direct POST /phases/:id/pay
       const url = buildApiUrlWithParams(API_ENDPOINTS.PHASES.PAY, { phaseId });
       const response = await fetch(url, {
         method: 'POST',
@@ -282,7 +391,6 @@ export default function InProgressProjectScreen({
           'Content-Type': 'application/json',
         },
       });
-
       if (response.ok || response.status === 201) {
         showSuccess(t('Payment processed successfully'));
         setTimeout(() => {
@@ -290,7 +398,6 @@ export default function InProgressProjectScreen({
           onSuccess?.();
         }, 1000);
       } else {
-        const errorText = await response.text();
         showError(t('Failed to process payment'));
       }
     } catch (error: any) {
@@ -299,31 +406,6 @@ export default function InProgressProjectScreen({
       setPayingPhaseId(null);
     }
   };
-
-  // When app returns from payment gateway, check pending and poll status
-  useEffect(() => {
-    const subscription = AppState.addEventListener('change', async (nextAppState: AppStateStatus) => {
-      if (nextAppState !== 'active') return;
-      try {
-        const raw = await AsyncStorage.getItem(PENDING_PHASE_PAYMENT_KEY);
-        if (!raw) return;
-        const pending = JSON.parse(raw) as { checkoutId: string; phaseId: number; projectId?: number };
-        const status = await getPaymentStatus(pending.checkoutId);
-        if (status?.success) {
-          await AsyncStorage.removeItem(PENDING_PHASE_PAYMENT_KEY);
-          showSuccess(t('Payment successful'));
-          loadPhases();
-          onSuccess?.();
-        } else if (status?.description && (status.description.toLowerCase().includes('fail') || status.description.toLowerCase().includes('reject'))) {
-          await AsyncStorage.removeItem(PENDING_PHASE_PAYMENT_KEY);
-          showError(t('Payment failed or was cancelled'));
-        }
-      } catch (_) {
-        // Ignore; user may still be on payment page
-      }
-    });
-    return () => subscription.remove();
-  }, [project?.id]);
 
   // ===== COMPLETE PHASE FUNCTIONS (TECHNICIAN) =====
   const handleCompletePhase = (phase: Phase) => {
@@ -477,30 +559,23 @@ export default function InProgressProjectScreen({
   };
 
   const getPhaseStatus = (phase: Phase, index: number): PhaseStatus => {
-    const isPaid = phase.paymentStatus === 'PAID' || phase.paymentStatus === 'paid';
-    
-    if (isPaid) {
-      return 'paid';
-    }
+    const ps = (phase.paymentStatus || '').toUpperCase();
 
-    // Find the previous phase
+    if (ps === 'PAID') return 'paid';
+    if (ps === 'PARTIALLY_PAID') return 'partially_paid';
+
+    // Technician has explicitly requested payment from user
+    if (ps === 'REQUESTED_PAYMENT') return 'ready_for_payment';
+
+    // PENDING: check if previous phase is fully paid
     const previousPhase = index > 0 ? phases[index - 1] : null;
-    const isPreviousPaid = previousPhase
-      ? previousPhase.paymentStatus === 'PAID' || previousPhase.paymentStatus === 'paid'
-      : true; // First phase is always unlocked
+    const prevPS = previousPhase ? (previousPhase.paymentStatus || '').toUpperCase() : 'PAID';
+    const isPreviousPaid = prevPS === 'PAID';
 
-    if (!isPreviousPaid) {
-      return 'locked';
-    }
+    if (!isPreviousPaid) return 'locked';
 
-    // According to API: Phase must be approved before payment can be made
-    // If phase is approved, it's ready for payment
-    if (phase.approved) {
-      return 'ready_for_payment';
-    }
-
-    // Otherwise, awaiting approval (phase not yet approved)
-    return 'awaiting_approval';
+    // Previous phase fully paid but technician hasn't requested payment yet
+    return 'pending_request';
   };
 
   const getPhaseStatusConfig = (status: PhaseStatus) => {
@@ -515,6 +590,16 @@ export default function InProgressProjectScreen({
           textColor: c.green60,
           amountColor: c.green80,
         };
+      case 'partially_paid':
+        return {
+          bgColor: c.amber10,
+          borderColor: c.amber60,
+          iconBgColor: c.amber60,
+          icon: 'card-outline' as const,
+          iconColor: c.textWhite,
+          textColor: c.amber60,
+          amountColor: c.textBody,
+        };
       case 'ready_for_payment':
         return {
           bgColor: c.amber10,
@@ -525,7 +610,7 @@ export default function InProgressProjectScreen({
           textColor: c.amber60,
           amountColor: c.textBody,
         };
-      case 'awaiting_approval':
+      case 'pending_request':
         return {
           bgColor: c.primary10,
           borderColor: c.primary60,
@@ -559,21 +644,24 @@ export default function InProgressProjectScreen({
 
   // ===== CALCULATIONS =====
   const totalAmount = phases.reduce((sum, p) => sum + p.moneySpent, 0);
-  const paidAmount = phases
-    .filter(p => p.paymentStatus === 'PAID' || p.paymentStatus === 'paid')
-    .reduce((sum, p) => sum + p.moneySpent, 0);
+  const paidAmount = phases.reduce((sum, p) => {
+    const ps = (p.paymentStatus || '').toUpperCase();
+    if (ps === 'PAID') return sum + p.moneySpent;
+    if (ps === 'PARTIALLY_PAID') return sum + (p.amountPaid ?? 0);
+    return sum;
+  }, 0);
   const remainingAmount = totalAmount - paidAmount;
   const progressPercentage = totalAmount > 0 ? (paidAmount / totalAmount) * 100 : 0;
 
   // Check if all phases are completed and paid (for technician to complete project)
   const allPhasesPaid = phases.length > 0 && phases.every(
-    p => p.paymentStatus === 'PAID' || p.paymentStatus === 'paid'
+    p => (p.paymentStatus || '').toUpperCase() === 'PAID'
   );
   const allPhasesCompleted = phases.length > 0 && phases.every(p => p.completed);
   const canCompleteProject = allPhasesPaid && allPhasesCompleted;
   const completedPhasesCount = phases.filter(p => p.completed).length;
   const paidPhasesCount = phases.filter(
-    p => p.paymentStatus === 'PAID' || p.paymentStatus === 'paid'
+    p => (p.paymentStatus || '').toUpperCase() === 'PAID'
   ).length;
 
   // ===== RENDER FUNCTIONS =====
@@ -615,9 +703,25 @@ export default function InProgressProjectScreen({
             {t('Paid on {{date}}', { date: formatDate(phase.paidAt) })}
           </Text>
         )}
+        {status === 'partially_paid' && (
+          <View style={styles.partialPaymentInfo}>
+            <View style={styles.partialPaymentRow}>
+              <Text style={styles.partialPaymentLabel}>{t('Paid so far')}</Text>
+              <Text style={[styles.partialPaymentValue, { color: c.green60 }]}>
+                {formatBudget(phase.amountPaid ?? 0)} {t('SAR')}
+              </Text>
+            </View>
+            <View style={styles.partialPaymentRow}>
+              <Text style={styles.partialPaymentLabel}>{t('Remaining')}</Text>
+              <Text style={[styles.partialPaymentValue, { color: c.amber60 }]}>
+                {formatBudget(phase.remainingAmount ?? Math.max(phase.moneySpent - (phase.amountPaid ?? 0), 0))} {t('SAR')}
+              </Text>
+            </View>
+          </View>
+        )}
         {status === 'ready_for_payment' && !isTechnician && (
           <Text style={[styles.phaseStatusText, { color: config.textColor }]}>
-            {t('Ready for payment')}
+            {t('Technician has requested payment')}
           </Text>
         )}
         {status === 'ready_for_payment' && isTechnician && (
@@ -625,14 +729,14 @@ export default function InProgressProjectScreen({
             {t('Awaiting payment from User')}
           </Text>
         )}
-        {status === 'awaiting_approval' && !isTechnician && (
+        {status === 'pending_request' && !isTechnician && (
           <Text style={[styles.phaseStatusText, { color: config.textColor }]}>
-            {t('Awaiting phase approval')}
+            {t('Waiting for technician to request payment')}
           </Text>
         )}
-        {status === 'awaiting_approval' && isTechnician && (
+        {status === 'pending_request' && isTechnician && (
           <Text style={[styles.phaseStatusText, { color: config.textColor }]}>
-            {t('Phase pending approval')}
+            {t('Tap below to request payment from owner')}
           </Text>
         )}
 
@@ -656,7 +760,7 @@ export default function InProgressProjectScreen({
           </View>
         )}
 
-        {/* USER: Pay Button */}
+        {/* USER: Pay Now Button (REQUESTED_PAYMENT) */}
         {!isTechnician && status === 'ready_for_payment' && (
           <TouchableOpacity
             style={styles.payButton}
@@ -669,19 +773,39 @@ export default function InProgressProjectScreen({
               <>
                 <Ionicons name="card-outline" size={20} color={c.textWhite} />
                 <Text style={styles.payButtonText}>
-                  {t('Pay now')} - {formatBudget(phase.moneySpent)} {t('SAR')}
+                  {t('Pay Now')} — {formatBudget(phase.moneySpent)} {t('SAR')}
                 </Text>
               </>
             )}
           </TouchableOpacity>
         )}
 
-        {/* USER: Awaiting Approval State */}
-        {!isTechnician && status === 'awaiting_approval' && (
+        {/* USER: Pay Remaining Button (PARTIALLY_PAID) */}
+        {!isTechnician && status === 'partially_paid' && (
+          <TouchableOpacity
+            style={[styles.payButton, { backgroundColor: c.amber60 }]}
+            onPress={() => handlePayPhase(phase)}
+            disabled={isPaying}
+          >
+            {isPaying ? (
+              <ActivityIndicator size="small" color={c.textWhite} />
+            ) : (
+              <>
+                <Ionicons name="card-outline" size={20} color={c.textWhite} />
+                <Text style={styles.payButtonText}>
+                  {t('Pay Remaining')} — {formatBudget(phase.remainingAmount ?? Math.max(phase.moneySpent - (phase.amountPaid ?? 0), 0))} {t('SAR')}
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+        )}
+
+        {/* USER: Pending Request State (waiting for technician to request payment) */}
+        {!isTechnician && status === 'pending_request' && (
           <View style={styles.awaitingButton}>
             <Ionicons name="time-outline" size={20} color={c.primary60} />
             <Text style={styles.awaitingButtonText}>
-              {t('Awaiting Approval')}
+              {t('Awaiting Payment Request')}
             </Text>
           </View>
         )}
@@ -695,7 +819,7 @@ export default function InProgressProjectScreen({
           </View>
         )}
 
-        {/* TECHNICIAN: Complete Phase Button */}
+        {/* TECHNICIAN: Complete Phase Button (only when PAID) */}
         {isTechnician && status === 'paid' && !phase.completed && (
           <TouchableOpacity
             style={[styles.completeButton, { backgroundColor: c.green70 }]}
@@ -712,22 +836,30 @@ export default function InProgressProjectScreen({
           </TouchableOpacity>
         )}
 
-        {/* TECHNICIAN: Awaiting Payment - Disabled Complete */}
-        {isTechnician && status === 'ready_for_payment' && (
+        {/* TECHNICIAN: Awaiting Payment */}
+        {isTechnician && (status === 'ready_for_payment' || status === 'partially_paid') && (
           <View style={[styles.completeButton, { backgroundColor: c.amber50 }]}>
             <Text style={styles.completeButtonText}>
-              {t('Awaiting Payment')}
+              {status === 'partially_paid' ? t('Partial Payment Received') : t('Awaiting Payment')}
             </Text>
           </View>
         )}
 
-        {/* TECHNICIAN: Awaiting Approval - Show status */}
-        {isTechnician && status === 'awaiting_approval' && (
-          <View style={[styles.completeButton, { backgroundColor: c.primary60 }]}>
-            <Text style={styles.completeButtonText}>
-              {t('Phase Pending Approval')}
-            </Text>
-          </View>
+        {/* TECHNICIAN: Pending Request - send payment request to owner */}
+        {isTechnician && status === 'pending_request' && (
+          <TouchableOpacity
+            style={[styles.completeButton, { backgroundColor: c.primary60 }]}
+            onPress={() => handleRequestPayment(phase)}
+            disabled={requestingPaymentPhaseId === phase.id}
+          >
+            {requestingPaymentPhaseId === phase.id ? (
+              <ActivityIndicator size="small" color={c.textWhite} />
+            ) : (
+              <Text style={styles.completeButtonText}>
+                {t('Request Payment from Owner')}
+              </Text>
+            )}
+          </TouchableOpacity>
         )}
       </View>
     );
@@ -984,6 +1116,91 @@ export default function InProgressProjectScreen({
           </TouchableOpacity>
         </View>
       </AppBottomSheetModal>
+
+      {/* Payment Amount Modal */}
+      {paymentModalPhase && (
+        <AppBottomSheetModal
+          visible={!!paymentModalPhase}
+          onClose={() => setPaymentModalPhase(null)}
+          title={t('Pay for Phase')}
+          heightFraction={0.55}
+        >
+          {/* Phase info */}
+          <Text style={styles.payModalPhaseName}>{paymentModalPhase.description}</Text>
+
+          {/* Amounts summary */}
+          <View style={styles.payModalAmountRow}>
+            <Text style={styles.payModalAmountLabel}>{t('Total')}</Text>
+            <Text style={styles.payModalAmountValue}>
+              {formatBudget(paymentModalPhase.moneySpent)} {t('SAR')}
+            </Text>
+          </View>
+          {(paymentModalPhase.paymentStatus || '').toUpperCase() === 'PARTIALLY_PAID' && (
+            <>
+              <View style={styles.payModalAmountRow}>
+                <Text style={styles.payModalAmountLabel}>{t('Already Paid')}</Text>
+                <Text style={[styles.payModalAmountValue, { color: c.green60 }]}>
+                  {formatBudget(paymentModalPhase.amountPaid ?? 0)} {t('SAR')}
+                </Text>
+              </View>
+              <View style={styles.payModalAmountRow}>
+                <Text style={styles.payModalAmountLabel}>{t('Remaining Due')}</Text>
+                <Text style={[styles.payModalAmountValue, { color: c.amber60, fontWeight: '700' }]}>
+                  {formatBudget(
+                    paymentModalPhase.remainingAmount ??
+                    Math.max(paymentModalPhase.moneySpent - (paymentModalPhase.amountPaid ?? 0), 0)
+                  )} {t('SAR')}
+                </Text>
+              </View>
+            </>
+          )}
+
+          {/* Amount input */}
+          <Text style={styles.payModalInputLabel}>{t('Amount to pay (SAR)')}</Text>
+          <TextInput
+            style={[styles.payModalInput, { color: c.textBody, borderColor: c.textDividers, backgroundColor: c.bgGray }]}
+            value={paymentAmount}
+            onChangeText={setPaymentAmount}
+            keyboardType="numeric"
+            placeholder={t('Enter amount')}
+            placeholderTextColor={c.textSecondary}
+          />
+
+          <View style={styles.modalButtons}>
+            <TouchableOpacity
+              style={[styles.modalButton, styles.modalCancelButton]}
+              onPress={() => setPaymentModalPhase(null)}
+            >
+              <Text style={styles.modalCancelButtonText}>{t('Cancel')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.modalButton, styles.modalConfirmButton]}
+              onPress={() => submitPayment(paymentModalPhase)}
+            >
+              <Text style={styles.modalConfirmButtonText}>
+                {t('Pay')} {paymentAmount ? `${formatBudget(parseFloat(paymentAmount.replace(/,/g, '')) || 0)} ${t('SAR')}` : ''}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </AppBottomSheetModal>
+      )}
+
+      {/* HyperPay Checkout Overlay (native only) */}
+      {paymentCheckoutPhase && paymentCheckoutRequest && Platform.OS !== 'web' && (
+        <View style={StyleSheet.absoluteFillObject}>
+          <PaymentCheckoutScreen
+            onBack={() => {
+              setPaymentCheckoutPhase(null);
+              setPaymentCheckoutRequest(null);
+            }}
+            onSuccess={(transactionId) =>
+              handleCheckoutSuccess(transactionId, paymentCheckoutPhase.id)
+            }
+            checkoutRequest={paymentCheckoutRequest}
+            phaseId={paymentCheckoutPhase.id}
+          />
+        </View>
+      )}
     </View>
   );
 }
@@ -1506,7 +1723,67 @@ function makeStyles(c: typeof COLORS) {
     height: 24,
     justifyContent: 'center',
     alignItems: 'center',
-  }
+  },
+  // Partial payment info rows (inside phase card)
+  partialPaymentInfo: {
+    gap: 6,
+    backgroundColor: 'rgba(0,0,0,0.04)',
+    borderRadius: 6,
+    padding: 10,
+  },
+  partialPaymentRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  partialPaymentLabel: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: c.textSecondary,
+  },
+  partialPaymentValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: c.textBody,
+  },
+  // Payment amount modal
+  payModalPhaseName: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: c.textBody,
+    marginBottom: 12,
+  },
+  payModalAmountRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  payModalAmountLabel: {
+    fontSize: 13,
+    fontWeight: '400',
+    color: c.textSecondary,
+  },
+  payModalAmountValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: c.textBody,
+  },
+  payModalInputLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: c.textBody,
+    marginTop: 14,
+    marginBottom: 6,
+  },
+  payModalInput: {
+    height: 48,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    fontSize: 16,
+    marginBottom: 16,
+  },
   });
 }
 

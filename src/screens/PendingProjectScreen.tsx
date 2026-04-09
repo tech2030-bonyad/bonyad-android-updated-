@@ -38,6 +38,7 @@ import BookAppointmentModal from '../components/BookAppointmentModal';
 import { CopilotStep, walkthroughable, useCopilot } from 'react-native-copilot';
 import { coachMarksStorage } from '../utils/coachMarks';
 import { setTutorialCompletionKey } from '../utils/tutorialSession';
+import RialIcon from '../components/RialIcon';
 
 const WalkableView = walkthroughable(View);
 
@@ -844,7 +845,7 @@ export default function PendingProjectScreen({
               <View style={[styles.statsRow, IS_LARGE_WEB && styles.statsRowLargeWeb]}>
                 <View style={[styles.statCard, styles.budgetCard, IS_LARGE_WEB && styles.statCardLargeWeb]}>
                   <View style={[styles.statHeader, IS_LARGE_WEB && styles.statHeaderLargeWeb]}>
-                    <Ionicons name="cash-outline" size={IS_LARGE_WEB ? 20 : 12} color={c.primary80} />
+                    <RialIcon size={IS_LARGE_WEB ? 20 : 12} variant="primary" color={c.primary80} />
                     <Text style={[styles.statTitle, IS_LARGE_WEB && styles.statTitleLargeWeb]}>
                       {t('Total Budget')}
                     </Text>
