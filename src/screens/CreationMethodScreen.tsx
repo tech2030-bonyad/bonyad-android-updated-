@@ -60,16 +60,16 @@ export default function CreationMethodScreen({
   const subcategoryName = isRTL && subcategory.nameAr ? subcategory.nameAr : subcategory.nameEn;
 
   // ─── Screen enter / exit animation ────────────────────────────────────────
-  const screenOpacity = useRef(new Animated.Value(0)).current;
-  const screenTranslateY = useRef(new Animated.Value(260)).current;
-  const screenScale = useRef(new Animated.Value(0.96)).current;
+  const screenOpacity = useRef(new Animated.Value(1)).current;
+  const screenTranslateY = useRef(new Animated.Value(0)).current;
+  const screenScale = useRef(new Animated.Value(1)).current;
   const isClosingRef = useRef(false);
 
   // Card stagger animations
-  const card1Opacity = useRef(new Animated.Value(0)).current;
-  const card1Y = useRef(new Animated.Value(30)).current;
-  const card2Opacity = useRef(new Animated.Value(0)).current;
-  const card2Y = useRef(new Animated.Value(30)).current;
+  const card1Opacity = useRef(new Animated.Value(1)).current;
+  const card1Y = useRef(new Animated.Value(0)).current;
+  const card2Opacity = useRef(new Animated.Value(1)).current;
+  const card2Y = useRef(new Animated.Value(0)).current;
 
   // Press scale for cards
   const aiPressScale = useRef(new Animated.Value(1)).current;
@@ -79,39 +79,6 @@ export default function CreationMethodScreen({
   const sparkleScale = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    // Screen slide-up entrance
-    Animated.parallel([
-      Animated.timing(screenOpacity, {
-        toValue: 1,
-        duration: 280,
-        useNativeDriver: true,
-      }),
-      Animated.spring(screenTranslateY, {
-        toValue: 0,
-        friction: 8,
-        tension: 65,
-        useNativeDriver: true,
-      }),
-      Animated.spring(screenScale, {
-        toValue: 1,
-        friction: 8,
-        tension: 65,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      // Stagger cards in after screen appears
-      Animated.stagger(90, [
-        Animated.parallel([
-          Animated.timing(card1Opacity, { toValue: 1, duration: 260, useNativeDriver: true }),
-          Animated.spring(card1Y, { toValue: 0, friction: 9, tension: 100, useNativeDriver: true }),
-        ]),
-        Animated.parallel([
-          Animated.timing(card2Opacity, { toValue: 1, duration: 260, useNativeDriver: true }),
-          Animated.spring(card2Y, { toValue: 0, friction: 9, tension: 100, useNativeDriver: true }),
-        ]),
-      ]).start();
-    });
-
     // Sparkle pulse loop
     const pulse = Animated.loop(
       Animated.sequence([

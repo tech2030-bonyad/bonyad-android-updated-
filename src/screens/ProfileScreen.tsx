@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef, useLayoutEffect, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -55,6 +55,7 @@ interface ProfileScreenProps {
   onNavigateToSmallTaskTypes?: () => void;
   onNavigateToPaymentHistory?: () => void;
   onNavigateToSupportTickets?: () => void;
+  onNavigateToOnboarding?: () => void;
   /** Expose { startTour } so the parent (UserHomeScreen) can trigger the tour via the info button */
   onExposeTourControl?: (control: { startTour: () => void }) => void;
 }
@@ -109,6 +110,7 @@ export default function ProfileScreen({
   onNavigateToSmallTaskTypes,
   onNavigateToPaymentHistory,
   onNavigateToSupportTickets,
+  onNavigateToOnboarding,
   onExposeTourControl,
 }: ProfileScreenProps) {
   const { t, i18n } = useTranslation();
@@ -145,7 +147,6 @@ export default function ProfileScreen({
       steps.push(
         { spotId: 'profileMenuPortfolio',      text: t('tutorial.tab.profile.menuPortfolio') },
         { spotId: 'profileMenuSubscription',   text: t('tutorial.tab.profile.menuSubscription') },
-        { spotId: 'profileMenuAvailability',   text: t('tutorial.tab.profile.menuAvailability') },
         { spotId: 'profileMenuServices',       text: t('tutorial.tab.profile.menuServices') },
         { spotId: 'profileMenuSmallTaskTypes', text: t('tutorial.tab.profile.menuSmallTaskTypes') },
         { spotId: 'profileMenuWorkingAreas',   text: t('tutorial.tab.profile.menuWorkingAreas') },
@@ -187,8 +188,7 @@ export default function ProfileScreen({
       profileMenuMyData: 0,
       profileMenuPortfolio: 0,
       profileMenuSubscription: 200,
-      profileMenuAvailability: 300,
-      profileMenuServices: 400,
+      profileMenuServices: 300,
       profileMenuSmallTaskTypes: 500,
       profileMenuWorkingAreas: 600,
       profileMenuSupport: isTechnicianRole ? 700 : 350,
@@ -224,7 +224,6 @@ export default function ProfileScreen({
     setLanguage(i18n.language);
     
     const handleLanguageChange = (lng: string) => {
-      console.log('🌐 Language changed to:', lng);
       setLanguage(lng);
     };
 
@@ -245,7 +244,6 @@ export default function ProfileScreen({
       setUserDetails(profile);
       setIsCompanyMode(profile?.isCompany ?? false);
     } catch (error) {
-      console.error('Error fetching profile:', error);
       showError(t('Failed to load profile'), t('Error'));
     } finally {
       setIsLoading(false);
@@ -362,8 +360,8 @@ export default function ProfileScreen({
     try {
       await i18n.changeLanguage(newLang);
       setLanguage(newLang);
-    } catch (error) {
-      console.error('Error changing language:', error);
+    } catch {
+      // silently handle language change error
     }
   };
 
@@ -387,20 +385,35 @@ export default function ProfileScreen({
     toggleTheme();
   };
 
-  // Theme-aware colors
-  const bgColor = isDarkMode ? colors.background : FIGMA_COLORS.white;
-  const cardBgColor = isDarkMode ? colors.cardBackground : FIGMA_COLORS.white;
-  const textColor = isDarkMode ? colors.text : FIGMA_COLORS.textBody;
-  const headerTextColor = isDarkMode ? colors.text : FIGMA_COLORS.primaryDark;
-  const secondaryTextColor = isDarkMode ? colors.textSecondary : FIGMA_COLORS.textSecondary;
-  const dividerColor = isDarkMode ? colors.border : FIGMA_COLORS.divider;
-  const primaryColor = isDarkMode ? colors.primary : FIGMA_COLORS.primary;
-  const iconBgColor = isDarkMode ? colors.surface : FIGMA_COLORS.iconBg;
-  const statBgColor = isDarkMode ? colors.surface : FIGMA_COLORS.purpleLight;
-  const statBorderColor = isDarkMode ? colors.border : FIGMA_COLORS.purple;
-  const successColor = isDarkMode ? colors.success : FIGMA_COLORS.greenSuccess;
-  const successBgColor = isDarkMode ? 'rgba(26, 159, 120, 0.15)' : FIGMA_COLORS.greenLight;
-  const avatarBgColor = isDarkMode ? colors.surface : FIGMA_COLORS.primaryLight;
+  // Theme-aware colors (memoized to avoid recalculation on every render)
+  const themeColors = useMemo(() => ({
+    bg: isDarkMode ? colors.background : FIGMA_COLORS.white,
+    cardBg: isDarkMode ? colors.cardBackground : FIGMA_COLORS.white,
+    text: isDarkMode ? colors.text : FIGMA_COLORS.textBody,
+    headerText: isDarkMode ? colors.text : FIGMA_COLORS.primaryDark,
+    secondaryText: isDarkMode ? colors.textSecondary : FIGMA_COLORS.textSecondary,
+    divider: isDarkMode ? colors.border : FIGMA_COLORS.divider,
+    primary: isDarkMode ? colors.primary : FIGMA_COLORS.primary,
+    iconBg: isDarkMode ? colors.surface : FIGMA_COLORS.iconBg,
+    statBg: isDarkMode ? colors.surface : FIGMA_COLORS.purpleLight,
+    statBorder: isDarkMode ? colors.border : FIGMA_COLORS.purple,
+    success: isDarkMode ? colors.success : FIGMA_COLORS.greenSuccess,
+    successBg: isDarkMode ? 'rgba(26, 159, 120, 0.15)' : FIGMA_COLORS.greenLight,
+    avatarBg: isDarkMode ? colors.surface : FIGMA_COLORS.primaryLight,
+  }), [isDarkMode, colors]);
+  const bgColor = themeColors.bg;
+  const cardBgColor = themeColors.cardBg;
+  const textColor = themeColors.text;
+  const headerTextColor = themeColors.headerText;
+  const secondaryTextColor = themeColors.secondaryText;
+  const dividerColor = themeColors.divider;
+  const primaryColor = themeColors.primary;
+  const iconBgColor = themeColors.iconBg;
+  const statBgColor = themeColors.statBg;
+  const statBorderColor = themeColors.statBorder;
+  const successColor = themeColors.success;
+  const successBgColor = themeColors.successBg;
+  const avatarBgColor = themeColors.avatarBg;
 
   const technicianCertificateUrls = useMemo(() => {
     const c = userDetails?.certificates;
@@ -442,13 +455,7 @@ export default function ProfileScreen({
           {/* User Welcome Section - Clickable to open settings */}
           <TouchableOpacity 
             style={styles.userWelcomeSection} 
-            onPress={() => {
-              if (isTechnician) {
-                onNavigateToEditProfile?.();
-              } else {
-                onNavigateToEditProfile?.();
-              }
-            }}
+            onPress={() => onNavigateToEditProfile?.()}
           >
             <TouchableOpacity
               onPress={handleChangeProfileImage}
@@ -680,7 +687,7 @@ export default function ProfileScreen({
           ) : null}
         </View>
 
-        {/* Technician Menu Items – same order as web: Portfolio, Subscription, Availability, Services, Small Task Types, Working Areas */}
+        {/* Technician Menu Items – same order as web: Portfolio, Subscription, Services, Small Task Types, Working Areas */}
         {isTechnician && (
           <>
             {/* My Portfolio */}
@@ -729,32 +736,6 @@ export default function ProfileScreen({
                   </Text>
                   <Text style={[styles.settingSubtitle, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }]}>
                     {t('profile.manageYourSubscriptions')}
-                  </Text>
-                </View>
-                <Ionicons name={menuChevron} size={24} color={primaryColor} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Availability */}
-            <View
-              ref={tourRef('profileMenuAvailability')}
-              collapsable={false}
-              style={[styles.technicianCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}
-            >
-              <TouchableOpacity
-                style={styles.menuItem}
-                onPress={() => onNavigateToAvailability?.()}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.settingIconContainer, { backgroundColor: iconBgColor }]}>
-                  <Ionicons name="calendar-outline" size={24} color={isDarkMode ? colors.textSecondary : '#666666'} />
-                </View>
-                <View style={styles.settingTextContainer}>
-                  <Text style={[styles.settingTitle, { color: textColor, fontFamily, fontSize: scaledSize(16) }]}>
-                    {t('profile.availability')}
-                  </Text>
-                  <Text style={[styles.settingSubtitle, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }]}>
-                    {t('profile.setWhenAvailable')}
                   </Text>
                 </View>
                 <Ionicons name={menuChevron} size={24} color={primaryColor} />
@@ -885,14 +866,7 @@ export default function ProfileScreen({
         >
           <TouchableOpacity 
             style={styles.menuItem}
-            onPress={() => {
-              console.log('🎧 Support Center pressed, handler:', typeof onNavigateToSupportTickets);
-              if (onNavigateToSupportTickets) {
-                onNavigateToSupportTickets();
-              } else {
-                console.error('❌ onNavigateToSupportTickets is undefined!');
-              }
-            }}
+            onPress={() => onNavigateToSupportTickets?.()}
             activeOpacity={0.7}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
@@ -942,6 +916,28 @@ export default function ProfileScreen({
               size={24} 
               color={primaryColor} 
             />
+          </TouchableOpacity>
+        </View>
+
+        {/* App Walkthrough Card */}
+        <View style={[styles.userMenuCard, { backgroundColor: cardBgColor, borderColor: dividerColor }]}>
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => onNavigateToOnboarding?.()}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.settingIconContainer, { backgroundColor: iconBgColor }]}>
+              <Ionicons name="play-circle-outline" size={24} color={isDarkMode ? colors.textSecondary : '#666666'} />
+            </View>
+            <View style={styles.settingTextContainer}>
+              <Text style={[styles.settingTitle, { color: textColor, fontFamily, fontSize: scaledSize(16) }]}>
+                {t('profile.appWalkthrough', { defaultValue: 'App Walkthrough' })}
+              </Text>
+              <Text style={[styles.settingSubtitle, { color: secondaryTextColor, fontFamily, fontSize: scaledSize(14) }]}>
+                {t('profile.appWalkthroughDesc', { defaultValue: 'Replay the app introduction' })}
+              </Text>
+            </View>
+            <Ionicons name={menuChevron} size={24} color={primaryColor} />
           </TouchableOpacity>
         </View>
 

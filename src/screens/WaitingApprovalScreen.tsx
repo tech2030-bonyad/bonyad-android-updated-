@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { BackArrowIonicons } from '../components/navigation/BackArrowIonicons';
 import { useTheme } from '../context/ThemeContext';
+import { useRTL } from '../hooks/useRTL';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getTopPadding } from '../utils/statusBarHelper';
 import {
@@ -229,14 +230,10 @@ export default function WaitingApprovalScreen({
   onLogout,
 }: WaitingApprovalScreenProps) {
   const { colors, theme } = useTheme();
-  const { t, i18n } = useTranslation();
-  const tr = (key: string, fallback: string) => {
-    const v = t(key);
-    return v === key ? fallback : v;
-  };
+  const { t } = useTranslation();
+  const { isRTL } = useRTL();
   const insets = useSafeAreaInsets();
   const isDarkMode = theme === 'dark';
-  const isRTL = i18n.language === 'ar';
 
   // ── state (logic unchanged) ────────────────────────────────────────────────
   const [status, setStatus] = useState<TechnicianStatusResponse | null>(null);
@@ -316,7 +313,6 @@ export default function WaitingApprovalScreen({
         onApproved(); return;
       }
     } catch (err: unknown) {
-      console.error('❌ Error checking technician status:', err);
       const msg = err instanceof Error ? err.message : '';
       if (msg === TECHNICIAN_STATUS_REJECTED) {
         if (pollingIntervalRef.current) { clearInterval(pollingIntervalRef.current); pollingIntervalRef.current = null; }
@@ -335,7 +331,7 @@ export default function WaitingApprovalScreen({
         setIsApplicationRejected(false);
         setIsSuspendedBlocked(false);
         setRejectionDetail(null);
-        setError(msg || t('Failed to check status') || 'Failed to check status');
+        setError(msg || t('waitingApproval.failedToCheckStatus'));
       }
     } finally {
       setIsLoading(false);
@@ -384,11 +380,11 @@ export default function WaitingApprovalScreen({
   // ── loading ────────────────────────────────────────────────────────────────
   if (isLoading && !status && !showBlockedState) {
     return (
-      <View style={[styles.container, { backgroundColor: bg }]}>
-        <View style={[styles.loadingWrap, { paddingTop: getTopPadding(insets, 40) }]}>
+      <View style={[styles.container, { backgroundColor: bg, paddingTop: getTopPadding(insets, 40) }]}>
+        <View style={styles.loadingWrap}>
           <ActivityIndicator size="large" color={BLUE} />
           <Text style={[styles.loadingText, { color: textSec }]}>
-            {t('Loading...') || 'Loading...'}
+            {t('waitingApproval.loading')}
           </Text>
         </View>
       </View>
@@ -396,16 +392,14 @@ export default function WaitingApprovalScreen({
   }
 
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: bg }]}
-      contentContainerStyle={[
-        styles.scrollContent,
-        { paddingTop: Platform.OS === 'web' ? 0 : getTopPadding(insets, 20) },
-      ]}
-      showsVerticalScrollIndicator={false}
-    >
-      {/* ── Top bar ─────────────────────────────────────────────────────────── */}
-      <View style={[styles.topBar, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+    <View style={[styles.container, { backgroundColor: bg }]}>
+      {/* ── Top bar (always LTR) ─────────────────────────────────────────────── */}
+      <View
+        style={[
+          styles.topBar,
+          { paddingTop: Platform.OS === 'web' ? 4 : getTopPadding(insets, 4) },
+        ]}
+      >
         {onBack ? (
           <TouchableOpacity onPress={onBack} style={styles.topBarBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <BackArrowIonicons variant="chevron" size={22} color={textPrimary} />
@@ -416,11 +410,18 @@ export default function WaitingApprovalScreen({
           <TouchableOpacity onPress={onLogout} style={[styles.topBarBtn, styles.logoutBtn]}>
             <Ionicons name="log-out-outline" size={18} color={textSec} />
             <Text style={[styles.logoutText, { color: textSec }]}>
-              {t('Sign out') || 'Sign out'}
+              {t('waitingApproval.signOut')}
             </Text>
           </TouchableOpacity>
         )}
       </View>
+
+      <ScrollView
+        style={styles.scrollArea}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
 
       {/* ── Badge ───────────────────────────────────────────────────────────── */}
       <PulsingBadge
@@ -433,20 +434,17 @@ export default function WaitingApprovalScreen({
       {/* ── Title + subtitle ─────────────────────────────────────────────────── */}
       <Text style={[styles.title, { color: isApplicationRejected ? RED : isSuspendedBlocked ? AMBER : textPrimary }]}>
         {isApplicationRejected
-          ? tr('waitingApproval.rejectedTitle', 'Application not approved')
+          ? t('waitingApproval.rejectedTitle')
           : isSuspendedBlocked
-            ? tr('waitingApproval.suspendedTitle', 'Account suspended')
-            : t('Waiting for Approval') || 'Waiting for Approval'}
+            ? t('waitingApproval.suspendedTitle')
+            : t('waitingApproval.title')}
       </Text>
       <Text style={[styles.subtitle, { color: textSec }]}>
         {isApplicationRejected
-          ? tr(
-              'waitingApproval.rejectedSubtitle',
-              'Your provider application was not approved. Contact support if you believe this is a mistake.'
-            )
+          ? t('waitingApproval.rejectedSubtitle')
           : isSuspendedBlocked
-            ? tr('waitingApproval.suspendedSubtitle', 'Your account is suspended. Please contact support.')
-            : t('Your profile is being reviewed by our admin team. This usually takes a few hours.') || 'Your profile is being reviewed. This usually takes a few hours.'}
+            ? t('waitingApproval.suspendedSubtitle')
+            : t('waitingApproval.subtitle')}
       </Text>
 
       {/* ── Rejection / Suspended accent card ──────────────────────────────── */}
@@ -455,13 +453,11 @@ export default function WaitingApprovalScreen({
           <View style={styles.accentCardHeader}>
             <Ionicons name="alert-circle" size={16} color={RED} />
             <Text style={[styles.accentCardTitle, { color: RED }]}>
-              {tr('waitingApproval.rejectionMessageTitle', 'Message from the review team')}
+              {t('waitingApproval.rejectionMessageTitle')}
             </Text>
           </View>
           <Text style={[styles.accentCardBody, { color: textPrimary }]}>
-            {(rejectionDetail && rejectionDetail.trim()) ||
-              tr('waitingApproval.applicationRejectedDetail', 'Your technician application was not approved. Contact support if you need help.') ||
-              'Your technician application was not approved. Contact support if you need help.'}
+            {(rejectionDetail && rejectionDetail.trim()) || t('waitingApproval.applicationRejectedDetail')}
           </Text>
         </View>
       )}
@@ -470,14 +466,11 @@ export default function WaitingApprovalScreen({
           <View style={styles.accentCardHeader}>
             <Ionicons name="warning" size={16} color={AMBER} />
             <Text style={[styles.accentCardTitle, { color: AMBER }]}>
-              {t('Account Suspended') || 'Account Suspended'}
+              {t('waitingApproval.accountSuspended')}
             </Text>
           </View>
           <Text style={[styles.accentCardBody, { color: textPrimary }]}>
-            {tr(
-              'waitingApproval.suspendedSubtitle',
-              'Your provider account is suspended. Please contact support to resolve this.'
-            )}
+            {t('waitingApproval.suspendedSubtitle')}
           </Text>
         </View>
       )}
@@ -486,26 +479,26 @@ export default function WaitingApprovalScreen({
       {!showBlockedState && (
         <View style={[styles.card, { backgroundColor: cardBg }]}>
           <Text style={[styles.cardHeading, { color: textPrimary }]}>
-            {t('Review process') || 'Review process'}
+            {t('waitingApproval.reviewProcess')}
           </Text>
           <ReviewStep
             index={0}
-            label={t('Profile submitted') || 'Profile submitted'}
-            sublabel={t('All your information has been received') || 'All your information has been received'}
+            label={t('waitingApproval.profileSubmitted')}
+            sublabel={t('waitingApproval.profileSubmittedSub')}
             state={step1}
             isLast={false}
           />
           <ReviewStep
             index={1}
-            label={t('Under review') || 'Under review'}
-            sublabel={t('Admin team is reviewing your application') || 'Admin team is reviewing your application'}
+            label={t('waitingApproval.underReview')}
+            sublabel={t('waitingApproval.underReviewSub')}
             state={step2}
             isLast={false}
           />
           <ReviewStep
             index={2}
-            label={t('Approved') || 'Approved'}
-            sublabel={t('You will be notified once approved') || 'You will be notified once approved'}
+            label={t('waitingApproval.approvedStep')}
+            sublabel={t('waitingApproval.approvedStepSub')}
             state={step3}
             isLast
           />
@@ -515,9 +508,9 @@ export default function WaitingApprovalScreen({
       {/* ── Info chips (pending state only) ──────────────────────────────── */}
       {!showBlockedState && (
         <View style={styles.chipsRow}>
-          <InfoChip icon="time-outline" label={tr('waitingApproval.tile1Value', 'Few hrs')} />
-          <InfoChip icon="shield-checkmark-outline" label={tr('waitingApproval.tile2Value', 'Complete')} />
-          <InfoChip icon="notifications-outline" label={tr('waitingApproval.tile3Value', 'Notify')} />
+          <InfoChip icon="time-outline" label={t('waitingApproval.tile1Value')} />
+          <InfoChip icon="shield-checkmark-outline" label={t('waitingApproval.tile2Value')} />
+          <InfoChip icon="notifications-outline" label={t('waitingApproval.tile3Value')} />
         </View>
       )}
 
@@ -537,12 +530,12 @@ export default function WaitingApprovalScreen({
           <>
             <ActivityIndicator size="small" color={BLUE} style={{ marginRight: 6 }} />
             <Text style={[styles.autoRefreshText, { color: textSec }]}>
-              {t('Checking status every 10 seconds...') || 'Checking every 10 s…'}
+              {t('waitingApproval.checkingStatus')}
             </Text>
           </>
         ) : (
           <Text style={[styles.autoRefreshText, { color: textSec, textAlign: 'center' }]}>
-            {tr('waitingApproval.rejectedPollingStopped', 'Automatic checks stopped. Refresh manually.')}
+            {t('waitingApproval.rejectedPollingStopped')}
           </Text>
         )}
       </View>
@@ -558,8 +551,8 @@ export default function WaitingApprovalScreen({
           <ActivityIndicator size="small" color="#fff" />
         ) : (
           <>
-            <Ionicons name="refresh" size={18} color="#fff" style={{ marginRight: 8 }} />
-            <Text style={styles.refreshBtnText}>{t('Refresh Status') || 'Refresh Status'}</Text>
+            <Ionicons name="refresh" size={18} color="#fff" style={{ marginRight: isRTL ? 0 : 8, marginLeft: isRTL ? 8 : 0 }} />
+            <Text style={styles.refreshBtnText}>{t('waitingApproval.refreshStatus')}</Text>
           </>
         )}
       </TouchableOpacity>
@@ -571,36 +564,39 @@ export default function WaitingApprovalScreen({
           onPress={onLogout}
           activeOpacity={0.75}
         >
-          <Ionicons name="log-out-outline" size={16} color={textSec} style={{ marginRight: 6 }} />
+          <Ionicons name="log-out-outline" size={16} color={textSec} style={{ marginRight: isRTL ? 0 : 6, marginLeft: isRTL ? 6 : 0 }} />
           <Text style={[styles.signOutBtnText, { color: textSec }]}>
-            {tr('waitingApproval.signOut', 'Sign out')}
+            {t('waitingApproval.signOut')}
           </Text>
         </TouchableOpacity>
       )}
 
       <View style={{ height: 24 }} />
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  scrollArea: { flex: 1 },
   scrollContent: {
-    flexGrow: 1,
     alignItems: 'center',
     paddingHorizontal: 20,
+    paddingTop: 20,
     paddingBottom: 32,
   },
   loadingWrap: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: 14, fontSize: 15 },
 
-  // top bar
+  // top bar — always LTR, sits above the ScrollView
   topBar: {
+    flexDirection: 'row',
     width: '100%',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 28,
-    paddingTop: 4,
+    paddingHorizontal: 12,
+    paddingBottom: 8,
   },
   topBarBtn: { padding: 4 },
   logoutBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 6 },

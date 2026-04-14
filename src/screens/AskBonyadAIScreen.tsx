@@ -65,7 +65,6 @@ export default function AskBonyadAIScreen({ onBack }: AskBonyadAIScreenProps) {
         ]);
       }
     } catch (error) {
-      console.error('Failed to fetch suggestions:', error);
       // Fallback to defaults
       setQuickSuggestions(i18n.language === 'en' ? [
         'Estimate Cost',
@@ -127,7 +126,6 @@ export default function AskBonyadAIScreen({ onBack }: AskBonyadAIScreenProps) {
         );
       }
     } catch (error: any) {
-      console.error('Chat API Error:', error);
       Alert.alert(
         t('Error'),
         i18n.language === 'en' ? 'Network error. Please try again.' : 'خطأ في الشبكة. يرجى المحاولة مرة أخرى.'

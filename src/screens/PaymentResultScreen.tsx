@@ -65,7 +65,6 @@ export default function PaymentResultScreen({
         }, 2000);
       }
     } catch (error: any) {
-      console.error('Error verifying payment:', error);
       setVerificationError(error.message || t('Failed to verify payment'));
       showError(error.message || t('Failed to verify payment'), t('Error'));
     } finally {

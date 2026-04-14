@@ -115,35 +115,20 @@ export default function PhaseApprovalModal({
 
   useEffect(() => {
     if (visible && projectId) {
-      console.log('═══════════════════════════════════════════════════════════');
-      console.log('🟢 [PhaseApprovalModal] ==========================================');
-      console.log('🟢 [PhaseApprovalModal] ✅ MODAL IS NOW OPEN');
-      console.log('🟢 [PhaseApprovalModal] ==========================================');
-      console.log('🟢 [PhaseApprovalModal] Project ID:', projectId);
-      console.log('🟢 [PhaseApprovalModal] Is Technician:', isTechnician);
-      console.log('🟢 [PhaseApprovalModal] User Role:', isTechnician ? 'TECHNICIAN' : 'USER/HOMEOWNER');
-      console.log('🟢 [PhaseApprovalModal] Mode:', isTechnician ? 'EDITING (Technician can edit/update phases and view feedback)' : 'APPROVAL/FEEDBACK (User can approve phases and send feedback)');
-      console.log('🟢 [PhaseApprovalModal] Loading phases for this project...');
-      console.log('═══════════════════════════════════════════════════════════');
       loadPhases();
       // Load feedbacks for technicians
       if (isTechnician) {
-        console.log('🟢 [PhaseApprovalModal] Technician detected - Loading all feedbacks...');
         loadFeedbacks('all');
       }
     } else if (!visible) {
-      console.log('🔴 [PhaseApprovalModal] Modal closed');
     }
   }, [visible, projectId, isTechnician]);
 
   const loadPhases = async () => {
     try {
-      console.log('📋 [PhaseApprovalModal] loadPhases - Starting...');
-      console.log('📋 [PhaseApprovalModal] loadPhases - Project ID:', projectId);
       setIsLoading(true);
       const token = await storage.getAuthToken();
       if (!token) {
-        console.error('❌ [PhaseApprovalModal] loadPhases - No auth token');
         showError(t('Please login again'));
         return;
       }
@@ -151,8 +136,6 @@ export default function PhaseApprovalModal({
       const url = buildApiUrlWithParams(API_ENDPOINTS.PHASES.LIST, {
         projectId,
       });
-
-      console.log('📋 [PhaseApprovalModal] loadPhases - Fetching from:', url);
 
       const response = await fetch(url, {
         method: 'GET',
@@ -162,29 +145,16 @@ export default function PhaseApprovalModal({
         },
       });
 
-      console.log('📋 [PhaseApprovalModal] loadPhases - Response Status:', response.status);
-
       if (response.ok) {
         const data = await response.json();
-        console.log('✅ [PhaseApprovalModal] loadPhases - Loaded phases successfully!');
-        console.log('✅ [PhaseApprovalModal] loadPhases - Number of phases:', data.length);
-        console.log('✅ [PhaseApprovalModal] loadPhases - Phases data:', data);
         setPhases(data);
-        console.log('✅ [PhaseApprovalModal] loadPhases - Phases will appear in PhaseApprovalModal');
-        console.log('✅ [PhaseApprovalModal] loadPhases - User can now:', isTechnician ? 'Edit/update phases' : 'Approve phases and send feedback');
       } else {
-        const errorText = await response.text();
-        console.error('❌ [PhaseApprovalModal] loadPhases - Failed to load phases');
-        console.error('❌ [PhaseApprovalModal] loadPhases - Status:', response.status);
-        console.error('❌ [PhaseApprovalModal] loadPhases - Error:', errorText);
         showError(t('Failed to load phases'));
       }
     } catch (error: any) {
-      console.error('❌ [PhaseApprovalModal] loadPhases - Error:', error);
       showError(error.message || t('Failed to load phases'));
     } finally {
       setIsLoading(false);
-      console.log('📋 [PhaseApprovalModal] loadPhases - Loading complete');
     }
   };
 
@@ -193,7 +163,6 @@ export default function PhaseApprovalModal({
       setIsLoadingFeedbacks(true);
       const token = await storage.getAuthToken();
       if (!token) {
-        console.error('❌ [PhaseApprovalModal] loadFeedbacks - No auth token');
         return;
       }
 
@@ -206,9 +175,6 @@ export default function PhaseApprovalModal({
         projectId,
       });
 
-      console.log('📋 [PhaseApprovalModal] loadFeedbacks - Fetching from:', url);
-      console.log('📋 [PhaseApprovalModal] loadFeedbacks - Filter:', filter);
-
       const response = await fetch(url, {
         method: 'GET',
         headers: {
@@ -217,12 +183,8 @@ export default function PhaseApprovalModal({
         },
       });
 
-      console.log('📋 [PhaseApprovalModal] loadFeedbacks - Response Status:', response.status);
-
       if (response.ok) {
         const data = await response.json();
-        console.log('✅ [PhaseApprovalModal] loadFeedbacks - Loaded feedbacks successfully!');
-        console.log('✅ [PhaseApprovalModal] loadFeedbacks - Number of feedbacks:', data.length || 0);
         
         // Filter by resolved if needed (when loading all)
         let filteredData = data || [];
@@ -232,17 +194,11 @@ export default function PhaseApprovalModal({
           filteredData = filteredData.filter((fb: any) => fb.status === 'PENDING' || fb.status === 'pending');
         }
         
-        console.log('✅ [PhaseApprovalModal] loadFeedbacks - Filtered feedbacks:', filteredData.length);
         setFeedbacks(filteredData);
       } else {
-        const errorText = await response.text();
-        console.error('❌ [PhaseApprovalModal] loadFeedbacks - Failed to load feedbacks');
-        console.error('❌ [PhaseApprovalModal] loadFeedbacks - Status:', response.status);
-        console.error('❌ [PhaseApprovalModal] loadFeedbacks - Error:', errorText);
         setFeedbacks([]);
       }
     } catch (error: any) {
-      console.error('❌ [PhaseApprovalModal] loadFeedbacks - Error:', error);
       setFeedbacks([]);
     } finally {
       setIsLoadingFeedbacks(false);
@@ -250,20 +206,11 @@ export default function PhaseApprovalModal({
   };
 
   const resolveFeedback = async (feedbackId: number) => {
-    console.log('═══════════════════════════════════════════════════════════');
-    console.log('🔘 [PhaseApprovalModal] resolveFeedback - BUTTON CLICKED');
-    console.log('🔘 [PhaseApprovalModal] Feedback ID:', feedbackId);
-    console.log('🔘 [PhaseApprovalModal] Function called successfully');
-    console.log('🔘 [PhaseApprovalModal] Platform:', Platform.OS);
-    console.log('═══════════════════════════════════════════════════════════');
-    
     const executeResolve = async () => {
-      console.log('✅ [PhaseApprovalModal] User confirmed - Starting API call...');
       setShowConfirmModal(false);
       try {
         const token = await storage.getAuthToken();
         if (!token) {
-          console.error('❌ [PhaseApprovalModal] No auth token');
           showError(t('Please login again'));
           return;
         }
@@ -271,14 +218,6 @@ export default function PhaseApprovalModal({
         const url = buildApiUrlWithParams(API_ENDPOINTS.FEEDBACKS.RESOLVE, {
           feedbackId,
         });
-
-        console.log('═══════════════════════════════════════════════════════════');
-        console.log('🟢 [PhaseApprovalModal] Resolve Feedback');
-        console.log('🟢 [PhaseApprovalModal] Endpoint: POST /feedbacks/{feedbackId}/resolve');
-        console.log('🟢 [PhaseApprovalModal] Feedback ID:', feedbackId);
-        console.log('🟢 [PhaseApprovalModal] URL:', url);
-        console.log('🟢 [PhaseApprovalModal] Body: None (as per API spec)');
-        console.log('═══════════════════════════════════════════════════════════');
 
         const response = await fetch(url, {
           method: 'POST',
@@ -288,21 +227,14 @@ export default function PhaseApprovalModal({
           },
         });
 
-        console.log('📥 [PhaseApprovalModal] Resolve Response Status:', response.status);
-
         if (response.ok) {
-          console.log('✅ [PhaseApprovalModal] Feedback resolved successfully');
           showSuccess(t('Feedback marked as resolved'));
           // Reload feedbacks
           loadFeedbacks(feedbackFilter);
         } else {
-          const errorText = await response.text();
-          console.error('❌ [PhaseApprovalModal] Failed to resolve feedback:', errorText);
-          console.error('❌ [PhaseApprovalModal] Status:', response.status);
           showError(t('Failed to resolve feedback'));
         }
       } catch (error: any) {
-        console.error('❌ [PhaseApprovalModal] Error resolving feedback:', error);
         showError(error.message || t('Failed to resolve feedback'));
       }
     };
@@ -315,30 +247,17 @@ export default function PhaseApprovalModal({
   };
 
   const approveAllPhases = async () => {
-    console.log('═══════════════════════════════════════════════════════════');
-    console.log('🔘 [PhaseApprovalModal] approveAllPhases - BUTTON CLICKED');
-    console.log('🔘 [PhaseApprovalModal] Function called successfully');
-    console.log('🔘 [PhaseApprovalModal] Platform:', Platform.OS);
-    console.log('═══════════════════════════════════════════════════════════');
-    
     const executeApproval = async () => {
-      console.log('✅ [PhaseApprovalModal] User confirmed - Starting approval and signature flow...');
       setShowConfirmModal(false);
       setIsApproving(true);
       try {
         const token = await storage.getAuthToken();
         if (!token) {
-          console.error('❌ [PhaseApprovalModal] No auth token');
           showError(t('Please login again'));
           return;
         }
 
         // ===== STEP 1: Fetch User Email =====
-        console.log('═══════════════════════════════════════════════════════════');
-        console.log('🟢 [PhaseApprovalModal] STEP 1: Fetching user email');
-        console.log('🟢 [PhaseApprovalModal] Endpoint: GET /users/profile');
-        console.log('═══════════════════════════════════════════════════════════');
-
         const userProfileUrl = buildApiUrl(API_ENDPOINTS.USER.PROFILE);
         const userProfileResponse = await fetch(userProfileUrl, {
           method: 'GET',
@@ -352,16 +271,9 @@ export default function PhaseApprovalModal({
         if (userProfileResponse.ok) {
           const userProfile = await userProfileResponse.json();
           userEmail = userProfile?.email || '';
-          console.log('✅ [PhaseApprovalModal] User email fetched:', userEmail);
-        } else {
-          console.warn('⚠️ [PhaseApprovalModal] Failed to fetch user profile');
         }
 
         // ===== STEP 2: Fetch Project Details to Get Technician ID =====
-        console.log('═══════════════════════════════════════════════════════════');
-        console.log('🟢 [PhaseApprovalModal] STEP 2: Fetching project details for technician ID');
-        console.log('═══════════════════════════════════════════════════════════');
-
         const projectUrl = buildApiUrlWithParams(API_ENDPOINTS.PROJECTS.DETAILS, {
           id: projectId,
         });
@@ -378,7 +290,6 @@ export default function PhaseApprovalModal({
         if (projectResponse.ok) {
           const projectData = await projectResponse.json();
           const project = projectData?.project ?? projectData;
-          console.log('✅ [PhaseApprovalModal] Project details fetched');
 
           // Extract technician ID from project
           technicianId = 
@@ -388,21 +299,11 @@ export default function PhaseApprovalModal({
             project?.technician?.id || 
             project?.acceptedBid?.technicianId || 
             null;
-
-          console.log('🔧 [PhaseApprovalModal] Technician ID:', technicianId);
-        } else {
-          console.warn('⚠️ [PhaseApprovalModal] Failed to fetch project details');
         }
 
         // ===== STEP 3: Fetch Technician Email from Profile =====
         let technicianEmail = '';
         if (technicianId) {
-          console.log('═══════════════════════════════════════════════════════════');
-          console.log('🟢 [PhaseApprovalModal] STEP 3: Fetching technician email');
-          console.log('🟢 [PhaseApprovalModal] Endpoint: GET /users/{userId}/profile');
-          console.log('🟢 [PhaseApprovalModal] Technician ID:', technicianId);
-          console.log('═══════════════════════════════════════════════════════════');
-
           const technicianProfileUrl = buildApiUrlWithParams(API_ENDPOINTS.USER.PROFILE_BY_ID, {
             id: technicianId,
           });
@@ -419,19 +320,10 @@ export default function PhaseApprovalModal({
           if (technicianProfileResponse.ok) {
             const technicianProfile = await technicianProfileResponse.json();
             technicianEmail = technicianProfile?.email || '';
-            console.log('✅ [PhaseApprovalModal] Technician email fetched:', technicianEmail);
-          } else {
-            console.warn('⚠️ [PhaseApprovalModal] Failed to fetch technician profile');
           }
         }
 
         // ===== STEP 4: Approve All Phases =====
-        console.log('═══════════════════════════════════════════════════════════');
-        console.log('🟢 [PhaseApprovalModal] STEP 4: Approve All Phases');
-        console.log('🟢 [PhaseApprovalModal] Endpoint: POST /phases/project/{projectId}/approve-all');
-        console.log('🟢 [PhaseApprovalModal] Project ID:', projectId);
-        console.log('═══════════════════════════════════════════════════════════');
-
         const approveUrl = buildApiUrlWithParams(API_ENDPOINTS.PHASES.APPROVE_ALL, {
           projectId,
         });
@@ -444,31 +336,15 @@ export default function PhaseApprovalModal({
           },
         });
 
-        console.log('📥 [PhaseApprovalModal] Approve All Response Status:', approveResponse.status);
-
         if (!approveResponse.ok) {
-          const errorText = await approveResponse.text();
-          console.error('❌ [PhaseApprovalModal] Failed to approve phases:', errorText);
-          console.error('❌ [PhaseApprovalModal] Status:', approveResponse.status);
           showError(t('Failed to approve phases'));
           return;
         }
 
-        const approveData = await approveResponse.json().catch(() => null);
-        console.log('✅ [PhaseApprovalModal] Phases approved successfully:', approveData);
-        console.log('✅ [PhaseApprovalModal] Project status changed to CONTRACT_SIGNING');
-
-        // Log email status
-        console.log('📧 [PhaseApprovalModal] User Email:', userEmail);
-        console.log('📧 [PhaseApprovalModal] Technician Email:', technicianEmail);
-        console.log('🔧 [PhaseApprovalModal] Technician ID:', technicianId);
+        await approveResponse.json().catch(() => null);
 
         // Check if we have the required data for signature
         if (!technicianId || !userEmail || !technicianEmail) {
-          console.warn('⚠️ [PhaseApprovalModal] Missing email or technician info for signature');
-          console.warn('⚠️ [PhaseApprovalModal] technicianId:', technicianId);
-          console.warn('⚠️ [PhaseApprovalModal] userEmail:', userEmail);
-          console.warn('⚠️ [PhaseApprovalModal] technicianEmail:', technicianEmail);
           showSuccess(t('All phases approved successfully'));
           loadPhases();
           onSuccess?.();
@@ -476,11 +352,6 @@ export default function PhaseApprovalModal({
         }
 
         // ===== STEP 5: Create Signature Request =====
-        console.log('═══════════════════════════════════════════════════════════');
-        console.log('🟢 [PhaseApprovalModal] STEP 5: Creating signature request');
-        console.log('🟢 [PhaseApprovalModal] Endpoint: POST /signatures');
-        console.log('═══════════════════════════════════════════════════════════');
-
         const signatureUrl = buildApiUrl(API_ENDPOINTS.CONTRACTS.CREATE);
 
         // Get phase IDs
@@ -496,9 +367,6 @@ export default function PhaseApprovalModal({
           language: i18n.language === 'ar' ? 'AR' : 'EN',
         }).toString();
 
-        console.log('📤 [PhaseApprovalModal] Sending signature request...');
-        console.log('📤 [PhaseApprovalModal] Form body:', formBody);
-
         const signatureResponse = await fetch(signatureUrl, {
           method: 'POST',
           headers: {
@@ -509,27 +377,17 @@ export default function PhaseApprovalModal({
           body: formBody,
         });
 
-        console.log('📥 [PhaseApprovalModal] Signature Response Status:', signatureResponse.status);
-
         if (signatureResponse.ok || signatureResponse.status === 201) {
-          const signatureData = await signatureResponse.json();
-          console.log('✅ [PhaseApprovalModal] Signature request created successfully!');
-          console.log('✅ [PhaseApprovalModal] Signature ID:', signatureData.id);
-          console.log('✅ [PhaseApprovalModal] SignIt Reference:', signatureData.thirdPartyReferenceId);
-          
           showSuccess(t('All phases approved! Signature requests sent to both parties via email.'));
           loadPhases();
           onSuccess?.();
         } else {
-          const errorText = await signatureResponse.text();
-          console.error('❌ [PhaseApprovalModal] Failed to create signature:', errorText);
           // Still show success for phase approval even if signature fails
           showSuccess(t('All phases approved successfully'));
           loadPhases();
           onSuccess?.();
         }
       } catch (error: any) {
-        console.error('❌ [PhaseApprovalModal] Error:', error);
         showError(error.message || t('Failed to approve phases'));
       } finally {
         setIsApproving(false);
@@ -559,8 +417,6 @@ export default function PhaseApprovalModal({
 
       const url = buildApiUrl(API_ENDPOINTS.FEEDBACKS.CREATE);
 
-      console.log('🔍 Submitting feedback:', url);
-
       const response = await fetch(url, {
         method: 'POST',
         headers: {
@@ -573,20 +429,15 @@ export default function PhaseApprovalModal({
         }),
       });
 
-      console.log('📥 Feedback Response Status:', response.status);
-
       if (response.ok) {
         showSuccess(t('Feedback sent to technician'));
         setFeedbackText('');
         setShowFeedbackForm(false);
         onSuccess?.();
       } else {
-        const errorText = await response.text();
-        console.error('❌ Failed to submit feedback:', errorText);
         showError(t('Failed to submit feedback'));
       }
     } catch (error: any) {
-      console.error('❌ Error submitting feedback:', error);
       showError(error.message || t('Failed to submit feedback'));
     } finally {
       setIsSubmittingFeedback(false);
@@ -613,8 +464,6 @@ export default function PhaseApprovalModal({
                 phaseId,
               });
 
-              console.log('🔍 Paying for phase:', url);
-
               const response = await fetch(url, {
                 method: 'POST',
                 headers: {
@@ -623,19 +472,14 @@ export default function PhaseApprovalModal({
                 },
               });
 
-              console.log('📥 Payment Response Status:', response.status);
-
               if (response.ok) {
                 showSuccess(t('Payment successful'));
                 loadPhases(); // Reload to show updated status
                 onSuccess?.();
               } else {
-                const errorText = await response.text();
-                console.error('❌ Failed to pay phase:', errorText);
                 Alert.alert(t('Error'), t('Failed to process payment'));
               }
             } catch (error: any) {
-              console.error('❌ Error paying for phase:', error);
               Alert.alert(t('Error'), error.message || t('Failed to process payment'));
             }
           },
@@ -664,8 +508,6 @@ export default function PhaseApprovalModal({
                 phaseId,
               });
 
-              console.log('🔍 Marking phase complete:', url);
-
               const response = await fetch(url, {
                 method: 'POST',
                 headers: {
@@ -674,19 +516,14 @@ export default function PhaseApprovalModal({
                 },
               });
 
-              console.log('📥 Mark Complete Response Status:', response.status);
-
               if (response.ok) {
                 Alert.alert(t('Success'), t('Phase marked as complete. Waiting for payment.'));
                 loadPhases(); // Reload to show updated status
                 onSuccess?.();
               } else {
-                const errorText = await response.text();
-                console.error('❌ Failed to mark phase complete:', errorText);
                 Alert.alert(t('Error'), t('Failed to mark phase as complete'));
               }
             } catch (error: any) {
-              console.error('❌ Error marking phase complete:', error);
               Alert.alert(t('Error'), error.message || t('Failed to mark phase as complete'));
             }
           },
@@ -696,18 +533,6 @@ export default function PhaseApprovalModal({
   };
 
   const startEditingPhase = (phase: Phase) => {
-    console.log('═══════════════════════════════════════════════════════════');
-    console.log('🟡 [PhaseApprovalModal] ==========================================');
-    console.log('🟡 [PhaseApprovalModal] ✅ PHASE EDIT MODE OPENED');
-    console.log('🟡 [PhaseApprovalModal] ==========================================');
-    console.log('🟡 [PhaseApprovalModal] Phase ID:', phase.id);
-    console.log('🟡 [PhaseApprovalModal] Phase Number:', phase.phaseNumber);
-    console.log('🟡 [PhaseApprovalModal] Phase Description:', phase.description?.substring(0, 50) + '...');
-    console.log('🟡 [PhaseApprovalModal] Phase Time (days):', phase.timeSpentDays);
-    console.log('🟡 [PhaseApprovalModal] Phase Money (SAR):', phase.moneySpent);
-    console.log('🟡 [PhaseApprovalModal] Is Technician:', isTechnician);
-    console.log('🟡 [PhaseApprovalModal] Technician can now edit this phase');
-    console.log('═══════════════════════════════════════════════════════════');
     setEditingPhase(phase);
     setEditDescription(phase.description);
     setEditTimeDays(phase.timeSpentDays.toString());
@@ -715,7 +540,6 @@ export default function PhaseApprovalModal({
   };
 
   const cancelEditingPhase = () => {
-    console.log('🟡 [PhaseApprovalModal] Phase edit cancelled');
     setEditingPhase(null);
     setEditDescription('');
     setEditTimeDays('');
@@ -751,8 +575,6 @@ export default function PhaseApprovalModal({
 
       const url = buildApiUrl(API_ENDPOINTS.PHASES.CREATE);
 
-      console.log('🔍 Creating phase:', url);
-
       const nextPhaseNumber = phases.length > 0 ? Math.max(...phases.map(p => p.phaseNumber)) + 1 : 1;
 
       const response = await fetch(url, {
@@ -770,8 +592,6 @@ export default function PhaseApprovalModal({
         }),
       });
 
-      console.log('📥 Create Phase Response Status:', response.status);
-
       if (response.ok) {
         Alert.alert(t('Success'), t('Phase created successfully'));
         setNewPhaseDescription('');
@@ -781,12 +601,9 @@ export default function PhaseApprovalModal({
         loadPhases(); // Reload to show updated status (and trigger status change to PHASE_PLANNING)
         onSuccess?.(); // Reload project to get updated status
       } else {
-        const errorText = await response.text();
-        console.error('❌ Failed to create phase:', errorText);
         Alert.alert(t('Error'), t('Failed to create phase'));
       }
     } catch (error: any) {
-      console.error('❌ Error creating phase:', error);
       Alert.alert(t('Error'), error.message || t('Failed to create phase'));
     } finally {
       setIsCreatingPhase(false);
@@ -826,8 +643,6 @@ export default function PhaseApprovalModal({
         phaseId: editingPhase.id,
       });
 
-      console.log('🔍 Updating phase:', url);
-
       const response = await fetch(url, {
         method: 'PUT',
         headers: {
@@ -841,20 +656,15 @@ export default function PhaseApprovalModal({
         }),
       });
 
-      console.log('📥 Update Phase Response Status:', response.status);
-
       if (response.ok) {
         Alert.alert(t('Success'), t('Phase updated successfully'));
         cancelEditingPhase();
         loadPhases(); // Reload to show updated status
         onSuccess?.();
       } else {
-        const errorText = await response.text();
-        console.error('❌ Failed to update phase:', errorText);
         Alert.alert(t('Error'), t('Failed to update phase'));
       }
     } catch (error: any) {
-      console.error('❌ Error updating phase:', error);
       Alert.alert(t('Error'), error.message || t('Failed to update phase'));
     } finally {
       setIsSubmittingPhase(false);
@@ -1029,8 +839,6 @@ export default function PhaseApprovalModal({
                 <TouchableOpacity
                   style={styles.createPhaseButton}
                   onPress={() => {
-                    console.log('🟡 [PhaseApprovalModal] "Create First Phase" button clicked');
-                    console.log('🟡 [PhaseApprovalModal] Opening create phase form for technician');
                     setShowCreatePhaseForm(true);
                   }}
                 >
@@ -1074,11 +882,6 @@ export default function PhaseApprovalModal({
               )}
 
               {/* Create Phase Form (Technician) */}
-              {showCreatePhaseForm && (() => {
-                console.log('🟡 [PhaseApprovalModal] ✅ CREATE PHASE FORM IS NOW VISIBLE');
-                console.log('🟡 [PhaseApprovalModal] Technician can create a new phase');
-                return null;
-              })()}
               {showCreatePhaseForm && (
                 <View style={[styles.feedbackCard, { backgroundColor: colors.cardBackground }]}>
                   <Text style={[styles.feedbackTitle, { color: colors.text }]}>

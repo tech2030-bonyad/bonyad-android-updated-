@@ -47,19 +47,9 @@ export default function MySmallTaskBidsScreen({
   const { alertState, showError, showSuccess, hideAlert, showConfirm } = useAlertPopup();
 
   // Animation values (Android only)
-  const headerAnim = useRef(new Animated.Value(0)).current;
+  const headerAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    if (Platform.OS === 'android') {
-      Animated.timing(headerAnim, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
-      }).start();
-    } else {
-      headerAnim.setValue(1);
-    }
-
     fetchMyBids();
   }, []);
 
@@ -194,32 +184,8 @@ export default function MySmallTaskBidsScreen({
       : t('Task');
 
     // Animation for each card (Android only)
-    const cardAnim = useRef(new Animated.Value(0)).current;
-    const cardSlide = useRef(new Animated.Value(30)).current;
-
-    useEffect(() => {
-      if (Platform.OS === 'android') {
-        const delay = index * 80;
-        Animated.parallel([
-          Animated.timing(cardAnim, {
-            toValue: 1,
-            duration: 400,
-            delay,
-            useNativeDriver: true,
-          }),
-          Animated.spring(cardSlide, {
-            toValue: 0,
-            tension: 50,
-            friction: 7,
-            delay,
-            useNativeDriver: true,
-          }),
-        ]).start();
-      } else {
-        cardAnim.setValue(1);
-        cardSlide.setValue(0);
-      }
-    }, []);
+    const cardAnim = useRef(new Animated.Value(1)).current;
+    const cardSlide = useRef(new Animated.Value(0)).current;
 
     return (
       <Animated.View

@@ -70,7 +70,7 @@ export default function FlowingBorderCard({
         pointerEvents="none"
       />
 
-      {/* Layer 2 – rotating shimmer gradient (scaled 2× so diagonal is covered) */}
+      {/* Single rotating shimmer gradient (merged layers 2+3 into one for perf) */}
       <Animated.View
         style={[
           StyleSheet.absoluteFillObject,
@@ -82,38 +82,15 @@ export default function FlowingBorderCard({
           colors={[
             'transparent',
             'transparent',
-            `${accent}26`, // ~0.15
-            `${accent}8C`, // ~0.55
-            `${accent}B3`, // ~0.70
-            `${accent}8C`, // ~0.55
-            `${accent}26`, // ~0.15
+            `${accent}33`, // ~0.20 (merged glow + shimmer)
+            `${accent}99`, // ~0.60
+            `${accent}B3`, // ~0.70 (peak)
+            `${accent}99`, // ~0.60
+            `${accent}33`, // ~0.20
             'transparent',
             'transparent',
           ]}
           locations={[0, 0.35, 0.42, 0.48, 0.50, 0.52, 0.58, 0.65, 1.0]}
-          style={StyleSheet.absoluteFillObject}
-        />
-      </Animated.View>
-
-      {/* Layer 3 – softer glow behind shimmer point */}
-      <Animated.View
-        style={[
-          StyleSheet.absoluteFillObject,
-          { transform: [{ rotate }, { scale: 2 }], opacity: 0.4 },
-        ]}
-        pointerEvents="none"
-      >
-        <LinearGradient
-          colors={[
-            'transparent',
-            'transparent',
-            `${accent}40`, // ~0.25
-            `${accent}80`, // ~0.50
-            `${accent}40`, // ~0.25
-            'transparent',
-            'transparent',
-          ]}
-          locations={[0, 0.40, 0.47, 0.50, 0.53, 0.60, 1.0]}
           style={StyleSheet.absoluteFillObject}
         />
       </Animated.View>

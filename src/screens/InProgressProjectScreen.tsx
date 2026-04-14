@@ -138,15 +138,6 @@ export default function InProgressProjectScreen({
   const [confirmButtonText, setConfirmButtonText] = useState('');
 
   useEffect(() => {
-    console.log('═══════════════════════════════════════════════════════════');
-    console.log('🔵 [InProgressProjectScreen] ==========================================');
-    console.log('🔵 [InProgressProjectScreen] ✅ SCREEN OPENED');
-    console.log('🔵 [InProgressProjectScreen] ==========================================');
-    console.log('🔵 [InProgressProjectScreen] Project ID:', project?.id);
-    console.log('🔵 [InProgressProjectScreen] Project Status:', project?.status?.toUpperCase());
-    console.log('🔵 [InProgressProjectScreen] Is Technician:', isTechnician);
-    console.log('🔵 [InProgressProjectScreen] Mode:', isTechnician ? 'TECHNICIAN VIEW' : 'USER VIEW');
-    console.log('═══════════════════════════════════════════════════════════');
     loadPhases();
   }, [project]);
 
@@ -168,8 +159,6 @@ export default function InProgressProjectScreen({
         projectId: project.id,
       });
 
-      console.log('🔵 [InProgressProjectScreen] Fetching phases from:', url);
-
       const response = await fetch(url, {
         method: 'GET',
         headers: {
@@ -180,13 +169,11 @@ export default function InProgressProjectScreen({
 
       if (response.ok) {
         const data = await response.json();
-        console.log('🔵 [InProgressProjectScreen] Loaded phases:', data.length);
         setPhases(data);
       } else {
         showError(t('Failed to load phases'));
       }
     } catch (error: any) {
-      console.error('❌ [InProgressProjectScreen] Error loading phases:', error);
       showError(error.message || t('Failed to load phases'));
     } finally {
       setIsLoading(false);
@@ -195,8 +182,6 @@ export default function InProgressProjectScreen({
 
   // ===== PAYMENT FUNCTIONS =====
   const handlePayPhase = (phase: Phase) => {
-    console.log('🔘 [InProgressProjectScreen] Pay button clicked for phase:', phase.id);
-
     setConfirmTitle(t('Pay for Phase'));
     setConfirmMessage(
       t('Pay {{amount}} SAR for "{{description}}"?', {
@@ -327,8 +312,6 @@ export default function InProgressProjectScreen({
 
   // ===== COMPLETE PHASE FUNCTIONS (TECHNICIAN) =====
   const handleCompletePhase = (phase: Phase) => {
-    console.log('🔘 [InProgressProjectScreen] Complete phase button clicked:', phase.id);
-
     setConfirmTitle(t('Complete Phase'));
     setConfirmMessage(
       t('Are you sure you want to mark "{{description}}" as completed?', {
@@ -357,13 +340,6 @@ export default function InProgressProjectScreen({
         phaseId,
       });
 
-      console.log('═══════════════════════════════════════════════════════════');
-      console.log('🟢 [InProgressProjectScreen] Complete Phase');
-      console.log('🟢 [InProgressProjectScreen] Endpoint: POST /phases/{phaseId}/complete');
-      console.log('🟢 [InProgressProjectScreen] Phase ID:', phaseId);
-      console.log('🟢 [InProgressProjectScreen] URL:', url);
-      console.log('═══════════════════════════════════════════════════════════');
-
       const response = await fetch(url, {
         method: 'POST',
         headers: {
@@ -372,10 +348,7 @@ export default function InProgressProjectScreen({
         },
       });
 
-      console.log('📥 [InProgressProjectScreen] Complete Response Status:', response.status);
-
       if (response.ok || response.status === 201) {
-        console.log('✅ [InProgressProjectScreen] Phase completed successfully!');
         showSuccess(t('Phase marked as complete'));
         setTimeout(() => {
           loadPhases();
@@ -383,11 +356,9 @@ export default function InProgressProjectScreen({
         }, 1000);
       } else {
         const errorText = await response.text();
-        console.error('❌ [InProgressProjectScreen] Failed to complete phase:', errorText);
         showError(t('Failed to complete phase'));
       }
     } catch (error: any) {
-      console.error('❌ [InProgressProjectScreen] Error completing phase:', error);
       showError(error.message || t('Failed to complete phase'));
     } finally {
       setCompletingPhaseId(null);
@@ -396,8 +367,6 @@ export default function InProgressProjectScreen({
 
   // ===== COMPLETE PROJECT FUNCTIONS (TECHNICIAN) =====
   const handleCompleteProject = () => {
-    console.log('🔘 [InProgressProjectScreen] Complete project button clicked');
-
     setConfirmTitle(t('Complete Project'));
     setConfirmMessage(
       t('Are you sure you want to mark this project as completed? This action cannot be undone.')
@@ -424,13 +393,6 @@ export default function InProgressProjectScreen({
         id: project.id,
       });
 
-      console.log('═══════════════════════════════════════════════════════════');
-      console.log('🟢 [InProgressProjectScreen] Complete Project');
-      console.log('🟢 [InProgressProjectScreen] Endpoint: POST /projects/{projectId}/complete');
-      console.log('🟢 [InProgressProjectScreen] Project ID:', project.id);
-      console.log('🟢 [InProgressProjectScreen] URL:', url);
-      console.log('═══════════════════════════════════════════════════════════');
-
       const response = await fetch(url, {
         method: 'POST',
         headers: {
@@ -439,10 +401,7 @@ export default function InProgressProjectScreen({
         },
       });
 
-      console.log('📥 [InProgressProjectScreen] Complete Project Response Status:', response.status);
-
       if (response.ok || response.status === 201) {
-        console.log('✅ [InProgressProjectScreen] Project completed successfully!');
         showSuccess(t('Project completed successfully'));
         setTimeout(() => {
           onSuccess?.();
@@ -451,11 +410,9 @@ export default function InProgressProjectScreen({
       } else {
         const errorData = await response.json().catch(() => ({}));
         const errorMessage = errorData.message || t('Failed to complete project');
-        console.error('❌ [InProgressProjectScreen] Failed to complete project:', errorMessage);
         showError(errorMessage);
       }
     } catch (error: any) {
-      console.error('❌ [InProgressProjectScreen] Error completing project:', error);
       showError(error.message || t('Failed to complete project'));
     } finally {
       setCompletingProject(false);

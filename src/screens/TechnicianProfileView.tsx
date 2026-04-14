@@ -51,15 +51,9 @@ export default function TechnicianProfileView({
   const [chatLoading, setChatLoading] = useState(false);
 
   // Slide-in animation
-  const slideX = useRef(new Animated.Value(SCREEN_W)).current;
+  const slideX = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.spring(slideX, {
-      toValue: 0,
-      tension: 280,
-      friction: 28,
-      useNativeDriver: true,
-    }).start();
     loadProfile();
   }, [technicianId]);
 
@@ -69,7 +63,7 @@ export default function TechnicianProfileView({
       const data = await getTechnicianProfile(technicianId);
       setProfile(data);
     } catch (e) {
-      console.error('❌ [TechnicianProfileView] Error loading profile:', e);
+      // silently handle
     } finally {
       setIsLoading(false);
     }
@@ -93,7 +87,7 @@ export default function TechnicianProfileView({
         onChat(roomId, technicianId, profile.name);
       }
     } catch (e) {
-      console.error('❌ [TechnicianProfileView] Error opening chat:', e);
+      // silently handle
     } finally {
       setChatLoading(false);
     }

@@ -37,7 +37,6 @@ export { default as RunningProjectsScreen } from './RunningProjectsScreen';
 export { default as PhaseApprovalModal } from './PhaseApprovalModal';
 export { default as ContractViewerModal } from './ContractViewerModal';
 export { default as NotificationsScreen } from './NotificationsScreen';
-export { default as AppointmentsScreen } from './AppointmentsScreen';
 export { default as BookingScreen } from './BookingScreen';
 export { default as RoomDesignScreen } from './RoomDesignScreen';
 export { default as CostExplorerScreen } from './CostExplorerScreen';

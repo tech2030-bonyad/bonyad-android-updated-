@@ -21,8 +21,11 @@ import { storage } from '../utils/storage';
 import { formatMessageTime } from '../utils/chatUtils';
 import { Asset } from 'expo-asset';
 import * as Sharing from 'expo-sharing';
+import { File, Paths } from 'expo-file-system/next';
 import { showError } from '../utils/alert';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
+import { WebView } from 'react-native-webview';
+import RialIcon from '../components/RialIcon';
 
 interface ContractViewerModalProps {
   visible: boolean;
@@ -61,6 +64,7 @@ export default function ContractViewerModal({
   const { t, i18n } = useTranslation();
   const { colors } = useTheme();
   const { fontFamily, scaledSize } = useFontFamily();
+  const isArabic = i18n.language === 'ar';
   const [isLoading, setIsLoading] = useState(false);
   const [showPdfViewer, setShowPdfViewer] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
@@ -90,7 +94,7 @@ export default function ContractViewerModal({
       const userRole = await storage.getUserRole();
       setIsTechnician(userRole === 'technician');
     } catch (error) {
-      console.log('Error checking user role:', error);
+      // silently handle
     }
   };
 
@@ -99,7 +103,6 @@ export default function ContractViewerModal({
       setIsLoading(true);
       const token = await storage.getAuthToken();
       if (!token) {
-        console.error('❌ No auth token found');
         return;
       }
 
@@ -118,7 +121,6 @@ export default function ContractViewerModal({
 
       if (projectResponse.ok) {
         const projectData = await projectResponse.json();
-        console.log('✅ [ContractViewerModal] Project API response:', JSON.stringify(projectData, null, 2));
         const projectPayload = projectData?.project ?? projectData;
 
         const derivedTechnicianId =
@@ -170,7 +172,7 @@ export default function ContractViewerModal({
         }
       }
     } catch (error: any) {
-      console.error('❌ Error loading project data:', error);
+      // silently handle
     } finally {
       setIsLoading(false);
     }
@@ -212,7 +214,7 @@ export default function ContractViewerModal({
         return pdfUrl;
       }
     } catch (error) {
-      console.error('❌ Error generating PDF:', error);
+      // silently handle
     }
     return null;
   };
@@ -221,34 +223,80 @@ export default function ContractViewerModal({
     setIsLoadingPdf(true);
     try {
       const generatedPdfUrl = await getPdfUrl();
-      
+
       if (!generatedPdfUrl) {
         showError(t('Could not load PDF'), t('Error'));
         return;
       }
 
       setPdfUrl(generatedPdfUrl);
-
-      if (Platform.OS === 'web') {
-        // On web, show inline viewer
-        setShowPdfViewer(true);
-      } else {
-        // On mobile, download and share the PDF
-        if (await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(generatedPdfUrl, {
-            mimeType: 'application/pdf',
-            dialogTitle: t('Contract'),
-            UTI: 'com.adobe.pdf',
-          });
-        } else {
-          showError(t('Sharing is not available on this device'), t('Error'));
-        }
-      }
+      setShowPdfViewer(true);
     } catch (error) {
-      console.error('❌ Error opening PDF:', error);
       showError(t('Could not open PDF contract'), t('Error'));
     } finally {
       setIsLoadingPdf(false);
+    }
+  };
+
+  const downloadPdfContract = async () => {
+    try {
+      if (Platform.OS === 'web') {
+        const urlToShare = pdfUrl || (await getPdfUrl());
+        if (!urlToShare) { showError(t('Could not load PDF'), t('Error')); return; }
+        const a = document.createElement('a');
+        a.href = urlToShare;
+        a.download = `contract-${projectId}.pdf`;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        return;
+      }
+
+      // Mobile: call API with returnPdf=true to get PDF bytes directly (authenticated POST)
+      const token = await storage.getAuthToken();
+      if (!token || !projectDetails?.technicianId) {
+        showError(t('Could not load PDF'), t('Error'));
+        return;
+      }
+      const url = buildApiUrl(API_ENDPOINTS.CONTRACTS.GENERATE_PDF);
+      const formBody = new URLSearchParams({
+        projectId: projectId.toString(),
+        technicianId: projectDetails.technicianId.toString(),
+        language: i18n.language === 'ar' ? 'AR' : 'EN',
+        returnPdf: 'true',
+      }).toString();
+
+      const fetchResponse = await fetch(url, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: formBody,
+      });
+      if (!fetchResponse.ok) throw new Error(`HTTP ${fetchResponse.status}`);
+
+      const arrayBuffer = await fetchResponse.arrayBuffer();
+      const bytes = new Uint8Array(arrayBuffer);
+      let binary = '';
+      for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+      const base64 = btoa(binary);
+      const file = new File(Paths.cache, `contract-${projectId}.pdf`);
+      file.write(base64, { encoding: 'base64' });
+
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(file.uri, {
+          mimeType: 'application/pdf',
+          dialogTitle: t('Contract'),
+          UTI: 'com.adobe.pdf',
+        });
+      } else {
+        showError(t('Sharing is not available on this device'), t('Error'));
+      }
+    } catch (error) {
+      showError(t('Could not download PDF contract'), t('Error'));
     }
   };
 
@@ -265,23 +313,21 @@ export default function ContractViewerModal({
             <Text style={[styles.headerTitle, { color: colors.text, fontSize: scaledSize(20) }]}>
               {t('Project Contract')}
             </Text>
-            <TouchableOpacity onPress={onClose}>
+            <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
               <Ionicons name="close" size={28} color={colors.text} />
             </TouchableOpacity>
           </View>
 
           {/* Content */}
-          <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <ScrollView
+            style={styles.scrollContent}
+            contentContainerStyle={styles.scrollContentContainer}
+            showsVerticalScrollIndicator={false}
+            bounces
+            alwaysBounceVertical
+          >
             {/* Contract Status */}
-            <View
-              style={[
-                styles.statusCard,
-                {
-                  backgroundColor: '#F59E0B20',
-                  borderColor: '#F59E0B',
-                },
-              ]}
-            >
+            <View style={[styles.statusCard, { backgroundColor: '#F59E0B20', borderColor: '#F59E0B' }]}>
               <View style={styles.statusRow}>
                 <Ionicons name="time-outline" size={24} color="#F59E0B" />
                 <Text style={[styles.statusText, { color: '#F59E0B' }]}>
@@ -290,7 +336,7 @@ export default function ContractViewerModal({
               </View>
             </View>
 
-            {/* Service Agreement Card - Figma-style Header */}
+            {/* Service Agreement Card */}
             <View style={[styles.serviceAgreementCard, { backgroundColor: colors.cardBackground }]}>
               {/* Header with file icon */}
               <View style={styles.serviceAgreementHeader}>
@@ -306,80 +352,77 @@ export default function ContractViewerModal({
                   </Text>
                 </View>
                 <TouchableOpacity onPress={viewPdfContract} style={styles.serviceAgreementChevron}>
-                  <BackArrowIonicons variant="chevron" size={24} color={colors.textSecondary}/>
+                  <Ionicons
+                    name={isArabic ? 'chevron-back' : 'chevron-forward'}
+                    size={24}
+                    color={colors.textSecondary}
+                  />
                 </TouchableOpacity>
               </View>
 
               {/* Contract Details */}
               {projectDetails && (
                 <View style={styles.contractDetailsSection}>
-                  {/* Provider */}
                   <View style={[styles.contractDetailRow, { borderBottomColor: colors.border }]}>
-                    <Text style={[styles.contractDetailLabel, { color: colors.textSecondary }]}>
-                      {t('Provider')}
-                    </Text>
+                    <Text style={[styles.contractDetailLabel, { color: colors.textSecondary }]}>{t('Provider')}</Text>
                     <Text style={[styles.contractDetailValue, { color: colors.text }]}>
                       {isTechnician ? projectDetails.userName : projectDetails.technicianName || t('Not assigned')}
                     </Text>
                   </View>
 
-                  {/* Project Name */}
                   <View style={[styles.contractDetailRow, { borderBottomColor: colors.border }]}>
-                    <Text style={[styles.contractDetailLabel, { color: colors.textSecondary }]}>
-                      {t('Project')}
-                    </Text>
+                    <Text style={[styles.contractDetailLabel, { color: colors.textSecondary }]}>{t('Project')}</Text>
                     <Text style={[styles.contractDetailValue, { color: colors.text }]} numberOfLines={2}>
                       {projectDetails.description}
                     </Text>
                   </View>
 
-                  {/* Total Amount */}
                   <View style={[styles.contractDetailRow, { borderBottomColor: colors.border }]}>
-                    <Text style={[styles.contractDetailLabel, { color: colors.textSecondary }]}>
-                      {t('Total Amount')}
-                    </Text>
-                    <Text style={[styles.contractDetailValueGreen, { color: '#22C55E' }]}>
-                      {formatBudget(projectDetails.budget)} {t('SAR')}
-                    </Text>
+                    <Text style={[styles.contractDetailLabel, { color: colors.textSecondary }]}>{t('Total Amount')}</Text>
+                    <View style={styles.amountRow}>
+                      <Text style={[styles.contractDetailValueGreen, { color: '#22C55E' }]}>
+                        {formatBudget(projectDetails.budget)}
+                      </Text>
+                      <RialIcon size={14} variant="primary" color="#22C55E" style={{ marginLeft: 4 }} />
+                    </View>
                   </View>
 
-                  {/* Start Date */}
                   <View style={[styles.contractDetailRow, { borderBottomColor: colors.border }]}>
-                    <Text style={[styles.contractDetailLabel, { color: colors.textSecondary }]}>
-                      {t('Start Date')}
-                    </Text>
-                    <Text style={[styles.contractDetailValue, { color: colors.text }]}>
-                      {t('To be determined')}
-                    </Text>
+                    <Text style={[styles.contractDetailLabel, { color: colors.textSecondary }]}>{t('Start Date')}</Text>
+                    <Text style={[styles.contractDetailValue, { color: colors.text }]}>{t('To be determined')}</Text>
                   </View>
 
-                  {/* Completion Date */}
                   <View style={styles.contractDetailRowLast}>
-                    <Text style={[styles.contractDetailLabel, { color: colors.textSecondary }]}>
-                      {t('Completion Date')}
-                    </Text>
+                    <Text style={[styles.contractDetailLabel, { color: colors.textSecondary }]}>{t('Completion Date')}</Text>
                     <Text style={[styles.contractDetailValue, { color: colors.text }]}>
-                      {phases.length > 0 
-                        ? t('~{{weeks}} weeks', { weeks: Math.ceil(phases.reduce((sum, p) => sum + p.timeSpentDays, 0) / 7) }) 
+                      {phases.length > 0
+                        ? t('~{{weeks}} weeks', { weeks: Math.ceil(phases.reduce((sum, p) => sum + p.timeSpentDays, 0) / 7) })
                         : t('To be determined')}
                     </Text>
                   </View>
                 </View>
               )}
 
-              {/* Download Contract Button */}
+              {/* View Contract Button */}
               <TouchableOpacity
                 style={[styles.downloadContractButton, { borderColor: '#1A73E8' }]}
                 onPress={viewPdfContract}
+                disabled={isLoadingPdf}
               >
-                <Ionicons name="download-outline" size={20} color="#1A73E8" />
-                <Text style={[styles.downloadContractButtonText, { color: '#1A73E8' }]}>
-                  {t('Download Contract')} (PDF)
-                </Text>
+                {isLoadingPdf ? (
+                  <ActivityIndicator size="small" color="#1A73E8" />
+                ) : (
+                  <>
+                    <Ionicons name="document-text-outline" size={20} color="#1A73E8" />
+                    <Text style={[styles.downloadContractButtonText, { color: '#1A73E8' }]}>
+                      {t('View Contract')} (PDF)
+                    </Text>
+                  </>
+                )}
               </TouchableOpacity>
             </View>
 
-            {/* Email Signature Sent Info - Figma style */}
+            {/* Email Signature Sent Info */}
             {!isTechnician && (
               <View style={styles.emailSignatureInfoCard}>
                 <View style={[styles.emailSignatureIconContainer, { backgroundColor: '#D1FAE5' }]}>
@@ -396,47 +439,51 @@ export default function ContractViewerModal({
               </View>
             )}
 
-            {/* Phases - Collapsed Section */}
+            {/* Phases */}
             {phases.length > 0 && (
               <View style={[styles.section, { backgroundColor: colors.cardBackground }]}>
                 <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('Phases')}</Text>
 
-                {phases.map((phase, index) => {
-                  return (
-                    <View key={phase.id} style={styles.phaseRow}>
-                      <View style={styles.phaseHeader}>
-                        <View style={styles.phaseNumberContainer}>
-                          <View style={[styles.phaseNumberBadge, { backgroundColor: colors.primary + '20' }]}>
-                            <Text style={[styles.phaseNumberText, { color: colors.primary }]}>
-                              {phase.phaseNumber}
-                            </Text>
-                          </View>
-                          <Text style={[styles.phaseName, { color: colors.text }]}>
-                            {phase.description}
+                {phases.map((phase, index) => (
+                  <View key={phase.id} style={styles.phaseRow}>
+                    <View style={styles.phaseHeader}>
+                      <View style={styles.phaseNumberContainer}>
+                        <View style={[styles.phaseNumberBadge, { backgroundColor: colors.primary + '20' }]}>
+                          <Text style={[styles.phaseNumberText, { color: colors.primary }]}>
+                            {phase.phaseNumber}
                           </Text>
                         </View>
-                        <Text style={[styles.phaseAmount, { color: colors.primary }]}> 
-                          {formatBudget(phase.moneySpent)} {t('SAR')}
+                        <Text style={[styles.phaseName, { color: colors.text }]}>
+                          {phase.description}
                         </Text>
                       </View>
-                      <View style={styles.phaseMeta}> 
-                        <Ionicons name="time-outline" size={14} color={colors.textSecondary} />
-                        <Text style={[styles.phaseMetaText, { color: colors.textSecondary }]}> 
-                          {phase.timeSpentDays} {t('day_unit')}
+                      <View style={styles.amountRow}>
+                        <Text style={[styles.phaseAmount, { color: colors.primary }]}>
+                          {formatBudget(phase.moneySpent)}
                         </Text>
+                        <RialIcon size={13} variant="primary" color={colors.primary} style={{ marginLeft: 3 }} />
                       </View>
-                      {index < phases.length - 1 && (
-                        <View style={[styles.phaseDivider, { borderBottomColor: colors.border }]} />
-                      )}
                     </View>
-                  );
-                })}
+                    <View style={styles.phaseMeta}>
+                      <Ionicons name="time-outline" size={14} color={colors.textSecondary} />
+                      <Text style={[styles.phaseMetaText, { color: colors.textSecondary }]}>
+                        {phase.timeSpentDays} {t('day_unit')}
+                      </Text>
+                    </View>
+                    {index < phases.length - 1 && (
+                      <View style={[styles.phaseDivider, { borderBottomColor: colors.border }]} />
+                    )}
+                  </View>
+                ))}
 
                 <View style={[styles.totalRow, { borderTopColor: colors.border }]}>
                   <Text style={[styles.totalLabel, { color: colors.text }]}>{t('Total')}:</Text>
-                  <Text style={[styles.totalAmount, { color: colors.primary }]}>
-                    {formatBudget(phases.reduce((sum, p) => sum + p.moneySpent, 0))} {t('SAR')}
-                  </Text>
+                  <View style={styles.amountRow}>
+                    <Text style={[styles.totalAmount, { color: colors.primary }]}>
+                      {formatBudget(phases.reduce((sum, p) => sum + p.moneySpent, 0))}
+                    </Text>
+                    <RialIcon size={16} variant="primary" color={colors.primary} style={{ marginLeft: 4 }} />
+                  </View>
                 </View>
               </View>
             )}
@@ -447,14 +494,11 @@ export default function ContractViewerModal({
                 {t('Terms & Conditions')}
               </Text>
               <Text style={[styles.termsText, { color: colors.textSecondary }]}>
-                {t(
-                  'This contract outlines the agreed-upon phases, costs, and timeline for the project. Payment will be made phase-by-phase upon completion. Both parties agree to abide by the terms specified in this document.'
-                )}
+                {t('This contract outlines the agreed-upon phases, costs, and timeline for the project. Payment will be made phase-by-phase upon completion. Both parties agree to abide by the terms specified in this document.')}
               </Text>
             </View>
 
           </ScrollView>
-
         </View>
       </View>
 
@@ -462,35 +506,53 @@ export default function ContractViewerModal({
       <Modal
         visible={showPdfViewer}
         transparent
-        animationType="fade"
+        animationType="slide"
         onRequestClose={() => setShowPdfViewer(false)}
       >
         <View style={styles.pdfModalOverlay}>
           <View style={[styles.pdfModalContainer, { backgroundColor: colors.background }]}>
+            {/* PDF Header */}
             <View style={[styles.pdfHeader, { borderBottomColor: colors.border }]}>
-              <Text style={[styles.pdfHeaderTitle, { color: colors.text, fontSize: scaledSize(20) }]}>
-                {t('Contract')}
-              </Text>
-              <TouchableOpacity onPress={() => setShowPdfViewer(false)}>
-                <Ionicons name="close" size={28} color={colors.text} />
-              </TouchableOpacity>
+              <View style={styles.pdfHeaderLeft}>
+                <View style={[styles.pdfHeaderIcon, { backgroundColor: 'rgba(26,115,232,0.12)' }]}>
+                  <Ionicons name="document-text-outline" size={20} color="#1A73E8" />
+                </View>
+                <View>
+                  <Text style={[styles.pdfHeaderTitle, { color: colors.text, fontSize: scaledSize(16) }]}>
+                    {t('Contract')} #{projectId}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.pdfHeaderActions}>
+                {/* Download button */}
+                <TouchableOpacity
+                  style={[styles.pdfDownloadBtn, { backgroundColor: '#1A73E8' }]}
+                  onPress={downloadPdfContract}
+                >
+                  <Ionicons name="download-outline" size={16} color="#fff" />
+                  <Text style={styles.pdfDownloadBtnText}>{t('Download')}</Text>
+                </TouchableOpacity>
+                {/* Close button */}
+                <TouchableOpacity
+                  style={[styles.pdfCloseBtn, { backgroundColor: colors.cardBackground }]}
+                  onPress={() => setShowPdfViewer(false)}
+                >
+                  <Ionicons name="close" size={22} color={colors.text} />
+                </TouchableOpacity>
+              </View>
             </View>
+
+            {/* PDF Body */}
             <View style={styles.pdfViewer}>
-              {Platform.OS === 'web' ? (
+              {!pdfUrl ? (
+                <View style={styles.pdfUnavailableContainer}>
+                  <ActivityIndicator size="large" color="#1A73E8" />
+                  <Text style={[styles.pdfUnavailableSubtext, { color: colors.textSecondary, marginTop: 12 }]}>
+                    {t('Loading contract...')}
+                  </Text>
+                </View>
+              ) : Platform.OS === 'web' ? (
                 (() => {
-                  if (!pdfUrl) {
-                    return (
-                      <View style={styles.pdfUnavailableContainer}>
-                        <Ionicons name="document-text-outline" size={80} color={colors.textSecondary} />
-                        <Text style={[styles.pdfUnavailableText, { color: colors.text }]}>
-                          {t('PDF Preview Unavailable')}
-                        </Text>
-                        <Text style={[styles.pdfUnavailableSubtext, { color: colors.textSecondary }]}>
-                          {t('Please use the browser to view PDF files')}
-                        </Text>
-                      </View>
-                    );
-                  }
                   return (
                     <div
                       style={{ width: '100%', height: '100%' }}
@@ -501,15 +563,20 @@ export default function ContractViewerModal({
                   );
                 })()
               ) : (
-                <View style={styles.pdfUnavailableContainer}>
-                  <Ionicons name="document-text-outline" size={80} color={colors.textSecondary} />
-                  <Text style={[styles.pdfUnavailableText, { color: colors.text }]}>
-                    {t('PDF Preview Unavailable')}
-                  </Text>
-                  <Text style={[styles.pdfUnavailableSubtext, { color: colors.textSecondary }]}>
-                    {t('Please use the browser to view PDF files')}
-                  </Text>
-                </View>
+                <WebView
+                  source={{ uri: `https://docs.google.com/viewer?url=${encodeURIComponent(pdfUrl)}&embedded=true` }}
+                  style={{ flex: 1 }}
+                  startInLoadingState
+                  renderLoading={() => (
+                    <View style={[StyleSheet.absoluteFillObject, styles.pdfUnavailableContainer]}>
+                      <ActivityIndicator size="large" color="#1A73E8" />
+                      <Text style={[styles.pdfUnavailableSubtext, { color: colors.textSecondary, marginTop: 12 }]}>
+                        {t('Loading contract...')}
+                      </Text>
+                    </View>
+                  )}
+                  onError={() => showError(t('Could not load PDF'), t('Error'))}
+                />
               )}
             </View>
           </View>
@@ -536,9 +603,11 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContainer: {
-    flex: 0.9,
+    height: '92%',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
+    overflow: 'hidden',
+    flexDirection: 'column',
   },
   header: {
     flexDirection: 'row',
@@ -553,7 +622,14 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flex: 1,
+  },
+  scrollContentContainer: {
     padding: 16,
+    paddingBottom: 40,
+  },
+  amountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   statusCard: {
     padding: 16,
@@ -589,6 +665,7 @@ const styles = StyleSheet.create({
   serviceAgreementHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 12,
     padding: 16,
     paddingBottom: 12,
   },
@@ -601,7 +678,6 @@ const styles = StyleSheet.create({
   },
   serviceAgreementInfo: {
     flex: 1,
-    marginLeft: 12,
   },
   serviceAgreementTitle: {
     fontSize: 17,
@@ -644,8 +720,6 @@ const styles = StyleSheet.create({
   contractDetailValueGreen: {
     fontSize: 16,
     fontWeight: '700',
-    textAlign: 'right',
-    flex: 1,
   },
   downloadContractButton: {
     flexDirection: 'row',
@@ -719,6 +793,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+    gap: 10,
     marginRight: 12,
   },
   phaseNumberBadge: {
@@ -727,7 +802,6 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 10,
   },
   phaseNumberText: {
     fontSize: 14,
@@ -922,21 +996,65 @@ const styles = StyleSheet.create({
   },
   pdfModalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
   },
   pdfModalContainer: {
     flex: 1,
+    marginTop: 40,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    overflow: 'hidden',
   },
   pdfHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     borderBottomWidth: 1,
   },
+  pdfHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+    minWidth: 0,
+  },
+  pdfHeaderIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   pdfHeaderTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontWeight: '600',
+  },
+  pdfHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexShrink: 0,
+  },
+  pdfDownloadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  pdfDownloadBtnText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  pdfCloseBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   pdfViewer: {
     flex: 1,
@@ -945,7 +1063,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 16,
     padding: 40,
   },
   pdfUnavailableText: {
@@ -954,7 +1071,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   pdfUnavailableSubtext: {
-    fontSize: 16,
+    fontSize: 15,
     textAlign: 'center',
   },
   pdfOpenButton: {

@@ -58,8 +58,8 @@ export default function SmallTaskTypeSelectionScreen({
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(30)).current;
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const slideAnim = useRef(new Animated.Value(0)).current;
 
   const primaryColor = isDarkMode ? COLORS.primaryDark : COLORS.primaryLight;
   const borderColor = isDarkMode ? COLORS.borderDark : COLORS.borderLight;
@@ -67,19 +67,6 @@ export default function SmallTaskTypeSelectionScreen({
 
   useEffect(() => {
     loadTaskTypes();
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 400,
-        useNativeDriver: true,
-      }),
-      Animated.spring(slideAnim, {
-        toValue: 0,
-        tension: 50,
-        friction: 7,
-        useNativeDriver: true,
-      }),
-    ]).start();
   }, []);
 
   const loadTaskTypes = async () => {
@@ -287,14 +274,8 @@ const TaskTypeCard = React.memo(({
     transform: [{ translateX: shimmerX.value }],
   }));
 
-  // Entry animation
-  const entryAnim = useSharedValue(0);
-  useEffect(() => {
-    entryAnim.value = withTiming(1, {
-      duration: 350 + index * 60,
-      easing: ReEasing.out(ReEasing.quad),
-    });
-  }, []);
+  // Entry animation (disabled to prevent white flash)
+  const entryAnim = useSharedValue(1);
 
   const entryStyle = useAnimatedStyle(() => ({
     opacity: interpolate(entryAnim.value, [0, 1], [0, 1], Extrapolation.CLAMP),

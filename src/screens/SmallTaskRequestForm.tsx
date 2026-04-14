@@ -56,8 +56,8 @@ export default function SmallTaskRequestForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showMapPicker, setShowMapPicker] = useState(false);
   
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(30)).current;
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const slideAnim = useRef(new Animated.Value(0)).current;
 
   const { alertState, showError, showSuccess, hideAlert } = useAlertPopup();
 
@@ -65,21 +65,6 @@ export default function SmallTaskRequestForm({
   const borderColor = isDarkMode ? COLORS.borderDark : COLORS.borderLight;
   const topSpacing = Platform.OS === 'android' ? 0 : insets.top;
 
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 400,
-        useNativeDriver: true,
-      }),
-      Animated.spring(slideAnim, {
-        toValue: 0,
-        tension: 50,
-        friction: 7,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, []);
 
   const isFormValid = 
     description.trim().length > 0 && 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,9 @@ import {
   Dimensions,
   Platform,
   Image,
+  Modal,
+  TouchableWithoutFeedback,
+  Animated,
 } from 'react-native';
 import { walkthroughable } from 'react-native-copilot';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -30,8 +33,12 @@ import type { SmallTaskRequest } from '../../types/smallTasks';
 import FlowingBorderCard from '../../components/FlowingBorderCard';
 import { getMyTickets } from '../../services/SupportTicketService';
 import type { SupportTicket } from '../../types/chat';
+import ContractViewerModal from '../ContractViewerModal';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+// Cached Intl formatters (avoid re-creating inside render loops)
+const numberFormatterEn = new Intl.NumberFormat('en-SA', { maximumFractionDigits: 0 });
+const numberFormatterAr = new Intl.NumberFormat('ar-SA', { maximumFractionDigits: 0 });
 /** Extra space below the status / safe area so the home top bar sits lower (technician home tab). */
 const TECH_HOME_TOP_BAR_EXTRA_INSET = 14;
 const H_PADDING = 20;
@@ -178,14 +185,53 @@ export default function TechnicalHomeScreen({
   interface HomeContract { id: number; projectId?: number; type?: string; status?: string; otherPartyName?: string; description?: string; signedDocumentUrl?: string | null; createdAt?: string; amount?: number; budget?: number; startDate?: string; projectTitle?: string; }
   const [contracts, setContracts] = useState<HomeContract[]>([]);
   const [loadingContracts, setLoadingContracts] = useState(true);
+  const [selectedContractProjectId, setSelectedContractProjectId] = useState<number | null>(null);
   const [supportTickets, setSupportTickets] = useState<SupportTicket[]>([]);
   const [loadingTickets, setLoadingTickets] = useState(true);
   const [bannerIndex, setBannerIndex] = useState(0);
   const bannerScrollRef = useRef<ScrollView>(null);
+  const [escrowModalVisible, setEscrowModalVisible] = useState(false);
+  const escrowFadeAnim = useRef(new Animated.Value(0)).current;
+  const escrowScaleAnim = useRef(new Animated.Value(0.9)).current;
   const mainScrollRef = useRef<ScrollView>(null);
 
-  const fontStyle = { fontFamily: fontFamily || undefined };
-  const boldFontStyle = { fontFamily: boldFontFamily || fontFamily || undefined };
+  const fontStyle = useMemo(() => ({ fontFamily: fontFamily || undefined }), [fontFamily]);
+  const boldFontStyle = useMemo(() => ({ fontFamily: boldFontFamily || fontFamily || undefined }), [boldFontFamily, fontFamily]);
+
+  const handleBannerPress = useCallback((index: number) => {
+    switch (index) {
+      case 0:
+        // "Your opportunity – connect to trusted projects & ready clients"
+        // Technician: go browse available projects to bid on
+        onPressAvailableProject?.('approved');
+        break;
+      case 1:
+        // "Hundreds of projects launch monthly – are you ready?"
+        // Technician: open available projects
+        onPressAvailableProject?.('approved');
+        break;
+      case 2:
+        // "For every ambitious service provider – your gateway to growth"
+        // Technician: see their in-progress work (active earnings)
+        onPressAvailableProject?.('in_progress');
+        break;
+      case 3:
+        // "Escrow – secure payment" → coming soon modal
+        escrowFadeAnim.setValue(0);
+        escrowScaleAnim.setValue(0.9);
+        setEscrowModalVisible(true);
+        Animated.parallel([
+          Animated.timing(escrowFadeAnim, { toValue: 1, duration: 260, useNativeDriver: true }),
+          Animated.spring(escrowScaleAnim, { toValue: 1, tension: 50, friction: 7, useNativeDriver: true }),
+        ]).start();
+        break;
+      case 4:
+        // "Strict criteria for trusted service providers"
+        // Technician: browse available projects (proves they qualify to bid)
+        onPressAvailableProject?.('approved');
+        break;
+    }
+  }, [isArabic, onPressAvailableProject, escrowFadeAnim, escrowScaleAnim]);
 
   const loadProjects = useCallback(async () => {
     try {
@@ -257,7 +303,7 @@ export default function TechnicalHomeScreen({
 
   const loadSupportTickets = useCallback(async () => {
     try {
-      const tickets = await getMyTickets('OPEN');
+      const tickets = await getMyTickets();
       setSupportTickets(tickets.slice(0, 3));
     } catch { setSupportTickets([]); }
     finally { setLoadingTickets(false); }
@@ -359,11 +405,16 @@ export default function TechnicalHomeScreen({
             decelerationRate="fast"
           >
             {BANNER_IMAGES.map((img, index) => (
-              <View key={index} style={[styles.bannerPage, { width: SCREEN_WIDTH }]}>
+              <TouchableOpacity
+                key={index}
+                style={[styles.bannerPage, { width: SCREEN_WIDTH }]}
+                onPress={() => handleBannerPress(index)}
+                activeOpacity={0.92}
+              >
                 <View style={[styles.bannerCard, { backgroundColor: isDarkMode ? '#1A1A2E' : '#FFFFFF' }]}>
                   <Image source={img} style={styles.bannerImage} resizeMode="stretch" />
                 </View>
-              </View>
+              </TouchableOpacity>
             ))}
           </ScrollView>
           <View style={styles.paginationDots}>
@@ -584,14 +635,6 @@ export default function TechnicalHomeScreen({
               {t('In Progress')}
             </Text>
           </PressableScaleView>
-          <PressableScaleView style={[styles.quickActionCard, isDarkMode && { backgroundColor: themeColors.cardBackground, borderWidth: 1, borderColor: themeColors.border }]} onPress={() => onPressSchedule?.()}>
-            <View style={[styles.quickActionIconWrap, { backgroundColor: isDarkMode ? 'rgba(34, 197, 94, 0.3)' : COLORS.quickActionGreen }]}>
-              <Feather name="calendar" size={22} color={isDarkMode ? '#4ADE80' : COLORS.green} />
-            </View>
-            <Text style={[styles.quickActionLabel, fontStyle, isDarkMode && { color: themeColors.text }]} numberOfLines={1}>
-              {t('My appointments')}
-            </Text>
-          </PressableScaleView>
         </View>
       </View>
       </FlowingBorderCard>
@@ -631,13 +674,20 @@ export default function TechnicalHomeScreen({
               {contracts.slice(0, 2).map((c) => {
                 const contractAmount = c.amount ?? c.budget;
                 const formattedAmount = contractAmount
-                  ? new Intl.NumberFormat(isArabic ? 'ar-SA' : 'en-SA', { maximumFractionDigits: 0 }).format(contractAmount)
+                  ? (isArabic ? numberFormatterAr : numberFormatterEn).format(contractAmount)
                   : null;
                 const dateStr = c.createdAt
                   ? new Date(c.createdAt).toLocaleDateString(isArabic ? 'ar-SA' : 'en-US', { month: 'short', day: 'numeric' })
                   : null;
                 return (
-                  <PressableScaleView key={c.id} style={styles.cardWrapper} onPress={() => onPressContract?.(c.id)}>
+                  <PressableScaleView key={c.id} style={styles.cardWrapper} onPress={() => {
+                    const projectId = c.projectId ?? c.id;
+                    if (onPressContract) {
+                      onPressContract(projectId);
+                    } else {
+                      setSelectedContractProjectId(projectId);
+                    }
+                  }}>
                     <LinearGradient
                       colors={isDarkMode ? ['#1E1B3A', '#2D2A4E'] : ['#F0EEFF', '#E8E5FF']}
                       style={[styles.projectCard, isDarkMode && styles.cardBorderDark]}
@@ -695,11 +745,12 @@ export default function TechnicalHomeScreen({
               </Text>
             </View>
             <TouchableOpacity
-              style={[styles.viewAllBtn, { backgroundColor: isDarkMode ? themeColors.cardBackground : 'rgba(52,199,89,0.1)', borderWidth: isDarkMode ? 1 : 0, borderColor: isDarkMode ? themeColors.border : 'transparent' }]}
+              style={[styles.viewAllBtn, { backgroundColor: isDarkMode ? themeColors.cardBackground : 'rgba(52,199,89,0.1)', borderWidth: isDarkMode ? 1 : 0, borderColor: isDarkMode ? themeColors.border : 'transparent', flexDirection: 'row', alignItems: 'center', gap: 4 }]}
               onPress={() => onPressSupportTickets?.()}
               activeOpacity={0.8}
             >
-              <Text style={[styles.viewAllText, { color: isDarkMode ? themeColors.text : '#34C759' }, fontStyle]}>{t('View All')} ←</Text>
+              <Text style={[styles.viewAllText, { color: isDarkMode ? themeColors.text : '#34C759' }, fontStyle]}>{t('View All')}</Text>
+              <Ionicons name={isArabic ? 'chevron-back' : 'chevron-forward'} size={14} color={isDarkMode ? themeColors.text : '#34C759'} />
             </TouchableOpacity>
           </View>
           {loadingTickets ? (
@@ -764,6 +815,46 @@ export default function TechnicalHomeScreen({
           <MaterialCommunityIcons name="robot" size={26} color="#fff" />
         </TouchableOpacity>
       ) : null}
+
+      {/* Escrow Coming Soon Modal */}
+      <Modal visible={escrowModalVisible} transparent animationType="none" onRequestClose={() => setEscrowModalVisible(false)} statusBarTranslucent>
+        <TouchableWithoutFeedback onPress={() => setEscrowModalVisible(false)}>
+          <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', opacity: escrowFadeAnim.interpolate({ inputRange: [0, 1], outputRange: [0, isDarkMode ? 0.8 : 0.55] }) }]} />
+        </TouchableWithoutFeedback>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+          <TouchableWithoutFeedback>
+            <Animated.View style={[escrowModalStyles.card, { backgroundColor: isDarkMode ? themeColors.cardBackground : '#FFFFFF', borderColor: themeColors.border, opacity: escrowFadeAnim, transform: [{ scale: escrowScaleAnim }] }]}>
+              <TouchableOpacity style={escrowModalStyles.closeBtn} onPress={() => setEscrowModalVisible(false)}>
+                <Ionicons name="close" size={22} color={themeColors.textSecondary} />
+              </TouchableOpacity>
+              <View style={[escrowModalStyles.iconCircle, { backgroundColor: '#007AFF18' }]}>
+                <Ionicons name="shield-checkmark-outline" size={46} color="#007AFF" />
+              </View>
+              <Text style={[escrowModalStyles.title, { color: themeColors.text, fontFamily: boldFontFamily }]}>
+                {isArabic ? 'حساب الضمان' : 'Escrow Account'}
+              </Text>
+              <Text style={[escrowModalStyles.message, { color: themeColors.textSecondary }]}>
+                {isArabic
+                  ? 'هذه الخدمة قادمة قريباً!\nسيتمكن كل من العميل والمقاول من الدفع والاستلام بأمان تام.'
+                  : 'This feature is coming soon!\nClients and technicians will be able to pay and receive funds securely.'}
+              </Text>
+              <TouchableOpacity style={[escrowModalStyles.okBtn, { backgroundColor: '#007AFF' }]} onPress={() => setEscrowModalVisible(false)}>
+                <Text style={[escrowModalStyles.okText, { fontFamily: boldFontFamily }]}>
+                  {isArabic ? 'حسناً' : 'Got it'}
+                </Text>
+              </TouchableOpacity>
+            </Animated.View>
+          </TouchableWithoutFeedback>
+        </View>
+      </Modal>
+
+      {/* Contract PDF Viewer — opened from home screen contract cards */}
+      <ContractViewerModal
+        visible={selectedContractProjectId !== null}
+        projectId={selectedContractProjectId ?? 0}
+        onClose={() => setSelectedContractProjectId(null)}
+        isTechnician
+      />
     </View>
   );
 }
@@ -1073,5 +1164,62 @@ const styles = StyleSheet.create({
   },
   fabLTR: {
     right: 20,
+  },
+});
+
+const escrowModalStyles = StyleSheet.create({
+  card: {
+    width: '100%',
+    maxWidth: 360,
+    borderRadius: 20,
+    padding: 28,
+    borderWidth: 1,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  closeBtn: {
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1,
+  },
+  iconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 18,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  message: {
+    fontSize: 14,
+    lineHeight: 22,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  okBtn: {
+    width: '100%',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  okText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 });

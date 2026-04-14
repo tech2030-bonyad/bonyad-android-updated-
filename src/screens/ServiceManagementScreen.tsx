@@ -178,7 +178,7 @@ export default function ServiceManagementScreen({ onBack }: ServiceManagementScr
   const screenWidth = Dimensions.get('window').width;
 
   const screenSlideX = useRef(new Animated.Value(0)).current;
-  const screenOpacity = useRef(new Animated.Value(0)).current;
+  const screenOpacity = useRef(new Animated.Value(1)).current;
   const modalFade = useRef(new Animated.Value(0)).current;
   const modalSlideX = useRef(new Animated.Value(0)).current;
 
@@ -203,15 +203,6 @@ export default function ServiceManagementScreen({ onBack }: ServiceManagementScr
     );
   };
 
-  useEffect(() => {
-    screenSlideX.setValue(-screenWidth);
-    screenOpacity.setValue(0);
-    Animated.parallel([
-      Animated.timing(screenOpacity, { toValue: 1, duration: 220, useNativeDriver: true }),
-      Animated.spring(screenSlideX, { toValue: 0, tension: 65, friction: 11, useNativeDriver: true }),
-    ]).start();
-  }, []);
-
   const handleBackScreen = () => {
     Animated.parallel([
       Animated.timing(screenOpacity, { toValue: 0, duration: 180, useNativeDriver: true }),
@@ -232,7 +223,7 @@ export default function ServiceManagementScreen({ onBack }: ServiceManagementScr
       modalFade.setValue(0);
       Animated.parallel([
         Animated.timing(modalFade, { toValue: 1, duration: 220, useNativeDriver: true }),
-        Animated.spring(modalSlideX, { toValue: 0, tension: 65, friction: 11, useNativeDriver: true }),
+        Animated.timing(modalSlideX, { toValue: 0, duration: 220, useNativeDriver: true }),
       ]).start();
     } else {
       modalSlideX.setValue(-screenWidth);

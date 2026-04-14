@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,8 @@ import {
   Image,
   I18nManager,
   Keyboard,
+  Modal,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons, Feather } from '@expo/vector-icons';
@@ -44,10 +46,14 @@ import FlowingBorderCard from '../../components/FlowingBorderCard';
 import { useTour, type TourStepDef } from '../../components/tour/TourProvider';
 import { getMyTickets } from '../../services/SupportTicketService';
 import type { SupportTicket } from '../../types/chat';
+import ContractViewerModal from '../ContractViewerModal';
 
 export type { CategoryInfo };
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+// Cached Intl formatters (avoid re-creating inside render loops)
+const numberFormatterEn = new Intl.NumberFormat('en-SA', { maximumFractionDigits: 0 });
+const numberFormatterAr = new Intl.NumberFormat('ar-SA', { maximumFractionDigits: 0 });
 const H_PADDING = 20;
 const SECTION_SPACING = 20;
 const SEARCH_RADIUS = 14;
@@ -301,7 +307,38 @@ export default function UserHomeScreenContent({
 
   const [bannerIndex, setBannerIndex] = useState(0);
   const bannerScrollRef = useRef<ScrollView>(null);
+  const [escrowModalVisible, setEscrowModalVisible] = useState(false);
+  const escrowFadeAnim = useRef(new Animated.Value(0)).current;
+  const escrowScaleAnim = useRef(new Animated.Value(0.9)).current;
   const mainListScrollRef = useRef<ScrollView>(null);
+
+  const handleBannerPress = useCallback((index: number) => {
+    switch (index) {
+      case 0:
+        onPressFab?.();
+        break;
+      case 1:
+        onPressMyTasks?.();
+        break;
+      case 2:
+        // "For every ambitious service – your gateway to growth" → user's projects
+        onPressMyProjects?.();
+        break;
+      case 3:
+        escrowFadeAnim.setValue(0);
+        escrowScaleAnim.setValue(0.9);
+        setEscrowModalVisible(true);
+        Animated.parallel([
+          Animated.timing(escrowFadeAnim, { toValue: 1, duration: 260, useNativeDriver: true }),
+          Animated.spring(escrowScaleAnim, { toValue: 1, tension: 50, friction: 7, useNativeDriver: true }),
+        ]).start();
+        break;
+      case 4:
+        // "Strict criteria for trusted service providers" → user's tasks/requests
+        onPressMyTasks?.();
+        break;
+    }
+  }, [isArabic, onPressFab, onPressMyTasks, onPressMyProjects, escrowFadeAnim, escrowScaleAnim]);
   const [projects, setProjects] = useState<ApiProject[]>([]);
   const [smallTasks, setSmallTasks] = useState<SmallTaskRequest[]>([]);
   const [loadingProjects, setLoadingProjects] = useState(true);
@@ -311,6 +348,7 @@ export default function UserHomeScreenContent({
   interface HomeContract { id: number; projectId?: number; type?: string; status?: string; otherPartyName?: string; description?: string; signedDocumentUrl?: string | null; createdAt?: string; amount?: number; budget?: number; startDate?: string; projectTitle?: string; }
   const [contracts, setContracts] = useState<HomeContract[]>([]);
   const [loadingContracts, setLoadingContracts] = useState(true);
+  const [selectedContractProjectId, setSelectedContractProjectId] = useState<number | null>(null);
   // Support tickets
   const [supportTickets, setSupportTickets] = useState<SupportTicket[]>([]);
   const [loadingTickets, setLoadingTickets] = useState(true);
@@ -321,13 +359,13 @@ export default function UserHomeScreenContent({
   const [subcategoriesForModal, setSubcategoriesForModal] = useState<ServiceSubcategory[]>([]);
   const [loadingSubcategories, setLoadingSubcategories] = useState(false);
 
-  const fontStyle = { fontFamily: fontFamily || undefined };
-  const boldStyle = { fontFamily: boldFontFamily || fontFamily || undefined };
+  const fontStyle = useMemo(() => ({ fontFamily: fontFamily || undefined }), [fontFamily]);
+  const boldStyle = useMemo(() => ({ fontFamily: boldFontFamily || fontFamily || undefined }), [boldFontFamily, fontFamily]);
 
   // ─── Tour guide (new context-based system) ─────────────────────────────
   const { tourRef, startTour } = useTour();
 
-  const homeTourSteps: TourStepDef[] = [
+  const homeTourSteps: TourStepDef[] = useMemo(() => [
     { spotId: 'logo', text: t('tutorial.home.user.topNavLogo') },
     { spotId: 'messagesBtn', text: t('tutorial.home.user.topNavMessages') },
     { spotId: 'infoBtn', text: t('tutorial.home.user.topNavInfo') },
@@ -343,7 +381,7 @@ export default function UserHomeScreenContent({
     { spotId: 'contractsSection', text: t('tutorial.home.user.contractsSection') },
     { spotId: 'supportSection', text: t('tutorial.home.user.supportSection') },
     { spotId: 'chatbot', text: t('tutorial.home.user.chatbot') },
-  ];
+  ], [t]);
 
   const lastScrollY = useRef(0);
   const handleTourScroll = useCallback((stepIndex: number, spotId: string, scrollDelta?: number): boolean => {
@@ -453,7 +491,7 @@ export default function UserHomeScreenContent({
 
   const loadSupportTickets = useCallback(async () => {
     try {
-      const tickets = await getMyTickets('OPEN');
+      const tickets = await getMyTickets();
       setSupportTickets(tickets.slice(0, 3));
     } catch { setSupportTickets([]); }
     finally { setLoadingTickets(false); }
@@ -774,11 +812,16 @@ export default function UserHomeScreenContent({
           scrollEventThrottle={16}
         >
           {BANNER_IMAGES.map((img, i) => (
-            <View key={i} style={[styles.bannerPage, { width: SCREEN_WIDTH }]}>
+            <TouchableOpacity
+              key={i}
+              style={[styles.bannerPage, { width: SCREEN_WIDTH }]}
+              onPress={() => handleBannerPress(i)}
+              activeOpacity={0.92}
+            >
               <View style={[styles.bannerCard, { backgroundColor: isDark ? colors.cardBackground : '#FFFFFF' }]}>
                 <Image source={img} style={styles.bannerImage} resizeMode="stretch" />
               </View>
-            </View>
+            </TouchableOpacity>
           ))}
         </ScrollView>
         <View style={styles.dots}>
@@ -818,14 +861,6 @@ export default function UserHomeScreenContent({
                 <Ionicons name="flash" size={24} color="#FF9500" />
               </View>
               <Text style={[styles.quickActionLabel, { color: colors.text }, fontStyle]} numberOfLines={1}>{t('Small task')}</Text>
-            </PressableScaleView>
-          </View>
-          <View ref={tourRef('appointments')} collapsable={false}>
-            <PressableScaleView style={styles.quickActionItem} onPress={() => { onPressAppointments ? onPressAppointments() : onPressProjectStatus?.('running'); }}>
-              <View style={[styles.quickActionCircle, { backgroundColor: 'rgba(52,199,89,0.18)' }]}>
-                <Ionicons name="calendar" size={24} color="#34C759" />
-              </View>
-              <Text style={[styles.quickActionLabel, { color: colors.text }, fontStyle]} numberOfLines={1}>{t('Appointments')}</Text>
             </PressableScaleView>
           </View>
           <View ref={tourRef('services')} collapsable={false}>
@@ -1127,7 +1162,7 @@ export default function UserHomeScreenContent({
               contracts.map((c) => {
                 const contractAmount = c.amount ?? c.budget;
                 const formattedAmount = contractAmount
-                  ? new Intl.NumberFormat(isArabic ? 'ar-SA' : 'en-SA', { maximumFractionDigits: 0 }).format(contractAmount)
+                  ? (isArabic ? numberFormatterAr : numberFormatterEn).format(contractAmount)
                   : null;
                 const dateStr = c.createdAt
                   ? new Date(c.createdAt).toLocaleDateString(isArabic ? 'ar-SA' : 'en-US', { month: 'short', day: 'numeric' })
@@ -1136,7 +1171,14 @@ export default function UserHomeScreenContent({
                   <PressableScaleView
                     key={c.id}
                     style={[styles.homeCard, { backgroundColor: colors.cardBackground, height: 180 }]}
-                    onPress={() => onPressContract?.(c.id)}
+                    onPress={() => {
+                      const projectId = c.projectId ?? c.id;
+                      if (onPressContract) {
+                        onPressContract(projectId);
+                      } else {
+                        setSelectedContractProjectId(projectId);
+                      }
+                    }}
                   >
                     <View style={styles.homeCardRow}>
                       <View style={[styles.homeCardIconWrap, { backgroundColor: 'rgba(88,86,214,0.15)' }]}>
@@ -1186,8 +1228,9 @@ export default function UserHomeScreenContent({
         <View ref={tourRef('supportSection')} collapsable={false} style={{ paddingVertical: 8 }}>
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: colors.text }, { fontSize: scaledSize(18) }, boldStyle]}>{t('Support')}</Text>
-            <TouchableOpacity onPress={onPressSupportTickets} activeOpacity={0.8}>
-              <Text style={[styles.viewAll, { color: '#34C759' }, fontStyle]}>{t('View All')} ←</Text>
+            <TouchableOpacity onPress={onPressSupportTickets} activeOpacity={0.8} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Text style={[styles.viewAll, { color: '#34C759' }, fontStyle]}>{t('View All')}</Text>
+              <Ionicons name={isArabic ? 'chevron-back' : 'chevron-forward'} size={14} color="#34C759" />
             </TouchableOpacity>
           </View>
           {loadingTickets ? (
@@ -1259,6 +1302,45 @@ export default function UserHomeScreenContent({
           />
         </View>
       )}
+
+      {/* Escrow Coming Soon Modal */}
+      <Modal visible={escrowModalVisible} transparent animationType="none" onRequestClose={() => setEscrowModalVisible(false)} statusBarTranslucent>
+        <TouchableWithoutFeedback onPress={() => setEscrowModalVisible(false)}>
+          <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', opacity: escrowFadeAnim.interpolate({ inputRange: [0, 1], outputRange: [0, isDark ? 0.8 : 0.55] }) }]} />
+        </TouchableWithoutFeedback>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+          <TouchableWithoutFeedback>
+            <Animated.View style={[escrowModalStyles.card, { backgroundColor: isDark ? colors.cardBackground : '#FFFFFF', borderColor: colors.border, opacity: escrowFadeAnim, transform: [{ scale: escrowScaleAnim }] }]}>
+              <TouchableOpacity style={escrowModalStyles.closeBtn} onPress={() => setEscrowModalVisible(false)}>
+                <Ionicons name="close" size={22} color={colors.textSecondary} />
+              </TouchableOpacity>
+              <View style={[escrowModalStyles.iconCircle, { backgroundColor: '#007AFF18' }]}>
+                <Ionicons name="shield-checkmark-outline" size={46} color="#007AFF" />
+              </View>
+              <Text style={[escrowModalStyles.title, { color: colors.text, fontFamily: boldFontFamily }]}>
+                {isArabic ? 'حساب الضمان' : 'Escrow Account'}
+              </Text>
+              <Text style={[escrowModalStyles.message, { color: colors.textSecondary }]}>
+                {isArabic
+                  ? 'هذه الخدمة قادمة قريباً!\nسيتمكن كل من العميل والمقاول من الدفع والاستلام بأمان تام.'
+                  : 'This feature is coming soon!\nClients and technicians will be able to pay and receive funds securely.'}
+              </Text>
+              <TouchableOpacity style={[escrowModalStyles.okBtn, { backgroundColor: primaryColor }]} onPress={() => setEscrowModalVisible(false)}>
+                <Text style={[escrowModalStyles.okText, { fontFamily: boldFontFamily }]}>
+                  {isArabic ? 'حسناً' : 'Got it'}
+                </Text>
+              </TouchableOpacity>
+            </Animated.View>
+          </TouchableWithoutFeedback>
+        </View>
+      </Modal>
+
+      {/* Contract PDF Viewer — opened from home screen contract cards */}
+      <ContractViewerModal
+        visible={selectedContractProjectId !== null}
+        projectId={selectedContractProjectId ?? 0}
+        onClose={() => setSelectedContractProjectId(null)}
+      />
 
       {/* Search dropdown — rendered at root level with absolute positioning (no Modal) */}
       <SearchResultsDropdown
@@ -1445,4 +1527,61 @@ const styles = StyleSheet.create({
     ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 6 }, android: { elevation: 2 } }),
   },
   placeholderLabel: { fontSize: 13, marginTop: 8, textAlign: 'center' },
+});
+
+const escrowModalStyles = StyleSheet.create({
+  card: {
+    width: '100%',
+    maxWidth: 360,
+    borderRadius: 20,
+    padding: 28,
+    borderWidth: 1,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  closeBtn: {
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1,
+  },
+  iconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 18,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  message: {
+    fontSize: 14,
+    lineHeight: 22,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  okBtn: {
+    width: '100%',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  okText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
 });

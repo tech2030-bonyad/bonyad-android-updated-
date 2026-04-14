@@ -130,11 +130,9 @@ export default function ServiceProvidersScreen({
         });
         setRegions(Array.from(uniqueRegions).map(r => JSON.parse(r as string)));
       } else {
-        console.error('Failed to fetch providers:', response.status);
         setProviders([]);
       }
     } catch (error) {
-      console.error('Error fetching providers:', error);
       setProviders([]);
     } finally {
       setLoading(false);
@@ -394,6 +392,10 @@ export default function ServiceProvidersScreen({
             { paddingBottom: insets.bottom + 20 }
           ]}
           showsVerticalScrollIndicator={false}
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={8}
+          windowSize={7}
+          initialNumToRender={8}
         />
       )}
     </View>

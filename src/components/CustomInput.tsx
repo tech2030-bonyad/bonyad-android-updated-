@@ -672,7 +672,6 @@ const styles = StyleSheet.create({
     height: 'auto' as any,
     paddingTop: 8,
     paddingBottom: 8,
-    textAlign: 'left',
     textAlignVertical: 'top',
   },
   inputDisabled: {

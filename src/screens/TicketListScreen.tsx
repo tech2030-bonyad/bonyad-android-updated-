@@ -163,26 +163,8 @@ const TicketListScreen: React.FC<TicketListScreenProps> = ({
   const isDarkMode = theme === 'dark';
   const language = i18n.language === 'ar' ? 'ar' : 'en';
   const isRTL = i18n.language === 'ar';
-  const screenOpacity = useRef(new Animated.Value(0)).current;
+  const screenOpacity = useRef(new Animated.Value(1)).current;
   const screenSlideX = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    screenSlideX.setValue(-screenWidth);
-    screenOpacity.setValue(0);
-    Animated.parallel([
-      Animated.timing(screenOpacity, {
-        toValue: 1,
-        duration: 220,
-        useNativeDriver: true,
-      }),
-      Animated.spring(screenSlideX, {
-        toValue: 0,
-        tension: 65,
-        friction: 11,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [screenOpacity, screenSlideX]);
 
   const handleBackScreen = () => {
     Animated.parallel([

@@ -115,15 +115,12 @@ export default function RoomVisualizerScreen({ onBack }: RoomVisualizerScreenPro
         const serverBaseUrl = getServerBaseUrl();
         const generatedImageFullUrl = `${serverBaseUrl}${data.generatedImageUrl}`;
         setGeneratedImage(generatedImageFullUrl);
-        console.log('✅ Generated Image URL:', generatedImageFullUrl);
         Alert.alert(
           t('Success'),
           i18n.language === 'en' ? 'Design generated successfully!' : 'تم إنشاء التصميم بنجاح!'
         );
       } else {
-        console.log('❌ Room Design API Error - Status:', response.status);
         const errorText = await response.text();
-        console.log('❌ Error response:', errorText);
         
         try {
           const errorData = JSON.parse(errorText);
@@ -140,7 +137,6 @@ export default function RoomVisualizerScreen({ onBack }: RoomVisualizerScreenPro
         }
       }
     } catch (error: any) {
-      console.error('Design Generation API Error:', error);
       Alert.alert(
         t('Error'),
         i18n.language === 'en' ? 'Network error. Please try again.' : 'خطأ في الشبكة. يرجى المحاولة مرة أخرى.'
@@ -164,7 +160,6 @@ export default function RoomVisualizerScreen({ onBack }: RoomVisualizerScreenPro
         );
       }
     } catch (error) {
-      console.error('Error downloading image:', error);
       Alert.alert(
         t('Error'),
         i18n.language === 'en' ? 'Failed to download image' : 'فشل تنزيل الصورة'
@@ -265,14 +260,12 @@ export default function RoomVisualizerScreen({ onBack }: RoomVisualizerScreenPro
               style={styles.generatedImage}
               resizeMode="contain"
               onError={(error) => {
-                console.error('❌ Error loading generated image:', error);
                 Alert.alert(
                   t('Error'),
                   i18n.language === 'en' ? 'Failed to load generated image' : 'فشل تحميل الصورة المولدة'
                 );
               }}
               onLoad={() => {
-                console.log('✅ Generated image loaded successfully');
               }}
             />
             <TouchableOpacity 

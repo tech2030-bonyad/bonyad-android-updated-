@@ -63,16 +63,7 @@ export default function ChangePhoneScreen({ onBack, onOTPSent }: ChangePhoneScre
 
   const screenWidth = Dimensions.get('window').width;
   const screenSlideX = useRef(new Animated.Value(0)).current;
-  const screenOpacity = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    screenSlideX.setValue(-screenWidth);
-    screenOpacity.setValue(0);
-    Animated.parallel([
-      Animated.timing(screenOpacity, { toValue: 1, duration: 220, useNativeDriver: true }),
-      Animated.spring(screenSlideX, { toValue: 0, tension: 65, friction: 11, useNativeDriver: true }),
-    ]).start();
-  }, []);
+  const screenOpacity = useRef(new Animated.Value(1)).current;
 
   const handleBackScreen = () => {
     Animated.parallel([

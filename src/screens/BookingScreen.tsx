@@ -87,11 +87,7 @@ const BookingScreen: React.FC<BookingScreenProps> = ({
 
       setAvailabilityStatus(data.status || 'FIXED_TIMES');
       setAvailability(data.availability || []);
-
-      console.log(`✅ Loaded ${data.availability?.length || 0} availability slots`);
-      console.log(`   Status: ${data.status}`);
       } catch (error: any) {
-        console.error('❌ Error fetching availability:', error);
         showError(error.message || t('Failed to load availability'));
       } finally {
       setIsLoading(false);
@@ -207,9 +203,6 @@ const BookingScreen: React.FC<BookingScreenProps> = ({
         ...(projectId && { projectId: projectId }),
       };
 
-      console.log('📤 Creating appointment...');
-      console.log('   Data:', bookingData);
-
       const result = await createAppointment(bookingData);
 
       if (result && result.success) {
@@ -222,7 +215,6 @@ const BookingScreen: React.FC<BookingScreenProps> = ({
         throw new Error(t('Failed to create appointment'));
       }
     } catch (error: any) {
-      console.error('❌ Error creating booking:', error);
       showError(error.message || t('Network error'));
     } finally {
       setIsSubmitting(false);

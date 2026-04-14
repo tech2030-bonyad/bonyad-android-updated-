@@ -79,20 +79,6 @@ export default function LoginScreen({
   const IS_MEDIUM_WEB = IS_WEB && screenWidth >= 768 && screenWidth < 1024;
   const IS_SMALL_WEB = IS_WEB && screenWidth < 768;
 
-  // Debug logs for responsive breakpoints
-  useEffect(() => {
-    console.log('🔍 LoginScreen Responsive Debug:', {
-      platform: Platform.OS,
-      screenWidth,
-      IS_WEB,
-      IS_LARGE_WEB,
-      IS_MEDIUM_WEB,
-      IS_SMALL_WEB,
-      willRenderMobile: Platform.OS !== 'web' || IS_SMALL_WEB || IS_MEDIUM_WEB,
-      willRenderDesktop: IS_LARGE_WEB,
-    });
-  }, [screenWidth, IS_WEB, IS_LARGE_WEB, IS_MEDIUM_WEB, IS_SMALL_WEB]);
-  
   // State
   const [selectedRole, setSelectedRole] = useState<'user' | 'technician'>('user');
   const [phone, setPhone] = useState('');
@@ -153,12 +139,6 @@ export default function LoginScreen({
         return;
       }
 
-      // API Request
-      console.log('📤 Login Request:');
-      console.log('   Phone:', formattedPhone);
-      console.log('   Role:', selectedRole === 'user' ? 'USER' : 'TECHNICIAN');
-      console.log('   FCM Token:', fcmToken || 'no-token');
-      
       const response = await fetch(buildApiUrl(API_ENDPOINTS.AUTH.LOGIN), {
         method: 'POST',
         headers: {
@@ -173,22 +153,15 @@ export default function LoginScreen({
         }),
       });
 
-      // Get response text first to debug non-JSON responses
       const responseText = await response.text();
-      console.log('📥 Login Response Status:', response.status);
-      console.log('📥 Login Response Text:', responseText.substring(0, 500));
 
       // Try to parse JSON
       let data;
       try {
         data = JSON.parse(responseText);
       } catch (parseError) {
-        console.error('❌ Failed to parse login response as JSON');
-        console.error('   Response text:', responseText);
         throw new Error('Invalid server response. Please check your connection.');
       }
-
-      console.log('📥 Login Response:', data);
 
       // Check for pending verification FIRST (before status/token checks)
       // Handle errorCode: USER_ALREADY_EXISTS_PENDING
@@ -198,9 +171,6 @@ export default function LoginScreen({
             data.message.toLowerCase().includes('otp sent')
           ))
       ) {
-        console.log('⚠️ Account pending verification - redirecting to OTP screen');
-        // Note: OTP is already sent by backend, no need to call resend endpoint here
-        
         setIsLoading(false);
         // Navigate to OTP screen with phone number and role
         onNavigateToOTP(formattedPhone, selectedRole);
@@ -208,22 +178,12 @@ export default function LoginScreen({
       }
 
       if (response.ok && data.token) {
-        // Success - save session and navigate
-        console.log('✅ Login successful');
-        console.log('   Token: ' + data.token.substring(0, 20) + '...');
-        console.log('   User ID: ' + (data.user?.id || data.userId || data.id));
-        console.log('   Role: ' + (data.user?.role || data.role || selectedRole));
-        
         const userId = data.user?.id || data.userId || data.id || 0;
         const userRole = data.user?.role || data.role || (selectedRole === 'user' ? 'USER' : 'TECHNICIAN');
         
         // Save to AsyncStorage
         await storage.saveAuthData(data.token, userRole, userId, data.user?.deviceToken || 'no-token');
-        console.log('✅ Saved auth data to storage');
-        console.log('   Saved token:', data.token);
-        console.log('   Saved userId:', userId);
-        console.log('   Saved role:', userRole);
-        
+
         onLoginSuccess(selectedRole, data.token, userId);
       } else {
         // Check for multilingual messages (messageEn/messageAr)
@@ -237,7 +197,6 @@ export default function LoginScreen({
         showError(message, t('validation_failed'));
       }
     } catch (error) {
-      console.error('❌ Login error:', error);
       showError(t('network_error'), t('Error'));
     } finally {
       setIsLoading(false);
@@ -515,10 +474,6 @@ export default function LoginScreen({
     );
   }
 
-  // Render web desktop layout (large screens only on web)
-  console.log('🖥️ Rendering DESKTOP layout (Web large screen)');
-  console.log('🎨 Desktop Layout Branding Panel:', { IS_LARGE_WEB, willShow: IS_LARGE_WEB });
-  
   // Figma Design Colors
   const figmaColors = {
     background: '#E6EFF7',       // Light blue background

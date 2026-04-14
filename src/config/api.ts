@@ -30,7 +30,7 @@ if (__DEV__) {
 export function getChatbotBaseUrl(): string {
   const raw = (ENV.CHATBOT_API_URL || '').trim();
   if (!raw) {
-    return 'https://glynda-unvexatious-felisa.ngrok-free.dev';
+    return 'https://3-120-251-178.nip.io';
   }
   return raw
     .replace(/\/$/, '')

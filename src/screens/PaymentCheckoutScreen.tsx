@@ -63,9 +63,6 @@ export default function PaymentCheckoutScreen({
   }, []);
 
   const initializeCheckout = async () => {
-    console.log('🔥 [PaymentCheckout] initializeCheckout called');
-    console.log('   checkoutRequest:', JSON.stringify(checkoutRequest, null, 2));
-    
     try {
       setIsLoading(true);
       const request: CreateCheckoutRequest = {
@@ -76,12 +73,9 @@ export default function PaymentCheckoutScreen({
         shopperResultUrl: `${getServerBaseUrl()}/payment/result?checkoutId={checkoutId}`,
       };
 
-      console.log('📤 [PaymentCheckout] Calling createCheckout API...');
       const response = await createCheckout(request);
-      console.log('✅ [PaymentCheckout] createCheckout response:', JSON.stringify(response, null, 2));
       setCheckoutData(response);
     } catch (error: any) {
-      console.error('❌ [PaymentCheckout] Error creating checkout:', error);
       showError(error.message || t('Failed to initialize payment'), t('Error'));
     } finally {
       setIsLoading(false);
@@ -173,7 +167,6 @@ export default function PaymentCheckoutScreen({
         showError(t('Payment failed. Please try again.'), t('Payment Failed'));
       }
     } catch (error: any) {
-      console.error('Error checking payment status:', error);
       showError(error.message || t('Failed to check payment status'), t('Error'));
     } finally {
       setIsProcessing(false);
@@ -230,8 +223,6 @@ export default function PaymentCheckoutScreen({
           </View>
         )}
         onError={(syntheticEvent) => {
-          const { nativeEvent } = syntheticEvent;
-          console.error('WebView error:', nativeEvent);
           showError(t('Failed to load payment form'), t('Error'));
         }}
         javaScriptEnabled={true}

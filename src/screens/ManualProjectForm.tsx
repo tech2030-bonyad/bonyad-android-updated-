@@ -59,24 +59,8 @@ interface PhaseInput {
 }
 
 function AnimatedPhaseCard({ children, style }: { children: React.ReactNode; style?: any }) {
-  const opacity = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(14)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(opacity, {
-        toValue: 1,
-        duration: 220,
-        useNativeDriver: true,
-      }),
-      Animated.spring(translateY, {
-        toValue: 0,
-        friction: 8,
-        tension: 110,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [opacity, translateY]);
+  const opacity = useRef(new Animated.Value(1)).current;
+  const translateY = useRef(new Animated.Value(0)).current;
 
   return (
     <Animated.View style={[style, { opacity, transform: [{ translateY }] }]}>
@@ -159,8 +143,8 @@ export default function ManualProjectForm({
   const [showPhasesModal, setShowPhasesModal] = useState(false);
   const phaseModalOpacity = useRef(new Animated.Value(0)).current;
   const phaseModalTranslateY = useRef(new Animated.Value(28)).current;
-  const screenOpacity = useRef(new Animated.Value(0)).current;
-  const screenTranslateY = useRef(new Animated.Value(18)).current;
+  const screenOpacity = useRef(new Animated.Value(1)).current;
+  const screenTranslateY = useRef(new Animated.Value(0)).current;
   const isClosingScreenRef = useRef(false);
 
   useEffect(() => {
@@ -169,21 +153,6 @@ export default function ManualProjectForm({
     }
   }, []);
 
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(screenOpacity, {
-        toValue: 1,
-        duration: 220,
-        useNativeDriver: true,
-      }),
-      Animated.spring(screenTranslateY, {
-        toValue: 0,
-        friction: 9,
-        tension: 110,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [screenOpacity, screenTranslateY]);
 
   const closeScreenAnimated = () => {
     if (isClosingScreenRef.current) return;
@@ -419,11 +388,10 @@ export default function ManualProjectForm({
       LayoutAnimation.create(280, LayoutAnimation.Types.easeInEaseOut, LayoutAnimation.Properties.opacity)
     );
     const toValue = next === 'DIRECT_ASSIGNMENT' ? 1 : 0;
-    Animated.spring(assignmentToggleAnim, {
+    Animated.timing(assignmentToggleAnim, {
       toValue,
       useNativeDriver: true,
-      friction: 8,
-      tension: 180,
+      duration: 200,
     }).start();
     setAssignmentType(next);
     if (next === 'ALL') setTechnicianSearchError(null);
@@ -478,7 +446,7 @@ export default function ManualProjectForm({
     setShowPhasesModal(true);
     Animated.parallel([
       Animated.timing(phaseModalOpacity, { toValue: 1, duration: 220, useNativeDriver: true }),
-      Animated.spring(phaseModalTranslateY, { toValue: 0, friction: 9, tension: 110, useNativeDriver: true }),
+      Animated.timing(phaseModalTranslateY, { toValue: 0, duration: 220, useNativeDriver: true }),
     ]).start();
   };
 

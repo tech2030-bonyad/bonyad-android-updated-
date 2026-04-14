@@ -32,7 +32,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
 import ConfirmationPopup, { useConfirmationPopup } from '../components/ConfirmationPopup';
 import ProjectCreationFlow from '../components/ProjectCreationFlow';
-import BookAppointmentModal from '../components/BookAppointmentModal';
 import AppBottomSheetModal from '../components/AppBottomSheetModal';
 
 // ===== DESIGN TOKENS FROM FIGMA =====
@@ -1937,23 +1936,6 @@ export default function BidReceivedProjectScreen({
         </TouchableOpacity>
       </AppBottomSheetModal>
       
-      {/* Book Appointment Modal */}
-      {selectedVisitRequest && (
-        <BookAppointmentModal
-          visible={bookingModalVisible}
-          technicianId={selectedVisitRequest.technicianId}
-          technicianName={selectedVisitRequest.technicianName}
-          projectId={project.id}
-          onClose={() => {
-            setBookingModalVisible(false);
-            setSelectedVisitRequest(null);
-          }}
-          onSuccess={() => {
-            loadVisitRequests();
-            onSuccess?.();
-          }}
-        />
-      )}
       
       {/* Alert Popup */}
       <AlertPopup

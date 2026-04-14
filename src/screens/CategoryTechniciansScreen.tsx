@@ -59,15 +59,7 @@ export default function CategoryTechniciansScreen({
   const title = categoryName || t('Technicians');
 
   // Slide-in animation (matches ServiceTechniciansScreen feel)
-  const slideX = useRef(new Animated.Value(SCREEN_W)).current;
-  useEffect(() => {
-    Animated.spring(slideX, {
-      toValue: 0,
-      tension: 280,
-      friction: 28,
-      useNativeDriver: true,
-    }).start();
-  }, [slideX]);
+  const slideX = useRef(new Animated.Value(0)).current;
 
   const handleBack = () => {
     Animated.timing(slideX, {

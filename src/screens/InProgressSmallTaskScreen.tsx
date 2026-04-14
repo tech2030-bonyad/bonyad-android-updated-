@@ -69,10 +69,10 @@ export default function InProgressSmallTaskScreen({
   const [hasError, setHasError] = useState(false);
 
   // Animation values
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(30)).current;
-  const scaleAnim = useRef(new Animated.Value(0.95)).current;
-  const buttonAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const slideAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const buttonAnim = useRef(new Animated.Value(1)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
 
   const { alertState, showError, showSuccess, hideAlert } = useAlertPopup();
@@ -95,35 +95,6 @@ export default function InProgressSmallTaskScreen({
   };
 
   useEffect(() => {
-    // Entrance animation
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 400,
-        useNativeDriver: true,
-      }),
-      Animated.spring(slideAnim, {
-        toValue: 0,
-        tension: 50,
-        friction: 7,
-        useNativeDriver: true,
-      }),
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        tension: 50,
-        friction: 7,
-        useNativeDriver: true,
-      }),
-    ]).start();
-
-    Animated.spring(buttonAnim, {
-      toValue: 1,
-      tension: 50,
-      friction: 7,
-      delay: 200,
-      useNativeDriver: true,
-    }).start();
-
     // Animate progress bar
     Animated.timing(progressAnim, {
       toValue: progress / 100,

@@ -124,16 +124,7 @@ export default function PortfolioScreen({
   const cardTranslateY = useRef(new Animated.Value(28)).current;
 
   const screenSlideX = useRef(new Animated.Value(0)).current;
-  const screenOpacity = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    screenSlideX.setValue(-SCREEN_W);
-    screenOpacity.setValue(0);
-    Animated.parallel([
-      Animated.timing(screenOpacity, { toValue: 1, duration: 220, useNativeDriver: true }),
-      Animated.spring(screenSlideX, { toValue: 0, tension: 65, friction: 11, useNativeDriver: true }),
-    ]).start();
-  }, [screenOpacity, screenSlideX]);
+  const screenOpacity = useRef(new Animated.Value(1)).current;
 
   const handleBackScreen = useCallback(() => {
     Animated.parallel([
@@ -167,7 +158,7 @@ export default function PortfolioScreen({
     cardTranslateY.setValue(28);
     Animated.parallel([
       Animated.timing(backdropOpacity, { toValue: 1, duration: 280, useNativeDriver: true }),
-      Animated.spring(cardTranslateY, { toValue: 0, useNativeDriver: true, tension: 72, friction: 12 }),
+      Animated.timing(cardTranslateY, { toValue: 0, duration: 200, useNativeDriver: true }),
     ]).start();
   }, [showAddModal, backdropOpacity, cardTranslateY]);
 

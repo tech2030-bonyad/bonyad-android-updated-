@@ -43,16 +43,7 @@ export default function CommissionPaymentScreen({
   const isRTL = i18n.language === 'ar';
   const screenWidth = Dimensions.get('window').width;
   const screenSlideX = useRef(new Animated.Value(0)).current;
-  const screenOpacity = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    screenSlideX.setValue(-screenWidth);
-    screenOpacity.setValue(0);
-    Animated.parallel([
-      Animated.timing(screenOpacity, { toValue: 1, duration: 220, useNativeDriver: true }),
-      Animated.spring(screenSlideX, { toValue: 0, tension: 65, friction: 11, useNativeDriver: true }),
-    ]).start();
-  }, []);
+  const screenOpacity = useRef(new Animated.Value(1)).current;
 
   const handleBackScreen = () => {
     Keyboard.dismiss();
@@ -81,7 +72,7 @@ export default function CommissionPaymentScreen({
   // Reset payment initiation flag on mount
   useEffect(() => {
     isPaymentInitiated.current = false;
-    console.log('🔄 [CommissionPayment] Component mounted, reset payment flag');
+
   }, []);
 
   // Load commission settings from API (placeholder for now)
@@ -124,19 +115,12 @@ export default function CommissionPaymentScreen({
 
   // Navigate to checkout screen with payment details
   const initiatePayment = useCallback(() => {
-    console.log('🔥 [CommissionPayment] initiatePayment called');
-    console.log('   commissionAmount:', commissionAmount);
-    console.log('   onNavigateToCheckout:', onNavigateToCheckout ? 'defined' : 'undefined');
-    console.log('   isPaymentInitiated:', isPaymentInitiated.current);
-    
     // Prevent duplicate payment initiation
     if (isPaymentInitiated.current) {
-      console.log('⚠️ [CommissionPayment] Payment already initiated, ignoring duplicate call');
       return;
     }
     
     if (commissionAmount <= 0 || !onNavigateToCheckout) {
-      console.error('❌ [CommissionPayment] Cannot initiate - invalid amount or callback');
       return;
     }
     
@@ -163,15 +147,11 @@ export default function CommissionPaymentScreen({
       },
     };
 
-    console.log('📤 [CommissionPayment] Checkout request built:', JSON.stringify(checkoutRequest, null, 2));
-
     const description = t('commissionPayment.paymentDescription', {
       amount: projectAmountValue.toFixed(2),
     });
 
-    console.log('📤 [CommissionPayment] Calling onNavigateToCheckout...');
     onNavigateToCheckout(checkoutRequest, description);
-    console.log('✅ [CommissionPayment] onNavigateToCheckout called successfully');
     hideConfirmation();
   }, [commissionAmount, projectAmountValue, onNavigateToCheckout, t, hideConfirmation]);
 
@@ -213,9 +193,9 @@ export default function CommissionPaymentScreen({
           keyboardShouldPersistTaps="handled"
           onScrollBeginDrag={() => Keyboard.dismiss()}
         >
-          {/* Header – LTR so back stays left */}
+          {/* Header – back on left in LTR, right in RTL */}
           {onBack && (
-            <View style={[styles.header, styles.headerLTR, { borderBottomColor: colors.border }]}>
+            <View style={[styles.header, { borderBottomColor: colors.border, flexDirection: 'row' }]}>
               <TouchableOpacity onPress={handleBackScreen}>
                 <BackArrowIonicons variant="chevron" size={24} color={colors.text}/>
               </TouchableOpacity>
@@ -360,9 +340,6 @@ const styles = StyleSheet.create({
   },
   animatedScreen: {
     flex: 1,
-  },
-  headerLTR: {
-    direction: 'ltr',
   },
   scrollView: {
     flex: 1,

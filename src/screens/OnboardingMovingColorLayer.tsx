@@ -1,55 +1,65 @@
-import React, { useEffect } from 'react';
-import { Dimensions, Platform, StyleSheet, View } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Animated, Dimensions, Platform, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, {
-  Easing,
-  interpolate,
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withTiming,
-} from 'react-native-reanimated';
 
 const { width: W, height: H } = Dimensions.get('window');
 
-/**
- * Soft moving color wash for onboarding (Reanimated + expo-linear-gradient).
- * Omitted on web (no moving layer).
- */
 export function OnboardingMovingColorLayer() {
-  const progress = useSharedValue(0);
+  const progress = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    progress.value = withRepeat(
-      withTiming(1, { duration: 14000, easing: Easing.inOut(Easing.sin) }),
-      -1,
-      true,
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(progress, {
+          toValue: 1,
+          duration: 14000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(progress, {
+          toValue: 0,
+          duration: 14000,
+          useNativeDriver: true,
+        }),
+      ])
     );
-  }, []);
-
-  const sheetStyle = useAnimatedStyle(() => {
-    const tx = interpolate(progress.value, [0, 1], [-W * 0.42, W * 0.42]);
-    const ty = interpolate(progress.value, [0, 1], [H * 0.06, -H * 0.045]);
-    const rotate = `${interpolate(progress.value, [0, 1], [-7, 7])}deg`;
-    return {
-      transform: [{ translateX: tx }, { translateY: ty }, { rotate }],
-    };
-  });
+    anim.start();
+    return () => anim.stop();
+  }, [progress]);
 
   if (Platform.OS === 'web') {
     return null;
   }
 
+  const translateX = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-W * 0.42, W * 0.42],
+  });
+
+  const translateY = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [H * 0.06, -H * 0.045],
+  });
+
+  const rotate = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['-7deg', '7deg'],
+  });
+
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      <Animated.View style={[styles.sheet, sheetStyle]}>
+    <View pointerEvents="none" style={{ position: 'absolute', zIndex: -1, elevation: -1 }}>
+      <Animated.View
+        style={[
+          styles.sheet,
+          { transform: [{ translateX }, { translateY }, { rotate }] },
+        ]}
+      >
         <LinearGradient
           colors={[
             'rgba(255,255,255,0)',
-            'rgba(186,230,253,0.38)',
-            'rgba(56,189,248,0.30)',
-            'rgba(96,165,250,0.24)',
-            'rgba(147,197,253,0.20)',
+            'rgba(186,230,253,0.15)',
+            'rgba(56,189,248,0.10)',
+            'rgba(96,165,250,0.08)',
+            'rgba(147,197,253,0.06)',
             'rgba(255,255,255,0)',
           ]}
           locations={[0, 0.18, 0.36, 0.52, 0.7, 1]}

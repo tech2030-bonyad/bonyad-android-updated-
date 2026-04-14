@@ -207,7 +207,7 @@ export default function ChatRoomsListScreen({
   const shouldShowBackButton = onBack && !IS_LARGE_WEB;
   const headerTopPadding = stackedUnderAppTopBar ? 0 : getAppTopBarPaddingTop(insets);
 
-  const fontStyle = { fontFamily };
+  const fontStyle = useMemo(() => ({ fontFamily }), [fontFamily]);
   const bottomPad = Math.max(insets.bottom + 96, 140);
 
   const filteredRooms = useMemo(() => {
@@ -264,14 +264,13 @@ export default function ChatRoomsListScreen({
 
   useEffect(() => {
     loadChatRooms().catch((error) => {
-      console.error('❌ Failed to load chat rooms:', error);
       setIsLoading(false);
     });
 
     const subscription = AppState.addEventListener('change', (nextAppState) => {
       if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
-        loadChatRooms().catch((error) => {
-          console.error('❌ Failed to refresh chat rooms:', error);
+        loadChatRooms().catch(() => {
+          // silently handle
         });
       }
       appState.current = nextAppState;
@@ -284,7 +283,6 @@ export default function ChatRoomsListScreen({
     try {
       const token = await storage.getAuthToken();
       if (!token) {
-        console.error('❌ No auth token found');
         Alert.alert(t('Error'), t('Please login to view chats'));
         return;
       }
@@ -314,7 +312,6 @@ export default function ChatRoomsListScreen({
         try {
           responseData = JSON.parse(responseText);
         } catch (parseError) {
-          console.error('❌ Failed to parse JSON response:', parseError);
           throw new Error('Invalid JSON response from server');
         }
 
@@ -337,11 +334,9 @@ export default function ChatRoomsListScreen({
         setChatRooms(chatRoomsData);
       } else {
         const errorText = await response.text();
-        console.error('❌ Failed to load chat rooms - Status:', response.status, errorText);
         Alert.alert(t('Error'), t('Failed to load chats'));
       }
     } catch (error: unknown) {
-      console.error('❌ Error loading chat rooms:', error);
       const message = error instanceof Error ? error.message : t('Failed to load chats');
       Alert.alert(t('Error'), message);
     } finally {
@@ -511,6 +506,10 @@ export default function ChatRoomsListScreen({
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
           }
           showsVerticalScrollIndicator={false}
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={10}
+          windowSize={7}
+          initialNumToRender={10}
         />
       </Animated.View>
 

@@ -115,7 +115,6 @@ export default function ServiceSuggestionFormScreen({
       }
 
       const url = buildApiUrl(API_ENDPOINTS.SERVICE_SUGGESTIONS.CREATE);
-      console.log('📤 Submitting service suggestion:', url);
 
       const response = await fetch(url, {
         method: 'POST',
@@ -134,7 +133,6 @@ export default function ServiceSuggestionFormScreen({
 
       if (response.ok) {
         const data = await response.json();
-        console.log('✅ Service suggestion submitted:', data);
         showSuccess(t('Service suggestion submitted successfully'), t('Success'));
         setTimeout(() => {
           hideAlert();
@@ -143,11 +141,9 @@ export default function ServiceSuggestionFormScreen({
         }, 1500);
       } else {
         const errorData = await response.json().catch(() => ({}));
-        console.error('❌ Failed to submit suggestion:', response.status, errorData);
         showError(errorData.message || t('Failed to submit suggestion'), t('Error'));
       }
     } catch (error) {
-      console.error('❌ Error submitting suggestion:', error);
       showError(t('Error submitting suggestion'), t('Error'));
     } finally {
       setIsSubmitting(false);

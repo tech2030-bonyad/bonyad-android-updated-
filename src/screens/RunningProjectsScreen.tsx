@@ -90,7 +90,6 @@ export default function RunningProjectsScreen({
     try {
       const token = await storage.getAuthToken();
       if (!token) {
-        console.error('❌ No auth token found');
         Alert.alert(t('Error'), t('Please login to view projects'));
         return;
       }
@@ -101,8 +100,6 @@ export default function RunningProjectsScreen({
         : API_ENDPOINTS.PROJECTS.MY_PROJECTS;
 
       const url = buildApiUrl(endpoint);
-      console.log('🔍 Fetching running projects from:', url);
-
       const response = await fetch(url, {
         method: 'GET',
         headers: {
@@ -111,12 +108,8 @@ export default function RunningProjectsScreen({
         },
       });
 
-      console.log('📥 Running Projects API Response Status:', response.status);
-
       if (response.ok) {
         const data = await response.json();
-        console.log('✅ Loaded projects:', data);
-        
         // For technicians, show ALL assigned projects (no filtering)
         // For users, only show running projects (with phases)
         if (!isTechnician) {
@@ -131,22 +124,17 @@ export default function RunningProjectsScreen({
             ];
             return acceptableStatuses.includes(project.status.toUpperCase());
           });
-          console.log('📊 Filtered running projects (user):', runningProjects.length);
           setProjects(runningProjects);
         } else {
           // Technician: show all assigned projects; MY_BIDS flags for correct PENDING vs bid-received routing
-          console.log('📊 All assigned projects (technician):', data.length);
           const withBidFlags = await mergeUserHasBidFlag<RunningProject>(data as RunningProject[]);
           setProjects(withBidFlags);
         }
       } else {
         const errorText = await response.text();
-        console.error('❌ Failed to load running projects - Status:', response.status);
-        console.error('❌ Error response:', errorText);
         Alert.alert(t('Error'), t('Failed to load projects'));
       }
     } catch (error: any) {
-      console.error('❌ Error loading running projects:', error);
       Alert.alert(t('Error'), error.message || t('Failed to load projects'));
     } finally {
       setIsLoading(false);

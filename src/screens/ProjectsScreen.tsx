@@ -87,6 +87,11 @@ const PROJECT_CARD_MARGIN = 16;
 const PROJECT_CARD_ESTIMATED_HEIGHT = 230;
 const PROJECT_CARD_STEP = PROJECT_CARD_ESTIMATED_HEIGHT + PROJECT_CARD_MARGIN;
 
+// Module-level cached formatters (avoid re-creating Intl.NumberFormat per render)
+const budgetFormatter = new Intl.NumberFormat('en-US');
+const dateFormatterEn = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+const dateFormatterAr = new Intl.DateTimeFormat('ar-SA', { month: 'short', day: 'numeric', year: 'numeric' });
+
 type ProjectCardItemProps = {
   project: any;
   index: number;
@@ -504,21 +509,12 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
 
   const screenWidthForAnimation = Dimensions.get('window').width;
   const screenSlideX = useRef(new Animated.Value(0)).current;
-  const screenOpacity = useRef(new Animated.Value(0)).current;
+  const screenOpacity = useRef(new Animated.Value(1)).current;
 
   const projectListScrollY = useSharedValue(0);
   const projectScrollHandler = useAnimatedScrollHandler((event) => {
     projectListScrollY.value = event.contentOffset.y;
   });
-
-  useEffect(() => {
-    screenSlideX.setValue(-screenWidthForAnimation);
-    screenOpacity.setValue(0);
-    Animated.parallel([
-      Animated.timing(screenOpacity, { toValue: 1, duration: 220, useNativeDriver: true }),
-      Animated.spring(screenSlideX, { toValue: 0, tension: 65, friction: 11, useNativeDriver: true }),
-    ]).start();
-  }, []);
 
   const handleBackScreen = useCallback(() => {
     Animated.parallel([
@@ -528,7 +524,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
   }, [onBack]);
 
   const [projects, setProjects] = useState<Project[]>([]);
-  const [filteredProjects, setFilteredProjects] = useState<Project[]>([]);
+  // filteredProjects is now a useMemo (below), no longer a useState
   const [services, setServices] = useState<Service[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -585,8 +581,6 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
   const { confirmState, showDeleteConfirmation, hideConfirmation } = useConfirmationPopup();
 
   // Refs to ensure auto-open effects only fire once per mount
-  const didOpenInitialProject = useRef(false);
-  const didOpenInitialTask = useRef(false);
 
   /** Animate out (slide left) → switch project type → animate in (slide in from left) */
   const handleProjectTypeChange = useCallback((type: 'large' | 'small') => {
@@ -663,12 +657,20 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
     }
   }, [onBack]);
 
-  /** Stack-aware back: pop to projects list. Use for all sub-screens so back returns to list, not Home. */
+  // Track whether the current detail view was opened from home (via initialProject/initialSmallTask)
+  const openedFromHome = useRef(false);
+
+  /** Stack-aware back: if opened from home go back to home, otherwise pop to projects list. */
   const goToProjectList = useCallback(() => {
+    if (openedFromHome.current) {
+      openedFromHome.current = false;
+      onBack?.();
+      return;
+    }
     setCurrentPage('list');
     setSelectedProject(null);
     setSelectedTechnicianId(null);
-  }, []);
+  }, [onBack]);
 
   /** Back to small task type selection (when leaving request form). */
   const goToSmallTaskTypeSelection = useCallback(() => {
@@ -705,19 +707,38 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
   }, [initialServiceCategoryId]);
 
   // Auto-open a specific project when initialProject is provided (e.g. from Home screen card tap).
-  // Uses the project object directly — no extra API call, status is already correct.
+  // Opens directly using the project data we already have — no extra API call needed.
   useEffect(() => {
-    if (!initialProject || !userRole || didOpenInitialProject.current) return;
-    didOpenInitialProject.current = true;
-    handleProjectCardPress(initialProject as Project);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (!initialProject || !userRole) return;
+    openedFromHome.current = true;
+    const project = initialProject as Project;
+    const status = (project.status || '').toUpperCase();
+    const isTechnician = userRole?.toUpperCase() === 'TECHNICIAN';
+    const userHasBid = !!(project as any).userHasBid;
+    setSelectedProject(project);
+
+    if (status === 'PENDING') {
+      setCurrentPage(isTechnician ? (userHasBid ? 'technician-bid-received' : 'technician-pending-project') : 'pending-project');
+    } else if (status === 'BID_RECEIVED' || (status.includes('BID') && status.includes('RECEIVED'))) {
+      setCurrentPage(isTechnician ? (userHasBid ? 'technician-bid-received' : 'technician-pending-project') : 'bid-received-project');
+    } else if (status === 'APPROVED' || status === 'PHASE_PLANNING' || status === 'PHASE_PLANNING_APPROVED') {
+      setCurrentPage(isTechnician ? 'technician-approved-project' : 'approved-project');
+    } else if (status === 'CONTRACT_SIGNING') {
+      setCurrentPage(isTechnician ? 'contract-signing' : 'user-contract-signing');
+    } else if (status === 'IN_PROGRESS') {
+      setCurrentPage(isTechnician ? 'progress' : 'user-progress');
+    } else if (status === 'COMPLETED') {
+      setCurrentPage('completed-project');
+    } else {
+      setCurrentPage(isTechnician ? 'technician-pending-project' : 'bid-received-project');
+    }
   }, [initialProject, userRole]);
 
   // Auto-open a specific small task when initialSmallTask is provided (e.g. from Home screen card tap).
-  // Uses the task object directly — no extra API call, status is already correct.
+  // Opens directly using the task data — no extra API call needed.
   useEffect(() => {
-    if (!initialSmallTask || !userRole || didOpenInitialTask.current) return;
-    didOpenInitialTask.current = true;
+    if (!initialSmallTask || !userRole) return;
+    openedFromHome.current = true;
     setProjectType('small');
     const status = (initialSmallTask.status || 'PENDING').toUpperCase();
     switch (status) {
@@ -730,7 +751,6 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
       default: setCurrentPage('small-task-detail');
     }
     setSelectedProject(initialSmallTask as any);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialSmallTask, userRole]);
 
   // Calculate responsive breakpoints
@@ -820,7 +840,6 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
             throw new Error(errorText || t('projectsScreen.failedToDeleteProject'));
           }
         } catch (error: any) {
-          console.error('❌ Failed to delete project:', error);
           showError(error.message || t('projectsScreen.failedToDeleteProject'), t('projectsScreen.error'));
         }
       }
@@ -860,14 +879,11 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
     setUserRole(role);
   };
 
-  useEffect(() => {
-    filterProjects();
-  }, [selectedCategory, projects, userRole, localFilter, searchQuery, serviceCategoryFilterId, selectedRegionId, regions]);
+  // filterProjects is now inlined as useMemo below
 
   const loadServices = async () => {
     try {
       const url = buildApiUrl(API_ENDPOINTS.SERVICES.LIST);
-      console.log('🔍 Fetching services from:', url);
 
       const response = await fetch(url, {
         method: 'GET',
@@ -876,20 +892,14 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
         },
       });
 
-      console.log('📥 Services API Response Status:', response.status);
-
       if (response.ok) {
         const data = await response.json();
-        console.log('✅ Loaded services:', data);
-        console.log('📊 Number of services:', data.length);
         setServices(data);
       } else {
-        const errorText = await response.text();
-        console.error('❌ Failed to load services - Status:', response.status);
-        console.error('❌ Error response:', errorText);
+        // silently handle
       }
     } catch (error) {
-      console.error('❌ Error loading services:', error);
+      // silently handle
     }
   };
 
@@ -903,7 +913,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
         setRegions(Array.isArray(data) ? data : []);
       }
     } catch (error) {
-      console.error('❌ Error loading regions:', error);
+      // silently handle
     } finally {
       setIsLoadingRegions(false);
     }
@@ -928,7 +938,6 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
             rawList = await getAvailableProjects(regionId);
             rawList = await mergeUserHasBidFlag(rawList);
           } catch (e) {
-            console.error('❌ Available projects failed:', e);
             setProjects([]);
             return;
           }
@@ -941,7 +950,6 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
         }
       } else {
         if (!token) {
-          console.error('❌ No auth token for MY_PROJECTS');
           setIsLoading(false);
           setRefreshing(false);
           return;
@@ -949,15 +957,12 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
         try {
           rawList = await getMyProjects();
         } catch (e) {
-          console.error('❌ MY_PROJECTS failed:', e);
           rawList = [];
         }
       }
 
-      console.log('📊 Loaded projects count:', rawList.length, 'filter:', currentFilter, 'technician:', isTechnician);
       setProjects(rawList);
     } catch (error) {
-      console.error('❌ Error loading projects:', error);
       setProjects([]);
     } finally {
       setIsLoading(false);
@@ -972,18 +977,16 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
   };
 
   const handleViewTechnician = (technicianId: number) => {
-    console.log('🔵 [ProjectsScreen] Viewing technician profile:', technicianId);
     setSelectedTechnicianId(technicianId);
     setCurrentPage('technician-profile');
   };
 
-  const filterProjects = () => {
+  const filteredProjects = useMemo(() => {
     let filtered = [...projects];
     const isTechnician = userRole?.toUpperCase() === 'TECHNICIAN';
 
-    // Status filtering (same rules as web ProjectsScreen; 'all' = no status filter)
     if (localFilter === 'all') {
-      // keep full list from API
+      // keep full list
     } else if (localFilter === 'available') {
       if (isTechnician) {
         filtered = filtered.filter((p) => !(p as { userHasBid?: boolean }).userHasBid);
@@ -999,24 +1002,15 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
           return status !== 'PENDING' && status !== 'COMPLETED';
         });
       } else {
-        const runningStatuses = [
-          'APPROVED',
-          'PHASE_PLANNING',
-          'PHASE_PLANNING_APPROVED',
-          'CONTRACT_SIGNING',
-          'IN_PROGRESS',
-        ];
+        const runningStatuses = ['APPROVED', 'PHASE_PLANNING', 'PHASE_PLANNING_APPROVED', 'CONTRACT_SIGNING', 'IN_PROGRESS'];
         filtered = filtered.filter((p) => runningStatuses.includes((p.status || '').toUpperCase()));
       }
     } else if (localFilter === 'approved') {
       filtered = filtered.filter((p) => (p.status || '').toUpperCase().trim() === 'APPROVED');
     } else if (localFilter === 'completed') {
       filtered = filtered.filter((p) => (p.status || '').toUpperCase() === 'COMPLETED');
-    } else if (localFilter === 'bid_received' || localFilter === 'direct_offers') {
-      // API already scopes list; no extra status filter
     }
 
-    // Service category (same as web: selectedCategory is service id or "All")
     if (selectedCategory !== 'All') {
       const serviceId = parseInt(selectedCategory, 10);
       if (!Number.isNaN(serviceId)) {
@@ -1024,7 +1018,6 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
       }
     }
 
-    // Step 2b: Filter by service category when opened from Home → Category → View available projects
     if (serviceCategoryFilterId != null) {
       filtered = filtered.filter(p => {
         const categoryId = (p as Project).serviceCategory?.id;
@@ -1032,7 +1025,6 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
       });
     }
 
-    // Technician Available: region filter (same rules as web ProjectsScreen)
     if (isTechnician && localFilter === 'available' && selectedRegionId !== 'all') {
       const selectedRegion = regions.find((r) => r.id === selectedRegionId);
       const selectedIdNum = Number(selectedRegionId);
@@ -1051,7 +1043,6 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
       });
     }
 
-    // Step 3: Apply search query filter (applies to all platforms)
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
       filtered = filtered.filter(p => {
@@ -1068,14 +1059,14 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
       });
     }
 
-    setFilteredProjects(filtered);
-  };
+    return filtered;
+  }, [selectedCategory, projects, userRole, localFilter, searchQuery, serviceCategoryFilterId, selectedRegionId, regions]);
 
-  const formatBudget = (budget: number) => {
-    return new Intl.NumberFormat('en-US').format(budget);
-  };
+  const formatBudget = useCallback((budget: number) => {
+    return budgetFormatter.format(budget);
+  }, []);
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = useCallback((status: string) => {
     switch (status.toUpperCase()) {
       case 'PENDING':
         return '#FFA500';
@@ -1087,11 +1078,11 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
       default:
         return colors.textSecondary;
     }
-  };
+  }, [colors.textSecondary]);
 
-  const riyalLogo = theme === 'dark'
+  const riyalLogo = useMemo(() => theme === 'dark'
     ? require('../../assets/saudi_riyal_logo_dark.svg')
-    : require('../../assets/saudi_riyal_logo.svg');
+    : require('../../assets/saudi_riyal_logo.svg'), [theme]);
 
   const getStatusLabel = (status: string) => {
     if (!status) return t('projectsScreen.unknown');
@@ -1147,9 +1138,9 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
   };
 
   /** Same as web ProjectsScreen: GET /projects/:id then merge list row (keeps userHasBid, bidCount, etc.). */
-  const handleProjectCardPress = (item: Project) => {
+  const handleProjectCardPress = useCallback((item: Project) => {
     void openProjectFromList(item);
-  };
+  }, [userRole, localFilter]);
 
   const openProjectFromList = async (item: Project) => {
     const isTechnician = userRole?.toUpperCase() === 'TECHNICIAN';
@@ -1170,7 +1161,6 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
       | 'technician-bid-received' =>
       userHasBid ? 'technician-bid-received' : 'technician-pending-project';
 
-    console.log('🔵 [ProjectsScreen] Card pressed - Status:', status, 'isTechnician:', isTechnician, 'userHasBid:', userHasBid, 'detail:', !!full);
     setSelectedProject(merged);
 
     if (localFilter === 'all') {
@@ -1194,7 +1184,6 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
     }
 
     if (isTechnician && (localFilter === 'running' || localFilter === 'approved')) {
-      console.log('🔵 [ProjectsScreen] Technician clicked on running project');
       if (status === 'APPROVED') {
         setCurrentPage('technician-approved-project');
       } else if (status === 'PHASE_PLANNING' || status === 'PHASE_PLANNING_APPROVED') {
@@ -1209,7 +1198,6 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
         setCurrentPage('technician-pending-project');
       }
     } else if (!isTechnician && (localFilter === 'running' || localFilter === 'approved')) {
-      console.log('🔵 [ProjectsScreen] User clicked on running project');
       if (status === 'APPROVED') {
         setCurrentPage('approved-project');
       } else if (status === 'PHASE_PLANNING' || status === 'PHASE_PLANNING_APPROVED') {
@@ -1478,7 +1466,6 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
           isTechnician={true}
           onBack={goToProjectList}
           onSuccess={() => {
-            console.log('🔵 [ProjectsScreen] ApprovedProjectScreen (Technician) success - reloading projects');
             loadProjects();
           }}
           onOpenChat={onOpenChat}
@@ -1494,7 +1481,6 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
           isTechnician={true}
           onBack={goToProjectList}
           onSuccess={() => {
-            console.log('🔵 [ProjectsScreen] ContractSigningProjectScreen success - reloading projects');
             loadProjects();
             setCurrentPage('list');
             setSelectedProject(null);
@@ -1502,9 +1488,9 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
         />
       )}
 
-      {userRole?.toUpperCase() === 'TECHNICIAN' && 
-       phaseAllowsRunningFlows && 
-       selectedProject && 
+      {userRole?.toUpperCase() === 'TECHNICIAN' &&
+       phaseAllowsRunningFlows &&
+       selectedProject &&
        currentPage === 'progress' && (
         <InProgressProjectScreen
           project={selectedProject}
@@ -1512,7 +1498,6 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
           onBack={goToProjectList}
           onOpenChat={onOpenChat}
           onSuccess={() => {
-            console.log('🔵 [ProjectsScreen] InProgressProjectScreen (Technician) success - reloading projects');
             loadProjects();
             setCurrentPage('list');
             setSelectedProject(null);
@@ -1531,13 +1516,11 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
           project={selectedProject}
           onBack={goToProjectList}
           onSuccess={() => {
-            console.log('🔵 [ProjectsScreen] ApprovedProjectScreen success - reloading projects');
             loadProjects();
             setCurrentPage('list');
             setSelectedProject(null);
           }}
           onProceedToContract={() => {
-            console.log('🔵 [ProjectsScreen] Proceeding to contract signing');
             setCurrentPage('user-contract-signing');
           }}
           onOpenChat={onOpenChat}
@@ -1553,7 +1536,6 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
           project={selectedProject}
           onBack={goToProjectList}
           onSuccess={() => {
-            console.log('🔵 [ProjectsScreen] UserPhaseViewPage success - reloading projects');
             loadProjects();
             setCurrentPage('list');
             setSelectedProject(null);
@@ -1572,7 +1554,6 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
           isTechnician={false}
           onBack={goToProjectList}
           onSuccess={() => {
-            console.log('🔵 [ProjectsScreen] ContractSigningProjectScreen success - reloading projects');
             loadProjects();
             setCurrentPage('list');
             setSelectedProject(null);
@@ -1591,7 +1572,6 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
           onOpenChat={onOpenChat}
           onBookAppointment={onBookAppointment}
           onSuccess={() => {
-            console.log('🔵 [ProjectsScreen] InProgressProjectScreen (User) success - reloading projects');
             loadProjects();
             setCurrentPage('list');
             setSelectedProject(null);
@@ -1607,18 +1587,15 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
           onBack={goToProjectList}
           onOpenChat={onOpenChat}
           onSuccess={() => {
-            console.log('🔵 [ProjectsScreen] CompletedProjectScreen success - reloading projects');
             loadProjects();
             setCurrentPage('list');
             setSelectedProject(null);
           }}
           onStartNewProject={() => {
-            console.log('🔵 [ProjectsScreen] Start new project from CompletedProjectScreen');
             setCurrentPage('new-project');
             setSelectedProject(null);
           }}
           onViewAllProjects={() => {
-            console.log('🔵 [ProjectsScreen] View all projects from CompletedProjectScreen');
             setCurrentPage('list');
             setSelectedProject(null);
           }}
@@ -1632,7 +1609,6 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
           projectId={selectedProject.id}
           onBack={goToProjectList}
           onSuccess={() => {
-            console.log('🔵 [ProjectsScreen] OwnerProjectEditScreen success - reloading projects');
             loadProjects();
             setCurrentPage('list');
             setSelectedProject(null);
@@ -1648,11 +1624,9 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
           project={selectedProject}
           onBack={goToProjectList}
           onEditProject={() => {
-            console.log('🔵 [ProjectsScreen] Edit project from PendingProjectScreen');
             setCurrentPage('owner-edit');
           }}
           onSuccess={() => {
-            console.log('🔵 [ProjectsScreen] PendingProjectScreen success - reloading projects');
             loadProjects();
             setCurrentPage('list');
             setSelectedProject(null);
@@ -1668,7 +1642,6 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
           project={selectedProject}
           onBack={goToProjectList}
           onSuccess={() => {
-            console.log('🔵 [ProjectsScreen] BidReceivedProjectScreen success - reloading projects');
             loadProjects();
             setCurrentPage('list');
             setSelectedProject(null);
@@ -1690,7 +1663,6 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
           isTechnician={true}
           onBack={goToProjectList}
           onSuccess={() => {
-            console.log('🔵 [ProjectsScreen] TechnicianBidReceivedProjectScreen success - reloading projects');
             loadProjects();
             setCurrentPage('list');
             setSelectedProject(null);
@@ -1712,15 +1684,12 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
           isTechnician={true}
           onBack={goToProjectList}
           onAskForVisit={() => {
-            console.log('🔵 [ProjectsScreen] Ask for Visit from TechnicianPendingProjectScreen');
             setShowVisitRequest(true);
           }}
           onBidNow={() => {
-            console.log('🔵 [ProjectsScreen] Bid Now from TechnicianPendingProjectScreen');
             setShowBidForm(true);
           }}
           onSuccess={() => {
-            console.log('🔵 [ProjectsScreen] TechnicianPendingProjectScreen success - reloading projects');
             loadProjects();
             setCurrentPage('list');
             setSelectedProject(null);
@@ -2150,10 +2119,19 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
               <View ref={projectTour.register('list')} collapsable={false} style={{ flex: 1 }}>
               <ReAnimated.FlatList
                 data={filteredProjects}
-                extraData={[localFilter, selectedCategory, searchQuery]}
+                extraData={localFilter + selectedCategory + searchQuery}
                 keyExtractor={(item: any) => item.id.toString()}
                 onScroll={projectScrollHandler}
                 scrollEventThrottle={16}
+                removeClippedSubviews={true}
+                maxToRenderPerBatch={8}
+                windowSize={7}
+                initialNumToRender={6}
+                getItemLayout={(_data: any, index: number) => ({
+                  length: PROJECT_CARD_STEP,
+                  offset: PROJECT_CARD_STEP * index,
+                  index,
+                })}
                 renderItem={({ item: project, index }: { item: any; index: number }) => {
                   const words = (project.description || '').trim().split(/\s+/);
                   const description = words.length <= 7 ? project.description || '' : words.slice(0, 7).join(' ') + '...';
@@ -2162,10 +2140,8 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
                   const formattedDate = project.createdAt
                     ? (() => {
                         try {
-                          return new Date(project.createdAt).toLocaleDateString(
-                            i18n.language === 'ar' ? 'ar-SA' : 'en-US',
-                            { month: 'short', day: 'numeric', year: 'numeric' }
-                          );
+                          const d = new Date(project.createdAt);
+                          return (i18n.language === 'ar' ? dateFormatterAr : dateFormatterEn).format(d);
                         } catch { return ''; }
                       })()
                     : '';
@@ -2470,6 +2446,10 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
           columnWrapperStyle={columns > 1 ? styles.row : undefined}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={true}
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={8}
+          windowSize={7}
+          initialNumToRender={6}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -2477,8 +2457,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
               tintColor={colors.primary}
             />
           }
-          removeClippedSubviews={false}
-          key={`flatlist-${screenWidth}`} // Force re-render on width change
+          key={`flatlist-${screenWidth}`}
           {...(Platform.OS === 'web' && {
             style: { width: '100%' },
           })}
@@ -2585,11 +2564,9 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
         <ProjectTypeSelectionScreen
           onExposeTourControl={onExposeProjectTypeTourControl}
           onSelectLarge={() => {
-            console.log('🔵 [ProjectsScreen] Selected Large Project');
             setCurrentPage('new-project');
           }}
           onSelectSmall={() => {
-            console.log('🔵 [ProjectsScreen] Selected Small Task');
             setCurrentPage('small-task-type-selection');
           }}
           onBack={goToProjectList}
@@ -2600,7 +2577,6 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
       {currentPage === 'small-task-type-selection' && (
         <SmallTaskTypeSelectionScreen
           onSelectTaskType={(taskType) => {
-            console.log('🔵 [ProjectsScreen] Selected task type:', taskType);
             setSelectedTaskType(taskType);
             setCurrentPage('small-task-request-form');
           }}
@@ -2614,7 +2590,6 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
           taskType={selectedTaskType}
           onBack={goToSmallTaskTypeSelection}
           onSuccess={() => {
-            console.log('🔵 [ProjectsScreen] Small task request created successfully');
             // Trigger refresh of small tasks list
             setSmallTasksRefreshTrigger(prev => prev + 1);
             setProjectType('small');
@@ -2628,11 +2603,9 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
       {currentPage === 'new-project' && (
         <NewProjectView
           onNavigateToAI={() => {
-            console.log('🔵 [ProjectsScreen] Navigate to AI project creation');
             setCurrentPage('ai-form');
           }}
           onNavigateToManual={() => {
-            console.log('🔵 [ProjectsScreen] Navigate to manual project creation');
             setCurrentPage('manual-form');
           }}
           onBack={goToProjectTypeSelection}
@@ -2644,7 +2617,6 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
         <ConversationalAIForm
           onBack={goToNewProject}
           onSuccess={() => {
-            console.log('🔵 [ProjectsScreen] AI Form success - reloading projects');
             loadProjects();
             setCurrentPage('list');
           }}
@@ -2656,7 +2628,6 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
         <ManualProjectForm
           onBack={goToNewProject}
           onSuccess={() => {
-            console.log('🔵 [ProjectsScreen] Manual Form success - reloading projects');
             loadProjects();
             setCurrentPage('list');
           }}
@@ -2755,7 +2726,6 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
           task={selectedProject as any}
           onBack={goToProjectList}
           onSuccess={() => {
-            console.log('🔵 [ProjectsScreen] Small task detail success');
             setSmallTasksRefreshTrigger(prev => prev + 1);
             setCurrentPage('list');
           }}

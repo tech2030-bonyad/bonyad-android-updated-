@@ -50,8 +50,6 @@ export default function TermsScreen({ type, onAccept, onDecline }: TermsScreenPr
   const canUsePdf = Platform.OS !== 'web' && !isExpoGo && !!Pdf;
   const isWeb = Platform.OS === 'web';
 
-  console.log('🔍 [TermsScreen] Environment:', { isWeb, isExpoGo, canUsePdf, isRTL, lang: i18n.language });
-
   const [terms, setTerms] = useState<TermsAndConditions | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -60,25 +58,19 @@ export default function TermsScreen({ type, onAccept, onDecline }: TermsScreenPr
   const [generatingPdf, setGeneratingPdf] = useState(false);
 
   useEffect(() => {
-    console.log('🔄 [TermsScreen] Mounted/Type Changed:', type);
     loadTerms();
   }, [type]);
 
   const loadTerms = async () => {
     try {
-      console.log('⏳ [TermsScreen] Loading terms...');
       setLoading(true);
       setError(null);
       const data = await getTermsByType(type);
-      console.log('📥 [TermsScreen] Terms Fetch Result:', data ? 'Success' : 'Null');
       setTerms(data);
       if (data && canUsePdf) {
         generatePDF(data);
-      } else if (data && !canUsePdf) {
-        console.log('📝 [TermsScreen] Rendering text fallback (PDF disabled or unavailable)');
       }
     } catch (err) {
-      console.error('❌ [TermsScreen] Error loading terms:', err);
       setError(t('Failed to load terms and conditions'));
     } finally {
       setLoading(false);
@@ -89,7 +81,6 @@ export default function TermsScreen({ type, onAccept, onDecline }: TermsScreenPr
     if (!canUsePdf) return;
 
     try {
-      console.log('📄 [TermsScreen] Generating PDF...');
       setGeneratingPdf(true);
       const content = isRTL ? termsData.contentAr : termsData.contentEn;
       const title = t('Terms and Conditions');
@@ -140,10 +131,8 @@ export default function TermsScreen({ type, onAccept, onDecline }: TermsScreenPr
         html,
         base64: false
       });
-      console.log('✅ [TermsScreen] PDF Generated:', uri);
       setPdfUri(uri);
     } catch (err) {
-      console.error('❌ [TermsScreen] Error generating PDF:', err);
       // Fail silently, fallback to text will handle it (pdfUri remains null)
     } finally {
       setGeneratingPdf(false);
@@ -152,7 +141,6 @@ export default function TermsScreen({ type, onAccept, onDecline }: TermsScreenPr
 
   const handleAccept = () => {
     if (terms && accepted) {
-      console.log('✅ [TermsScreen] Accepting terms ID:', terms.id);
       onAccept(terms.id, terms.version);
     }
   };
@@ -275,9 +263,7 @@ export default function TermsScreen({ type, onAccept, onDecline }: TermsScreenPr
               <Pdf
                 source={{ uri: pdfUri, cache: true }}
                 style={styles.pdf}
-                onError={(error: any) => {
-                  console.log('❌ [TermsScreen] Pdf Component Error:', error);
-                }}
+                onError={() => {}}
               />
             ) : (
               /* Fallback to text if PDF failed or not yet generated */

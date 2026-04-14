@@ -66,16 +66,11 @@ export default function TechnicianBidsView({ visible, project, onClose, onSucces
 
   useEffect(() => {
     if (visible && project) {
-      console.log('🔵 [TechnicianBidsView] Modal opened with project:', {
-        projectId: project.id,
-        projectStatus: project.status,
-      });
       setSelectedProject(project);
       loadMyBid();
       loadMyVisitRequest();
     } else if (!visible) {
       // When modal closes, reset all states
-      console.log('🔵 [TechnicianBidsView] Modal closed, resetting states');
       setShowBidForm(false);
       setShowVisitRequest(false);
     }
@@ -90,7 +85,6 @@ export default function TechnicianBidsView({ visible, project, onClose, onSucces
     try {
       const userId = await storage.getUserId();
       const url = buildApiUrlWithParams(API_ENDPOINTS.BIDS.LIST, { projectId: project.id });
-      console.log('🔍 [TechnicianBidsView] Fetching bids for project:', url);
 
       const response = await fetch(url, {
         method: 'GET',
@@ -99,21 +93,12 @@ export default function TechnicianBidsView({ visible, project, onClose, onSucces
         },
       });
 
-      console.log('📥 [TechnicianBidsView] Bids API Response Status:', response.status);
-
       if (response.ok) {
         const data = await response.json();
-        console.log('✅ [TechnicianBidsView] Loaded all bids:', data.length);
-        
+
         // Filter to only show my bid
         const myBids = data.filter((bid: Bid) => bid.technicianId === userId);
-        console.log('🔵 [TechnicianBidsView] Filtered my bids:', {
-          technicianId: userId,
-          totalBids: data.length,
-          myBidsCount: myBids.length,
-          myBids: myBids.map(b => ({ id: b.id, status: b.status })),
-        });
-        
+
         if (myBids.length > 0) {
           setMyBid(myBids[0]); // Take the first one (should only be one)
           setHasBid(true);
@@ -122,13 +107,9 @@ export default function TechnicianBidsView({ visible, project, onClose, onSucces
           setHasBid(false);
         }
       } else {
-        const errorText = await response.text();
-        console.error('❌ [TechnicianBidsView] Failed to load bids - Status:', response.status);
-        console.error('❌ Error response:', errorText);
         setBidError('Failed to load bids');
       }
     } catch (error) {
-      console.error('❌ [TechnicianBidsView] Error loading bids:', error);
       setBidError('Error loading bids');
     } finally {
       setIsLoadingBid(false);
@@ -144,7 +125,6 @@ export default function TechnicianBidsView({ visible, project, onClose, onSucces
     try {
       const userId = await storage.getUserId();
       const url = buildApiUrlWithParams(API_ENDPOINTS.VISIT_REQUESTS.LIST, { projectId: project.id });
-      console.log('🔍 [TechnicianBidsView] Fetching visit requests for project:', url);
 
       const token = await storage.getAuthToken();
       const response = await fetch(url, {
@@ -155,21 +135,12 @@ export default function TechnicianBidsView({ visible, project, onClose, onSucces
         },
       });
 
-      console.log('📥 [TechnicianBidsView] Visit Requests API Response Status:', response.status);
-
       if (response.ok) {
         const data = await response.json();
-        console.log('✅ [TechnicianBidsView] Loaded all visit requests:', data.length);
-        
+
         // Filter to only show my visit request
         const myVisits = data.filter((visit: VisitRequest) => visit.technicianId === userId);
-        console.log('🔵 [TechnicianBidsView] Filtered my visit requests:', {
-          technicianId: userId,
-          totalVisits: data.length,
-          myVisitsCount: myVisits.length,
-          myVisits: myVisits.map(v => ({ id: v.id, status: v.status })),
-        });
-        
+
         if (myVisits.length > 0) {
           setMyVisitRequest(myVisits[0]); // Take the first one (should only be one)
           setHasAskedForVisit(true);
@@ -178,13 +149,9 @@ export default function TechnicianBidsView({ visible, project, onClose, onSucces
           setHasAskedForVisit(false);
         }
       } else {
-        const errorText = await response.text();
-        console.error('❌ [TechnicianBidsView] Failed to load visit requests - Status:', response.status);
-        console.error('❌ Error response:', errorText);
         setVisitError('Failed to load visit requests');
       }
     } catch (error) {
-      console.error('❌ [TechnicianBidsView] Error loading visit requests:', error);
       setVisitError('Error loading visit requests');
     } finally {
       setIsLoadingVisit(false);
@@ -239,9 +206,6 @@ export default function TechnicianBidsView({ visible, project, onClose, onSucces
                 id: myBid.id,
               });
 
-              console.log('🗑️ [TechnicianBidsView] Withdrawing bid:', url);
-              console.log('   Bid ID:', myBid.id);
-
               const response = await fetch(url, {
                 method: 'DELETE',
                 headers: {
@@ -250,10 +214,7 @@ export default function TechnicianBidsView({ visible, project, onClose, onSucces
                 },
               });
 
-              console.log('📥 [TechnicianBidsView] Withdraw Bid Response Status:', response.status);
-
               if (response.ok) {
-                console.log('✅ [TechnicianBidsView] Bid withdrawn successfully');
                 Alert.alert(t('Success'), t('Bid withdrawn successfully'));
                 // Reload bid data to reflect the change
                 await loadMyBid();
@@ -262,12 +223,9 @@ export default function TechnicianBidsView({ visible, project, onClose, onSucces
                 setHasBid(false);
                 onSuccess?.();
               } else {
-                const errorText = await response.text();
-                console.error('❌ [TechnicianBidsView] Failed to withdraw bid:', errorText);
                 Alert.alert(t('Error'), t('Failed to withdraw bid'));
               }
             } catch (error: any) {
-              console.error('❌ [TechnicianBidsView] Error withdrawing bid:', error);
               Alert.alert(t('Error'), error.message || t('Failed to withdraw bid'));
             }
           },
@@ -475,7 +433,6 @@ export default function TechnicianBidsView({ visible, project, onClose, onSucces
         project={selectedProject}
         onClose={() => setShowBidForm(false)}
         onSuccess={() => {
-          console.log('✅ [TechnicianBidsView] Bid submitted successfully');
           loadMyBid();
           setShowBidForm(false);
           onSuccess?.();
@@ -488,7 +445,6 @@ export default function TechnicianBidsView({ visible, project, onClose, onSucces
         project={selectedProject}
         onClose={() => setShowVisitRequest(false)}
         onSuccess={() => {
-          console.log('✅ [TechnicianBidsView] Visit request submitted successfully');
           loadMyVisitRequest();
           setShowVisitRequest(false);
           onSuccess?.();

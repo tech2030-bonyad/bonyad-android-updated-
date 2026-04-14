@@ -58,15 +58,9 @@ export default function ServiceTechniciansScreen({
   const [chatLoadingId, setChatLoadingId] = useState<number | null>(null);
 
   // Slide-in animation
-  const slideX = useRef(new Animated.Value(SCREEN_W)).current;
+  const slideX = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.spring(slideX, {
-      toValue: 0,
-      tension: 280,
-      friction: 28,
-      useNativeDriver: true,
-    }).start();
     loadTechnicians();
   }, [serviceId]);
 

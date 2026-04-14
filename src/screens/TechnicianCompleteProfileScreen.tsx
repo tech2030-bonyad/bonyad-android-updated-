@@ -6,7 +6,6 @@ import {
     ScrollView,
     TouchableOpacity,
     ActivityIndicator,
-    Alert,
     Image,
     Platform,
     Modal,
@@ -20,6 +19,8 @@ import { CustomTextInput } from '../components/CustomInput';
 import { API_ENDPOINTS, buildApiUrl } from '../config/api';
 import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
+import LocationPicker from '../components/LocationPicker';
 
 interface TechnicianCompleteProfileScreenProps {
     authToken: string;
@@ -42,11 +43,14 @@ export default function TechnicianCompleteProfileScreen({
     const { colors, theme } = useTheme();
     const isDarkMode = theme === 'dark';
     const isRTL = i18n.language.startsWith('ar');
+    const { alertState, showError, showSuccess, hideAlert } = useAlertPopup();
 
     // Form State
     const [email, setEmail] = useState('');
     const [bio, setBio] = useState('');
     const [address, setAddress] = useState('');
+    const [addressCoordinates, setAddressCoordinates] = useState<{ latitude: number; longitude: number } | null>(null);
+    const [showAddressLocationPicker, setShowAddressLocationPicker] = useState(false);
     const [yearsOfExperience, setYearsOfExperience] = useState('');
     const [selectedRegions, setSelectedRegions] = useState<number[]>([]);
     const [certificates, setCertificates] = useState<ImagePicker.ImagePickerAsset[]>([]);
@@ -84,7 +88,7 @@ export default function TechnicianCompleteProfileScreen({
                 setRegions(Array.isArray(data) ? data : data.data || []);
             }
         } catch (error) {
-            console.error('Error fetching regions:', error);
+            // silently handle
         } finally {
             setFetchingRegions(false);
         }
@@ -103,7 +107,7 @@ export default function TechnicianCompleteProfileScreen({
                 setErrors(prev => ({ ...prev, certificates: '' }));
             }
         } catch (error) {
-            Alert.alert(t('Error'), t('Failed to pick image'));
+            showError(t('completeProfile.errorPickImage'));
         }
     };
 
@@ -116,35 +120,35 @@ export default function TechnicianCompleteProfileScreen({
         const newErrors = { ...errors };
 
         if (!email || !email.includes('@')) {
-            newErrors.email = t('Please enter a valid email');
+            newErrors.email = t('completeProfile.errorEmail');
             isValid = false;
         } else {
             newErrors.email = '';
         }
 
         if (!bio || bio.length < 10) {
-            newErrors.bio = t('Bio must be at least 10 characters');
+            newErrors.bio = t('completeProfile.errorBio');
             isValid = false;
         } else {
             newErrors.bio = '';
         }
 
         if (!address) {
-            newErrors.address = t('Address is required');
+            newErrors.address = t('completeProfile.errorAddress');
             isValid = false;
         } else {
             newErrors.address = '';
         }
 
         if (!yearsOfExperience) {
-            newErrors.yearsOfExperience = t('Years of experience is required');
+            newErrors.yearsOfExperience = t('completeProfile.errorExperience');
             isValid = false;
         } else {
             newErrors.yearsOfExperience = '';
         }
 
         if (selectedRegions.length === 0) {
-            newErrors.regions = t('Please select at least one region');
+            newErrors.regions = t('completeProfile.errorRegions');
             isValid = false;
         } else {
             newErrors.regions = '';
@@ -163,6 +167,10 @@ export default function TechnicianCompleteProfileScreen({
             formData.append('email', email);
             formData.append('description', bio);
             formData.append('address', address);
+            if (addressCoordinates) {
+                formData.append('latitude', String(addressCoordinates.latitude));
+                formData.append('longitude', String(addressCoordinates.longitude));
+            }
             formData.append('yearsOfExperience', yearsOfExperience);
 
             selectedRegions.forEach(id => {
@@ -198,7 +206,7 @@ export default function TechnicianCompleteProfileScreen({
                 const isArabic = i18n.language.startsWith('ar');
                 const mainMessage =
                     (isArabic && data?.messageAr) ? data.messageAr
-                    : (data?.messageEn || data?.message || data?.error) || t('Failed to complete profile');
+                    : (data?.messageEn || data?.message || data?.error) || t('completeProfile.errorSubmit');
 
                 // Map API field-level errors to form state (support both array and string per field)
                 const apiErrors = data?.errors || {};
@@ -206,7 +214,7 @@ export default function TechnicianCompleteProfileScreen({
                     Array.isArray(v) ? (v[0] || '') : (v || '');
                 setErrors(prev => ({
                     ...prev,
-                    email: first(apiErrors.email) || (data?.errorCode === 'EMAIL_ALREADY_EXISTS' ? (isArabic && data?.messageAr ? data.messageAr : (data?.messageEn || data?.message || t('Email already registered. Please use a different email.'))) : ''),
+                    email: first(apiErrors.email) || (data?.errorCode === 'EMAIL_ALREADY_EXISTS' ? (isArabic && data?.messageAr ? data.messageAr : (data?.messageEn || data?.message || t('completeProfile.errorEmailExists'))) : ''),
                     bio: first(apiErrors.description) || first(apiErrors.bio) || '',
                     address: first(apiErrors.address) || '',
                     yearsOfExperience: first(apiErrors.yearsOfExperience) || '',
@@ -214,20 +222,16 @@ export default function TechnicianCompleteProfileScreen({
                     certificates: first(apiErrors.certificates) || '',
                 }));
 
-                if (__DEV__) {
-                    console.warn('❌ [TechnicianCompleteProfile] API error:', response.status, data);
-                }
-                Alert.alert(t('Error'), mainMessage);
+                showError(mainMessage);
                 return;
             }
 
-            Alert.alert(t('Success'), t('Profile completed successfully!'), [
-                { text: t('OK'), onPress: onSuccess }
-            ]);
+            showSuccess(t('completeProfile.successSubmit'));
+            setTimeout(() => onSuccess(), 1500);
 
         } catch (error: any) {
-            const message = error?.message || t('Failed to complete profile');
-            Alert.alert(t('Error'), message);
+            const message = error?.message || t('completeProfile.errorSubmit');
+            showError(message);
         } finally {
             setLoading(false);
         }
@@ -258,18 +262,18 @@ export default function TechnicianCompleteProfileScreen({
 
                     {/* Header */}
                     <View style={styles.header}>
-                        <Text style={[styles.title, { color: colors.text }]}>{t('Complete Your Profile')}</Text>
-                        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{t('Please provide additional details to verify your account.')}</Text>
+                        <Text style={[styles.title, { color: colors.text }]}>{t('completeProfile.title')}</Text>
+                        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{t('completeProfile.subtitle')}</Text>
                     </View>
 
                     {/* Form */}
                     <View style={styles.form}>
 
                         <CustomTextInput
-                            label={t('Email')}
+                            label={t('completeProfile.emailLabel')}
                             value={email}
                             onChangeText={(text) => { setEmail(text); setErrors(prev => ({ ...prev, email: '' })); }}
-                            placeholder={t('Enter your email')}
+                            placeholder={t('completeProfile.emailPlaceholder')}
                             keyboardType="email-address"
                             error={errors.email}
                             autoCapitalize="none"
@@ -277,10 +281,10 @@ export default function TechnicianCompleteProfileScreen({
                         />
 
                         <CustomTextInput
-                            label={t('Bio / Description')}
+                            label={t('completeProfile.bioLabel')}
                             value={bio}
                             onChangeText={(text) => { setBio(text); setErrors(prev => ({ ...prev, bio: '' })); }}
-                            placeholder={t('Tell us about your services...')}
+                            placeholder={t('completeProfile.bioPlaceholder')}
                             multiline
                             numberOfLines={4}
                             error={errors.bio}
@@ -288,23 +292,31 @@ export default function TechnicianCompleteProfileScreen({
                         />
 
                         <CustomTextInput
-                            label={t('Address')}
+                            label={t('completeProfile.addressLabel')}
                             value={address}
                             onChangeText={(text) => { setAddress(text); setErrors(prev => ({ ...prev, address: '' })); }}
-                            placeholder={t('Your specific address')}
+                            placeholder={t('completeProfile.addressPlaceholder')}
                             error={errors.address}
                             leftIcon="location-outline"
                         />
 
+                        <TouchableOpacity
+                            style={styles.pickOnMapButton}
+                            onPress={() => setShowAddressLocationPicker(true)}
+                        >
+                            <Ionicons name="map-outline" size={18} color="#00549B" />
+                            <Text style={styles.pickOnMapText}>{t('completeProfile.pickOnMap')}</Text>
+                        </TouchableOpacity>
+
                         {/* Regions Dropdown Trigger */}
                         <View style={styles.inputContainer}>
-                            <Text style={[styles.label, { color: colors.text }]}>{t('Regions')}</Text>
+                            <Text style={[styles.label, { color: colors.text }]}>{t('completeProfile.regionsLabel')}</Text>
                             <TouchableOpacity
                                 style={[styles.dropdownButton, { borderColor: errors.regions ? 'red' : colors.border, backgroundColor: colors.surface }]}
                                 onPress={() => setShowRegionsModal(true)}
                             >
                                 <Text style={{ color: selectedRegions.length ? colors.text : colors.textSecondary, flex: 1, textAlign: isRTL ? 'right' : 'left' }}>
-                                    {getSelectedRegionsText() || t('Select Regions')}
+                                    {getSelectedRegionsText() || t('completeProfile.selectRegions')}
                                 </Text>
                                 <Feather name="chevron-down" size={20} color={colors.textSecondary} />
                             </TouchableOpacity>
@@ -313,13 +325,13 @@ export default function TechnicianCompleteProfileScreen({
 
                         {/* Experience Dropdown Trigger */}
                         <View style={styles.inputContainer}>
-                            <Text style={[styles.label, { color: colors.text }]}>{t('Years of Experience')}</Text>
+                            <Text style={[styles.label, { color: colors.text }]}>{t('completeProfile.experienceLabel')}</Text>
                             <TouchableOpacity
                                 style={[styles.dropdownButton, { borderColor: errors.yearsOfExperience ? 'red' : colors.border, backgroundColor: colors.surface }]}
                                 onPress={() => setShowExperienceModal(true)}
                             >
                                 <Text style={{ color: yearsOfExperience ? colors.text : colors.textSecondary, flex: 1, textAlign: isRTL ? 'right' : 'left' }}>
-                                    {yearsOfExperience ? `${yearsOfExperience} ${t('Years')}` : t('Select Experience')}
+                                    {yearsOfExperience ? `${yearsOfExperience} ${t('completeProfile.years')}` : t('completeProfile.selectExperience')}
                                 </Text>
                                 <Feather name="chevron-down" size={20} color={colors.textSecondary} />
                             </TouchableOpacity>
@@ -328,10 +340,10 @@ export default function TechnicianCompleteProfileScreen({
 
                         {/* Certificates Upload */}
                         <View style={styles.inputContainer}>
-                            <Text style={[styles.label, { color: colors.text }]}>{t('Certificates / Licenses')}</Text>
+                            <Text style={[styles.label, { color: colors.text }]}>{t('completeProfile.certificatesLabel')}</Text>
                             <TouchableOpacity style={styles.uploadButton} onPress={pickImage}>
                                 <Feather name="upload" size={20} color="#00549B" />
-                                <Text style={styles.uploadText}>{t('Upload Images')}</Text>
+                                <Text style={styles.uploadText}>{t('completeProfile.uploadImages')}</Text>
                             </TouchableOpacity>
 
                             <View style={styles.certsContainer}>
@@ -355,7 +367,7 @@ export default function TechnicianCompleteProfileScreen({
                             {loading ? (
                                 <ActivityIndicator color="#fff" />
                             ) : (
-                                <Text style={styles.submitButtonText}>{t('Submit Profile')}</Text>
+                                <Text style={styles.submitButtonText}>{t('completeProfile.submitProfile')}</Text>
                             )}
                         </TouchableOpacity>
 
@@ -368,7 +380,7 @@ export default function TechnicianCompleteProfileScreen({
                 <View style={styles.modalOverlay}>
                     <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
                         <View style={styles.modalHeader}>
-                            <Text style={[styles.modalTitle, { color: colors.text }]}>{t('Select Regions')}</Text>
+                            <Text style={[styles.modalTitle, { color: colors.text }]}>{t('completeProfile.selectRegions')}</Text>
                             <TouchableOpacity onPress={() => setShowRegionsModal(false)}>
                                 <Ionicons name="close" size={24} color={colors.text} />
                             </TouchableOpacity>
@@ -391,7 +403,7 @@ export default function TechnicianCompleteProfileScreen({
                             />
                         )}
                         <TouchableOpacity style={styles.modalDoneButton} onPress={() => setShowRegionsModal(false)}>
-                            <Text style={styles.modalDoneText}>{t('Done')}</Text>
+                            <Text style={styles.modalDoneText}>{t('completeProfile.done')}</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -402,7 +414,7 @@ export default function TechnicianCompleteProfileScreen({
                 <View style={styles.modalOverlay}>
                     <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
                         <View style={styles.modalHeader}>
-                            <Text style={[styles.modalTitle, { color: colors.text }]}>{t('Select Years of Experience')}</Text>
+                            <Text style={[styles.modalTitle, { color: colors.text }]}>{t('completeProfile.selectYearsTitle')}</Text>
                             <TouchableOpacity onPress={() => setShowExperienceModal(false)}>
                                 <Ionicons name="close" size={24} color={colors.text} />
                             </TouchableOpacity>
@@ -419,13 +431,36 @@ export default function TechnicianCompleteProfileScreen({
                                         setShowExperienceModal(false);
                                     }}
                                 >
-                                    <Text style={[styles.regionText, { color: colors.text }]}>{item} {t('Years')}</Text>
+                                    <Text style={[styles.regionText, { color: colors.text }]}>{item} {t('completeProfile.years')}</Text>
                                 </TouchableOpacity>
                             )}
                         />
                     </View>
                 </View>
             </Modal>
+
+            <AlertPopup
+                visible={alertState.visible}
+                title={alertState.title}
+                message={alertState.message}
+                type={alertState.type}
+                countdown={alertState.countdown}
+                onClose={hideAlert}
+            />
+
+            {showAddressLocationPicker && (
+                <LocationPicker
+                    initialLocation={addressCoordinates ?? undefined}
+                    initialAddress={address}
+                    onLocationSelect={(loc) => {
+                        setAddress(loc.address);
+                        setAddressCoordinates({ latitude: loc.latitude, longitude: loc.longitude });
+                        setErrors(prev => ({ ...prev, address: '' }));
+                        setShowAddressLocationPicker(false);
+                    }}
+                    onClose={() => setShowAddressLocationPicker(false)}
+                />
+            )}
 
         </SafeAreaView>
     );
@@ -480,6 +515,15 @@ const styles = StyleSheet.create({
     modalTitle: { fontSize: 18, fontWeight: 'bold' },
     regionItem: { padding: 16, borderBottomWidth: 1, borderBottomColor: '#eee', flexDirection: 'row', justifyContent: 'space-between' },
     regionText: { fontSize: 16 },
-    modalDoneButton: { marginTop: 16, backgroundColor: '#00549B', padding: 12, borderRadius: 8, alignItems: 'center' },
+    modalDoneButton: { marginTop: 8, marginBottom: 8, backgroundColor: '#00549B', padding: 12, borderRadius: 8, alignItems: 'center' },
     modalDoneText: { color: '#fff', fontWeight: 'bold' },
+    pickOnMapButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginTop: -8,
+        marginBottom: 12,
+        paddingVertical: 4,
+    },
+    pickOnMapText: { color: '#00549B', fontSize: 13, fontWeight: '500' },
 });

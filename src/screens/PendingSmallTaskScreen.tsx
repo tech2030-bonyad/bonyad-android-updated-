@@ -75,9 +75,9 @@ export default function PendingSmallTaskScreen({
   const [userRole, setUserRole] = useState<'user' | 'technician'>('user');
   const [myBidId, setMyBidId] = useState<number | null>(null);
 
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(30)).current;
-  const buttonAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const slideAnim = useRef(new Animated.Value(0)).current;
+  const buttonAnim = useRef(new Animated.Value(1)).current;
 
   const { alertState, showError, showSuccess, hideAlert } = useAlertPopup();
   const { confirmState, showConfirmation, hideConfirmation } = useConfirmationPopup();
@@ -87,28 +87,6 @@ export default function PendingSmallTaskScreen({
   const topSpacing = Platform.OS === 'android' ? 0 : insets.top;
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 400,
-        useNativeDriver: true,
-      }),
-      Animated.spring(slideAnim, {
-        toValue: 0,
-        tension: 50,
-        friction: 7,
-        useNativeDriver: true,
-      }),
-    ]).start();
-
-    Animated.spring(buttonAnim, {
-      toValue: 1,
-      tension: 50,
-      friction: 7,
-      delay: 200,
-      useNativeDriver: true,
-    }).start();
-
     checkUserRole();
     loadData();
   }, []);

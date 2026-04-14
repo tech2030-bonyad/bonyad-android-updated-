@@ -81,16 +81,7 @@ export default function SubscriptionScreen({ onBack }: SubscriptionScreenProps) 
 
   const screenWidth = Dimensions.get('window').width;
   const screenSlideX = useRef(new Animated.Value(0)).current;
-  const screenOpacity = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    screenSlideX.setValue(-screenWidth);
-    screenOpacity.setValue(0);
-    Animated.parallel([
-      Animated.timing(screenOpacity, { toValue: 1, duration: 220, useNativeDriver: true }),
-      Animated.spring(screenSlideX, { toValue: 0, tension: 65, friction: 11, useNativeDriver: true }),
-    ]).start();
-  }, []);
+  const screenOpacity = useRef(new Animated.Value(1)).current;
 
   const handleBackScreen = () => {
     Animated.parallel([
@@ -131,17 +122,14 @@ export default function SubscriptionScreen({ onBack }: SubscriptionScreenProps) 
 
       if (subscriptionRes.ok) {
         const data = await subscriptionRes.json();
-        console.log('📊 Subscription data:', data);
         setSubscription(data);
       } else {
-        console.warn('⚠️ Failed to load current subscription', subscriptionRes.status, subscriptionRes.statusText);
         setSubscription(null);
       }
 
       if (Array.isArray(plans)) {
         setAvailablePlans(plans as SubscriptionPlan[]);
       } else {
-        console.warn('⚠️ Unexpected subscription plans payload', plans);
         setAvailablePlans([]);
       }
 
@@ -158,18 +146,15 @@ export default function SubscriptionScreen({ onBack }: SubscriptionScreenProps) 
 
         if (bidsRes.ok) {
           const bidsData = await bidsRes.json();
-          console.log('📊 Bid quota data:', bidsData);
           setBidQuota(bidsData);
         } else {
-          console.warn('⚠️ Failed to load bid quota', bidsRes.status, bidsRes.statusText);
           setBidQuota(null);
         }
       } catch (bidError) {
-        console.warn('⚠️ Bid quota endpoint error (non-critical):', bidError);
         setBidQuota(null);
       }
     } catch (error) {
-      console.error('Error fetching subscription:', error);
+      // silently handle
     } finally {
       setIsLoading(false);
     }
@@ -180,7 +165,6 @@ export default function SubscriptionScreen({ onBack }: SubscriptionScreenProps) 
       setIsSaving(true);
       try {
         const token = await storage.getAuthToken();
-        console.log('🔄 Subscribing to plan:', planId);
 
         const response = await fetch(
           buildApiUrl(API_ENDPOINTS.TECHNICIANS.SUBSCRIBE),
@@ -196,21 +180,16 @@ export default function SubscriptionScreen({ onBack }: SubscriptionScreenProps) 
           }
         );
 
-        console.log('📊 Subscribe response status:', response.status);
-
         if (response.ok) {
           const data = await response.json();
-          console.log('✅ Subscribe success:', data);
           showSuccess(t('subscription.messages.subscribeSuccess'), t('Success'));
           setShowPlanModal(false);
           fetchSubscription();
         } else {
           const errorText = await response.text();
-          console.error('❌ Subscribe failed:', response.status, errorText);
           throw new Error(`Failed to subscribe: ${response.status}`);
         }
       } catch (error) {
-        console.error('Error subscribing:', error);
         showError(t('subscription.errors.subscribeFailed'), t('Error'));
       } finally {
         setIsSaving(false);
@@ -234,7 +213,6 @@ export default function SubscriptionScreen({ onBack }: SubscriptionScreenProps) 
       setIsSaving(true);
       try {
         const token = await storage.getAuthToken();
-        console.log('🔄 Cancelling subscription...');
 
         const response = await fetch(
           buildApiUrl(API_ENDPOINTS.TECHNICIANS.CANCEL_SUBSCRIPTION),
@@ -246,19 +224,14 @@ export default function SubscriptionScreen({ onBack }: SubscriptionScreenProps) 
           }
         );
 
-        console.log('📊 Cancel response status:', response.status);
-
         if (response.ok) {
-          console.log('✅ Subscription cancelled');
           showSuccess(t('subscription.messages.cancelSuccess'), t('Success'));
           fetchSubscription();
         } else {
           const errorText = await response.text();
-          console.error('❌ Cancel failed:', response.status, errorText);
           throw new Error(`Failed to cancel subscription: ${response.status}`);
         }
       } catch (error) {
-        console.error('Error cancelling subscription:', error);
         showError(t('subscription.errors.cancelFailed'), t('Error'));
       } finally {
         setIsSaving(false);
@@ -373,17 +346,18 @@ export default function SubscriptionScreen({ onBack }: SubscriptionScreenProps) 
       ]}
     >
       {/* Header */}
-      <View style={[styles.headerContainer, { borderBottomWidth: 1, borderBottomColor: colors.border }]}>
+      <View style={[styles.headerContainer, { borderBottomWidth: 1, borderBottomColor: colors.border, flexDirection: 'row' }]}>
         <TouchableOpacity onPress={handleBackScreen} style={styles.backButton}>
           <BackArrowIonicons variant="chevron" size={24} color={colors.text}/>
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { fontSize: scaledSize(18), color: colors.text }]}>
           {t('My Subscription')}
         </Text>
+        <View style={{ width: 40 }} />
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollView}>
-        <View style={styles.content}>
+        <View style={[styles.content, { paddingBottom: insets.bottom + 80 }]}>
           {/* Current Subscription Card */}
           {hasActive && subscriptionName ? (
             <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
@@ -632,20 +606,15 @@ const styles = StyleSheet.create({
   headerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    direction: 'ltr',
-    writingDirection: 'ltr',
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    gap: 8,
   },
   backButton: {
     width: 40,
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    position: 'absolute',
-    left: 8,
   },
   headerTitle: {
     fontSize: 20,

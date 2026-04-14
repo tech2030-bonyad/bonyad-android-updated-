@@ -52,9 +52,9 @@ export default function SmallTaskDetailScreen({
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [userRole, setUserRole] = useState<'user' | 'technician'>('user');
   
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(30)).current;
-  const buttonAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const slideAnim = useRef(new Animated.Value(0)).current;
+  const buttonAnim = useRef(new Animated.Value(1)).current;
   
   const { alertState, showError, showSuccess, showConfirm, hideAlert } = useAlertPopup();
   
@@ -63,36 +63,6 @@ export default function SmallTaskDetailScreen({
     : require('../../assets/saudi_riyal_logo.svg');
 
   useEffect(() => {
-    // Entrance animation (Android only)
-    if (Platform.OS === 'android') {
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 400,
-          useNativeDriver: true,
-        }),
-        Animated.spring(slideAnim, {
-          toValue: 0,
-          tension: 50,
-          friction: 7,
-          useNativeDriver: true,
-        }),
-      ]).start();
-      
-      // Button animation
-      Animated.spring(buttonAnim, {
-        toValue: 1,
-        tension: 50,
-        friction: 7,
-        delay: 300,
-        useNativeDriver: true,
-      }).start();
-    } else {
-      fadeAnim.setValue(1);
-      slideAnim.setValue(0);
-      buttonAnim.setValue(1);
-    }
-    
     checkUserRole();
     loadTaskDetails();
   }, [task]);

@@ -51,32 +51,8 @@ function SuggestionCard({
   t: (key: string, options?: any) => string;
 }) {
   const serviceName = language === 'ar' ? item.nameAr : item.nameEn;
-  const cardAnim = useRef(new Animated.Value(0)).current;
-  const cardSlide = useRef(new Animated.Value(30)).current;
-
-  useEffect(() => {
-    if (Platform.OS === 'android') {
-      const delay = index * 80;
-      Animated.parallel([
-        Animated.timing(cardAnim, {
-          toValue: 1,
-          duration: 400,
-          delay,
-          useNativeDriver: true,
-        }),
-        Animated.spring(cardSlide, {
-          toValue: 0,
-          tension: 50,
-          friction: 7,
-          delay,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    } else {
-      cardAnim.setValue(1);
-      cardSlide.setValue(0);
-    }
-  }, [index]);
+  const cardAnim = useRef(new Animated.Value(1)).current;
+  const cardSlide = useRef(new Animated.Value(0)).current;
 
   return (
     <Animated.View
@@ -176,28 +152,10 @@ export default function MyServiceSuggestionsScreen({
   const { alertState, showError, hideAlert } = useAlertPopup();
 
   // Animation values (Android only)
-  const headerAnim = useRef(new Animated.Value(0)).current;
-  const statsAnim = useRef(new Animated.Value(0)).current;
+  const headerAnim = useRef(new Animated.Value(1)).current;
+  const statsAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    if (Platform.OS === 'android') {
-      Animated.sequence([
-        Animated.timing(headerAnim, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.timing(statsAnim, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    } else {
-      headerAnim.setValue(1);
-      statsAnim.setValue(1);
-    }
-
     fetchSuggestions();
   }, []);
 
@@ -215,7 +173,6 @@ export default function MyServiceSuggestionsScreen({
       }
 
       const url = buildApiUrl(API_ENDPOINTS.SERVICE_SUGGESTIONS.MY_REQUESTS);
-      console.log('🔍 Fetching my service suggestions:', url);
 
       const response = await fetch(url, {
         headers: {
@@ -225,16 +182,13 @@ export default function MyServiceSuggestionsScreen({
 
       if (response.ok) {
         const data = await response.json();
-        console.log('✅ Loaded suggestions:', data.requests?.length || data.length || 0);
         const suggestionsList = data.requests || data || [];
         setSuggestions(suggestionsList);
         setFilteredSuggestions(suggestionsList);
       } else {
-        console.error('❌ Failed to fetch suggestions:', response.status);
         showError(t('Failed to load suggestions'), t('Error'));
       }
     } catch (error) {
-      console.error('❌ Error fetching suggestions:', error);
       showError(t('Error loading suggestions'), t('Error'));
     } finally {
       setIsLoading(false);

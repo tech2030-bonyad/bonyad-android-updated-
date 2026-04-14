@@ -139,7 +139,7 @@ export default function ChatDetailScreen({
       }
     } catch (error) {
       draftLoadedRef.current = true;
-      console.error('❌ Error loading chat draft:', error);
+      // silently handle
     }
   }, [roomId, receiverId]);
 
@@ -206,7 +206,8 @@ export default function ChatDetailScreen({
       rows.push({ type: 'msg', msg: m });
     });
     return rows;
-  }, [messagesDeduped, t, i18n.language]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messagesDeduped, i18n.language]);
 
   useEffect(() => {
     return () => {
@@ -246,7 +247,7 @@ export default function ChatDetailScreen({
           await AsyncStorage.removeItem(key);
         }
       } catch (error) {
-        console.error('❌ Error saving chat draft:', error);
+        // silently handle
       }
     };
 
@@ -258,17 +259,14 @@ export default function ChatDetailScreen({
 
     const init = async () => {
       setMessages([]);
-      await loadMessages(false).catch((error) => {
-        console.error('❌ Failed to load messages:', error);
+      await loadMessages(false).catch(() => {
         setIsLoading(false);
       });
       // Setup MQTT for real-time messages (same as web) - non-blocking
-      setupMqtt().catch((err) => {
-        console.warn('⚠️ [MQTT] Setup failed (non-critical), using polling:', err?.message || err);
-      });
+      setupMqtt().catch(() => {});
       // Poll for new messages every 5s as fallback (same as web)
       pollInterval = setInterval(() => {
-        loadMessages(true).catch((e) => console.error('❌ Poll load messages:', e));
+        loadMessages(true).catch(() => {});
       }, 5000);
     };
 
@@ -278,7 +276,7 @@ export default function ChatDetailScreen({
       try {
         MqttChatService.disconnect();
       } catch (e) {
-        console.warn('⚠️ [MQTT] Disconnect error:', e);
+        // silently handle
       }
     };
   }, [roomId, receiverId]);
@@ -299,7 +297,7 @@ export default function ChatDetailScreen({
               markMessageAsRead(newMessage.id).catch(() => {});
             }
           } catch (e) {
-            console.error('❌ [MQTT] Handle message error:', e);
+            // silently handle
           }
         },
         onReadReceipt: (messageId: number, isRead: boolean) => {
@@ -308,11 +306,8 @@ export default function ChatDetailScreen({
           );
         },
       });
-      if (!connected) {
-        console.warn('⚠️ [MQTT] Not connected - chat will use polling');
-      }
     } catch (e: any) {
-      console.warn('⚠️ [MQTT] Setup failed:', e?.message || e);
+      // silently handle
     }
   };
 
@@ -321,7 +316,6 @@ export default function ChatDetailScreen({
       if (!silent) setIsLoading(true);
       const token = await storage.getAuthToken();
       if (!token) {
-        console.error('❌ No auth token found');
         Alert.alert(t('Error'), t('chatDetail.pleaseLoginViewMessages'));
         setIsLoading(false);
         return;
@@ -331,8 +325,6 @@ export default function ChatDetailScreen({
         roomId,
       }) + '?limit=100';
 
-      if (!silent) console.log('🔍 Fetching messages from:', url);
-
       const response = await fetch(url, {
         method: 'GET',
         headers: {
@@ -340,8 +332,6 @@ export default function ChatDetailScreen({
           'Content-Type': 'application/json',
         },
       });
-
-      if (!silent) console.log('📥 Messages API Response Status:', response.status);
 
       if (response.ok) {
         const data = await response.json();
@@ -367,7 +357,6 @@ export default function ChatDetailScreen({
         });
 
         setMessages(dedupeChatMessages(messagesWithOwnership));
-        if (!silent) console.log('✅ Loaded messages:', messagesWithOwnership.length);
 
         if (!silent) {
           setTimeout(() => {
@@ -375,29 +364,22 @@ export default function ChatDetailScreen({
           }, 300);
         }
 
-        markAllMessagesAsRead().catch((err) => {
-          console.error('❌ Failed to mark messages as read:', err);
-        });
+        markAllMessagesAsRead().catch(() => {});
       } else if (response.status === 400) {
         // Room doesn't exist yet — treat as a fresh conversation (0 messages).
         // The server creates the room automatically when the first message is sent.
         const body = await response.text();
         if (body.includes('not found') || body.includes('Chat room')) {
           setMessages([]);
-          if (!silent) console.log('💬 New conversation — no messages yet');
         } else if (!silent) {
-          console.error('❌ Failed to load messages - Status:', response.status, body);
           Alert.alert(t('Error'), t('chatDetail.failedLoadMessages'));
         }
       } else {
         if (!silent) {
-          const errorText = await response.text();
-          console.error('❌ Failed to load messages - Status:', response.status, errorText);
           Alert.alert(t('Error'), t('chatDetail.failedLoadMessages'));
         }
       }
     } catch (error: any) {
-      console.error('❌ Error loading messages:', error);
       if (!silent) Alert.alert(t('Error'), error?.message || t('chatDetail.failedLoadMessages'));
     } finally {
       if (!silent) setIsLoading(false);
@@ -472,7 +454,6 @@ export default function ChatDetailScreen({
         throw new Error(errorText || t('chatDetail.failedSendMessage'));
       }
     } catch (error: any) {
-      console.error('❌ Failed to send message:', error);
       Alert.alert(t('Error'), error.message || t('chatDetail.failedSendMessage'));
       setMessages((prev) => prev.filter((msg) => msg.id !== optimisticMessage.id));
       setMessage(messageText);
@@ -498,9 +479,8 @@ export default function ChatDetailScreen({
         },
       });
 
-      console.log('✅ Message marked as read:', messageId);
     } catch (error) {
-      console.error('❌ Failed to mark as read:', error);
+      // silently handle
     }
   };
 
@@ -521,9 +501,8 @@ export default function ChatDetailScreen({
         },
       });
 
-      console.log('✅ All messages marked as read');
     } catch (error) {
-      console.error('❌ Failed to mark all as read:', error);
+      // silently handle
     }
   };
 
@@ -548,17 +527,6 @@ export default function ChatDetailScreen({
       if (payload.duration !== undefined && payload.duration !== null) {
         formData.append('duration', String(payload.duration));
       }
-
-      console.log('📤 [ChatDetailScreen] Uploading attachment', {
-        roomId,
-        receiverId,
-        hasCaption: Boolean(trimmedMessage),
-        projectId: projectId ?? null,
-        name: payload.name,
-        type: payload.type,
-        isVoiceNote: payload.type === 'audio/m4a',
-        duration: payload.duration,
-      });
 
       if (payload.file) {
         formData.append('file', payload.file, payload.name);
@@ -588,7 +556,7 @@ export default function ChatDetailScreen({
             if (isOurValidation) {
               throw e;
             }
-            console.warn('⚠️ [ChatDetailScreen] Could not stat voice file before upload:', e);
+            // silently handle
           }
           // Let native FS flush the file before multipart read (OkHttp).
           await new Promise<void>((r) => setTimeout(r, 200));
@@ -620,26 +588,22 @@ export default function ChatDetailScreen({
         body: formData,
       });
 
-      console.log('📥 [ChatDetailScreen] Attachment upload status:', response.status);
-
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('❌ [ChatDetailScreen] Attachment upload failed response:', errorText);
         throw new Error(errorText || t('chatDetail.failedSendAttachment'));
       }
 
       // Reload messages so the new attachment appears (REST-only, no MQTT)
       if (payload.type === 'audio/m4a' && payload.duration) {
-        setTimeout(() => loadMessages(true).catch(console.error), 500);
+        setTimeout(() => loadMessages(true).catch(() => {}), 500);
       } else {
-        loadMessages(true).catch(console.error);
+        loadMessages(true).catch(() => {});
       }
 
       if (trimmedMessage) {
         setMessage('');
       }
     } catch (error: any) {
-      console.error('❌ Attachment upload failed:', error);
       Alert.alert(t('Error'), error?.message || t('chatDetail.failedUploadAttachment'));
     } finally {
       setIsUploadingAttachment(false);
@@ -710,7 +674,6 @@ export default function ChatDetailScreen({
       if ((error as any)?.code === 'DOCUMENT_PICKER_CANCELED') {
         return;
       }
-      console.error('❌ Attachment picker error:', error);
       Alert.alert(t('Error'), t('chatDetail.failedChooseAttachment'));
     }
   };
@@ -730,7 +693,6 @@ export default function ChatDetailScreen({
         setIsRecording(true);
       }
     } catch (error: any) {
-      console.error('❌ Failed to start recording:', error);
       Alert.alert(t('Error'), t('chatDetail.failedStartRecording'));
     }
   };
@@ -772,14 +734,6 @@ export default function ChatDetailScreen({
             type: mimeType, // Always audio/m4a
           });
 
-          console.log('📤 [ChatDetailScreen] Sending voice note as m4a:', {
-            fileName,
-            mimeType,
-            blobSize: blob.size,
-            fileSize: file.size,
-            duration: result.duration
-          });
-
           await uploadAttachment({
             file,
             name: fileName,
@@ -787,18 +741,9 @@ export default function ChatDetailScreen({
             duration: result.duration,
           });
         } catch (error: any) {
-          console.error('❌ [ChatDetailScreen] Error preparing voice note file:', error);
           throw error;
         }
       } else {
-        // Native: Use URI directly with m4a format
-        console.log('📤 [ChatDetailScreen] Sending voice note as m4a:', {
-          fileName,
-          mimeType,
-          uri: result.uri,
-          duration: result.duration
-        });
-
         await uploadAttachment({
           uri: result.uri,
           name: fileName,
@@ -807,7 +752,6 @@ export default function ChatDetailScreen({
         });
       }
     } catch (error: any) {
-      console.error('❌ Failed to stop recording:', error);
       setIsRecording(false);
       setRecordingDuration(0);
       Alert.alert(t('Error'), t('chatDetail.failedSendVoiceNote'));
@@ -824,11 +768,14 @@ export default function ChatDetailScreen({
       setIsRecording(false);
       setRecordingDuration(0);
     } catch (error: any) {
-      console.error('❌ Failed to cancel recording:', error);
       setIsRecording(false);
       setRecordingDuration(0);
     }
   };
+
+  const scrollToEnd = useCallback(() => flatListRef.current?.scrollToEnd(), []);
+  const chatKeyExtractor = useCallback((item: ChatListRow) =>
+    item.type === 'date' ? item.id : `m-${item.msg.id}-${item.msg.createdAt}`, []);
 
   const renderListItem = useCallback(
     ({ item }: { item: ChatListRow }) => {
@@ -916,9 +863,7 @@ export default function ChatDetailScreen({
         style={styles.messagesListFlex}
         data={listRows}
         renderItem={renderListItem}
-        keyExtractor={(item) =>
-          item.type === 'date' ? item.id : `m-${item.msg.id}-${item.msg.createdAt}`
-        }
+        keyExtractor={chatKeyExtractor}
         contentContainerStyle={[
           styles.messagesList,
           {
@@ -927,8 +872,12 @@ export default function ChatDetailScreen({
           },
         ]}
         keyboardShouldPersistTaps="handled"
-        onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
+        onContentSizeChange={scrollToEnd}
         showsVerticalScrollIndicator={false}
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={12}
+        windowSize={9}
+        initialNumToRender={15}
       />
 
       {isRecording && (

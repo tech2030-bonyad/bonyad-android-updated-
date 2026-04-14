@@ -283,27 +283,8 @@ const ChatbotScreen: React.FC<ChatbotScreenProps> = ({
   const flatListRef = useRef<FlatList>(null);
   const inputRef = useRef<TextInput>(null);
 
-  const screenOpacity = useRef(new Animated.Value(0)).current;
-  const screenTranslateY = useRef(new Animated.Value(28)).current;
-
-  useEffect(() => {
-    screenOpacity.setValue(0);
-    screenTranslateY.setValue(28);
-    Animated.parallel([
-      Animated.timing(screenOpacity, {
-        toValue: 1,
-        duration: 320,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.spring(screenTranslateY, {
-        toValue: 0,
-        tension: 68,
-        friction: 12,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [screenOpacity, screenTranslateY]);
+  const screenOpacity = useRef(new Animated.Value(1)).current;
+  const screenTranslateY = useRef(new Animated.Value(0)).current;
 
   const runCloseAnimation = useCallback(
     (then?: () => void) => {

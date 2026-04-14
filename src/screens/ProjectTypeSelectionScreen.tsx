@@ -122,15 +122,9 @@ export default function ProjectTypeSelectionScreen({
   const { fontFamily, boldFontFamily } = useFontFamily();
   const insets = useSafeAreaInsets();
 
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(40)).current;
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const slideAnim = useRef(new Animated.Value(0)).current;
 
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 380, useNativeDriver: true }),
-      Animated.spring(slideAnim, { toValue: 0, tension: 55, friction: 8, useNativeDriver: true }),
-    ]).start();
-  }, []);
 
   useEffect(() => {
     // No dedicated project-type selection tour yet; expose a no-op control for compatibility.

@@ -34,7 +34,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ProjectCreationFlow from '../components/ProjectCreationFlow';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
 import ConfirmationPopup, { useConfirmationPopup } from '../components/ConfirmationPopup';
-import BookAppointmentModal from '../components/BookAppointmentModal';
 
 // ===== DESIGN TOKENS FROM FIGMA =====
 const COLORS = {
@@ -1100,23 +1099,6 @@ export default function PendingProjectScreen({
         <View style={{ height: insets.bottom + 70 }} />
       </ScrollView>
       
-      {/* Book Appointment Modal */}
-      {selectedVisitRequest && (
-        <BookAppointmentModal
-          visible={bookingModalVisible}
-          technicianId={selectedVisitRequest.technicianId}
-          technicianName={selectedVisitRequest.technicianName || t('Technician')}
-          projectId={project?.id}
-          onClose={() => {
-            setBookingModalVisible(false);
-            setSelectedVisitRequest(null);
-          }}
-          onSuccess={() => {
-            loadVisitRequests();
-            onSuccess?.();
-          }}
-        />
-      )}
       
       {/* Alert Popup */}
       <AlertPopup

@@ -50,7 +50,6 @@ const FileAttachment: React.FC<{
   const handlePress = () => {
     if (fileUrl && fileUrl !== 'pending') {
       // Open file viewer - in a real app, use a file viewer library
-      console.log('Opening file:', fileUrl);
     }
   };
 
@@ -319,7 +318,6 @@ const SupportChatScreen: React.FC<SupportChatScreenProps> = ({
         ]
       );
     } catch (error) {
-      console.error('❌ Attachment picker error:', error);
       Alert.alert(
         language === 'ar' ? 'خطأ' : 'Error',
         language === 'ar' ? 'فشل اختيار الملف' : 'Failed to select file'
@@ -354,7 +352,7 @@ const SupportChatScreen: React.FC<SupportChatScreenProps> = ({
         });
       }
     } catch (error) {
-      console.error('❌ Camera error:', error);
+      // silently handle
     }
   }, [language]);
 

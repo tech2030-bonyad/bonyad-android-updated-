@@ -72,7 +72,7 @@ const CreateTicketScreen: React.FC<CreateTicketScreenProps> = ({
   const isDarkMode = theme === 'dark';
   const screenWidth = Dimensions.get('window').width;
   const slideXAnim = useRef(new Animated.Value(0)).current;
-  const opacityAnim = useRef(new Animated.Value(0)).current;
+  const opacityAnim = useRef(new Animated.Value(1)).current;
   const language = i18n.language === 'ar' ? 'ar' : 'en';
   const isRTL = language === 'ar';
   const { alertState, showSuccess, showError, hideAlert } = useAlertPopup();
@@ -149,16 +149,6 @@ const CreateTicketScreen: React.FC<CreateTicketScreenProps> = ({
   useEffect(() => {
     loadCategories();
   }, [loadCategories]);
-
-  // Opening animation: content comes from the left
-  useEffect(() => {
-    slideXAnim.setValue(-screenWidth);
-    opacityAnim.setValue(0);
-    Animated.parallel([
-      Animated.timing(opacityAnim, { toValue: 1, duration: 220, useNativeDriver: true }),
-      Animated.spring(slideXAnim, { toValue: 0, tension: 65, friction: 11, useNativeDriver: true }),
-    ]).start();
-  }, []);
 
   const handleBack = () => {
     Animated.parallel([

@@ -13,7 +13,7 @@ import {
   Dimensions,
 } from 'react-native';
 
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+if (Platform.OS === 'android' && UIManager?.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 import { useTranslation } from 'react-i18next';
@@ -119,16 +119,7 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
 
   const screenWidth = Dimensions.get('window').width;
   const screenSlideX = useRef(new Animated.Value(0)).current;
-  const screenOpacity = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    screenSlideX.setValue(-screenWidth);
-    screenOpacity.setValue(0);
-    Animated.parallel([
-      Animated.timing(screenOpacity, { toValue: 1, duration: 220, useNativeDriver: true }),
-      Animated.spring(screenSlideX, { toValue: 0, tension: 65, friction: 11, useNativeDriver: true }),
-    ]).start();
-  }, []);
+  const screenOpacity = useRef(new Animated.Value(1)).current;
 
   const handleBackScreen = () => {
     Animated.parallel([
@@ -155,11 +146,10 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
 
   // Animate mode toggle when availabilityMode changes
   useEffect(() => {
-    Animated.spring(modeSlideAnim, {
+    Animated.timing(modeSlideAnim, {
       toValue: availabilityMode === 'AVAILABLE_ANYTIME' ? 0 : 1,
+      duration: 220,
       useNativeDriver: true,
-      tension: 100,
-      friction: 10,
     }).start();
   }, [availabilityMode]);
 
@@ -172,10 +162,9 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
           duration: 300,
           useNativeDriver: true,
         }),
-        Animated.spring(timeSlotsTranslateY, {
+        Animated.timing(timeSlotsTranslateY, {
           toValue: 0,
-          tension: 80,
-          friction: 10,
+          duration: 200,
           useNativeDriver: true,
         }),
       ]).start();
@@ -194,16 +183,14 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
           duration: 280,
           useNativeDriver: true,
         }),
-        Animated.spring(addModalSlideAnim, {
+        Animated.timing(addModalSlideAnim, {
           toValue: 0,
-          tension: 65,
-          friction: 9,
+          duration: 220,
           useNativeDriver: true,
         }),
-        Animated.spring(addModalScaleAnim, {
+        Animated.timing(addModalScaleAnim, {
           toValue: 1,
-          tension: 65,
-          friction: 9,
+          duration: 220,
           useNativeDriver: true,
         }),
       ]).start();
@@ -223,16 +210,14 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
           duration: 280,
           useNativeDriver: true,
         }),
-        Animated.spring(editModalSlideAnim, {
+        Animated.timing(editModalSlideAnim, {
           toValue: 0,
-          tension: 65,
-          friction: 9,
+          duration: 220,
           useNativeDriver: true,
         }),
-        Animated.spring(editModalScaleAnim, {
+        Animated.timing(editModalScaleAnim, {
           toValue: 1,
-          tension: 65,
-          friction: 9,
+          duration: 220,
           useNativeDriver: true,
         }),
       ]).start();
@@ -259,15 +244,13 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
 
       if (response.ok) {
         const data = await response.json();
-        console.log('✅ Fetched availability:', data);
         setAvailability(data);
         if (data.status) {
-          console.log('✅ Setting availability mode:', data.status);
           setAvailabilityMode(data.status);
         }
       }
     } catch (error) {
-      console.error('❌ Error fetching availability:', error);
+      // silently handle
     } finally {
       setIsLoading(false);
     }
@@ -297,10 +280,6 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
           }));
       }
 
-      console.log('📤 Setting availability mode:', mode);
-      console.log('📤 Request body:', JSON.stringify(requestBody, null, 2));
-      console.log('📤 Endpoint:', buildApiUrl(API_ENDPOINTS.TECHNICIANS.SET_AVAILABILITY));
-
       const response = await fetch(
         buildApiUrl(API_ENDPOINTS.TECHNICIANS.SET_AVAILABILITY),
         {
@@ -313,11 +292,8 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
         }
       );
 
-      console.log('📥 Response status:', response.status);
-
       if (response.ok) {
         const responseData = await response.json();
-        console.log('✅ Set availability mode response:', responseData);
         setAvailabilityMode(mode);
         // Refresh availability data
         await fetchAvailability();
@@ -327,8 +303,7 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
         }, 100);
       } else {
         const errorText = await response.text();
-        console.error('❌ Failed to set availability mode:', errorText);
-        
+
         // Try to parse error as JSON
         let errorMessage = errorText || 'Failed to set availability mode';
         try {
@@ -340,8 +315,7 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
         
         // Even if there's an error, try to refresh to see if the status was actually updated
         // This handles cases where the backend updates the status but returns an error
-        console.log('🔄 Refreshing availability data despite error...');
-        
+
         // Fetch fresh data to check if status was actually updated
         const refreshResponse = await fetch(
           buildApiUrl(API_ENDPOINTS.TECHNICIANS.AVAILABILITY),
@@ -354,8 +328,7 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
         
         if (refreshResponse.ok) {
           const refreshedData = await refreshResponse.json();
-          console.log('✅ Refreshed availability data:', refreshedData);
-          
+
           // Update state with refreshed data
           setAvailability(refreshedData);
           if (refreshedData.status) {
@@ -365,7 +338,6 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
           // Check if the mode was actually updated
           if (refreshedData.status === mode) {
             // Status was updated successfully, just show success
-            console.log('✅ Status was updated successfully despite error response');
             setTimeout(() => {
               showSuccess(t('availability.modeSetSuccess'), t('Success'));
             }, 100);
@@ -377,7 +349,6 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
         throw new Error(errorMessage);
       }
     } catch (error: any) {
-      console.error('❌ Error setting availability mode:', error);
       showError(error.message || t('availability.failedSetMode'), t('Error'));
     } finally {
       setIsSaving(false);
@@ -430,7 +401,6 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
         throw new Error('Failed to add time slot');
       }
     } catch (error) {
-      console.error('Error adding time slot:', error);
       showError(t('availability.failedAddSlot'), t('Error'));
     } finally {
       setIsSaving(false);
@@ -463,9 +433,6 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
           })),
       };
 
-      console.log('📤 Saving all slots:', JSON.stringify(requestBody, null, 2));
-      console.log('📤 Endpoint:', buildApiUrl(API_ENDPOINTS.TECHNICIANS.SET_AVAILABILITY));
-
       const response = await fetch(
         buildApiUrl(API_ENDPOINTS.TECHNICIANS.SET_AVAILABILITY),
         {
@@ -478,11 +445,8 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
         }
       );
 
-      console.log('📥 Response status:', response.status);
-
       if (response.ok) {
         const responseData = await response.json();
-        console.log('✅ Save all slots response:', responseData);
         // Refresh availability data first
         await fetchAvailability();
         // Show success alert after refresh
@@ -491,11 +455,9 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
         }, 100);
       } else {
         const errorText = await response.text();
-        console.error('❌ Failed to save all slots:', errorText);
         throw new Error(errorText || 'Failed to save all slots');
       }
     } catch (error: any) {
-      console.error('❌ Error saving all slots:', error);
       showError(error.message || t('availability.failedSaveSlots'), t('Error'));
     } finally {
       setIsSaving(false);
@@ -560,7 +522,6 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
         throw new Error('Failed to update time slot');
       }
     } catch (error) {
-      console.error('Error updating time slot:', error);
       showError(t('availability.failedUpdateSlot'), t('Error'));
     } finally {
       setIsSaving(false);
@@ -568,11 +529,8 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
   };
 
   const handleDeleteSlot = async (slotId: number) => {
-    console.log('[Availability] Delete icon tapped for slot', slotId);
-
     const confirmDelete = async () => {
       try {
-        console.log('[Availability] Confirm delete for slot', slotId);
         const token = await storage.getAuthToken();
 
         const response = await fetch(
@@ -590,11 +548,9 @@ export default function AvailabilityScreen({ onBack }: AvailabilityScreenProps) 
           fetchAvailability();
         } else {
           const errorText = await response.text();
-          console.error('Error response deleting slot:', response.status, errorText);
           throw new Error(errorText || 'Failed to delete time slot');
         }
       } catch (error) {
-        console.error('Error deleting time slot:', error);
         showError((error as Error)?.message || t('availability.failedDeleteSlot'), t('Error'));
       }
     };

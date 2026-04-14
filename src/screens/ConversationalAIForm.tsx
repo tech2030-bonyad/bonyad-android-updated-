@@ -190,7 +190,7 @@ export default function ConversationalAIForm({
           setServiceCategories(categories);
         }
       } catch (error) {
-        console.error('Failed to load categories:', error);
+        // silently handle
       }
     };
     loadCategories();
@@ -219,9 +219,9 @@ export default function ConversationalAIForm({
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const loadingRotateAnim = useRef(new Animated.Value(0)).current;
   const loadingAnimRef = useRef<Animated.CompositeAnimation | null>(null);
-  const screenOpacity = useRef(new Animated.Value(0)).current;
-  const screenTranslateY = useRef(new Animated.Value(320)).current;
-  const screenScale = useRef(new Animated.Value(0.95)).current;
+  const screenOpacity = useRef(new Animated.Value(1)).current;
+  const screenTranslateY = useRef(new Animated.Value(0)).current;
+  const screenScale = useRef(new Animated.Value(1)).current;
   const isClosingScreenRef = useRef(false);
 
   // Creative loading animation refs
@@ -278,27 +278,6 @@ export default function ConversationalAIForm({
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(screenOpacity, {
-        toValue: 1,
-        duration: 280,
-        useNativeDriver: true,
-      }),
-      Animated.spring(screenTranslateY, {
-        toValue: 0,
-        friction: 8,
-        tension: 70,
-        useNativeDriver: true,
-      }),
-      Animated.spring(screenScale, {
-        toValue: 1,
-        friction: 8,
-        tension: 70,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [screenOpacity, screenTranslateY, screenScale]);
 
   const closeScreenAnimated = () => {
     if (isClosingScreenRef.current) return;
@@ -481,7 +460,6 @@ export default function ConversationalAIForm({
         );
       }
     } catch (error) {
-      console.error('Error picking location:', error);
       showError(t('Could not get your location. Please manually enter your address.'), t('Location Error'));
     }
   };
@@ -497,7 +475,6 @@ export default function ConversationalAIForm({
     setError(null);
 
     try {
-      console.log('🔍 Generating AI questions...');
       const analysis = await analyzeDescription(description, i18n.language as 'en' | 'ar');
       
       if (analysis.questions && analysis.questions.length > 0) {
@@ -508,7 +485,6 @@ export default function ConversationalAIForm({
         await generateProject();
       }
     } catch (error: any) {
-      console.error('❌ Error getting AI questions:', error);
       setError(error.message || t('Failed to generate questions'));
     } finally {
       setIsLoading(false);
@@ -530,8 +506,6 @@ export default function ConversationalAIForm({
     setError(null);
 
     try {
-      console.log('🤖 Generating project with AI...');
-      
       // Combine description and answers
       const fullDescription = description + '\n\nAdditional Details:\n' + answersText;
       
@@ -545,10 +519,6 @@ export default function ConversationalAIForm({
         project.serviceId = serviceId;
       }
       
-      console.log('✅ Project generated:', project);
-      console.log('   Category:', project.category);
-      console.log('   Matched serviceId:', project.serviceId);
-      
       // Initialize editedPhases with generated phases
       if (project.phases && project.phases.length > 0) {
         setEditedPhases(project.phases);
@@ -558,7 +528,6 @@ export default function ConversationalAIForm({
       setEditedProject(project);
       setCurrentStep('review');
     } catch (error: any) {
-      console.error('❌ Error generating project:', error);
       setError(error.message || t('Failed to generate project'));
     } finally {
       setIsLoading(false);
@@ -613,7 +582,7 @@ export default function ConversationalAIForm({
           setBidClosedDate(date);
         }
       } catch (e) {
-        console.error('Error parsing bid deadline date:', e);
+        // silently handle
       }
     }
   }, [editedProject?.bidsCloseAt]);
@@ -805,15 +774,6 @@ export default function ConversationalAIForm({
         return;
       }
 
-      console.log('📋 ============ AI PROJECT SUBMISSION ============');
-      console.log('📋 AI-Generated Project Details:');
-      console.log('   Description:', project.description);
-      console.log('   ServiceId:', project.serviceId);
-      console.log('   Budget:', project.budget);
-      console.log('   Duration:', project.durationWeeks, 'weeks →', project.durationWeeks * 7, 'days');
-      console.log('   Photos:', photos.length);
-      console.log('   Phases:', project.phases?.length || 0);
-
       // STEP 1: Create project (20-50%)
       updateProgress(0.1, t('Preparing project...'));
       await new Promise(resolve => setTimeout(resolve, 300));
@@ -854,7 +814,6 @@ export default function ConversationalAIForm({
       }
 
       const projectId = data.id;
-      console.log('✅ Project created with ID:', projectId);
 
       updateProgress(0.5, t('Project created!'));
       await new Promise(resolve => setTimeout(resolve, 300));
@@ -862,7 +821,6 @@ export default function ConversationalAIForm({
       // STEP 2: Create phases (60-90%)
       if (project.phases && project.phases.length > 0) {
         updateProgress(0.6, t('Creating phases...'));
-        console.log('📝 STEP 2: Creating', project.phases.length, 'phases...');
 
         for (let i = 0; i < project.phases.length; i++) {
           const phase = project.phases[i];
@@ -871,9 +829,7 @@ export default function ConversationalAIForm({
 
           try {
             await createPhase(projectId, i + 1, phase, token);
-            console.log(`✅ Phase ${i + 1} created`);
           } catch (error) {
-            console.error(`❌ Failed to create phase ${i + 1}:`, error);
             // Continue with other phases
           }
 
@@ -887,9 +843,6 @@ export default function ConversationalAIForm({
 
       updateProgress(1.0, t('Complete!'));
       await new Promise(resolve => setTimeout(resolve, 500));
-
-      console.log('✅ AI Project submitted successfully!');
-      console.log('📸 ============ AI PROJECT SUBMISSION END ============');
 
       setIsSubmitting(false);
       
@@ -918,7 +871,6 @@ export default function ConversationalAIForm({
         }, 2000);
       }
     } catch (error: any) {
-      console.error('❌ Error submitting project:', error);
       setIsSubmitting(false);
       showError(error.message || t('Failed to submit project'));
     }
@@ -939,8 +891,6 @@ export default function ConversationalAIForm({
       moneySpent: phase.amount,
     };
 
-    console.log('📤 Creating phase', phaseNumber, ':', requestBody);
-
     const response = await fetch(
       buildApiUrl(API_ENDPOINTS.PROJECTS.PHASES),
       {
@@ -959,7 +909,6 @@ export default function ConversationalAIForm({
       throw new Error(data.message || `Failed to create phase ${phaseNumber}`);
     }
 
-    console.log('📥 Phase', phaseNumber, 'response:', data);
     return data.id;
   };
 

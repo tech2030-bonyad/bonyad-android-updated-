@@ -203,7 +203,6 @@ export default function SignupScreen({
   );
 
   const handleOpenTerms = () => {
-    console.log('🔘 [SignupScreen] Opening Terms and Conditions modal...');
     setShowTermsScreen(true);
   };
 
@@ -259,7 +258,6 @@ export default function SignupScreen({
     try {
       await performSignup(formattedPhone);
     } catch (error) {
-      console.error('❌ Signup error:', error);
       showError(t('network_error'), t('Error'));
       setIsLoading(false);
     }
@@ -291,8 +289,6 @@ export default function SignupScreen({
             role: 'TECHNICIAN',
           };
 
-    console.log('📤 Signup Request:', { url: apiURL, body: requestBody });
-
     const response = await fetch(apiURL, {
       method: 'POST',
       headers: {
@@ -303,7 +299,6 @@ export default function SignupScreen({
     });
 
     if (response.status === 201 || response.ok) {
-      console.log('✅ Signup successful!');
       setIsLoading(false);
       onNavigateToOTP(phoneOnly, selectedRole);
     } else {

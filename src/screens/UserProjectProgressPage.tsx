@@ -66,15 +66,6 @@ export default function UserProjectProgressPage({
   const [selectedPhaseForPayment, setSelectedPhaseForPayment] = useState<Phase | null>(null);
 
   useEffect(() => {
-    console.log('═══════════════════════════════════════════════════════════');
-    console.log('🔵 [UserProjectProgressPage] ==========================================');
-    console.log('🔵 [UserProjectProgressPage] ✅ PAGE OPENED');
-    console.log('🔵 [UserProjectProgressPage] ==========================================');
-    console.log('🔵 [UserProjectProgressPage] Project ID:', project.id);
-    console.log('🔵 [UserProjectProgressPage] Project Status:', project.status?.toUpperCase());
-    console.log('🔵 [UserProjectProgressPage] Status: IN_PROGRESS');
-    console.log('🔵 [UserProjectProgressPage] User can pay for each phase');
-    console.log('═══════════════════════════════════════════════════════════');
     loadPhases();
   }, [project]);
 
@@ -91,8 +82,6 @@ export default function UserProjectProgressPage({
         projectId: project.id,
       });
 
-      console.log('🔵 [UserProjectProgressPage] Fetching phases from:', url);
-
       const response = await fetch(url, {
         method: 'GET',
         headers: {
@@ -103,13 +92,11 @@ export default function UserProjectProgressPage({
 
       if (response.ok) {
         const data = await response.json();
-        console.log('🔵 [UserProjectProgressPage] Loaded phases:', data.length);
         setPhases(data);
       } else {
         showError(t('Failed to load phases'));
       }
     } catch (error: any) {
-      console.error('❌ [UserProjectProgressPage] Error loading phases:', error);
       showError(error.message || t('Failed to load phases'));
     } finally {
       setIsLoading(false);
@@ -117,7 +104,6 @@ export default function UserProjectProgressPage({
   };
 
   const handlePayPhase = (phase: Phase) => {
-    console.log('🔘 [UserProjectProgressPage] Pay button clicked for phase:', phase.id);
     setSelectedPhaseForPayment(phase);
     
     // Show confirmation modal
@@ -149,13 +135,6 @@ export default function UserProjectProgressPage({
         phaseId,
       });
 
-      console.log('═══════════════════════════════════════════════════════════');
-      console.log('🟢 [UserProjectProgressPage] Pay for Phase');
-      console.log('🟢 [UserProjectProgressPage] Endpoint: POST /phases/{phaseId}/pay');
-      console.log('🟢 [UserProjectProgressPage] Phase ID:', phaseId);
-      console.log('🟢 [UserProjectProgressPage] URL:', url);
-      console.log('═══════════════════════════════════════════════════════════');
-
       const response = await fetch(url, {
         method: 'POST',
         headers: {
@@ -164,13 +143,9 @@ export default function UserProjectProgressPage({
         },
       });
 
-      console.log('📥 [UserProjectProgressPage] Pay Response Status:', response.status);
-
       if (response.ok || response.status === 201) {
         const data = await response.json();
-        console.log('✅ [UserProjectProgressPage] Payment successful!');
-        console.log('✅ [UserProjectProgressPage] Response Data:', data);
-        
+
         // Show success message
         showSuccess(t('Payment processed successfully for Phase {{number}}', {
           number: selectedPhaseForPayment?.phaseNumber || '',
@@ -181,12 +156,9 @@ export default function UserProjectProgressPage({
         }, 1000);
       } else {
         const errorText = await response.text();
-        console.error('❌ [UserProjectProgressPage] Failed to pay:', errorText);
-        console.error('❌ [UserProjectProgressPage] Status:', response.status);
         showError(t('Failed to process payment'));
       }
     } catch (error: any) {
-      console.error('❌ [UserProjectProgressPage] Error paying for phase:', error);
       showError(error.message || t('Failed to process payment'));
     } finally {
       setPayingPhaseId(null);
@@ -376,7 +348,6 @@ export default function UserProjectProgressPage({
               <TouchableOpacity
                 style={[styles.confirmModalButton, styles.confirmModalCancelButton, { borderColor: colors.border }]}
                 onPress={() => {
-                  console.log('❌ [UserProjectProgressPage] User cancelled via custom modal');
                   setShowConfirmModal(false);
                 }}
               >

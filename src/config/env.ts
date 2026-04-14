@@ -23,9 +23,9 @@ function getEnvVar(key: string, defaultValue: string): string {
   return defaultValue;
 }
 
-/** Bonyad RAG chatbot (Python FastAPI / Gradio). Emulator: host machine via 10.0.2.2:7860 */
-const DEFAULT_CHATBOT_URL_ANDROID = 'http://10.0.2.2:7860';
-const DEFAULT_CHATBOT_URL_OTHER = 'http://localhost:7860';
+/** Bonyad RAG chatbot (Python FastAPI / Gradio). */
+const DEFAULT_CHATBOT_URL_ANDROID = 'https://3-120-251-178.nip.io';
+const DEFAULT_CHATBOT_URL_OTHER = 'https://3-120-251-178.nip.io';
 
 export const ENV = {
   API_BASE_URL: getEnvVar('apiBaseUrl', DEFAULT_API_BASE_URL),
@@ -43,9 +43,6 @@ export const ENV = {
     const fallback =
       Platform.OS === 'android' ? DEFAULT_CHATBOT_URL_ANDROID : DEFAULT_CHATBOT_URL_OTHER;
     let configured = getEnvVar('chatbotApiUrl', fallback).trim().replace(/\/$/, '');
-    if (Platform.OS === 'android' && configured.includes('localhost')) {
-      configured = configured.replace(/localhost/g, '10.0.2.2');
-    }
     if (__DEV__) {
       console.log('🤖 [ENV] CHATBOT_API_URL base:', configured);
     }

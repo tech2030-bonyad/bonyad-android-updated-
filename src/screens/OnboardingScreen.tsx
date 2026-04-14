@@ -12,14 +12,13 @@ import {
   Easing,
   NativeSyntheticEvent,
   NativeScrollEvent,
-  I18nManager,
   Platform,
 } from 'react-native';
 import { MaterialCommunityIcons, Ionicons, Feather } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { SvgXml, Rect } from 'react-native-svg';
+import Svg, { SvgXml, Rect, Defs, Pattern, Circle } from 'react-native-svg';
 import BonyadLogo from '../components/BonyadLogo';
 import { AbsherLogoSvg } from '../assets/svg/AbsherLogo';
 import { NafathLogoSvg } from '../assets/svg/NafathLogo';
@@ -81,31 +80,20 @@ interface OnboardingScreenProps {
   variant?: 'user' | 'technician';
 }
 
-// --- Dot Pattern Background ---
+// --- Dot Pattern Background (SVG-based: 1 element instead of ~400 Views) ---
 function DotPattern({ color = 'rgba(255,255,255,0.04)' }: { color?: string }) {
-  const dots = [];
-  const spacing = 28;
-  const cols = Math.ceil(SCREEN_WIDTH / spacing);
-  const rows = Math.ceil(SCREEN_HEIGHT / spacing);
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      dots.push(
-        <View
-          key={`${r}-${c}`}
-          style={{
-            position: 'absolute',
-            left: c * spacing,
-            top: r * spacing,
-            width: 2,
-            height: 2,
-            borderRadius: 1,
-            backgroundColor: color,
-          }}
-        />
-      );
-    }
-  }
-  return <View style={StyleSheet.absoluteFill} pointerEvents="none">{dots}</View>;
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      <Svg width={SCREEN_WIDTH} height={SCREEN_HEIGHT}>
+        <Defs>
+          <Pattern id="dotGrid" x="0" y="0" width="28" height="28" patternUnits="userSpaceOnUse">
+            <Circle cx="1" cy="1" r="1" fill={color} />
+          </Pattern>
+        </Defs>
+        <Rect x="0" y="0" width={SCREEN_WIDTH} height={SCREEN_HEIGHT} fill="url(#dotGrid)" />
+      </Svg>
+    </View>
+  );
 }
 
 // --- Page dots: scroll-linked capsule + gradient (same position on every onboarding page) ---
@@ -253,8 +241,9 @@ function ProCard({
 
 // ================== SCREEN 1: WELCOME ==================
 function BuiltOnTrustScreen({ onContinue }: { onContinue: () => void }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
+  const isRTL = i18n.language === 'ar' || i18n.language?.startsWith('ar-');
 
   // === Background orbs (aurora effect) ===
   // Orb 1 – large deep-blue, bottom-left → sweep across
@@ -389,7 +378,7 @@ function BuiltOnTrustScreen({ onContinue }: { onContinue: () => void }) {
           toValue: btnW,
           duration: 2000,
           easing: Easing.inOut(Easing.cubic),
-          useNativeDriver: false,
+          useNativeDriver: true,
         }),
         Animated.delay(1100),
       ]).start(() => runGloss());
@@ -476,7 +465,7 @@ function BuiltOnTrustScreen({ onContinue }: { onContinue: () => void }) {
             {t('onboarding_nafath', { defaultValue: 'Nafath' })}
           </Text>
           <Text style={styles.builtParagraphRegular}>
-            {t('onboarding_secure_access_suffix', { defaultValue: ' integration.\nYour identity. Fully a.' })}
+            {t('onboarding_secure_access_suffix', { defaultValue: ' integration.\nYour identity. Fully verified.' })}
           </Text>
         </Text>
 
@@ -539,7 +528,7 @@ function BuiltOnTrustScreen({ onContinue }: { onContinue: () => void }) {
             <Text style={[styles.builtButtonLabel, { zIndex: 2 }]}>
               {t('onboarding_continue_securely', { defaultValue: 'Continue Securely' })}
             </Text>
-            <View style={[styles.builtArrowWrap, { zIndex: 2 }]} pointerEvents="none">
+            <View style={[styles.builtArrowWrap, { zIndex: 2, transform: [{ scaleX: isRTL ? -1 : 1 }] }]} pointerEvents="none">
               <View style={styles.builtArrow1}>
                 <SvgXml xml={BuiltOnTrustArrow1Svg} width="100%" height="100%" />
               </View>
@@ -621,8 +610,9 @@ function FpFeaturesRingSection({ children }: { children: React.ReactNode }) {
 }
 
 function FindProfessionalsOnboardingScreen({ onGetStarted }: { onGetStarted: () => void }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
+  const isRTL = i18n.language === 'ar' || i18n.language?.startsWith('ar-');
 
   const fpGlossW = Math.min(sx(160), SCREEN_WIDTH * 0.45);
   const fpShimmerX = useRef(new Animated.Value(-fpGlossW)).current;
@@ -669,7 +659,7 @@ function FindProfessionalsOnboardingScreen({ onGetStarted }: { onGetStarted: () 
           toValue: btnInnerW,
           duration: 2000,
           easing: Easing.inOut(Easing.cubic),
-          useNativeDriver: false,
+          useNativeDriver: true,
         }),
         Animated.delay(1100),
       ]).start(() => runGloss());
@@ -712,7 +702,7 @@ function FindProfessionalsOnboardingScreen({ onGetStarted }: { onGetStarted: () 
         </View>
       </View>
 
-      <View style={styles.fpWorkerChevronBtn}>
+      <View style={[styles.fpWorkerChevronBtn, { transform: [{ scaleX: isRTL ? -1 : 1 }] }]}>
         <Ionicons name="chevron-forward" size={14} color="#00549B" />
       </View>
     </View>
@@ -743,10 +733,9 @@ function FindProfessionalsOnboardingScreen({ onGetStarted }: { onGetStarted: () 
                 shadowRadius: 36,
                 shadowOffset: { width: 0, height: 0 },
               },
-              android: {
-                elevation: 10,
-                shadowColor: '#dbeafe',
-              },
+              // Android elevation shadows ignore overflow:hidden and bleed into
+              // adjacent pages — remove it; the gradient disc provides the glow.
+              android: {},
               default: {
                 shadowColor: '#e0f2fe',
                 shadowOpacity: 0.38,
@@ -832,17 +821,16 @@ function FindProfessionalsOnboardingScreen({ onGetStarted }: { onGetStarted: () 
             <Text style={styles.fpTrophy}>🏆</Text>
             <Text style={styles.fpTopWorkers}>{t('onboarding_fp_top_workers', { defaultValue: 'Top Workers' })}</Text>
           </View>
-          <Text style={styles.fpSeeAll}>{t('onboarding_fp_see_all', { defaultValue: 'See all →' })}</Text>
         </View>
 
         <View style={styles.fpWorkersList}>
-          {workerCard('#2563EB', 'AR', 'Ahmed Al-Rashidi', 'Structural Engineer · Riyadh', '4.9', '32 jobs')}
-          {workerCard('#F59E0B', 'KO', 'Khalid Al-Otaibi', 'General Contractor · Jeddah', '4.8', '18 jobs')}
-          {workerCard('#22C55E', 'OG', 'Omar Al-Ghamdi', 'Electrical Specialist · Dammam', '4.7', '25 jobs')}
+          {workerCard('#2563EB', 'AR', t('onboarding_pro_1_name', { defaultValue: 'Ahmed Al-Rashidi' }), t('onboarding_pro_1_role', { defaultValue: 'Structural Engineer · Riyadh' }), '4.9', t('onboarding_fp_jobs', { defaultValue: '32 jobs', count: 32 }))}
+          {workerCard('#F59E0B', 'KO', t('onboarding_pro_2_name', { defaultValue: 'Khalid Al-Otaibi' }), t('onboarding_pro_2_role', { defaultValue: 'General Contractor · Jeddah' }), '4.8', t('onboarding_fp_jobs', { defaultValue: '18 jobs', count: 18 }))}
+          {workerCard('#22C55E', 'OG', t('onboarding_pro_3_name', { defaultValue: 'Omar Al-Ghamdi' }), t('onboarding_pro_3_role', { defaultValue: 'Electrical Specialist · Dammam' }), '4.7', t('onboarding_fp_jobs', { defaultValue: '25 jobs', count: 25 }))}
         </View>
       </View>
 
-      <TouchableOpacity activeOpacity={0.88} onPress={onGetStarted} style={styles.fpCtaWrap}>
+      <TouchableOpacity activeOpacity={0.88} onPress={onGetStarted} style={[styles.fpCtaWrap, isRTL && { bottom: 55 }]}>
         <View style={[styles.fpCtaBtn, { overflow: 'hidden', width: '100%' }]}>
           <LinearGradient
             colors={[COLORS.blue100, COLORS.blue60]}
@@ -880,7 +868,7 @@ function FindProfessionalsOnboardingScreen({ onGetStarted }: { onGetStarted: () 
           <Text style={[styles.fpCtaText, { zIndex: 2 }]}>
             {t('onboarding_fp_get_started', { defaultValue: 'Get Started' })}
           </Text>
-          <View style={[styles.fpCtaChevron, { zIndex: 2 }]} pointerEvents="none">
+          <View style={[styles.fpCtaChevron, { zIndex: 2, transform: [{ scaleX: isRTL ? -1 : 1 }] }]} pointerEvents="none">
             <Ionicons name="chevron-forward" size={14} color="#fff" />
           </View>
         </View>
@@ -897,15 +885,15 @@ function ManageProjectsOnboardingScreen({
   onSkip: () => void;
   onNext: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
+  const isRTL = i18n.language === 'ar' || i18n.language?.startsWith('ar-');
   const MP_BASE = { w: 390, h: 880 };
   const ms = SCREEN_WIDTH / MP_BASE.w; // uniform scale (prevents layout drift on tall Android screens)
   const mx = (px: number) => px * ms;
   const my = (px: number) => px * ms;
   useEffect(() => {
     // Non-visual marker to confirm correct Screen 3 is running
-    console.log('✅ Onboarding Screen 3 active (Figma 186:2274)');
   }, []);
 
   const mapPulse = useRef(new Animated.Value(0)).current;
@@ -1189,13 +1177,13 @@ function ManageProjectsOnboardingScreen({
           </View>
         </View>
 
-        <View style={{ position: 'absolute', left: mx(22), right: mx(22), top: my(47.44) + insets.top }}>
-          <Text style={styles.mpTitle}>
+        <View style={{ position: 'absolute', left: mx(22), right: mx(22), top: my(60) + insets.top }}>
+          <Text style={[styles.mpTitle, { lineHeight: 32 }]}>
             {t('onboarding_manage_projects_title', { defaultValue: 'Track every detail\nwith ease' })}
           </Text>
         </View>
-        <View style={{ position: 'absolute', left: mx(22), right: mx(22), top: my(112.78) + insets.top }}>
-          <Text style={styles.mpSubtitle}>
+        <View style={{ position: 'absolute', left: mx(22), right: mx(22), top: my(130) + insets.top }}>
+          <Text style={[styles.mpSubtitle, { lineHeight: 22 }]}>
             {t('onboarding_manage_projects_subtitle', {
               defaultValue: 'Monitor timelines, assign tasks, and keep projects on\nschedule.',
             })}
@@ -1203,7 +1191,7 @@ function ManageProjectsOnboardingScreen({
         </View>
 
         {/* Project card */}
-        <View style={[styles.mpProjectCard, { position: 'absolute', left: mx(22), right: mx(22), top: my(151.16) + insets.top }]}>
+        <View style={[styles.mpProjectCard, { position: 'absolute', left: mx(22), right: mx(22), top: my(175) + insets.top }]}>
           <View style={styles.mpProjectHeader}>
             <Text style={styles.mpProjectName} numberOfLines={1}>
               {t('onboarding_project_name', { defaultValue: 'Al-Nakheel Villa — Phase 2' })}
@@ -1231,11 +1219,11 @@ function ManageProjectsOnboardingScreen({
           <View style={styles.mpProgressMetaRow}>
             <Text style={styles.mpProgressLeft}>
               <Text style={styles.mpProgressStrong}>68%</Text>
-              <Text style={styles.mpProgressLight}> complete</Text>
+              <Text style={styles.mpProgressLight}> {t('complete', { defaultValue: 'complete' })}</Text>
             </Text>
             <Text style={styles.mpProgressRight}>
-              <Text style={styles.mpProgressStrong}>12 days</Text>
-              <Text style={styles.mpProgressLight}> left</Text>
+              <Text style={styles.mpProgressStrong}>12</Text>
+              <Text style={styles.mpProgressLight}> {t('days_left', { defaultValue: 'days left' })}</Text>
             </Text>
           </View>
 
@@ -1244,33 +1232,32 @@ function ManageProjectsOnboardingScreen({
               <LinearGradient colors={[COLORS.blue70, '#637CCF']} style={styles.mpTaskCheck}>
                 <SvgXml xml={MpCheckmarkSvg} width={9} height={8} />
               </LinearGradient>
-              <Text style={styles.mpTaskDone}>Foundation inspection</Text>
+              <Text style={styles.mpTaskDone}>{t('onboarding_task_1', { defaultValue: 'Foundation inspection' })}</Text>
             </View>
             <View style={styles.mpTaskRow}>
               <LinearGradient colors={[COLORS.blue70, '#637CCF']} style={styles.mpTaskCheck}>
                 <SvgXml xml={MpCheckmarkSvg} width={9} height={8} />
               </LinearGradient>
-              <Text style={styles.mpTaskDone}>Electrical rough-in</Text>
+              <Text style={styles.mpTaskDone}>{t('onboarding_task_2', { defaultValue: 'Electrical rough-in' })}</Text>
             </View>
             <View style={styles.mpTaskRow}>
               <View style={styles.mpTaskEmpty} />
-              <Text style={styles.mpTaskTodo}>Plumbing installation</Text>
+              <Text style={styles.mpTaskTodo}>{t('onboarding_task_3', { defaultValue: 'Plumbing installation' })}</Text>
             </View>
           </View>
         </View>
 
         {/* Top workers */}
-        <View style={[styles.mpTopWorkersHeader, { position: 'absolute', left: mx(22), right: mx(22), top: my(308.16) + insets.top }]}>
+        <View style={[styles.mpTopWorkersHeader, { position: 'absolute', left: mx(22), right: mx(22), top: my(330) + insets.top }]}>
           <View style={styles.mpTopWorkersLeft}>
             <Text style={styles.mpTrophy}>🏆</Text>
             <Text style={styles.mpTopWorkersTitle}>
               {t('onboarding_top_workers_week', { defaultValue: 'Top Workers — This Week' })}
             </Text>
           </View>
-          <Text style={styles.mpSeeAll}>{t('onboarding_see_all', { defaultValue: 'See all →' })}</Text>
         </View>
 
-        <View style={[styles.mpWorkersRow, { position: 'absolute', left: mx(22), right: mx(22), top: my(342) + insets.top }]}>
+        <View style={[styles.mpWorkersRow, { position: 'absolute', left: mx(22), right: mx(22), top: my(370) + insets.top }]}>
           {/* Card #2 — Mohammed, orange (Figma 186:2340) */}
           {renderSideWorkerCard({
             rank: '#2', rankBg: '#FEF3C7', rankColor: '#B45309',
@@ -1292,16 +1279,14 @@ function ManageProjectsOnboardingScreen({
         </View>
 
         {/* Map card — Figma 186:2344 */}
-        {/* h=185, radius=20, bg transparent, border rgba(255,255,255,0.6), shadow blue */}
         <View style={{
-          position: 'absolute', left: mx(22), right: mx(22), top: my(528.94) + insets.top,
+          position: 'absolute', left: mx(22), right: mx(22), top: my(560) + insets.top,
           height: ms * 185,
           borderRadius: ms * 20, overflow: 'hidden',
-          borderWidth: 1, borderColor: 'rgba(255,255,255,0.6)',
           backgroundColor: 'rgba(255,255,255,0)',
-          elevation: 6,
-          shadowColor: '#3B82F6', shadowOpacity: 0.15,
-          shadowRadius: ms * 16, shadowOffset: { width: 0, height: ms * 8 },
+          elevation: 4,
+          shadowColor: 'rgba(0,0,0,0.12)', shadowOpacity: 1,
+          shadowRadius: ms * 12, shadowOffset: { width: 0, height: ms * 4 },
         }}>
           {/* ── Static map grid (Figma 186:2345) ─────────────────────── */}
           {/* 3×3 blocks with road lines. Colors from Figma palette:     */}
@@ -1494,7 +1479,7 @@ function ManageProjectsOnboardingScreen({
               position: 'absolute',
               left: mx(22),
               right: mx(22),
-              bottom: Math.max(insets.bottom, ms * 16),
+              bottom: isRTL ? 0 : Math.max(insets.bottom, ms * 16),
             },
           ]}
         >
@@ -1549,7 +1534,7 @@ function ManageProjectsOnboardingScreen({
               </Animated.View>
               <View style={[styles.mpNextBtn, { backgroundColor: 'transparent', zIndex: 2 }]} collapsable={false}>
                 <Text style={styles.mpNextText}>{t('Next', { defaultValue: 'Next' })}</Text>
-                <View style={{ width: 14, height: 14, position: 'relative' }}>
+                <View style={{ width: 14, height: 14, position: 'relative', transform: [{ scaleX: isRTL ? -1 : 1 }] }}>
                   <View style={{ position: 'absolute', left: 0, top: 6.5 }}>
                     <SvgXml xml={MpNextArrow1Svg} width={10} height={2} />
                   </View>
@@ -2492,7 +2477,13 @@ function OnboardingPagerPage({
   children: React.ReactNode;
 }) {
   const w = SCREEN_WIDTH;
-  const inputRange = [(index - 1) * w, index * w, (index + 1) * w];
+  const { i18n } = useTranslation();
+  const isRTL = i18n.language === 'ar' || i18n.language?.startsWith('ar-');
+  // In RTL on Android the scroll view lays pages right-to-left so scrollX=0
+  // corresponds to the LAST page. Remap index so interpolations stay correct.
+  const TOTAL = 3;
+  const effIdx = isRTL ? (TOTAL - 1 - index) : index;
+  const inputRange = [(effIdx - 1) * w, effIdx * w, (effIdx + 1) * w];
   const opacity = scrollX.interpolate({
     inputRange,
     outputRange: [0.5, 1, 0.5],
@@ -2500,6 +2491,8 @@ function OnboardingPagerPage({
   });
   const translateX = scrollX.interpolate({
     inputRange,
+    // Same direction for both LTR and RTL — the effIdx remap already handles
+    // the reversed scroll axis, so the parallax offset direction stays the same.
     outputRange: [w * 0.07, 0, -w * 0.07],
     extrapolate: 'clamp',
   });
@@ -2509,7 +2502,9 @@ function OnboardingPagerPage({
     extrapolate: 'clamp',
   });
   return (
-    <Animated.View style={{ width: w, opacity, transform: [{ translateX }, { scale }] }}>
+    // overflow:hidden ensures no off-screen content (e.g. the orbiting blue
+    // disc on page 2) bleeds visually into adjacent pages.
+    <Animated.View style={{ width: w, overflow: 'hidden', opacity, transform: [{ translateX }, { scale }] }}>
       {children}
     </Animated.View>
   );
@@ -2517,8 +2512,9 @@ function OnboardingPagerPage({
 
 // ================== MAIN ONBOARDING VIEW ==================
 export default function OnboardingScreen({ onFinish, variant = 'user' }: OnboardingScreenProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
+  const isRTL = i18n.language === 'ar' || i18n.language?.startsWith('ar-');
   const [currentPage, setCurrentPage] = useState(0);
   const scrollViewRef = useRef<ScrollView>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
@@ -2527,20 +2523,27 @@ export default function OnboardingScreen({ onFinish, variant = 'user' }: Onboard
   const handleScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       const offsetX = event.nativeEvent.contentOffset.x;
-      const page = Math.round(offsetX / SCREEN_WIDTH);
+      const rawPage = Math.round(offsetX / SCREEN_WIDTH);
+      // In RTL on Android the scroll view starts at the last page (x=0) and
+      // increases toward the first page, so we invert the raw page index.
+      const page = isRTL ? (totalPages - 1 - rawPage) : rawPage;
       if (page !== currentPage && page >= 0 && page < totalPages) {
         setCurrentPage(page);
       }
     },
-    [currentPage],
+    [currentPage, isRTL],
   );
 
   const goToPage = useCallback(
     (page: number) => {
-      scrollViewRef.current?.scrollTo({ x: SCREEN_WIDTH * page, animated: true });
+      // In RTL the scroll target x for a logical page is mirrored
+      const xPos = isRTL
+        ? SCREEN_WIDTH * (totalPages - 1 - page)
+        : SCREEN_WIDTH * page;
+      scrollViewRef.current?.scrollTo({ x: xPos, animated: true });
       setCurrentPage(page);
     },
-    [],
+    [isRTL],
   );
 
   const handleNext = useCallback(() => {
@@ -2554,6 +2557,9 @@ export default function OnboardingScreen({ onFinish, variant = 'user' }: Onboard
   const handleSkip = useCallback(() => {
     onFinish();
   }, [onFinish]);
+
+  // In RTL mode the scroll view starts at the last page; scroll to the first page on mount
+  const [rtlReady, setRtlReady] = useState(!isRTL);
 
   const isTech = variant === 'technician';
   const bgColor = isTech
@@ -2583,6 +2589,14 @@ export default function OnboardingScreen({ onFinish, variant = 'user' }: Onboard
         scrollEventThrottle={16}
         bounces={false}
         style={StyleSheet.absoluteFill}
+        onLayout={() => {
+          // In RTL Android the scroll view starts at the last page (x=0 = last).
+          // Jump instantly to page 0's position so the user sees the first page.
+          if (isRTL && !rtlReady) {
+            scrollViewRef.current?.scrollTo({ x: SCREEN_WIDTH * (totalPages - 1), animated: false });
+            setRtlReady(true);
+          }
+        }}
       >
         <OnboardingPagerPage index={0} scrollX={scrollX}>
           <BuiltOnTrustScreen onContinue={handleNext} />
@@ -2680,14 +2694,19 @@ const styles = StyleSheet.create({
   builtLogoWrap: {
     position: 'absolute',
     top: sy(110),
+    left: 0,
+    right: 0,
     width: sx(153),
     height: sy(66.56),
     justifyContent: 'center',
     alignItems: 'center',
+    alignSelf: 'center',
   },
   builtTitle: {
     position: 'absolute',
     top: sy(244),
+    left: 0,
+    right: 0,
     fontSize: 30,
     lineHeight: 32.4,
     letterSpacing: -0.6,
@@ -2698,7 +2717,10 @@ const styles = StyleSheet.create({
   builtParagraph: {
     position: 'absolute',
     top: sy(297),
+    left: 0,
+    right: 0,
     width: sx(378 - 22.8 * 2),
+    alignSelf: 'center',
     textAlign: 'center',
   },
   builtParagraphRegular: {
@@ -2716,6 +2738,8 @@ const styles = StyleSheet.create({
   builtIntegratedWith: {
     position: 'absolute',
     top: sy(365),
+    left: 0,
+    right: 0,
     fontSize: 12.5,
     letterSpacing: 0.2,
     color: COLORS.blue70,
@@ -2725,6 +2749,8 @@ const styles = StyleSheet.create({
   builtLogosRow: {
     position: 'absolute',
     top: sy(472),
+    left: 0,
+    right: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -2751,8 +2777,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flexDirection: 'row',
     paddingHorizontal: sx(20),
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.85)',
     ...Platform.select({
       ios: {
         shadowColor: '#1e3a5f',
@@ -2762,7 +2786,7 @@ const styles = StyleSheet.create({
       },
       android: {
         elevation: 8,
-        shadowColor: '#0c4a6e',
+        shadowColor: 'rgba(0,0,0,0.18)',
       },
       default: {
         shadowColor: '#000',
@@ -2836,7 +2860,7 @@ const styles = StyleSheet.create({
   fpBorderOrbitLayer: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 0,
-    overflow: 'visible',
+    overflow: 'hidden',
   },
   fpBorderOrbitOuter: {
     position: 'absolute',
@@ -2855,7 +2879,7 @@ const styles = StyleSheet.create({
   fpHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: sx(8),
     marginTop: sy(6),
   },
   fpHeaderLeft: {
@@ -3153,8 +3177,8 @@ const styles = StyleSheet.create({
   },
   mpTopRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 8,
     marginTop: 0,
   },
   mpKicker: {

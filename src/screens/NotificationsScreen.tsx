@@ -2,7 +2,7 @@
  * Notifications Screen – same mechanism as web (notificationService, filter tabs, section list, mark read, delete).
  * Layout is LTR only; filter changes animate like a book (cards enter from left, exit to right).
  */
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -143,7 +143,7 @@ export default function NotificationsScreen({
       const unreadCount = normalizedData.filter((n: Notification) => !n.read).length;
       onUnreadCountChange?.(unreadCount);
     } catch (error) {
-      console.error('Failed to fetch notifications:', error);
+      // silently handle
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -226,17 +226,14 @@ export default function NotificationsScreen({
   };
 
   const handleNotificationTap = async (notification: Notification) => {
-    console.log('[NotificationsScreen] Tap:', notification.id, notification.notificationType);
-
     // Fire and forget the read status update so UI doesn't block
     void markAsRead(notification.id);
     
     if (onNavigateFromNotification) {
       try {
         await onNavigateFromNotification(notification);
-        console.log('[NotificationsScreen] Navigation completed for:', notification.notificationType);
       } catch (e: any) {
-        console.warn('[NotificationsScreen] onNavigateFromNotification failed', e);
+        // silently handle
       }
       return;
     }
@@ -319,6 +316,31 @@ export default function NotificationsScreen({
   const filteredNotifications = getFilteredNotifications(selectedFilter);
   const sections = useMemo(() => groupNotificationsByTime(filteredNotifications), [filteredNotifications]);
 
+  const renderNotificationItem = useCallback(({ item, index }: { item: any; index: number }) => (
+    <NotificationCard
+      notification={item}
+      index={index}
+      onTap={() => handleNotificationTap(item)}
+      onDelete={() => deleteNotification(item.id)}
+      colors={colors}
+      isDarkMode={isDarkMode}
+      t={t}
+      scaledSize={scaledSize}
+    />
+  ), [colors, isDarkMode, t, scaledSize, handleNotificationTap, deleteNotification]);
+
+  const renderSectionHeader = useCallback(({ section: { title } }: { section: { title: string } }) => (
+    <Text style={[styles.sectionHeader, { color: colors.text, fontSize: scaledSize(16), marginTop: 16, marginBottom: 8 }]}>
+      {t(title)}
+    </Text>
+  ), [colors.text, scaledSize, t]);
+
+  const renderSectionFooter = useCallback(() => (
+    <View style={[styles.sectionDivider, { backgroundColor: colors.border, marginVertical: 10 }]} />
+  ), [colors.border]);
+
+  const notifKeyExtractor = useCallback((item: any) => item.id.toString(), []);
+
   const screenStyle = [
     styles.container,
     { backgroundColor: colors.background, transform: [{ translateX: screenSlideAnim }] },
@@ -391,26 +413,15 @@ export default function NotificationsScreen({
           sections={sections}
           style={{ flex: 1, backgroundColor: colors.background }}
           contentContainerStyle={[styles.listContent, { paddingTop: 8, paddingBottom: 32, paddingHorizontal: 4, backgroundColor: colors.background }]}
-          renderItem={({ item, index }) => (
-            <NotificationCard
-              notification={item}
-              index={index}
-              onTap={() => handleNotificationTap(item)}
-              onDelete={() => deleteNotification(item.id)}
-              colors={colors}
-              isDarkMode={isDarkMode}
-              t={t}
-              scaledSize={scaledSize}
-            />
-          )}
-          renderSectionHeader={({ section: { title } }) => (
-            <Text style={[styles.sectionHeader, { color: colors.text, fontSize: scaledSize(16), marginTop: 16, marginBottom: 8 }]}>
-              {t(title)}
-            </Text>
-          )}
-          renderSectionFooter={() => <View style={[styles.sectionDivider, { backgroundColor: colors.border, marginVertical: 10 }]} />}
-          keyExtractor={(item) => item.id.toString()}
+          renderItem={renderNotificationItem}
+          renderSectionHeader={renderSectionHeader}
+          renderSectionFooter={renderSectionFooter}
+          keyExtractor={notifKeyExtractor}
           stickySectionHeadersEnabled={false}
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={10}
+          windowSize={7}
+          initialNumToRender={10}
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
           ListEmptyComponent={
             <View style={[styles.emptyState, { padding: 40, backgroundColor: colors.background }]}>

@@ -26,7 +26,6 @@ import { Image as ExpoImage } from 'expo-image';
 import BonyadLogo from '../components/BonyadLogo';
 import AppTopBar from '../components/AppTopBar';
 import GlassTabBar, { type UserTabId } from '../components/GlassTabBar';
-import AnimatedLoadingScreen from '../components/AnimatedLoadingScreen';
 import { coachMarksStorage } from '../utils/coachMarks';
 import ScreenTourOverlay from '../components/tour/ScreenTourOverlay';
 import { useSimpleScreenTour } from '../hooks/useSimpleScreenTour';
@@ -34,11 +33,11 @@ import { TourProvider } from '../components/tour/TourProvider';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 
-import AppointmentsScreen from './AppointmentsScreen';
 import ProjectsScreen from './ProjectsScreen';
 import ChatRoomsListScreen from './ChatRoomsListScreen';
 import ChatDetailScreen from './ChatDetailScreen';
 import ProfileScreen from './ProfileScreen';
+import OnboardingScreen from './OnboardingScreen';
 import NewProjectView from './NewProjectView';
 import ProjectTypeSelectionScreen from './ProjectTypeSelectionScreen';
 import SmallTaskTypeSelectionScreen from './SmallTaskTypeSelectionScreen';
@@ -68,6 +67,9 @@ import { storage } from '../utils/storage';
 import { FontFamily, FontWeights } from '../constants/Fonts';
 import UserHomeScreenContent from './home/UserHomeScreenContent';
 import ChatbotScreen from './ChatbotScreen';
+import TicketListScreen from './TicketListScreen';
+import TicketDetailScreen from './TicketDetailScreen';
+import CreateTicketScreen from './CreateTicketScreen';
 import type { CategoryInfo } from './CategorySubcategoryScreen';
 import CategorySubcategoryScreen from './CategorySubcategoryScreen';
 import type { ProfileSubviewForChatbot, HomeShellFromChatbotPayload } from '../utils/chatbotNavigateAndroid';
@@ -183,27 +185,25 @@ export default function UserHomeScreen({
   // Animation values for dropdowns and tab content transition
   const mobileDropdownAnim = useRef(new Animated.Value(0)).current;
   const desktopDropdownAnim = useRef(new Animated.Value(0)).current;
-  const tabContentOpacity = useRef(new Animated.Value(1)).current;
-  const tabContentTranslateY = useRef(new Animated.Value(0)).current;
   const tabScrollRef = useRef<ScrollView>(null);
   const prevActiveTabRef = useRef(activeTab);
   const [showServicesList, setShowServicesList] = useState(false);
 
   // Helper to get tab index
-  const getTabIndex = (tab: string) => {
+  const getTabIndex = useCallback((tab: string) => {
     const tabs = ['home', 'projects', 'profile'];
     return tabs.indexOf(tab);
-  };
+  }, []);
 
   // Card width for tab bar
   const CARD_WIDTH = screenWidth * 0.32;
 
   // Helper to scroll to tab
-  const scrollToTab = (index: number) => {
+  const scrollToTab = useCallback((index: number) => {
     tabScrollRef.current?.scrollTo({ x: index * CARD_WIDTH, animated: true });
-  };
+  }, [CARD_WIDTH]);
   const [currentProjectsFilter, setCurrentProjectsFilter] = useState<'available' | 'running' | 'completed'>(projectsFilter || 'available');
-  const [profileSubView, setProfileSubView] = useState<'myData' | 'editProfile' | 'portfolio' | 'subscription' | 'services' | 'availability' | 'regions' | 'smallTaskTypes' | 'paymentHistory' | 'changePassword' | 'changePhone' | 'verifyPhoneChange' | null>(null);
+  const [profileSubView, setProfileSubView] = useState<'myData' | 'editProfile' | 'portfolio' | 'subscription' | 'services' | 'availability' | 'regions' | 'smallTaskTypes' | 'paymentHistory' | 'changePassword' | 'changePhone' | 'verifyPhoneChange' | 'onboarding' | null>(null);
   const [phoneChangeNumber, setPhoneChangeNumber] = useState<string>('');
   const [newProjectSubView, setNewProjectSubView] = useState<'project-type-selection' | 'creation-method' | 'ai' | 'manual' | 'small-task-type-selection' | 'small-task-request-form' | null>(null);
   const [selectedTaskType, setSelectedTaskType] = useState<any>(null);
@@ -222,6 +222,11 @@ export default function UserHomeScreen({
   const [projectsReturnTabOnBack, setProjectsReturnTabOnBack] = useState<UserTabId | null>(null);
   const [pendingOpenSmallTask, setPendingOpenSmallTask] = useState<any>(null);
   const [projectsTabEmbeddedType, setProjectsTabEmbeddedType] = useState<'large' | 'small' | null>(null);
+
+  // Support Tickets state
+  const [showTicketList, setShowTicketList] = useState(false);
+  const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null);
+  const [showCreateTicket, setShowCreateTicket] = useState(false);
   const [manualFormInitial, setManualFormInitial] = useState<{
     categoryId: number;
     categoryNameEn: string;
@@ -250,10 +255,6 @@ export default function UserHomeScreen({
   const newTabTour = useSimpleScreenTour(newTabTourSteps, 'userNewTab');
   const [userProfile, setUserProfile] = useState<{ name?: string; avatar?: string; profileImage?: string } | null>(null);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
-  const [isInHomeTransitionLoading, setIsInHomeTransitionLoading] = useState(false);
-  const homeTransitionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const prevProfileSubViewRef = useRef<typeof profileSubView>(profileSubView);
-  const prevNewProjectSubViewRef = useRef<typeof newProjectSubView>(newProjectSubView);
 
   // Auto-start the coach tour ONLY on the Home tab (prevents tour showing on Notifications tab).
   useEffect(() => {
@@ -321,52 +322,10 @@ export default function UserHomeScreen({
     }
   }, [activeTab, chatReturnContext, hireReturnTab, techProfileReturnTab]);
 
-  // Animate tab content transition when tab changes (slide-up + fade); stronger motion for assistant tab
+  // Track previous tab (no animation — tabs stay mounted, instant switch)
   useEffect(() => {
-    if (prevActiveTabRef.current === activeTab) return;
-    const previousTab = prevActiveTabRef.current;
     prevActiveTabRef.current = activeTab;
-    setIsInHomeTransitionLoading(true);
-    if (homeTransitionTimerRef.current) clearTimeout(homeTransitionTimerRef.current);
-    homeTransitionTimerRef.current = setTimeout(() => setIsInHomeTransitionLoading(false), 280);
-    tabContentOpacity.setValue(0);
-    const chatbotMotion =
-      previousTab === 'chatbot' || activeTab === 'chatbot';
-    tabContentTranslateY.setValue(chatbotMotion ? 32 : 18);
-    Animated.parallel([
-      Animated.timing(tabContentOpacity, {
-        toValue: 1,
-        duration: chatbotMotion ? 300 : 280,
-        useNativeDriver: true,
-      }),
-      Animated.spring(tabContentTranslateY, {
-        toValue: 0,
-        tension: chatbotMotion ? 300 : 280,
-        friction: chatbotMotion ? 22 : 20,
-        useNativeDriver: true,
-      }),
-    ]).start();
   }, [activeTab]);
-
-  // Show the same loader when switching profile subviews (top nav actions inside Profile tab)
-  useEffect(() => {
-    if (prevProfileSubViewRef.current === profileSubView) return;
-    prevProfileSubViewRef.current = profileSubView;
-    if (activeTab !== 'profile') return;
-    setIsInHomeTransitionLoading(true);
-    if (homeTransitionTimerRef.current) clearTimeout(homeTransitionTimerRef.current);
-    homeTransitionTimerRef.current = setTimeout(() => setIsInHomeTransitionLoading(false), 240);
-  }, [activeTab, profileSubView]);
-
-  // Show loader when stepping through new-project subviews inside the New tab
-  useEffect(() => {
-    if (prevNewProjectSubViewRef.current === newProjectSubView) return;
-    prevNewProjectSubViewRef.current = newProjectSubView;
-    if (activeTab !== 'new') return;
-    setIsInHomeTransitionLoading(true);
-    if (homeTransitionTimerRef.current) clearTimeout(homeTransitionTimerRef.current);
-    homeTransitionTimerRef.current = setTimeout(() => setIsInHomeTransitionLoading(false), 240);
-  }, [activeTab, newProjectSubView]);
 
   const exposeProjectTypeTourControl = useCallback((c: { startTour: () => void } | null) => {
     projectTypeSelectionTourControl.current = c;
@@ -560,7 +519,7 @@ export default function UserHomeScreen({
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
 
-  const resolveServiceImageSource = (service: any) => {
+  const resolveServiceImageSource = useCallback((service: any) => {
     if (!service) {
       return null;
     }
@@ -602,14 +561,7 @@ export default function UserHomeScreen({
     const normalizedPath = candidateStr.startsWith('/') ? candidateStr : `/${candidateStr}`;
 
     return { uri: `${baseUrl}${normalizedPath}` };
-  };
-
-  // Debug: Log when unread count changes
-  useEffect(() => {
-    console.log(`🔔 Unread notification count changed to: ${unreadNotificationCount}`);
-  }, [unreadNotificationCount]);
-
-
+  }, []);
 
   // Calculate responsive breakpoints
   const IS_WEB = Platform.OS === 'web';
@@ -648,10 +600,6 @@ export default function UserHomeScreen({
           });
         }
       } catch (error) {
-        // Network unreachable / offline - use fallback; avoid noisy logs in __DEV__
-        if (__DEV__) {
-          console.warn('User profile fetch failed (network may be unreachable):', (error as Error)?.message ?? error);
-        }
         setUserProfile({ name: userName || 'User' });
       }
     };
@@ -681,34 +629,10 @@ export default function UserHomeScreen({
   );
 
   const handleChatBackNavigation = useCallback(() => {
-    if (true) {
-      setSelectedChat(null);
-      setChatReturnContext(null);
-      setShowChatList(true);
-      return;
-    }
-
-    if (chatReturnContext === 'service-technicians') {
-      setSelectedChat(null);
-      setShowChatList(true);
-      setChatReturnContext(null);
-      setActiveTab('service-technicians');
-      return;
-    }
-
-    if (chatReturnContext === 'home') {
-      setSelectedChat(null);
-      setShowChatList(true);
-      setChatReturnContext(null);
-      setServiceTechniciansView((prev) => (prev?.source === 'search' ? null : prev));
-      setActiveTab('home');
-      return;
-    }
-
     setSelectedChat(null);
-    setShowChatList(true);
     setChatReturnContext(null);
-  }, [IS_LARGE_WEB, chatReturnContext, setActiveTab, setSelectedChat, setShowChatList, setChatReturnContext, setServiceTechniciansView]);
+    setShowChatList(true);
+  }, []);
 
   // Load services on mount
   useEffect(() => {
@@ -729,10 +653,9 @@ export default function UserHomeScreen({
         if (response.ok) {
           const data = await response.json();
           setAllServices(data);
-          console.log(`✅ Loaded ${data.length} services`);
         }
       } catch (error) {
-        console.error('❌ Error loading services:', error);
+        // Error loading services - silent in production
       }
     };
 
@@ -740,7 +663,7 @@ export default function UserHomeScreen({
   }, [authToken]);
 
   // Fetch unread notification count
-  const fetchUnreadCount = async () => {
+  const fetchUnreadCount = useCallback(async () => {
     try {
       const token = authToken || await storage.getAuthToken();
       if (!token) {
@@ -766,31 +689,14 @@ export default function UserHomeScreen({
         setUnreadNotificationCount(count);
         return count;
       } else {
-        const errorText = await response.text();
-        // Only log error if it's not a 401 (unauthorized) - that's expected when not logged in
-        if (response.status !== 401) {
-          console.error('❌ Failed to fetch unread count. Status:', response.status);
-          console.error('   Error body:', errorText);
-        }
         // Set to 0 on error to avoid showing stale data
         setUnreadNotificationCount(0);
       }
     } catch (error: any) {
-      // Only log network errors if we have a token (meaning user is authenticated)
-      const token = authToken || await storage.getAuthToken();
-      if (token) {
-        // Check if it's a network error
-        if (error?.message?.includes('Network request failed') || error?.message?.includes('Failed to fetch')) {
-          // Network error - might be offline, silently handle (no log to avoid spam)
-        } else {
-          console.error('❌ Error fetching unread count:', error);
-        }
-      }
-      // Silently set to 0 if no token or on network error
       setUnreadNotificationCount(0);
     }
     return 0;
-  };
+  }, [authToken]);
 
   // Load unread count on component mount
   useEffect(() => {
@@ -837,8 +743,8 @@ export default function UserHomeScreen({
     }
   }, [activeTab]);
 
-  // Levenshtein distance for fuzzy search
-  const levenshteinDistance = (s1: string, s2: string): number => {
+  // Levenshtein distance for fuzzy search (pure function, memoized via useCallback)
+  const levenshteinDistance = useCallback((s1: string, s2: string): number => {
     const len1 = s1.length;
     const len2 = s2.length;
     if (s1 === s2) return 0;
@@ -866,19 +772,19 @@ export default function UserHomeScreen({
       }
     }
     return distance[len1][len2];
-  };
+  }, []);
 
   // Search functions
-  const performExactSearch = (query: string): any[] => {
+  const performExactSearch = useCallback((query: string): any[] => {
     const queryLower = query.toLowerCase();
     return allServices.filter((service: any) =>
       service.nameEn?.toLowerCase().includes(queryLower) ||
       service.nameAr?.toLowerCase().includes(queryLower) ||
       service.description?.toLowerCase().includes(queryLower)
     );
-  };
+  }, [allServices]);
 
-  const performFuzzySearch = (query: string): any[] => {
+  const performFuzzySearch = useCallback((query: string): any[] => {
     const queryLower = query.toLowerCase();
     const maxDistance = query.length <= 3 ? 1 : query.length <= 6 ? 2 : 3;
 
@@ -909,7 +815,7 @@ export default function UserHomeScreen({
       .map((item) => item.service);
 
     return matched;
-  };
+  }, [allServices, levenshteinDistance]);
 
   // AI Search function
   // Handle search text change
@@ -949,27 +855,12 @@ export default function UserHomeScreen({
   }, [searchText, allServices]);
 
   // Handle service selection
-  const handleSelectService = (service: any) => {
-    console.log('═══════════════════════════════════════════════════════════');
-    console.log('🔵 [UserHomeScreen] Service clicked!');
-    console.log('🔵 [UserHomeScreen] Selected service:', service);
-    console.log('🔵 [UserHomeScreen] Service ID:', service?.id);
-    console.log('🔵 [UserHomeScreen] Service Name (EN):', service?.nameEn);
-    console.log('🔵 [UserHomeScreen] Service Name (AR):', service?.nameAr);
-    console.log('🔵 [UserHomeScreen] Current language:', i18n.language);
-
+  const handleSelectService = useCallback((service: any) => {
     if (!service || !service.id) {
-      console.error('❌ [UserHomeScreen] Invalid service object:', service);
       return;
     }
 
-    // Navigate to service technicians screen in tab
     const serviceName = i18n.language === 'ar' && service.nameAr ? service.nameAr : (service.nameEn || 'Service');
-
-    console.log('🔵 [UserHomeScreen] Setting serviceTechniciansView with:', {
-      serviceId: service.id,
-      serviceName: serviceName,
-    });
 
     setServiceTechniciansView({
       serviceId: service.id,
@@ -977,16 +868,10 @@ export default function UserHomeScreen({
       source: 'search',
     });
 
-    // Switch to service-technicians tab
     setActiveTab('service-technicians');
-
-    // Close search results
     setShowSearchResults(false);
     setSearchText('');
-
-    console.log('✅ [UserHomeScreen] Navigation triggered to tab');
-    console.log('═══════════════════════════════════════════════════════════');
-  };
+  }, [i18n.language]);
 
   // Dummy data based on guide
 
@@ -1013,9 +898,9 @@ export default function UserHomeScreen({
         )}
 
         {/* Render content based on active tab — animated transition */}
-        <Animated.View style={{ flex: 1, opacity: tabContentOpacity, transform: [{ translateY: tabContentTranslateY }] }}>
+        <View style={{ flex: 1 }}>
         {/* Home tab - always mounted to preserve state when navigating back */}
-        <View style={{ flex: 1, display: activeTab === 'home' ? 'flex' : 'none', pointerEvents: activeTab === 'home' ? 'auto' : 'none' }}>
+        <View style={{ flex: 1, display: (activeTab === 'home' && !showTicketList && selectedTicketId === null && !showCreateTicket) ? 'flex' : 'none', pointerEvents: (activeTab === 'home' && !showTicketList && selectedTicketId === null && !showCreateTicket) ? 'auto' : 'none' }}>
         {selectedCategory ? (
             <CategorySubcategoryScreen
               category={selectedCategory}
@@ -1124,7 +1009,6 @@ export default function UserHomeScreen({
                 setActiveTab('projects');
                 setCurrentProjectsFilter('available');
               }}
-              onPressAppointments={() => setActiveTab('appointments')}
               onPressCreateProject={() => {
                 setActiveTab('new');
                 setNewProjectSubView('project-type-selection');
@@ -1137,12 +1021,35 @@ export default function UserHomeScreen({
                 setActiveTab('projects');
                 setCurrentProjectsFilter('available');
               }}
+              onPressSupportTickets={() => setShowTicketList(true)}
+              onPressSupportTicket={(ticketId) => setSelectedTicketId(ticketId)}
+              onPressCreateSupportTicket={() => setShowCreateTicket(true)}
             />
           )}
         </View>
 
-        {activeTab === 'projects' && (
-          <View style={{ flex: 1 }}>
+        {/* Support Ticket Screens - Mobile */}
+        {activeTab === 'home' && showTicketList && selectedTicketId === null && !showCreateTicket && (
+          <TicketListScreen
+            onBack={() => setShowTicketList(false)}
+            onCreateTicket={() => setShowCreateTicket(true)}
+            onTicketPress={(ticket) => setSelectedTicketId(ticket.id)}
+          />
+        )}
+        {activeTab === 'home' && selectedTicketId !== null && (
+          <TicketDetailScreen
+            ticketId={selectedTicketId}
+            onBack={() => setSelectedTicketId(null)}
+          />
+        )}
+        {activeTab === 'home' && showCreateTicket && (
+          <CreateTicketScreen
+            onBack={() => setShowCreateTicket(false)}
+            onSuccess={() => { setShowCreateTicket(false); setShowTicketList(true); }}
+          />
+        )}
+
+        <View style={{ flex: 1, display: activeTab === 'projects' ? 'flex' : 'none', pointerEvents: activeTab === 'projects' ? 'auto' : 'none' }}>
             <ProjectsScreen
               filter={currentProjectsFilter}
               initialServiceCategoryId={projectsScreenCategoryId}
@@ -1166,27 +1073,14 @@ export default function UserHomeScreen({
                 setCurrentProjectsFilter(newFilter as any);
               }}
               onOpenChat={(roomId, receiverId, receiverName) => {
-                console.log('🔵 [UserHomeScreen] Opening chat from ProjectsScreen:', receiverId, 'roomId:', roomId, 'receiverName:', receiverName);
                 openChat(roomId, receiverId, receiverName);
               }}
               onViewTechnician={onNavigateToTechnicianProfile || (() => { })}
               onBookAppointment={(technicianId, technicianName, projectId) => {
-                console.log('🔵 [UserHomeScreen] Book Appointment clicked:', { technicianId, technicianName, projectId });
                 onShowBooking?.(technicianId, technicianName, projectId);
               }}
             />
-          </View>
-        )}
-
-        {activeTab === 'appointments' && (
-          <View style={{ flex: 1 }}>
-            <AppointmentsScreen
-              onExposeTourControl={(c: { startTour: () => void }) => {
-                appointmentsTourControl.current = c;
-              }}
-            />
-          </View>
-        )}
+        </View>
 
         {activeTab === 'service-technicians' && serviceTechniciansView && (
           <View style={{ flex: 1 }}>
@@ -1194,18 +1088,15 @@ export default function UserHomeScreen({
               serviceId={serviceTechniciansView.serviceId}
               serviceName={serviceTechniciansView.serviceName}
               onBack={() => {
-                console.log('🔵 [UserHomeScreen] Back from ServiceTechniciansScreen');
                 setActiveTab('home');
                 setServiceTechniciansView(null);
               }}
               onNavigateToTechnicianProfile={(technicianId) => {
-                console.log('🔵 [UserHomeScreen] Navigating to technician profile:', technicianId);
                 setTechProfileReturnTab('service-technicians');
                 setSelectedTechnicianId(technicianId);
                 setActiveTab('technician-profile');
               }}
               onNavigateToChat={(roomId, receiverId, receiverName) => {
-                console.log('🔵 [UserHomeScreen] Opening chat with technician:', receiverId, 'roomId:', roomId, 'receiverName:', receiverName);
                 const source = serviceTechniciansView?.source;
                 const returnContext =
                   source === 'lookForBonyaders'
@@ -1349,8 +1240,7 @@ export default function UserHomeScreen({
           </View>
         )}
 
-        {activeTab === 'notifications' && (
-          <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, display: activeTab === 'notifications' ? 'flex' : 'none', pointerEvents: activeTab === 'notifications' ? 'auto' : 'none' }}>
             <NotificationsScreen
               onUnreadCountChange={setUnreadNotificationCount}
               onNavigateFromNotification={onNavigateFromNotification}
@@ -1358,11 +1248,9 @@ export default function UserHomeScreen({
                 notificationsTourControl.current = c;
               }}
             />
-          </View>
-        )}
+        </View>
 
-        {activeTab === 'profile' && (
-          <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, display: activeTab === 'profile' ? 'flex' : 'none', pointerEvents: activeTab === 'profile' ? 'auto' : 'none' }}>
             {profileSubView === null ? (
               <ProfileScreen
                 onExposeTourControl={(c) => {
@@ -1381,7 +1269,14 @@ export default function UserHomeScreen({
                   setProfileSubView(null);
                   onShowSupportTickets?.();
                 }}
+                onNavigateToOnboarding={() => setProfileSubView('onboarding')}
               />
+            ) : profileSubView === 'onboarding' ? (
+              <Modal visible={true} animationType="slide" style={{ flex: 1 }}>
+                <OnboardingScreen
+                  onFinish={() => setProfileSubView(null)}
+                />
+              </Modal>
             ) : profileSubView === 'myData' ? (
               <MyDataScreen
                 onBack={() => setProfileSubView(null)}
@@ -1445,8 +1340,7 @@ export default function UserHomeScreen({
                 onVerified={() => setProfileSubView(null)}
               />
             ) : null}
-          </View>
-        )}
+        </View>
 
         {activeTab === 'new' && (
           <View
@@ -1477,7 +1371,6 @@ export default function UserHomeScreen({
             ) : newProjectSubView === 'small-task-type-selection' ? (
               <SmallTaskTypeSelectionScreen
                 onSelectTaskType={(taskType) => {
-                  console.log('Selected task type:', taskType);
                   setSelectedTaskType(taskType);
                   setNewProjectSubView('small-task-request-form');
                 }}
@@ -1601,7 +1494,7 @@ export default function UserHomeScreen({
             />
           </View>
         )}
-        </Animated.View>
+        </View>
 
         {/* Glass tab bar — iOS-style with water-drop press */}
         <View style={styles.glassTabBarContainer}>
@@ -1816,21 +1709,6 @@ export default function UserHomeScreen({
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.desktopNavTab, activeTab === 'appointments' && {
-              ...styles.desktopNavTabActive,
-              borderBottomColor: isDarkMode ? colors.primary : '#FFFFFF'
-            }]}
-            onPress={() => setActiveTab('appointments')}
-          >
-            <Text style={[styles.desktopNavTabText, activeTab === 'appointments' && styles.desktopNavTabTextActive, {
-              color: activeTab === 'appointments'
-                ? (isDarkMode ? colors.primary : '#FFFFFF')
-                : (isDarkMode ? colors.textSecondary : '#B3CEE6')
-            }]}>
-              {t('Appointments')}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
             style={[styles.desktopNavTab, activeTab === 'new' && {
               ...styles.desktopNavTabActive,
               borderBottomColor: isDarkMode ? colors.primary : '#FFFFFF'
@@ -1956,7 +1834,7 @@ export default function UserHomeScreen({
       {/* Main content - Render based on active tab */}
       <View style={styles.desktopMainContentWrapper}>
         {/* Home tab - always mounted to preserve state when navigating back */}
-        <View style={{ flex: 1, display: activeTab === 'home' ? 'flex' : 'none', pointerEvents: activeTab === 'home' ? 'auto' : 'none' }}>
+        <View style={{ flex: 1, display: (activeTab === 'home' && !showTicketList && selectedTicketId === null && !showCreateTicket) ? 'flex' : 'none', pointerEvents: (activeTab === 'home' && !showTicketList && selectedTicketId === null && !showCreateTicket) ? 'auto' : 'none' }}>
         {selectedCategory ? (
             <CategorySubcategoryScreen
               category={selectedCategory}
@@ -2054,7 +1932,6 @@ export default function UserHomeScreen({
                 setActiveTab('projects');
                 setCurrentProjectsFilter('available');
               }}
-              onPressAppointments={() => setActiveTab('appointments')}
               onPressCreateProject={() => {
                 setActiveTab('new');
                 setNewProjectSubView('project-type-selection');
@@ -2067,11 +1944,35 @@ export default function UserHomeScreen({
                 setActiveTab('projects');
                 setCurrentProjectsFilter('available');
               }}
+              onPressSupportTickets={() => setShowTicketList(true)}
+              onPressSupportTicket={(ticketId) => setSelectedTicketId(ticketId)}
+              onPressCreateSupportTicket={() => setShowCreateTicket(true)}
             />
           )}
         </View>
 
-        {activeTab === 'projects' && (
+        {/* Support Ticket Screens - Desktop */}
+        {activeTab === 'home' && showTicketList && selectedTicketId === null && !showCreateTicket && (
+          <TicketListScreen
+            onBack={() => setShowTicketList(false)}
+            onCreateTicket={() => setShowCreateTicket(true)}
+            onTicketPress={(ticket) => setSelectedTicketId(ticket.id)}
+          />
+        )}
+        {activeTab === 'home' && selectedTicketId !== null && (
+          <TicketDetailScreen
+            ticketId={selectedTicketId}
+            onBack={() => setSelectedTicketId(null)}
+          />
+        )}
+        {activeTab === 'home' && showCreateTicket && (
+          <CreateTicketScreen
+            onBack={() => setShowCreateTicket(false)}
+            onSuccess={() => { setShowCreateTicket(false); setShowTicketList(true); }}
+          />
+        )}
+
+        <View style={{ flex: 1, display: activeTab === 'projects' ? 'flex' : 'none', pointerEvents: activeTab === 'projects' ? 'auto' : 'none' }}>
           <ScrollView
             style={styles.desktopMainContent}
             contentContainerStyle={styles.scrollContentWithFooter}
@@ -2096,36 +1997,18 @@ export default function UserHomeScreen({
                   setCurrentProjectsFilter(newFilter as any);
                 }}
                 onOpenChat={(roomId, receiverId, receiverName) => {
-                  console.log('🔵 [UserHomeScreen] Opening chat from ProjectsScreen:', receiverId, 'roomId:', roomId, 'receiverName:', receiverName);
                   openChat(roomId, receiverId, receiverName);
                 }}
                 onViewTechnician={onNavigateToTechnicianProfile || (() => { })}
                 onBookAppointment={(technicianId, technicianName, projectId) => {
-                  console.log('🔵 [UserHomeScreen] Book Appointment clicked:', { technicianId, technicianName, projectId });
                   onShowBooking?.(technicianId, technicianName, projectId);
                 }}
               />
             </View>
             <Footer />
           </ScrollView>
-        )}
+        </View>
 
-        {activeTab === 'appointments' && (
-          <ScrollView
-            style={styles.desktopMainContent}
-            contentContainerStyle={styles.scrollContentWithFooter}
-            showsVerticalScrollIndicator={true}
-          >
-            <View style={styles.mainContentWrapper}>
-              <AppointmentsScreen
-                onExposeTourControl={(c: { startTour: () => void }) => {
-                  appointmentsTourControl.current = c;
-                }}
-              />
-            </View>
-            <Footer />
-          </ScrollView>
-        )}
 
         {activeTab === 'service-technicians' && serviceTechniciansView && (
           <ScrollView
@@ -2138,18 +2021,15 @@ export default function UserHomeScreen({
                 serviceId={serviceTechniciansView.serviceId}
                 serviceName={serviceTechniciansView.serviceName}
                 onBack={() => {
-                  console.log('🔵 [UserHomeScreen] Back from ServiceTechniciansScreen');
                   setActiveTab('home');
                   setServiceTechniciansView(null);
                 }}
                 onNavigateToTechnicianProfile={(technicianId) => {
-                  console.log('🔵 [UserHomeScreen] Navigating to technician profile:', technicianId);
                   setTechProfileReturnTab('service-technicians');
                   setSelectedTechnicianId(technicianId);
                   setActiveTab('technician-profile');
                 }}
                 onNavigateToChat={(roomId, receiverId, receiverName) => {
-                  console.log('🔵 [UserHomeScreen] Opening chat with technician:', receiverId, 'roomId:', roomId, 'receiverName:', receiverName);
                   const source = serviceTechniciansView?.source;
                   const returnContext =
                     source === 'lookForBonyaders'
@@ -2284,7 +2164,7 @@ export default function UserHomeScreen({
           </ScrollView>
         )}
 
-        {activeTab === 'profile' && (
+        <View style={{ flex: 1, display: activeTab === 'profile' ? 'flex' : 'none', pointerEvents: activeTab === 'profile' ? 'auto' : 'none' }}>
           <ScrollView
             style={styles.desktopMainContent}
             contentContainerStyle={styles.scrollContentWithFooter}
@@ -2309,7 +2189,14 @@ export default function UserHomeScreen({
                     setProfileSubView(null);
                     onShowSupportTickets?.();
                   }}
+                  onNavigateToOnboarding={() => setProfileSubView('onboarding')}
                 />
+              ) : profileSubView === 'onboarding' ? (
+                <Modal visible={true} animationType="slide" style={{ flex: 1 }}>
+                  <OnboardingScreen
+                    onFinish={() => setProfileSubView(null)}
+                  />
+                </Modal>
               ) : profileSubView === 'myData' ? (
                 <MyDataScreen
                   onBack={() => setProfileSubView(null)}
@@ -2376,7 +2263,7 @@ export default function UserHomeScreen({
             </View>
             <Footer />
           </ScrollView>
-        )}
+        </View>
 
         {activeTab === 'new' && (
           <ScrollView
@@ -2618,12 +2505,6 @@ export default function UserHomeScreen({
         <Ionicons name="chatbubbles" size={28} color="#fff" />
       </TouchableOpacity>
 
-      {/* Local transition loader for tab/subview switches (bottom nav / top nav / profile subviews) */}
-      {isInHomeTransitionLoading && (
-        <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, { zIndex: 9999 }]}>
-          <AnimatedLoadingScreen showMessage={false} />
-        </View>
-      )}
     </View>
     </TourProvider>
   );

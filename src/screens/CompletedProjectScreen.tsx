@@ -147,7 +147,6 @@ export default function CompletedProjectScreen({
         const isTech = role?.toUpperCase() === 'TECHNICIAN';
         setIsTechnician(isTech);
       } catch (error) {
-        console.error('Error checking role:', error);
         setIsTechnician(false);
       }
     };
@@ -158,35 +157,19 @@ export default function CompletedProjectScreen({
     if (!resolvedProjectId) return;
     try {
       setIsReviewLoading(true);
-      console.log('═══════════════════════════════════════════════════════════');
-      console.log('🔍 [CompletedProjectScreen] Loading review status...');
-      console.log('🔍 [CompletedProjectScreen] Project ID:', resolvedProjectId);
-      console.log('🔍 [CompletedProjectScreen] Is Technician:', isTechnician);
-      console.log('═══════════════════════════════════════════════════════════');
-      
+
       const status = await getProjectReviewStatus(resolvedProjectId);
-      
-      console.log('═══════════════════════════════════════════════════════════');
-      console.log('📥 [CompletedProjectScreen] Review status response:');
-      console.log('📥 [CompletedProjectScreen] Has Review:', status.hasReview);
-      console.log('📥 [CompletedProjectScreen] Review Data:', JSON.stringify(status.review, null, 2));
-      console.log('═══════════════════════════════════════════════════════════');
       
       setReviewStatus(status);
       // Pre-fill inline review if exists
       if (status.hasReview && status.review) {
-        console.log('✅ [CompletedProjectScreen] Pre-filling review data');
-        console.log('✅ [CompletedProjectScreen] Rating:', status.review.rating);
-        console.log('✅ [CompletedProjectScreen] Comment:', status.review.comment);
         setInlineRating(status.review.rating || 0);
         setInlineComment(status.review.comment || '');
       } else {
-        console.log('⚠️ [CompletedProjectScreen] No review found - resetting form');
         setInlineRating(0);
         setInlineComment('');
       }
     } catch (error) {
-      console.error('❌ [CompletedProjectScreen] Error loading review status:', error);
       setReviewStatus({ hasReview: false });
     } finally {
       setIsReviewLoading(false);
@@ -194,16 +177,6 @@ export default function CompletedProjectScreen({
   }, [resolvedProjectId, isTechnician]);
 
   useEffect(() => {
-    console.log('═══════════════════════════════════════════════════════════');
-    console.log('🟢 [CompletedProjectScreen] ==========================================');
-    console.log('🟢 [CompletedProjectScreen] ✅ SCREEN OPENED');
-    console.log('🟢 [CompletedProjectScreen] ==========================================');
-    console.log('🟢 [CompletedProjectScreen] Project ID:', resolvedProjectId);
-    console.log('🟢 [CompletedProjectScreen] Project Status:', project.status?.toUpperCase());
-    console.log('🟢 [CompletedProjectScreen] Is Technician:', isTechnician);
-    console.log('🟢 [CompletedProjectScreen] Mode:', isTechnician ? 'TECHNICIAN VIEW' : 'USER VIEW');
-    console.log('═══════════════════════════════════════════════════════════');
-    
     loadPhases();
     loadProjectDetails();
     extractTechnicianInfo();
@@ -214,36 +187,20 @@ export default function CompletedProjectScreen({
   }, [project, loadReviewStatus, isTechnician]);
 
   const extractTechnicianInfo = () => {
-    console.log('═══════════════════════════════════════════════════════════');
-    console.log('🔍 [CompletedProjectScreen] Extracting technician info...');
-    console.log('🔍 [CompletedProjectScreen] Project keys:', Object.keys(project || {}));
-    console.log('🔍 [CompletedProjectScreen] Project.assignedTechnicianId:', project?.assignedTechnicianId);
-    console.log('🔍 [CompletedProjectScreen] Project.technicianId:', project?.technicianId);
-    console.log('🔍 [CompletedProjectScreen] Project.acceptedBid:', project?.acceptedBid);
-    console.log('🔍 [CompletedProjectScreen] Project.assignedTechnician:', project?.assignedTechnician);
-    console.log('🔍 [CompletedProjectScreen] Project.technician:', project?.technician);
-    
     let foundTechnicianId: number | null = null;
     let foundTechnicianName: string = '';
 
     // Try multiple ways to get technician info
     if (project.assignedTechnicianId) {
       foundTechnicianId = project.assignedTechnicianId;
-      console.log('✅ [CompletedProjectScreen] Found via assignedTechnicianId');
     } else if (project.technicianId) {
       foundTechnicianId = project.technicianId;
-      console.log('✅ [CompletedProjectScreen] Found via technicianId');
     } else if (project.acceptedBid?.technicianId) {
       foundTechnicianId = project.acceptedBid.technicianId;
-      console.log('✅ [CompletedProjectScreen] Found via acceptedBid.technicianId');
     } else if (project.assignedTechnician?.id) {
       foundTechnicianId = project.assignedTechnician.id;
-      console.log('✅ [CompletedProjectScreen] Found via assignedTechnician.id');
     } else if (project.technician?.id) {
       foundTechnicianId = project.technician.id;
-      console.log('✅ [CompletedProjectScreen] Found via technician.id');
-    } else {
-      console.warn('⚠️ [CompletedProjectScreen] No technician ID found in project data!');
     }
 
     // Get technician name
@@ -256,10 +213,6 @@ export default function CompletedProjectScreen({
     } else if (project.assignedTechnician?.name) {
       foundTechnicianName = project.assignedTechnician.name;
     }
-
-    console.log('✅ [CompletedProjectScreen] Final Technician ID:', foundTechnicianId);
-    console.log('✅ [CompletedProjectScreen] Final Technician Name:', foundTechnicianName);
-    console.log('═══════════════════════════════════════════════════════════');
 
     if (foundTechnicianId) setTechnicianId(foundTechnicianId);
     if (foundTechnicianName) setTechnicianName(foundTechnicianName);
@@ -332,7 +285,6 @@ export default function CompletedProjectScreen({
       if (!token || !resolvedProjectId) return;
 
       const url = `https://bonyad-hub.com/api/projects/${resolvedProjectId}`;
-      console.log('🔍 [CompletedProjectScreen] Fetching project details from:', url);
 
       const response = await fetch(url, {
         method: 'GET',
@@ -344,8 +296,7 @@ export default function CompletedProjectScreen({
 
       if (response.ok) {
         const projectData = await response.json();
-        console.log('✅ [CompletedProjectScreen] Loaded project details');
-        
+
         // Update technician info
         if (projectData.assignedTechnicianId) {
           setTechnicianId(projectData.assignedTechnicianId);
@@ -376,7 +327,7 @@ export default function CompletedProjectScreen({
         if (projectData.user?.name) setUserName(projectData.user.name);
       }
     } catch (error: any) {
-      console.error('❌ [CompletedProjectScreen] Error loading project details:', error);
+      // silently handle
     }
   };
 
@@ -390,8 +341,6 @@ export default function CompletedProjectScreen({
         projectId: resolvedProjectId,
       });
 
-      console.log('🔍 [CompletedProjectScreen] Fetching phases from:', url);
-
       const response = await fetch(url, {
         method: 'GET',
         headers: {
@@ -402,11 +351,10 @@ export default function CompletedProjectScreen({
 
       if (response.ok) {
         const data = await response.json();
-        console.log('✅ [CompletedProjectScreen] Loaded phases:', data.length);
         setPhases(data);
       }
     } catch (error: any) {
-      console.error('❌ [CompletedProjectScreen] Error loading phases:', error);
+      // silently handle
     } finally {
       setIsLoading(false);
     }
@@ -422,54 +370,22 @@ export default function CompletedProjectScreen({
     const reviewedUserId = isTechnician ? userId : technicianId;
     const reviewedUserName = isTechnician ? (userName || t('the client')) : (technicianName || t('this technician'));
 
-    console.log('═══════════════════════════════════════════════════════════');
-    console.log('🔵 [CompletedProjectScreen] handleSubmitReview called');
-    console.log('🔵 [CompletedProjectScreen] Is Technician:', isTechnician);
-    console.log('🔵 [CompletedProjectScreen] Reviewed User ID:', reviewedUserId);
-    console.log('🔵 [CompletedProjectScreen] Reviewed User Name:', reviewedUserName);
-    console.log('🔵 [CompletedProjectScreen] Inline Rating:', inlineRating);
-    console.log('🔵 [CompletedProjectScreen] Inline Comment:', inlineComment);
-    console.log('═══════════════════════════════════════════════════════════');
-
-    console.log('🔍 [CompletedProjectScreen] Validation 1: Checking reviewedUserId...');
     if (!reviewedUserId) {
-      console.error('❌ [CompletedProjectScreen] VALIDATION FAILED: No user ID found to review');
       Alert.alert(t('Error'), isTechnician ? t('Client information not available') : t('Technician information not available'));
       return;
     }
-    console.log('✅ [CompletedProjectScreen] Validation 1 passed');
-
-    console.log('🔍 [CompletedProjectScreen] Validation 2: Checking inlineRating...');
     if (inlineRating === 0) {
-      console.error('❌ [CompletedProjectScreen] VALIDATION FAILED: Rating is 0');
       Alert.alert(t('Error'), t('Please select a rating'));
       return;
     }
-    console.log('✅ [CompletedProjectScreen] Validation 2 passed');
-
-    console.log('🔍 [CompletedProjectScreen] Validation 3: Checking comment for low rating...');
     // API requires comment for ratings below 3.0
     if (inlineRating < 3 && (!inlineComment || inlineComment.trim().length === 0)) {
-      console.error('❌ [CompletedProjectScreen] VALIDATION FAILED: Rating < 3 requires comment');
       Alert.alert(t('Error'), t('Comment is required for ratings below 3 stars'));
       return;
     }
-    console.log('✅ [CompletedProjectScreen] Validation 3 passed');
-
-    console.log('🔵 [CompletedProjectScreen] All validations passed! Submitting review directly...');
-    
     // Submit directly - no confirmation dialog needed since user already clicked "Submit Review" button
     try {
       setIsSubmittingReview(true);
-      console.log('═══════════════════════════════════════════════════════════');
-      console.log('🔵 [CompletedProjectScreen] Submitting review...');
-      console.log('🔵 [CompletedProjectScreen] Project ID:', resolvedProjectId);
-      console.log('🔵 [CompletedProjectScreen] Reviewed User ID:', reviewedUserId);
-      console.log('🔵 [CompletedProjectScreen] Is Technician Reviewing:', isTechnician);
-      console.log('🔵 [CompletedProjectScreen] Rating:', inlineRating);
-      console.log('🔵 [CompletedProjectScreen] Comment:', inlineComment || '(empty)');
-      console.log('🔵 [CompletedProjectScreen] Comment length:', inlineComment?.length || 0);
-      console.log('═══════════════════════════════════════════════════════════');
 
       // Use the same API endpoint - it works for both user reviewing technician
       // and technician reviewing user (reviewedUserId is the person being reviewed)
@@ -480,9 +396,6 @@ export default function CompletedProjectScreen({
         resolvedProjectId
       );
 
-      console.log('✅ [CompletedProjectScreen] Review submitted successfully');
-      console.log('✅ [CompletedProjectScreen] Result:', JSON.stringify(result, null, 2));
-      
       Alert.alert(t('Success'), t('Thank you for your review!'));
       
       // Reload review status to show the new review
@@ -491,13 +404,6 @@ export default function CompletedProjectScreen({
       // Notify parent
       onSuccess?.();
     } catch (error: any) {
-      console.error('═══════════════════════════════════════════════════════════');
-      console.error('❌ [CompletedProjectScreen] Error submitting review:', error);
-      console.error('❌ [CompletedProjectScreen] Error name:', error.name);
-      console.error('❌ [CompletedProjectScreen] Error message:', error.message);
-      console.error('❌ [CompletedProjectScreen] Error stack:', error.stack);
-      console.error('═══════════════════════════════════════════════════════════');
-      
       // Show user-friendly error message
       const errorMessage = error.message || t('Failed to submit review');
       Alert.alert(t('Error'), errorMessage);
@@ -539,7 +445,6 @@ export default function CompletedProjectScreen({
 
     // API requires comment for ratings below 3.0
     if (inlineRating < 3 && (!inlineComment || inlineComment.trim().length === 0)) {
-      console.log('⚠️ [CompletedProjectScreen] Rating < 3 requires comment');
       Alert.alert(t('Error'), t('Comment is required for ratings below 3 stars'));
       return;
     }
@@ -547,10 +452,6 @@ export default function CompletedProjectScreen({
     // Submit directly - no confirmation dialog needed
     try {
       setIsSubmittingReview(true);
-      console.log('🔵 [CompletedProjectScreen] Updating review...');
-      console.log('🔵 [CompletedProjectScreen] Review ID:', reviewId);
-      console.log('🔵 [CompletedProjectScreen] New Rating:', inlineRating);
-      console.log('🔵 [CompletedProjectScreen] New Comment:', inlineComment);
 
       await updateReview(
         reviewId,
@@ -559,8 +460,6 @@ export default function CompletedProjectScreen({
         resolvedProjectId
       );
 
-      console.log('✅ [CompletedProjectScreen] Review updated successfully');
-      
       Alert.alert(t('Success'), t('Review updated successfully'));
       setIsEditingReview(false);
       
@@ -569,7 +468,6 @@ export default function CompletedProjectScreen({
       
       onSuccess?.();
     } catch (error: any) {
-      console.error('❌ [CompletedProjectScreen] Error updating review:', error);
       Alert.alert(t('Error'), error.message || t('Failed to update review'));
     } finally {
       setIsSubmittingReview(false);
@@ -584,25 +482,20 @@ export default function CompletedProjectScreen({
     const confirmed = window.confirm(t('Are you sure you want to delete your review?'));
     
     if (!confirmed) {
-      console.log('🔵 [CompletedProjectScreen] Delete cancelled by user');
       return;
     }
 
     try {
       setIsDeletingReview(true);
-      console.log('🔵 [CompletedProjectScreen] Deleting review...');
-      console.log('🔵 [CompletedProjectScreen] Review ID:', reviewId);
-      
+
       await deleteReview(reviewId);
       
-      console.log('✅ [CompletedProjectScreen] Review deleted successfully');
       Alert.alert(t('Success'), t('Review deleted successfully'));
       setReviewStatus({ hasReview: false });
       setInlineRating(0);
       setInlineComment('');
       loadReviewStatus();
     } catch (error: any) {
-      console.error('❌ [CompletedProjectScreen] Error deleting review:', error);
       Alert.alert(t('Error'), error?.message || t('Failed to delete review'));
     } finally {
       setIsDeletingReview(false);
@@ -627,7 +520,6 @@ export default function CompletedProjectScreen({
 
   const handleDownloadInvoice = () => {
     // TODO: Implement invoice download - API endpoint not yet available
-    console.log('📥 [CompletedProjectScreen] Download invoice clicked - feature coming soon');
     // No API endpoint available yet for invoice download
   };
 
