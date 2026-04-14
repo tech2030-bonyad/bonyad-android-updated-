@@ -71,6 +71,7 @@ import AnimatedProjectTypeToggle from '../components/AnimatedProjectTypeToggle';
 import { useTourGuide } from '@wrack/react-native-tour-guide';
 import AppTourTooltip from '../components/AppTourTooltip';
 import { LinearGradient } from 'expo-linear-gradient';
+import RialIcon from '../components/RialIcon';
 import ReAnimated, {
   useSharedValue,
   useAnimatedScrollHandler,
@@ -1418,7 +1419,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
                 setShowBidForm(true);
               }}
             >
-              <Ionicons name="cash-outline" size={16} color="#fff" />
+              <RialIcon size={16} variant="light" />
               <Text style={[styles.actionButtonText, { color: '#fff' }]} numberOfLines={1} ellipsizeMode="tail">
                 {t('projectsScreen.bidNow')}
               </Text>

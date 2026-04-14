@@ -52,6 +52,7 @@ import { buildApiUrl, API_ENDPOINTS, getServerBaseUrl } from '../config/api';
 import { storage } from '../utils/storage';
 import { checkHasPortfolio } from '../services/PortfolioService';
 import TechnicalHomeScreenContent from './home/TechnicalHomeScreen';
+import ContractViewerModal from './ContractViewerModal';
 import ChatbotScreen from './ChatbotScreen';
 import TicketListScreen from './TicketListScreen';
 import TicketDetailScreen from './TicketDetailScreen';
@@ -89,6 +90,7 @@ interface TechnicianHomeScreenProps {
   onNavigateToAvailability?: () => void;
   projectsFilter?: 'available' | 'running' | 'completed' | 'bid_received' | 'direct_offers';
   onNavigateFromNotification?: (notification: any) => void | Promise<void>;
+  onNavigateToIntroToApp?: () => void;
   initialProjectToOpen?: any;
   initialSmallTaskToOpen?: any;
   profileNavFromChatbot?: { id: number; subView: 'myData' | 'paymentHistory' | 'smallTaskTypes' | 'regions' } | null;
@@ -106,6 +108,9 @@ export default function TechnicianHomeScreen({
   onShowNotifications,
   onShowAppointments,
   onShowChatbot,
+  onChatbotNavigateToTab,
+  onChatbotNavigateToScreen,
+  onChatbotRequestLiveAgent,
   onShowSupportTickets,
   onShowServiceProviders,
   onShowCommissionPayment,
@@ -119,6 +124,7 @@ export default function TechnicianHomeScreen({
   onNavigateToAvailability,
   projectsFilter = 'available',
   onNavigateFromNotification,
+  onNavigateToIntroToApp,
   initialProjectToOpen,
   initialSmallTaskToOpen,
   profileNavFromChatbot,
@@ -136,6 +142,29 @@ export default function TechnicianHomeScreen({
   const [activeTab, setActiveTab] = useState(openProfileOnMount ? 'profile' : 'home');
   const [currentProjectsFilter, setCurrentProjectsFilter] = useState<'available' | 'running' | 'completed' | 'bid_received' | 'direct_offers'>(projectsFilter || 'available');
   const [profileSubView, setProfileSubView] = useState<'myData' | 'editProfile' | 'portfolio' | 'subscription' | 'services' | 'availability' | 'regions' | 'smallTaskTypes' | 'paymentHistory' | 'changePassword' | 'changePhone' | 'verifyPhoneChange' | 'serviceSuggestions' | 'onboarding' | null>(null);
+
+  // Responsive state — declared early so useEffects below can depend on IS_LARGE_WEB
+  const [screenWidth, setScreenWidth] = useState(Dimensions.get('window').width);
+  useEffect(() => {
+    const subscription = Dimensions.addEventListener('change', ({ window }) => {
+      setScreenWidth(window.width);
+    });
+    return () => { subscription?.remove(); };
+  }, []);
+  const IS_WEB = Platform.OS === 'web';
+  const IS_LARGE_WEB = IS_WEB && screenWidth >= 1200;
+
+  // Chat state + helper — declared early so homeShellFromChatbot effect can depend on openEmbeddedChatFromProjects
+  const [selectedChat, setSelectedChat] = useState<{ roomId: string; receiverId: number; receiverName: string; projectId?: number | null } | null>(null);
+  const [showChatList, setShowChatList] = useState(true);
+  const openEmbeddedChatFromProjects = useCallback(
+    (roomId: string, receiverId: number, receiverName: string, projectId?: number | null) => {
+      setActiveTab('chat');
+      setSelectedChat({ roomId, receiverId, receiverName, projectId: projectId ?? undefined });
+      setShowChatList(IS_LARGE_WEB);
+    },
+    [IS_LARGE_WEB],
+  );
 
   useEffect(() => {
     if (!profileNavFromChatbot) return;
@@ -203,8 +232,6 @@ export default function TechnicianHomeScreen({
   const [portfolioSource, setPortfolioSource] = useState<'home' | 'profile' | null>(null);
   const showAppointmentsView = false;
   const [phoneChangeNumber, setPhoneChangeNumber] = useState<string>('');
-  const [selectedChat, setSelectedChat] = useState<{ roomId: string; receiverId: number; receiverName: string; projectId?: number | null } | null>(null);
-  const [showChatList, setShowChatList] = useState(true);
   const insets = useSafeAreaInsets();
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [projectsReturnTabOnBack, setProjectsReturnTabOnBack] = useState<
@@ -354,15 +381,6 @@ export default function TechnicianHomeScreen({
   const chatEnterTy = useRef(new Animated.Value(0)).current;
   const chatDetailOpac = useRef(new Animated.Value(0)).current;
   const chatDetailTy = useRef(new Animated.Value(0)).current;
-
-  const openEmbeddedChatFromProjects = useCallback(
-    (roomId: string, receiverId: number, receiverName: string, projectId?: number | null) => {
-      setActiveTab('chat');
-      setSelectedChat({ roomId, receiverId, receiverName, projectId: projectId ?? undefined });
-      setShowChatList(IS_LARGE_WEB);
-    },
-    [IS_LARGE_WEB],
-  );
 
   useEffect(() => {
     if (activeTab !== 'chat') {
@@ -978,6 +996,22 @@ export default function TechnicianHomeScreen({
           </View>
         </View>
 
+        {/* Interactive Demo Overlay — mobile layout */}
+        <InteractiveDemoOverlay
+          visible={demoOverlayVisible}
+          demos={TECHNICIAN_HOME_DEMOS}
+          primaryColor={colors.primary || '#00A5F4'}
+          textColor={colors.text}
+          secondaryTextColor={colors.textSecondary}
+          bgColor={colors.background}
+          cardBgColor={colors.cardBackground}
+          borderColor={colors.border}
+          isRTL={isRTL}
+          isDark={theme === 'dark'}
+          fontFamily={fontFamily}
+          onClose={() => setDemoOverlayVisible(false)}
+          t={t}
+        />
       </View>
     );
   }

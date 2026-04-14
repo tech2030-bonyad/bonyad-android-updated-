@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
+import RialIcon from './RialIcon';
 import { buildApiUrl, API_ENDPOINTS } from '../config/api';
 import { storage } from '../utils/storage';
 
@@ -322,7 +323,7 @@ export default function ProjectCards({ authToken }: ProjectCardsProps) {
                 </Text>
               </View>
               <View style={styles.detailRow}>
-                <Ionicons name="cash-outline" size={16} color={colors.textSecondary} />
+                <RialIcon size={16} variant="primary" color={colors.textSecondary} />
                 <Text style={[styles.detailText, { color: colors.textSecondary }]}>
                   {formatCurrency(project.budget)}
                 </Text>

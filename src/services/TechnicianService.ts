@@ -16,6 +16,9 @@ export interface TechnicianProfile {
   completedProjects: number;
   activeBids: number;
   yearsOfExperience?: number;
+  isCompany?: boolean;
+  companyName?: string | null;
+  crNumber?: string | null;
   services?: TechnicianService[];
   reviews?: TechnicianReview[];
 }

@@ -23,6 +23,7 @@ import { storage } from '../utils/storage';
 import { generateRoomId } from '../utils/chatUtils';
 import AnimatedLoadingScreen from '../components/AnimatedLoadingScreen';
 import { getGlassTabBarOverlayHeight } from '../components/GlassTabBar';
+import WathqBadge from '../components/WathqBadge';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -198,8 +199,17 @@ export default function TechnicianProfileView({
 
           <Text style={[styles.name, { color: colors.text, fontSize: scaledSize(20) }]}>{name}</Text>
 
+          {/* Company badge — Wathq verified */}
+          {(profile as any).isCompany && (
+            <WathqBadge
+              companyName={(profile as any).companyName}
+              crNumber={(profile as any).crNumber}
+              variant="full"
+            />
+          )}
+
           {/* Rating row */}
-          <View style={styles.ratingRow}>
+          <View style={[styles.ratingRow, { marginTop: (profile as any).isCompany ? 12 : 0 }]}>
             {renderStars(rating)}
             <Text style={[styles.ratingNum, { color: colors.text }]}>{rating.toFixed(1)}</Text>
             <Text style={[styles.ratingCount, { color: colors.textSecondary }]}>({totalReviews})</Text>

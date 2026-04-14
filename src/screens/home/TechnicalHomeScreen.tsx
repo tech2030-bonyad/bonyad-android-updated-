@@ -32,6 +32,7 @@ import { getAppTopBarPaddingTop } from '../../utils/statusBarHelper';
 import { getAvailableRequests } from '../../services/SmallTaskService';
 import type { SmallTaskRequest } from '../../types/smallTasks';
 import FlowingBorderCard from '../../components/FlowingBorderCard';
+import PulsingStatusDot from '../../components/PulsingStatusDot';
 import { getMyTickets } from '../../services/SupportTicketService';
 import type { SupportTicket } from '../../types/chat';
 import ContractViewerModal from '../ContractViewerModal';
@@ -89,13 +90,20 @@ const COLORS = {
   quickActionLabel: '#374151',
 };
 
-// 5 feature banners matching iOS AdvertisementComponent (PNG images)
-const BANNER_IMAGES = [
+// 5 feature banners matching iOS AdvertisementComponent (PNG images, per language)
+const BANNER_IMAGES_AR = [
   require('../../../assets/banner1.png'),
   require('../../../assets/banner2.png'),
   require('../../../assets/banner3.png'),
   require('../../../assets/banner4.png'),
   require('../../../assets/banner5.png'),
+];
+const BANNER_IMAGES_EN = [
+  require('../../../assets/banner1-en.png'),
+  require('../../../assets/banner2-en.png'),
+  require('../../../assets/banner3-en.png'),
+  require('../../../assets/banner4-en.png'),
+  require('../../../assets/banner5-en.png'),
 ];
 
 type ProjectStatus =
@@ -177,6 +185,7 @@ export default function TechnicalHomeScreen({
   const { colors: themeColors, theme } = useTheme();
   const { fontFamily, boldFontFamily, scaledSize } = useFontFamily();
   const isArabic = i18n.language === 'ar';
+  const bannerImages = isArabic ? BANNER_IMAGES_AR : BANNER_IMAGES_EN;
   const isDarkMode = theme === 'dark';
   const primaryColor = isDarkMode ? themeColors.primary : IOS_PRIMARY;
 
@@ -184,6 +193,7 @@ export default function TechnicalHomeScreen({
   const [smallTasks, setSmallTasks] = useState<SmallTaskRequest[]>([]);
   const [loadingProjects, setLoadingProjects] = useState(true);
   const [loadingTasks, setLoadingTasks] = useState(true);
+  const [showOnboardingCard, setShowOnboardingCard] = useState(true);
   // Contracts & support
   interface HomeContract { id: number; projectId?: number; type?: string; status?: string; otherPartyName?: string; description?: string; signedDocumentUrl?: string | null; createdAt?: string; amount?: number; budget?: number; startDate?: string; projectTitle?: string; }
   const [contracts, setContracts] = useState<HomeContract[]>([]);
@@ -487,13 +497,13 @@ export default function TechnicalHomeScreen({
     const x = e.nativeEvent.contentOffset.x;
     const w = e.nativeEvent.layoutMeasurement.width || SCREEN_WIDTH;
     const index = Math.round(x / w);
-    if (index >= 0 && index < BANNER_IMAGES.length) setBannerIndex(index);
+    if (index >= 0 && index < bannerImages.length) setBannerIndex(index);
   };
 
   useEffect(() => {
     const timer = setInterval(() => {
       setBannerIndex((prev) => {
-        const next = (prev + 1) % BANNER_IMAGES.length;
+        const next = (prev + 1) % bannerImages.length;
         bannerScrollRef.current?.scrollTo({ x: next * SCREEN_WIDTH, animated: true });
         return next;
       });
@@ -565,13 +575,13 @@ export default function TechnicalHomeScreen({
                 activeOpacity={0.92}
               >
                 <View style={[styles.bannerCard, { backgroundColor: isDarkMode ? '#1A1A2E' : '#FFFFFF' }]}>
-                  <Image source={img} style={styles.bannerImage} resizeMode="stretch" />
+                  <Image source={img} style={styles.bannerImage} resizeMode="cover" />
                 </View>
               </TouchableOpacity>
             ))}
           </ScrollView>
           <View style={styles.paginationDots}>
-            {BANNER_IMAGES.map((_, i) => (
+            {bannerImages.map((_, i) => (
               <View
                 key={i}
                 style={[
@@ -585,6 +595,37 @@ export default function TechnicalHomeScreen({
           </View>
       </StaggeredAppearView>
       </View>
+
+      {/* Onboarding intro card — dismissible */}
+      {showOnboardingCard && !!onPressIntroToApp && (
+        <TouchableOpacity
+          activeOpacity={0.88}
+          onPress={onPressIntroToApp}
+          style={{ marginBottom: SECTION_GAP }}
+        >
+          <LinearGradient
+            colors={isDarkMode ? ['#003867', '#005DAC'] : ['#0080E0', '#1A6DB4']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.onboardingCard}
+          >
+            <View style={styles.onboardingCardIcon}>
+              <Ionicons name="play-circle" size={34} color="rgba(255,255,255,0.95)" />
+            </View>
+            <View style={styles.onboardingCardBody}>
+              <Text style={[styles.onboardingCardTitle, { fontSize: scaledSize(14) }]}>{t('home.seeOnboarding')}</Text>
+              <Text style={[styles.onboardingCardSub, { fontSize: scaledSize(11) }]}>{t('home.seeOnboardingSub')}</Text>
+            </View>
+            <TouchableOpacity
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              onPress={(e) => { e.stopPropagation(); setShowOnboardingCard(false); }}
+              style={styles.onboardingCardClose}
+            >
+              <Ionicons name="close" size={18} color="rgba(255,255,255,0.8)" />
+            </TouchableOpacity>
+          </LinearGradient>
+        </TouchableOpacity>
+      )}
 
       {/* Section 2: Title "Available Opportunities" */}
       <StaggeredAppearView index={1}>
@@ -651,7 +692,8 @@ export default function TechnicalHomeScreen({
                         #{project.id}
                       </Text>
                       <View style={[styles.orangePill, isDarkMode && { backgroundColor: 'rgba(234, 88, 12, 0.25)' }]}>
-                        <Text style={[styles.orangePillText, fontStyle, isDarkMode && { color: '#F97316' }]}>{t('Bidding')} 🟠</Text>
+                        <PulsingStatusDot color={isDarkMode ? '#F97316' : COLORS.orange} size={6} />
+                        <Text style={[styles.orangePillText, fontStyle, isDarkMode && { color: '#F97316' }]}>{t('Bidding')}</Text>
                       </View>
                     </View>
                     <View style={styles.budgetRow}>
@@ -735,7 +777,8 @@ export default function TechnicalHomeScreen({
                         </Text>
                       </View>
                       <View style={[styles.orangePill, isDarkMode && { backgroundColor: 'rgba(234, 88, 12, 0.25)' }]}>
-                        <Text style={[styles.orangePillText, fontStyle, isDarkMode && { color: '#F97316' }]}>⚡ {t('Quick task')}</Text>
+                        <PulsingStatusDot color={isDarkMode ? '#FBBF24' : COLORS.yellow} size={6} />
+                        <Text style={[styles.orangePillText, fontStyle, isDarkMode && { color: '#F97316' }]}>{t('Quick task')}</Text>
                       </View>
                     </View>
                     <Text style={[styles.taskTitle, { color: isDarkMode ? themeColors.text : COLORS.sectionTitle }, boldFontStyle]} numberOfLines={2}>
@@ -857,10 +900,12 @@ export default function TechnicalHomeScreen({
                           <Text style={[styles.projectNumber, { color: isDarkMode ? themeColors.text : COLORS.sectionTitle }, fontStyle]}>#{c.id}</Text>
                           {c.signedDocumentUrl ? (
                             <View style={[styles.orangePill, { backgroundColor: 'rgba(52,199,89,0.15)' }]}>
+                              <PulsingStatusDot color="#34C759" size={6} />
                               <Text style={[styles.orangePillText, fontStyle, { color: '#34C759' }]}>{t('Signed')}</Text>
                             </View>
                           ) : (
                             <View style={[styles.orangePill, { backgroundColor: 'rgba(255,149,0,0.15)' }]}>
+                              <PulsingStatusDot color="#FF9500" size={6} />
                               <Text style={[styles.orangePillText, fontStyle, { color: '#FF9500' }]}>{t(c.status || 'Pending')}</Text>
                             </View>
                           )}
@@ -1089,7 +1134,7 @@ const styles = StyleSheet.create({
   },
   bannerImage: {
     width: '100%',
-    height: 160,
+    aspectRatio: 400 / 140,
   },
   paginationDots: {
     flexDirection: 'row',
@@ -1109,6 +1154,12 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
   },
+  onboardingCard: { flexDirection: 'row', alignItems: 'center', borderRadius: 16, paddingVertical: 14, paddingHorizontal: 16, gap: 12, overflow: 'hidden' },
+  onboardingCardIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.18)', justifyContent: 'center', alignItems: 'center' },
+  onboardingCardBody: { flex: 1 },
+  onboardingCardTitle: { fontWeight: '700', color: '#fff', marginBottom: 2 },
+  onboardingCardSub: { color: 'rgba(255,255,255,0.75)', lineHeight: 16 },
+  onboardingCardClose: { padding: 4 },
   // Quick actions
   quickActionsRow: {
     flexDirection: 'row',
@@ -1251,6 +1302,9 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   orangePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     backgroundColor: 'rgba(234, 88, 12, 0.15)',
     paddingHorizontal: 8,
     paddingVertical: 4,

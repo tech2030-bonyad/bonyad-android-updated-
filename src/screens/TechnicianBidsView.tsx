@@ -18,6 +18,7 @@ import { API_ENDPOINTS, buildApiUrlWithParams } from '../config/api';
 import { storage } from '../utils/storage';
 import BidFormModal from './BidFormModal';
 import VisitRequestModal from './VisitRequestModal';
+import RialIcon from '../components/RialIcon';
 
 interface TechnicianBidsViewProps {
   visible: boolean;
@@ -265,7 +266,7 @@ export default function TechnicianBidsView({ visible, project, onClose, onSucces
               {selectedProject.description}
             </Text>
             <View style={styles.projectInfoRow}>
-              <Ionicons name="cash-outline" size={16} color={colors.primary} />
+              <RialIcon size={16} variant="primary" color={colors.primary} />
               <Text style={[styles.projectInfoText, { color: colors.text }]}>
                 {formatBudget(selectedProject.budget)} SAR
               </Text>

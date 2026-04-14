@@ -24,6 +24,7 @@ import { generateRoomId } from '../utils/chatUtils';
 import { storage } from '../utils/storage';
 import AnimatedLoadingScreen from '../components/AnimatedLoadingScreen';
 import { getGlassTabBarOverlayHeight } from '../components/GlassTabBar';
+import WathqBadge from '../components/WathqBadge';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -160,9 +161,12 @@ export default function CategoryTechniciansScreen({
           </TouchableOpacity>
 
           <View style={styles.cardInfo}>
-            <Text style={[styles.cardName, { color: colors.text, fontSize: scaledSize(15) }]} numberOfLines={1}>
-              {name}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={[styles.cardName, { color: colors.text, fontSize: scaledSize(15), flexShrink: 1 }]} numberOfLines={1}>
+                {name}
+              </Text>
+              {item.isCompany && <WathqBadge variant="inline" />}
+            </View>
 
             <View style={styles.ratingRow}>
               {renderStars(rating)}
@@ -175,6 +179,13 @@ export default function CategoryTechniciansScreen({
             </View>
           </View>
         </View>
+
+        {/* Company info */}
+        {item.isCompany && (
+          <View style={{ marginBottom: 10 }}>
+            <WathqBadge companyName={item.companyName} crNumber={item.crNumber} variant="compact" />
+          </View>
+        )}
 
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
 

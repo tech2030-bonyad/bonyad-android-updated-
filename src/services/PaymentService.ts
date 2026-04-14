@@ -405,8 +405,24 @@ export const getPaymentStatus = async (checkoutId: string): Promise<PaymentStatu
     }
 
     const data = await response.json();
-    console.log('✅ [PaymentService] Payment status:', data.status);
-    return data;
+    console.log('✅ [PaymentService] Payment status raw:', JSON.stringify(data));
+
+    // Normalize: the API returns paymentResult (bool) – not isPaymentResult – and no status field.
+    const isSuccess = data.paymentResult ?? data.isPaymentResult ?? false;
+    return {
+      success: data.success ?? false,
+      isPaymentResult: isSuccess,
+      code: data.code ?? '',
+      description: data.description ?? '',
+      transactionId: data.transactionId ?? '',
+      paymentBrand: data.paymentBrand ?? 'MADA',
+      // Derive status from paymentResult since backend doesn't send a status field
+      status: isSuccess
+        ? 'COMPLETED'
+        : data.success === false
+          ? 'FAILED'
+          : 'PENDING',
+    };
   } catch (error: any) {
     console.error('❌ [PaymentService] Get payment status error:', error);
     throw error;

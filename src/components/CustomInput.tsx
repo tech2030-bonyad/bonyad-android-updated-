@@ -207,13 +207,48 @@ export const NameInput: React.FC<Omit<CustomInputProps, 'autoCapitalize'>> = (pr
 };
 
 /**
- * Phone Number Input
+ * Phone Number Input — Saudi format (05XXXXXXXX / ٠٥XXXXXXXX)
+ * - Accepts Arabic (٠-٩) or English (0-9) digits
+ * - Max 10 digits
+ * - Auto-prepends 0 (or ٠) if first digit is not zero
  */
-export const PhoneInput: React.FC<Omit<CustomInputProps, 'keyboardType'>> = (props) => {
+export const PhoneInput: React.FC<Omit<CustomInputProps, 'keyboardType' | 'maxLength'>> = ({ onChangeText, ...props }) => {
+  const handleChangeText = (raw: string) => {
+    // Keep only digit characters (Arabic or English)
+    const filtered = raw.split('').filter(
+      c => (c >= '0' && c <= '9') || (c >= '٠' && c <= '٩')
+    ).join('');
+
+    // Convert Arabic digits → English for counting / prefix check
+    const toEnglish = (s: string) =>
+      s.replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
+    const englishFiltered = toEnglish(filtered);
+
+    // Detect if user is using Arabic digits
+    const hasArabic = filtered.split('').some(c => c >= '٠' && c <= '٩');
+    const zero = hasArabic ? '٠' : '0';
+
+    let result: string;
+    if (englishFiltered.length > 10) {
+      // Trim to 10 English-digit equivalents
+      const excess = filtered.length - (englishFiltered.length - 10);
+      result = filtered.slice(0, excess);
+    } else if (englishFiltered.length > 0 && !englishFiltered.startsWith('0')) {
+      // First char is not zero → prepend appropriate zero, keep up to 9 more
+      result = zero + filtered.slice(0, 9);
+    } else {
+      result = filtered;
+    }
+
+    onChangeText?.(result);
+  };
+
   return (
     <CustomTextInput
       {...props}
+      onChangeText={handleChangeText}
       keyboardType={Platform.OS === 'web' ? 'numeric' : 'number-pad'}
+      maxLength={10}
     />
   );
 };

@@ -33,6 +33,7 @@ import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
 import ConfirmationPopup, { useConfirmationPopup } from '../components/ConfirmationPopup';
 import ProjectCreationFlow from '../components/ProjectCreationFlow';
 import AppBottomSheetModal from '../components/AppBottomSheetModal';
+import RialIcon from '../components/RialIcon';
 
 // ===== DESIGN TOKENS FROM FIGMA =====
 const COLORS = {
@@ -1469,7 +1470,7 @@ export default function BidReceivedProjectScreen({
         <View style={[styles.statsRow, IS_LARGE_WEB && styles.statsRowLargeWeb]}>
           <View style={[styles.statCard, styles.budgetCard, IS_LARGE_WEB && styles.statCardLargeWeb]}>
             <View style={[styles.statHeader, IS_LARGE_WEB && styles.statHeaderLargeWeb]}>
-              <Ionicons name="cash-outline" size={IS_LARGE_WEB ? 20 : 12} color={c.primary80} />
+              <RialIcon size={IS_LARGE_WEB ? 20 : 12} variant="primary" color={c.primary80} />
               <Text style={[styles.statTitle, IS_LARGE_WEB && styles.statTitleLargeWeb]}>
                 {t('Total Budget')}
               </Text>
@@ -1584,11 +1585,7 @@ export default function BidReceivedProjectScreen({
           ]}
           onPress={() => setSelectedTab('bids')}
         >
-          <Ionicons 
-            name="cash-outline" 
-            size={16} 
-            color={selectedTab === 'bids' ? c.primary60 : c.textSecondary} 
-          />
+          <RialIcon size={16} variant="primary" color={selectedTab === 'bids' ? c.primary60 : c.textSecondary} />
           <Text style={[
             styles.tabText,
             selectedTab === 'bids' && styles.tabTextActive,
@@ -1636,7 +1633,7 @@ export default function BidReceivedProjectScreen({
           {/* Bids List */}
           {bids.length === 0 ? (
             <View style={styles.emptyContainer}>
-              <Ionicons name="cash-outline" size={48} color={c.textDividers} />
+              <RialIcon size={48} variant="primary" color={c.textDividers} />
               <Text style={styles.emptyText}>{t('No bids yet')}</Text>
               <Text style={styles.emptySubtext}>
                 {t('Service providers will start sending bids soon')}
@@ -1709,7 +1706,7 @@ export default function BidReceivedProjectScreen({
         <View style={[styles.statsRow, IS_LARGE_WEB && styles.statsRowLargeWeb]}>
           <View style={[styles.statCard, styles.budgetCard, IS_LARGE_WEB && styles.statCardLargeWeb]}>
             <View style={[styles.statHeader, IS_LARGE_WEB && styles.statHeaderLargeWeb]}>
-              <Ionicons name="cash-outline" size={IS_LARGE_WEB ? 20 : 12} color={c.primary80} />
+              <RialIcon size={IS_LARGE_WEB ? 20 : 12} variant="primary" color={c.primary80} />
               <Text style={[styles.statTitle, IS_LARGE_WEB && styles.statTitleLargeWeb]}>
                 {t('Total Budget')}
               </Text>

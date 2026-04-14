@@ -57,6 +57,7 @@ import CreationMethodScreen from './CreationMethodScreen';
 import ServiceTechniciansScreen from './ServiceTechniciansScreen';
 import TechnicianProfileView from './TechnicianProfileView';
 import CategoryTechniciansScreen from './CategoryTechniciansScreen';
+import ContractViewerModal from './ContractViewerModal';
 import Footer from '../components/Footer';
 import { buildApiUrl, API_ENDPOINTS, getApiUrl, getServerBaseUrl } from '../config/api';
 import { storage } from '../utils/storage';
@@ -108,6 +109,7 @@ interface UserHomeScreenProps {
   onNavigateToManualForm?: () => void;
   onPressCategory?: (category: CategoryInfo) => void;
   onNavigateFromNotification?: (notification: any) => void | Promise<void>;
+  onNavigateToIntroToApp?: () => void;
 }
 
 export default function UserHomeScreen({
@@ -143,6 +145,7 @@ export default function UserHomeScreen({
   onNavigateToManualForm,
   onPressCategory,
   onNavigateFromNotification,
+  onNavigateToIntroToApp,
 }: UserHomeScreenProps) {
   // Bottom tab bar ref — passed to home content for tour guide highlighting
   const tabBarRef = useRef<View>(null);

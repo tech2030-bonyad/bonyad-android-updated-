@@ -70,17 +70,19 @@ export default function ForgotPasswordScreen({ onBack, onOTPSent }: ForgotPasswo
       return;
     }
 
-    if (phone.length < 9) {
+    if (phone.length < 10) {
       showError(t('Please enter a valid phone number'));
       return;
     }
 
+    // Strip leading 0 for API (API expects 9-digit: 5XXXXXXXX)
+    const phoneForApi = phone.replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).replace(/\D/g, '').replace(/^0/, '');
     setIsLoading(true);
     try {
       const roleUpper = convertRole(selectedRole);
-      await forgotPassword(phone, roleUpper);
+      await forgotPassword(phoneForApi, roleUpper);
       showAlert(t('OTP sent successfully to your phone'));
-      onOTPSent(phone, roleUpper);
+      onOTPSent(phoneForApi, roleUpper);
     } catch (error: any) {
       showError(error.message || t('Failed to send OTP'));
     } finally {

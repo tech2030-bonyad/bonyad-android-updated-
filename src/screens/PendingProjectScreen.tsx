@@ -34,6 +34,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ProjectCreationFlow from '../components/ProjectCreationFlow';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
 import ConfirmationPopup, { useConfirmationPopup } from '../components/ConfirmationPopup';
+import RialIcon from '../components/RialIcon';
 
 // ===== DESIGN TOKENS FROM FIGMA =====
 const COLORS = {
@@ -792,7 +793,7 @@ export default function PendingProjectScreen({
           <View style={[styles.statsRow, IS_LARGE_WEB && styles.statsRowLargeWeb]}>
             <View style={[styles.statCard, styles.budgetCard, IS_LARGE_WEB && styles.statCardLargeWeb]}>
               <View style={[styles.statHeader, IS_LARGE_WEB && styles.statHeaderLargeWeb]}>
-                <Ionicons name="cash-outline" size={IS_LARGE_WEB ? 20 : 12} color={c.primary80} />
+                <RialIcon size={IS_LARGE_WEB ? 20 : 12} variant="primary" color={c.primary80} />
                 <Text style={[styles.statTitle, IS_LARGE_WEB && styles.statTitleLargeWeb]}>
                   {t('Total Budget')}
                 </Text>

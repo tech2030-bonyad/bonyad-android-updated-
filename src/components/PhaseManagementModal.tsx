@@ -31,6 +31,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { API_ENDPOINTS, buildApiUrl, buildApiUrlWithParams } from '../config/api';
 import { storage } from '../utils/storage';
 import AlertPopup, { useAlertPopup } from './AlertPopup';
+import RialIcon from './RialIcon';
 
 // ===== DESIGN TOKENS =====
 const COLORS = {
@@ -449,7 +450,7 @@ const PhaseFormModal = ({
                 formStyles.inputContainer,
                 errors.money && formStyles.inputError
               ]}>
-                <Ionicons name="cash-outline" size={20} color={COLORS.textSecondary} />
+                <RialIcon size={20} variant="primary" color={COLORS.textSecondary} />
                 <TextInput
                   style={formStyles.input}
                   keyboardType="decimal-pad"
@@ -1102,7 +1103,7 @@ export default function PhaseManagementModal({
               </View>
               <View style={styles.summaryDivider} />
               <View style={styles.summaryItem}>
-                <Ionicons name="cash-outline" size={24} color={COLORS.green80} />
+                <RialIcon size={24} variant="primary" color={COLORS.green80} />
                 <View>
                   <Text style={styles.summaryValue}>{formatBudget(totalCost)}</Text>
                   <Text style={styles.summaryLabel}>{t('Total')}</Text>

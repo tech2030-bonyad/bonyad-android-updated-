@@ -28,6 +28,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { API_ENDPOINTS, buildApiUrl } from '../config/api';
 import { storage } from '../utils/storage';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
+import RialIcon from '../components/RialIcon';
 
 // Design tokens - now using theme colors
 // Removed hardcoded COLORS constant - using theme colors from useTheme hook
@@ -184,7 +185,7 @@ export default function VisitRequestModal({ visible, project, onClose, onSuccess
                     </Text>
                     {project?.budget && (
                       <View style={styles.budgetRow}>
-                        <Ionicons name="cash-outline" size={16} color={colors.success} />
+                        <RialIcon size={16} variant="primary" color={colors.success} />
                         <Text style={[styles.budgetText, { color: colors.success }]}>{formatBudget(project.budget)}</Text>
                       </View>
                     )}

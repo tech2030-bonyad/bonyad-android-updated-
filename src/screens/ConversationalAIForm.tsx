@@ -36,6 +36,7 @@ import ProjectCreationFlow from '../components/ProjectCreationFlow';
 import AlertPopup, { useAlertPopup } from '../components/AlertPopup';
 import ConfirmationPopup, { useConfirmationPopup } from '../components/ConfirmationPopup';
 import { globalAlertManager } from '../utils/globalAlertManager';
+import RialIcon from '../components/RialIcon';
 
 // Design tokens from Figma
 const FIGMA_COLORS = {
@@ -1268,7 +1269,7 @@ export default function ConversationalAIForm({
                       {/* Budget Card */}
                       <View style={[styles.statCard, { backgroundColor: TC.white, borderColor: TC.textDividers, flex: 1, minWidth: 0 }]}>
                         <View style={styles.statCardHeader}>
-                          <Ionicons name="cash-outline" size={14} color={TC.primary80} />
+                          <RialIcon size={14} variant="primary" color={TC.primary80} />
                           <Text style={[styles.statCardLabel, { color: TC.primary80 }]}>
                             {t('Budget')} (SAR)
                           </Text>
@@ -1432,7 +1433,7 @@ export default function ConversationalAIForm({
                       <View style={styles.statsRow}>
                         <View style={[styles.statCard, styles.budgetCard, { flex: 1, backgroundColor: TC.primary10, borderColor: TC.primary80 }]}>
                           <View style={styles.statHeader}>
-                            <Ionicons name="cash-outline" size={12} color={TC.primary80} />
+                            <RialIcon size={12} variant="primary" color={TC.primary80} />
                             <Text style={[styles.statTitle, { color: TC.primary80 }]}>{t('Total Budget')}</Text>
                           </View>
                           <Text style={[styles.statValue, { color: TC.textSecondary }]}>

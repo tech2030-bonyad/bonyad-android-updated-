@@ -131,7 +131,7 @@ export default function AcceptBidModal({ visible, bid, onClose, onSuccess }: Acc
               {/* Bid Price */}
               <View style={styles.summaryRow}>
                 <View style={styles.summaryRowLeft}>
-                  <Ionicons name="cash" size={20} color={colors.primary} />
+                  <RialIcon size={20} variant="primary" color={colors.primary} />
                   <Text style={[styles.summaryLabel, { color: colors.textSecondary, fontSize: scaledSize(14) }]}>
                     {t('Bid Price')}
                   </Text>

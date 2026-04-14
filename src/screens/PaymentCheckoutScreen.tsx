@@ -63,19 +63,31 @@ export default function PaymentCheckoutScreen({
   }, []);
 
   const initializeCheckout = async () => {
+    console.log('🔥 [PaymentCheckout] initializeCheckout called');
+    console.log('   checkoutRequest:', JSON.stringify(checkoutRequest, null, 2));
+
     try {
       setIsLoading(true);
       const request: CreateCheckoutRequest = {
         ...checkoutRequest,
         phaseId,
         subscriptionId,
-        // Set callback URL for result page
-        shopperResultUrl: `${getServerBaseUrl()}/payment/result?checkoutId={checkoutId}`,
+        shopperResultUrl: `${getServerBaseUrl()}/payment/result`,
       };
 
+      console.log('📤 [PaymentCheckout] Calling createCheckout API...');
       const response = await createCheckout(request);
+      console.log('✅ [PaymentCheckout] createCheckout response:', JSON.stringify(response, null, 2));
       setCheckoutData(response);
+
+      // MIMIC mode: backend returns a fake checkoutId — no real widget to show.
+      // Jump straight to status check so the flow completes immediately.
+      if (response.checkoutId?.startsWith('MIMIC')) {
+        console.log('🧪 [PaymentCheckout] MIMIC mode detected — skipping widget, checking status now');
+        await checkPaymentStatus(response.checkoutId, response.transactionId);
+      }
     } catch (error: any) {
+      console.error('❌ [PaymentCheckout] Error creating checkout:', error);
       showError(error.message || t('Failed to initialize payment'), t('Error'));
     } finally {
       setIsLoading(false);
@@ -150,23 +162,30 @@ export default function PaymentCheckoutScreen({
     `;
   };
 
-  const checkPaymentStatus = async (checkoutId: string) => {
+  /**
+   * @param checkoutId  The HyperPay checkout ID to query
+   * @param knownTransactionId  Optional transaction ID already known from the checkout response
+   *                            (used in MIMIC mode before checkoutData state is populated)
+   */
+  const checkPaymentStatus = async (checkoutId: string, knownTransactionId?: number) => {
     try {
       setIsProcessing(true);
       const status = await getPaymentStatus(checkoutId);
       setPaymentStatus(status.status);
+      console.log('📊 [PaymentCheckout] Normalized status:', JSON.stringify(status));
 
       if (status.isPaymentResult && status.status === 'COMPLETED') {
         showSuccess(t('Payment completed successfully'), t('Success'));
+        // Use knownTransactionId (MIMIC path) OR checkoutData.transactionId (WebView path)
+        const txId = knownTransactionId ?? checkoutData?.transactionId ?? 0;
         setTimeout(() => {
-          if (checkoutData?.transactionId) {
-            onSuccess?.(checkoutData.transactionId);
-          }
+          onSuccess?.(txId);
         }, 1500);
       } else if (status.status === 'FAILED') {
         showError(t('Payment failed. Please try again.'), t('Payment Failed'));
       }
     } catch (error: any) {
+      console.error('Error checking payment status:', error);
       showError(error.message || t('Failed to check payment status'), t('Error'));
     } finally {
       setIsProcessing(false);
@@ -184,6 +203,18 @@ export default function PaymentCheckoutScreen({
   // Render payment form using WebView with HyperPay COPYandPAY HTML
   const renderPaymentForm = () => {
     if (!checkoutData) return null;
+
+    // MIMIC mode — no real widget; status was already checked in initializeCheckout
+    if (checkoutData.checkoutId?.startsWith('MIMIC')) {
+      return (
+        <View style={[styles.loadingContainer, { gap: 12 }]}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={{ color: colors.textSecondary, fontSize: scaledSize(14) }}>
+            {t('Processing payment...')}
+          </Text>
+        </View>
+      );
+    }
 
     const htmlContent = generateHyperPayHTML(checkoutData.checkoutId);
 
@@ -223,6 +254,8 @@ export default function PaymentCheckoutScreen({
           </View>
         )}
         onError={(syntheticEvent) => {
+          const { nativeEvent } = syntheticEvent;
+          console.error('WebView error:', nativeEvent);
           showError(t('Failed to load payment form'), t('Error'));
         }}
         javaScriptEnabled={true}

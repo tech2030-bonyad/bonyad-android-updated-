@@ -19,6 +19,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { buildApiUrl, API_ENDPOINTS, getServerBaseUrl } from '../config/api';
 import { storage } from '../utils/storage';
+import WathqBadge from '../components/WathqBadge';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -36,6 +37,9 @@ interface Technician {
   completedProjects?: number;
   hourlyRate?: number;
   status?: string;
+  isCompany?: boolean;
+  companyName?: string | null;
+  crNumber?: string | null;
 }
 
 interface ServiceProvidersScreenProps {
@@ -172,10 +176,11 @@ export default function ServiceProvidersScreen({
   }, [searchText, selectedRegion, selectedRating, providers]);
 
   const renderTechnicianCard = ({ item }: { item: Technician }) => {
-    const avatarUrl = item.avatar || item.profileImage
-      ? (item.avatar || item.profileImage).startsWith('http')
-        ? item.avatar || item.profileImage
-        : `${getServerBaseUrl()}${item.avatar || item.profileImage}`
+    const rawAvatar = item.avatar || item.profileImage;
+    const avatarUrl = rawAvatar
+      ? rawAvatar.startsWith('http')
+        ? rawAvatar
+        : `${getServerBaseUrl()}${rawAvatar}`
       : null;
 
     const serviceName = isRTL && item.serviceNameAr ? item.serviceNameAr : (item.serviceName || t('Professional'));
@@ -210,11 +215,14 @@ export default function ServiceProvidersScreen({
 
         {/* Info */}
         <View style={styles.cardBody}>
-          <Text style={[styles.name, { color: colorsConfig.text }]} numberOfLines={1}>
-            {item.name}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={[styles.name, { color: colorsConfig.text, flexShrink: 1 }]} numberOfLines={1}>
+              {item.name}
+            </Text>
+            {item.isCompany && <WathqBadge variant="inline" />}
+          </View>
           <Text style={[styles.service, { color: colorsConfig.textSecondary }]} numberOfLines={1}>
-            {serviceName}
+            {item.isCompany && item.companyName ? item.companyName : serviceName}
           </Text>
 
           {/* Rating */}

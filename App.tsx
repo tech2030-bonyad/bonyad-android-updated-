@@ -2117,6 +2117,7 @@ function AppContent({
                     onNavigateFromNotification={async (n) => {
                       await handleNotificationTap({ data: n });
                     }}
+                    onNavigateToIntroToApp={() => navigate('introToApp')}
                   />
               )}
             </>

@@ -105,7 +105,7 @@ export default function NotificationPopup({
         return 'folder-open-outline';
       case 'BID_RECEIVED':
       case 'BID_ACCEPTED':
-        return 'cash-outline';
+        return 'wallet-outline';
       case 'PHASE_COMPLETED':
       case 'PHASE_APPROVED':
         return 'checkmark-circle-outline';
