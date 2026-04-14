@@ -28,7 +28,6 @@ interface TicketListScreenProps {
   onTicketPress?: (ticket: SupportTicket) => void;
   onNavigateTab?: (tab: 'home' | 'projects' | 'chat' | 'profile') => void;
   onPressChat?: () => void;
-  onPressInfo?: () => void;
   onPressNotifications?: () => void;
 }
 
@@ -154,7 +153,6 @@ const TicketListScreen: React.FC<TicketListScreenProps> = ({
   onTicketPress,
   onNavigateTab,
   onPressChat,
-  onPressInfo,
   onPressNotifications,
 }) => {
   const { t, i18n } = useTranslation();
@@ -221,7 +219,6 @@ const TicketListScreen: React.FC<TicketListScreenProps> = ({
     >
       <AppTopBar
         onPressChat={onPressChat || (() => {})}
-        onPressInfo={onPressInfo || (() => {})}
         onPressNotifications={onPressNotifications || (() => {})}
         primaryColor={colors.primary}
         isDark={isDarkMode}

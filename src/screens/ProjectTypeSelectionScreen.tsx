@@ -107,15 +107,12 @@ interface ProjectTypeSelectionScreenProps {
   onSelectLarge: () => void;
   onSelectSmall: () => void;
   onBack?: () => void;
-  /** Optional: allow parent (UserHomeScreen) to store a tour control handle. */
-  onExposeTourControl?: (control: { startTour: () => void } | null) => void;
 }
 
 export default function ProjectTypeSelectionScreen({
   onSelectLarge,
   onSelectSmall,
   onBack,
-  onExposeTourControl,
 }: ProjectTypeSelectionScreenProps) {
   const { t, i18n } = useTranslation();
   const { colors } = useTheme();
@@ -125,12 +122,6 @@ export default function ProjectTypeSelectionScreen({
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
 
-
-  useEffect(() => {
-    // No dedicated project-type selection tour yet; expose a no-op control for compatibility.
-    onExposeTourControl?.({ startTour: () => {} });
-    return () => onExposeTourControl?.(null);
-  }, [onExposeTourControl]);
 
   const handleSelect = (callback: () => void) => {
     Animated.parallel([

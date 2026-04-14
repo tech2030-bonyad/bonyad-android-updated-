@@ -14,7 +14,6 @@ import {
   ActivityIndicator,
   Animated,
   I18nManager,
-  InteractionManager,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,10 +25,7 @@ import { Image as ExpoImage } from 'expo-image';
 import BonyadLogo from '../components/BonyadLogo';
 import AppTopBar from '../components/AppTopBar';
 import GlassTabBar, { type UserTabId } from '../components/GlassTabBar';
-import { coachMarksStorage } from '../utils/coachMarks';
-import ScreenTourOverlay from '../components/tour/ScreenTourOverlay';
-import { useSimpleScreenTour } from '../hooks/useSimpleScreenTour';
-import { TourProvider } from '../components/tour/TourProvider';
+import ScreenTransition from '../components/ScreenTransition';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 
@@ -148,6 +144,16 @@ export default function UserHomeScreen({
   onPressCategory,
   onNavigateFromNotification,
 }: UserHomeScreenProps) {
+  // Bottom tab bar ref — passed to home content for tour guide highlighting
+  const tabBarRef = useRef<View>(null);
+  // Per-tab refs for individual tour steps
+  const tabHomeRef = useRef<View>(null);
+  const tabProjectsRef = useRef<View>(null);
+  const tabNewRef = useRef<View>(null);
+  const tabChatRef = useRef<View>(null);
+  const tabProfileRef = useRef<View>(null);
+  const tabRefs = { home: tabHomeRef, projects: tabProjectsRef, new: tabNewRef, chat: tabChatRef, profile: tabProfileRef };
+
   // Responsive state - updates on window resize
   const [screenWidth, setScreenWidth] = useState(Dimensions.get('window').width);
 
@@ -187,6 +193,7 @@ export default function UserHomeScreen({
   const desktopDropdownAnim = useRef(new Animated.Value(0)).current;
   const tabScrollRef = useRef<ScrollView>(null);
   const prevActiveTabRef = useRef(activeTab);
+
   const [showServicesList, setShowServicesList] = useState(false);
 
   // Helper to get tab index
@@ -236,46 +243,8 @@ export default function UserHomeScreen({
     subcategoryNameAr?: string;
   } | null>(null);
   const insets = useSafeAreaInsets();
-  const homeContentControl = useRef<{ startTour: () => void } | null>(null);
-  const projectsTourControl = useRef<{ startTour: () => void } | null>(null);
-  const chatTourControl = useRef<{ startTour: () => void } | null>(null);
-  /** Stable reference so ChatRoomsListScreen’s expose effect does not re-fire every parent render. */
-  const exposeChatTourControl = useCallback((c: { startTour: () => void }) => {
-    chatTourControl.current = c;
-  }, []);
-  const profileTourControl = useRef<{ startTour: () => void } | null>(null);
-  const notificationsTourControl = useRef<{ startTour: () => void } | null>(null);
-  const appointmentsTourControl = useRef<{ startTour: () => void } | null>(null);
-  const projectTypeSelectionTourControl = useRef<{ startTour: () => void } | null>(null);
-
-  const newTabTourSteps = useMemo(
-    () => [{ id: 'panel', i18nSuffix: 'overview' as const }],
-    [],
-  );
-  const newTabTour = useSimpleScreenTour(newTabTourSteps, 'userNewTab');
   const [userProfile, setUserProfile] = useState<{ name?: string; avatar?: string; profileImage?: string } | null>(null);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
-
-  // Auto-start the coach tour ONLY on the Home tab (prevents tour showing on Notifications tab).
-  useEffect(() => {
-    if (activeTab !== 'home') return;
-    let cancelled = false;
-    let timer: any = null;
-    (async () => {
-      const hasSeen = await coachMarksStorage.hasSeenTutorial('userHome');
-      if (cancelled) return;
-      if (!hasSeen) {
-        timer = setTimeout(() => {
-          if (cancelled) return;
-          homeContentControl.current?.startTour();
-        }, 2500);
-      }
-    })();
-    return () => {
-      cancelled = true;
-      if (timer) clearTimeout(timer);
-    };
-  }, [activeTab]);
 
   // Reset sub-views when switching tabs and sync tab bar scroll
   useEffect(() => {
@@ -327,80 +296,6 @@ export default function UserHomeScreen({
     prevActiveTabRef.current = activeTab;
   }, [activeTab]);
 
-  const exposeProjectTypeTourControl = useCallback((c: { startTour: () => void } | null) => {
-    projectTypeSelectionTourControl.current = c;
-  }, []);
-
-  // Info button: restart the tour for whichever main tab is currently open (same overlay style as Home).
-  const handleRestartCoachTour = async () => {
-    // doubleRAF is enough — screen is already rendered, no need for 150ms setTimeout
-    const delayStart = (fn: () => void) => {
-      requestAnimationFrame(() => requestAnimationFrame(fn));
-    };
-
-    if (activeTab === 'home') {
-      await coachMarksStorage.clearTutorial('userHome');
-      setSelectedCategory(null);
-      delayStart(() => homeContentControl.current?.startTour());
-      return;
-    }
-
-    if (activeTab === 'projects') {
-      const projectTypeTour = projectTypeSelectionTourControl.current;
-      if (projectTypeTour) {
-        await coachMarksStorage.clearTutorial('userProjectTypeSelection');
-        delayStart(() => projectTypeTour.startTour());
-      } else {
-        await coachMarksStorage.clearTutorial('userProjectsTab');
-        delayStart(() => projectsTourControl.current?.startTour());
-      }
-      return;
-    }
-
-    if (activeTab === 'chat') {
-      await coachMarksStorage.clearTutorial('userChatTab');
-      setSelectedChat(null);
-      setShowChatList(true);
-      let started = false;
-      const runChatTour = () => {
-        if (started) return;
-        started = true;
-        requestAnimationFrame(() => chatTourControl.current?.startTour());
-      };
-      InteractionManager.runAfterInteractions(runChatTour);
-      setTimeout(runChatTour, 420);
-      return;
-    }
-
-    if (activeTab === 'profile' && profileSubView === null) {
-      await coachMarksStorage.clearTutorial('userProfileTab');
-      delayStart(() => profileTourControl.current?.startTour());
-      return;
-    }
-
-    if (activeTab === 'new') {
-      if (newProjectSubView === 'project-type-selection') {
-        await coachMarksStorage.clearTutorial('userProjectTypeSelection');
-        delayStart(() => projectTypeSelectionTourControl.current?.startTour());
-      } else {
-        await coachMarksStorage.clearTutorial('userNewTab');
-        delayStart(() => newTabTour.startTour());
-      }
-      return;
-    }
-
-    if (activeTab === 'notifications') {
-      await coachMarksStorage.clearTutorial('userNotificationsTab');
-      delayStart(() => notificationsTourControl.current?.startTour());
-      return;
-    }
-
-    if (activeTab === 'appointments') {
-      await coachMarksStorage.clearTutorial('appointments');
-      delayStart(() => appointmentsTourControl.current?.startTour());
-      return;
-    }
-  };
 
   // Sync currentProjectsFilter when projectsFilter prop changes
   useEffect(() => {
@@ -882,7 +777,6 @@ export default function UserHomeScreen({
   if (shouldRenderMobile) {
     const isHomeTabOnly = activeTab === 'home' && !selectedCategory;
     return (
-      <TourProvider>
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         {/* Top bar — same as home screen (logo + Chat | Info | Notifications) */}
         {!isHomeTabOnly && (
@@ -892,12 +786,11 @@ export default function UserHomeScreen({
             backgroundColor={colors.background}
             unreadNotificationCount={unreadNotificationCount}
             onPressChat={() => setActiveTab('chat')}
-            onPressInfo={handleRestartCoachTour}
             onPressNotifications={() => setActiveTab('notifications')}
           />
         )}
 
-        {/* Render content based on active tab — animated transition */}
+        {/* Render content based on active tab */}
         <View style={{ flex: 1 }}>
         {/* Home tab - always mounted to preserve state when navigating back */}
         <View style={{ flex: 1, display: (activeTab === 'home' && !showTicketList && selectedTicketId === null && !showCreateTicket) ? 'flex' : 'none', pointerEvents: (activeTab === 'home' && !showTicketList && selectedTicketId === null && !showCreateTicket) ? 'auto' : 'none' }}>
@@ -916,7 +809,6 @@ export default function UserHomeScreen({
             <UserHomeScreenContent
               userName={userProfile?.name}
               unreadNotificationCount={unreadNotificationCount}
-              onExposeControl={(ctrl) => { homeContentControl.current = ctrl; }}
               onPressSearch={(query: string) => {
                 setSearchText(query);
                 if (query.trim().length > 0) {
@@ -939,7 +831,6 @@ export default function UserHomeScreen({
               }}
               onPressNotifications={() => setActiveTab('notifications')}
               onPressMessages={() => setActiveTab('chat')}
-              onPressInfo={handleRestartCoachTour}
               onPressFab={() => {
                 setActiveTab('new');
                 setNewProjectSubView('project-type-selection');
@@ -1024,6 +915,8 @@ export default function UserHomeScreen({
               onPressSupportTickets={() => setShowTicketList(true)}
               onPressSupportTicket={(ticketId) => setSelectedTicketId(ticketId)}
               onPressCreateSupportTicket={() => setShowCreateTicket(true)}
+              tabBarRef={tabBarRef}
+              tabRefs={tabRefs}
             />
           )}
         </View>
@@ -1056,10 +949,6 @@ export default function UserHomeScreen({
               initialProject={pendingOpenProject}
               initialSmallTask={pendingOpenSmallTask}
               initialProjectType={projectsTabEmbeddedType ?? undefined}
-              onExposeTourControl={(c) => {
-                projectsTourControl.current = c;
-              }}
-              onExposeProjectTypeTourControl={exposeProjectTypeTourControl}
               onBack={() => {
                 if (projectsReturnTabOnBack) {
                   setActiveTab(projectsReturnTabOnBack as any);
@@ -1068,6 +957,7 @@ export default function UserHomeScreen({
                   setActiveTab('home');
                 }
                 setProjectsScreenCategoryId(null);
+                setPendingOpenProject(null);
               }}
               onFilterChange={(newFilter) => {
                 setCurrentProjectsFilter(newFilter as any);
@@ -1083,7 +973,7 @@ export default function UserHomeScreen({
         </View>
 
         {activeTab === 'service-technicians' && serviceTechniciansView && (
-          <View style={{ flex: 1 }}>
+          <ScreenTransition>
             <ServiceTechniciansScreen
               serviceId={serviceTechniciansView.serviceId}
               serviceName={serviceTechniciansView.serviceName}
@@ -1114,11 +1004,11 @@ export default function UserHomeScreen({
                 setActiveTab('new');
               }}
             />
-          </View>
+          </ScreenTransition>
         )}
 
         {activeTab === 'category-technicians' && categoryTechniciansView && (
-          <View style={{ flex: 1 }}>
+          <ScreenTransition>
             <CategoryTechniciansScreen
               categoryId={categoryTechniciansView.categoryId}
               categoryName={categoryTechniciansView.categoryName}
@@ -1142,11 +1032,11 @@ export default function UserHomeScreen({
                 setActiveTab('new');
               }}
             />
-          </View>
+          </ScreenTransition>
         )}
 
         {activeTab === 'technician-profile' && selectedTechnicianId && (
-          <View style={{ flex: 1 }}>
+          <ScreenTransition>
             <TechnicianProfileView
               technicianId={selectedTechnicianId}
               onBack={() => {
@@ -1168,16 +1058,11 @@ export default function UserHomeScreen({
                 setActiveTab('new');
               }}
             />
-          </View>
+          </ScreenTransition>
         )}
 
         {activeTab === 'chat' && (
-          <View
-            style={{
-              flex: 1,
-              flexDirection: IS_LARGE_WEB ? 'row' : 'column',
-            }}
-          >
+          <ScreenTransition style={{ flexDirection: IS_LARGE_WEB ? 'row' : 'column' }}>
             {/* Chat List - Only show if showChatList is true */}
             {(showChatList || IS_LARGE_WEB) && (
               <View style={[
@@ -1196,7 +1081,6 @@ export default function UserHomeScreen({
               ]}>
                 <ChatRoomsListScreen
                   stackedUnderAppTopBar
-                  onExposeTourControl={exposeChatTourControl}
                   onOpenChat={(roomId, receiverId, receiverName, projectId) => {
                     openChat(roomId, receiverId, receiverName, { projectId });
                   }}
@@ -1237,25 +1121,19 @@ export default function UserHomeScreen({
                 />
               </View>
             )}
-          </View>
+          </ScreenTransition>
         )}
 
         <View style={{ flex: 1, display: activeTab === 'notifications' ? 'flex' : 'none', pointerEvents: activeTab === 'notifications' ? 'auto' : 'none' }}>
             <NotificationsScreen
               onUnreadCountChange={setUnreadNotificationCount}
               onNavigateFromNotification={onNavigateFromNotification}
-              onExposeTourControl={(c: { startTour: () => void }) => {
-                notificationsTourControl.current = c;
-              }}
             />
         </View>
 
         <View style={{ flex: 1, display: activeTab === 'profile' ? 'flex' : 'none', pointerEvents: activeTab === 'profile' ? 'auto' : 'none' }}>
             {profileSubView === null ? (
               <ProfileScreen
-                onExposeTourControl={(c) => {
-                  profileTourControl.current = c;
-                }}
                 onLogout={onLogout}
                 onNavigateToEditProfile={() => setProfileSubView('myData')}
                 onNavigateToPortfolio={() => setProfileSubView('portfolio')}
@@ -1343,14 +1221,9 @@ export default function UserHomeScreen({
         </View>
 
         {activeTab === 'new' && (
-          <View
-            ref={newProjectSubView !== 'project-type-selection' ? newTabTour.register('panel') : undefined}
-            collapsable={false}
-            style={{ flex: 1 }}
-          >
+          <ScreenTransition>
             {newProjectSubView === 'project-type-selection' ? (
               <ProjectTypeSelectionScreen
-                onExposeTourControl={exposeProjectTypeTourControl}
                 onSelectLarge={() => {
                   setSelectedTaskType(null);
                   setManualFormInitial({
@@ -1478,11 +1351,11 @@ export default function UserHomeScreen({
                 initialSubcategoryName={i18n.language === 'ar' ? manualFormInitial?.subcategoryNameAr : manualFormInitial?.subcategoryNameEn}
               />
             ) : null}
-          </View>
+          </ScreenTransition>
         )}
 
         {activeTab === 'chatbot' && (
-          <View style={{ flex: 1 }}>
+          <ScreenTransition>
             <ChatbotScreen
               onBack={() => setActiveTab('home')}
               userId={userId}
@@ -1492,12 +1365,12 @@ export default function UserHomeScreen({
               onRequestLiveAgent={onChatbotRequestLiveAgent}
               hasBottomTabBar
             />
-          </View>
+          </ScreenTransition>
         )}
         </View>
 
         {/* Glass tab bar — iOS-style with water-drop press */}
-        <View style={styles.glassTabBarContainer}>
+        <View ref={tabBarRef} collapsable={false} style={styles.glassTabBarContainer}>
           <GlassTabBar
             activeTab={
               activeTab === 'chatbot'
@@ -1514,6 +1387,9 @@ export default function UserHomeScreen({
               if (activeTab === 'profile' && tab !== 'profile') {
                 onProfileTabClosed?.();
               }
+              if (tab === 'projects') {
+                setPendingOpenProject(null);
+              }
               setActiveTab(tab as typeof activeTab);
             }}
             onNewPress={() => {
@@ -1525,39 +1401,9 @@ export default function UserHomeScreen({
             isDark={isDarkMode}
             bottomInset={insets.bottom}
             t={t}
+            tabRefs={tabRefs}
           />
         </View>
-
-        {activeTab === 'new' && (
-          <ScreenTourOverlay
-            visible={newTabTour.tourActive}
-            tourStep={newTabTour.tourStep}
-            stepRect={newTabTour.stepRect}
-            totalSteps={newTabTourSteps.length}
-            stepOrder={newTabTour.tourStep + 1}
-            stepText={
-              newTabTourSteps[newTabTour.tourStep]
-                ? t(`tutorial.tab.new.${newTabTourSteps[newTabTour.tourStep].i18nSuffix}`)
-                : ''
-            }
-            isFirst={newTabTour.tourStep === 0}
-            isLast={newTabTour.tourStep === newTabTourSteps.length - 1}
-            primaryColor={colors.primary}
-            textColor={colors.text}
-            secondaryTextColor={colors.textSecondary}
-            bgColor={colors.cardBackground}
-
-            fontFamily={fontFamily}
-            boldFontFamily={boldFontFamily}
-            onNext={() =>
-              newTabTour.setTourStep((s: number) => Math.min(s + 1, newTabTourSteps.length - 1))
-            }
-            onPrev={() => newTabTour.setTourStep((s: number) => Math.max(s - 1, 0))}
-            onSkip={newTabTour.endTour}
-            onFinish={newTabTour.endTour}
-            t={t}
-          />
-        )}
 
         <Modal
           visible={showServicesList}
@@ -1645,13 +1491,11 @@ export default function UserHomeScreen({
           </View>
         </Modal>
       </View>
-      </TourProvider>
     );
   }
 
   // Render desktop layout for large web screens
   return (
-    <TourProvider>
     <View style={[styles.desktopContainer, { backgroundColor: colors.background }]}>
       {/* New Horizontal Navigation Bar - Figma Design */}
       <View style={[styles.desktopNavBar, {
@@ -1727,13 +1571,6 @@ export default function UserHomeScreen({
 
         {/* Icons Section */}
         <View style={styles.desktopNavIcons}>
-          <TouchableOpacity style={styles.desktopNavIconButton} onPress={handleRestartCoachTour}>
-            <Ionicons
-              name="information-circle-outline"
-              size={24}
-              color={isDarkMode ? colors.text : '#E6EFF7'}
-            />
-          </TouchableOpacity>
           <TouchableOpacity
             style={styles.desktopNavIconButton}
             onPress={() => setActiveTab('chat')}
@@ -1850,7 +1687,6 @@ export default function UserHomeScreen({
             <UserHomeScreenContent
               userName={userProfile?.name}
               unreadNotificationCount={unreadNotificationCount}
-              onExposeControl={(ctrl) => { homeContentControl.current = ctrl; }}
               onPressSearch={(query: string) => {
                 setSearchText(query);
                 if (query.trim().length > 0) {
@@ -1873,7 +1709,6 @@ export default function UserHomeScreen({
               }}
               onPressNotifications={() => setActiveTab('notifications')}
               onPressMessages={() => setActiveTab('chat')}
-              onPressInfo={handleRestartCoachTour}
               onPressFab={() => {
                 setActiveTab('new');
                 setNewProjectSubView('project-type-selection');
@@ -1947,6 +1782,8 @@ export default function UserHomeScreen({
               onPressSupportTickets={() => setShowTicketList(true)}
               onPressSupportTicket={(ticketId) => setSelectedTicketId(ticketId)}
               onPressCreateSupportTicket={() => setShowCreateTicket(true)}
+              tabBarRef={tabBarRef}
+              tabRefs={tabRefs}
             />
           )}
         </View>
@@ -1985,13 +1822,10 @@ export default function UserHomeScreen({
                 initialProject={pendingOpenProject}
                 initialSmallTask={pendingOpenSmallTask}
                 initialProjectType={projectsTabEmbeddedType ?? undefined}
-                onExposeTourControl={(c) => {
-                  projectsTourControl.current = c;
-                }}
-                onExposeProjectTypeTourControl={exposeProjectTypeTourControl}
                 onBack={() => {
                   setActiveTab('home');
                   setProjectsScreenCategoryId(null);
+                  setPendingOpenProject(null);
                 }}
                 onFilterChange={(newFilter) => {
                   setCurrentProjectsFilter(newFilter as any);
@@ -2112,7 +1946,6 @@ export default function UserHomeScreen({
               ]}>
                 <ChatRoomsListScreen
                   stackedUnderAppTopBar
-                  onExposeTourControl={exposeChatTourControl}
                   onOpenChat={(roomId, receiverId, receiverName, projectId) => {
                     openChat(roomId, receiverId, receiverName, { projectId });
                   }}
@@ -2155,9 +1988,6 @@ export default function UserHomeScreen({
               <NotificationsScreen
                 onUnreadCountChange={setUnreadNotificationCount}
                 onNavigateFromNotification={onNavigateFromNotification}
-                onExposeTourControl={(c: { startTour: () => void }) => {
-                  notificationsTourControl.current = c;
-                }}
               />
             </View>
             <Footer />
@@ -2173,9 +2003,6 @@ export default function UserHomeScreen({
             <View style={styles.mainContentWrapper}>
               {profileSubView === null ? (
                 <ProfileScreen
-                  onExposeTourControl={(c) => {
-                    profileTourControl.current = c;
-                  }}
                   onLogout={onLogout}
                   onNavigateToEditProfile={() => setProfileSubView('myData')}
                   onNavigateToPortfolio={() => setProfileSubView('portfolio')}
@@ -2271,7 +2098,7 @@ export default function UserHomeScreen({
             contentContainerStyle={styles.scrollContentWithFooter}
             showsVerticalScrollIndicator={true}
           >
-            <View ref={newTabTour.register('panel')} collapsable={false} style={styles.mainContentWrapper}>
+            <View collapsable={false} style={styles.mainContentWrapper}>
               {newProjectSubView === 'creation-method' && manualFormInitial ? (
                 <CreationMethodScreen
                   category={{
@@ -2466,36 +2293,6 @@ export default function UserHomeScreen({
         </View>
       </Modal>
 
-      {activeTab === 'new' && (
-        <ScreenTourOverlay
-          visible={newTabTour.tourActive}
-          tourStep={newTabTour.tourStep}
-          stepRect={newTabTour.stepRect}
-          totalSteps={newTabTourSteps.length}
-          stepOrder={newTabTour.tourStep + 1}
-          stepText={
-            newTabTourSteps[newTabTour.tourStep]
-              ? t(`tutorial.tab.new.${newTabTourSteps[newTabTour.tourStep].i18nSuffix}`)
-              : ''
-          }
-          isFirst={newTabTour.tourStep === 0}
-          isLast={newTabTour.tourStep === newTabTourSteps.length - 1}
-          primaryColor={colors.primary}
-          textColor={colors.text}
-          secondaryTextColor={colors.textSecondary}
-          bgColor={colors.cardBackground}
-          fontFamily={fontFamily}
-          boldFontFamily={boldFontFamily}
-          onNext={() =>
-            newTabTour.setTourStep((s: number) => Math.min(s + 1, newTabTourSteps.length - 1))
-          }
-          onPrev={() => newTabTour.setTourStep((s: number) => Math.max(s - 1, 0))}
-          onSkip={newTabTour.endTour}
-          onFinish={newTabTour.endTour}
-          t={t}
-        />
-      )}
-
       {/* Floating Chatbot Button (desktop web — same assistant as mobile FAB in home content) */}
       <TouchableOpacity
         style={[styles.chatbotFab, { backgroundColor: colors.primary }]}
@@ -2506,7 +2303,6 @@ export default function UserHomeScreen({
       </TouchableOpacity>
 
     </View>
-    </TourProvider>
   );
 }
 

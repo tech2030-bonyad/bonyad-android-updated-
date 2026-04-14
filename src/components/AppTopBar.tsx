@@ -14,7 +14,6 @@ const H_PADDING = 16;
 
 export interface AppTopBarProps {
   onPressChat: () => void;
-  onPressInfo: () => void;
   onPressNotifications: () => void;
   unreadNotificationCount?: number;
   primaryColor: string;
@@ -26,7 +25,6 @@ export interface AppTopBarProps {
 
 export default function AppTopBar({
   onPressChat,
-  onPressInfo,
   onPressNotifications,
   unreadNotificationCount = 0,
   primaryColor,
@@ -42,9 +40,6 @@ export default function AppTopBar({
     <>
       <TouchableOpacity style={styles.iconBtn} onPress={onPressChat} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
         <Ionicons name="chatbubbles-outline" size={24} color={primaryColor} />
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.iconBtn} onPress={onPressInfo} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-        <Ionicons name="information-circle-outline" size={24} color={primaryColor} />
       </TouchableOpacity>
       {notificationsWrapper ? (
         notificationsWrapper({

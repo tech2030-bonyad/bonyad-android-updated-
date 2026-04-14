@@ -15,7 +15,6 @@ import Animated from 'react-native-reanimated';
 import OnlineStatusService from './src/services/OnlineStatusService';
 import { presenceService } from './src/services/PresenceService';
 import { storage } from './src/utils/storage';
-import CoachMarkProvider from './src/components/CoachMarkProvider';
 import AnimatedLoadingScreen from './src/components/AnimatedLoadingScreen';
 import { useRouter, type Screen } from './src/utils/useRouter';
 import {
@@ -60,6 +59,7 @@ function isTechnicianWaitingScreenApiError(err: unknown): boolean {
 }
 import GlobalAlertProvider from './src/components/GlobalAlertProvider';
 import { globalAlertManager } from './src/utils/globalAlertManager';
+import { TourGuideProvider, TourGuideOverlay } from '@wrack/react-native-tour-guide';
 import { CreateCheckoutRequest } from './src/services/PaymentService';
 // import * as Notifications from 'expo-notifications';
 // import { registerForPushNotificationsAsync } from './src/utils/useFCMToken';
@@ -1673,7 +1673,7 @@ function AppContent({
   return (
     <SafeAreaProvider>
       <PaperProvider>
-        <CoachMarkProvider>
+        <TourGuideProvider>
         <View style={[styles.container, { backgroundColor: colors.background }]}>
           <StatusBar style="auto" />
 
@@ -2496,7 +2496,8 @@ function AppContent({
             />
           )}
         </View>
-        </CoachMarkProvider>
+        <TourGuideOverlay />
+        </TourGuideProvider>
       </PaperProvider>
 
       {/* Notification Popup - Web only */}

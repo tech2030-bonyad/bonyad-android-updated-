@@ -65,10 +65,11 @@ import AssignedSmallTaskScreen from './AssignedSmallTaskScreen';
 import SmallTaskPaymentScreen from './SmallTaskPaymentScreen';
 import InProgressSmallTaskScreen from './InProgressSmallTaskScreen';
 import CompletedSmallTaskScreen from './CompletedSmallTaskScreen';
-import AnimatedProjectTypeToggle from '../components/AnimatedProjectTypeToggle';
+import CompactProjectHeader, { type CompactProjectHeaderRefs } from '../components/CompactProjectHeader';
 import AnimatedLoadingScreen from '../components/AnimatedLoadingScreen';
-import ScreenTourOverlay from '../components/tour/ScreenTourOverlay';
-import { useSimpleScreenTour } from '../hooks/useSimpleScreenTour';
+import AnimatedProjectTypeToggle from '../components/AnimatedProjectTypeToggle';
+import { useTourGuide } from '@wrack/react-native-tour-guide';
+import AppTourTooltip from '../components/AppTourTooltip';
 import { LinearGradient } from 'expo-linear-gradient';
 import ReAnimated, {
   useSharedValue,
@@ -411,9 +412,6 @@ interface ProjectsScreenProps {
   onBookAppointment?: (technicianId: number, technicianName: string, projectId?: number) => void;
   onRequestVisit?: (userId: number, userName: string, projectId?: number) => void;
   onFilterChange?: (filter: 'all' | 'available' | 'running' | 'approved' | 'completed' | 'bid_received' | 'direct_offers') => void;
-  onExposeTourControl?: (c: { startTour: () => void }) => void;
-  /** When FAB opens project type selection, parent can route Info to this tour. */
-  onExposeProjectTypeTourControl?: (c: { startTour: () => void } | null) => void;
 }
 
 interface Project {
@@ -501,7 +499,7 @@ const FIGMA_COLORS = {
   white: '#FFFFFF',
 };
 
-export default function ProjectsScreen({ onBack, filter = 'available', initialServiceCategoryId, initialProject, initialSmallTask, initialProjectType, onOpenChat, onViewTechnician, onBookAppointment, onRequestVisit, onFilterChange, onExposeTourControl, onExposeProjectTypeTourControl }: ProjectsScreenProps) {
+export default function ProjectsScreen({ onBack, filter = 'available', initialServiceCategoryId, initialProject, initialSmallTask, initialProjectType, onOpenChat, onViewTechnician, onBookAppointment, onRequestVisit, onFilterChange }: ProjectsScreenProps) {
   const { t, i18n } = useTranslation();
   const { colors, theme } = useTheme();
   const { fontFamily, boldFontFamily, scaledSize } = useFontFamily();
@@ -575,7 +573,94 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
   // Animate list content when switching between Small and Large (slide from left)
   const listContentOpacity = useRef(new Animated.Value(1)).current;
   const listContentTranslateX = useRef(new Animated.Value(0)).current;
-  
+
+  // Tour guide
+  const isDarkMode = theme === 'dark';
+  const { startTour } = useTourGuide();
+
+  // Ref for the CompactProjectHeader forwardRef – gives us access to all inner element refs
+  const headerRef = useRef<CompactProjectHeaderRefs>(null);
+  const tourProjectTypeRef = useRef<View>(null);
+  const tourListRef = useRef<View>(null);
+  const tourFabRef = useRef<View>(null);
+
+  const renderProjectTooltip = useCallback((props: any) => (
+    <AppTourTooltip
+      {...props}
+      primaryColor={colors.primary}
+      isDark={isDarkMode}
+    />
+  ), [colors.primary, isDarkMode]);
+
+  const handleStartProjectTour = useCallback(() => {
+    const isTechnician = userRole?.toUpperCase() === 'TECHNICIAN';
+    const hr = headerRef.current;
+    startTour([
+      {
+        id: 'projects-type-toggle',
+        targetRef: tourProjectTypeRef,
+        title: t('projectsScreen.tour.toggleTitle'),
+        description: t('projectsScreen.tour.toggleDesc'),
+        tooltipPosition: 'bottom',
+        targetStyle: { borderRadius: 10 },
+        spotlightPadding: 8,
+      },
+      {
+        id: 'projects-count',
+        targetRef: hr?.countBadgeRef ?? { current: null },
+        title: t('projectsScreen.tour.countTitle'),
+        description: t('projectsScreen.tour.countDesc'),
+        tooltipPosition: 'bottom',
+        targetStyle: { borderRadius: 8 },
+        spotlightPadding: 8,
+      },
+      {
+        id: 'projects-filter',
+        targetRef: hr?.filterButtonRef ?? { current: null },
+        title: t('projectsScreen.tour.filterTitle'),
+        description: t('projectsScreen.tour.filterDesc'),
+        tooltipPosition: 'bottom',
+        targetStyle: { borderRadius: 8 },
+        spotlightPadding: 10,
+      },
+      {
+        id: 'projects-search-container',
+        targetRef: hr?.searchContainerRef ?? { current: null },
+        title: t('projectsScreen.tour.searchTitle'),
+        description: t('projectsScreen.tour.searchDesc'),
+        tooltipPosition: 'bottom',
+        targetStyle: { borderRadius: 8 },
+        spotlightPadding: 6,
+      },
+      {
+        id: 'projects-list',
+        targetRef: tourListRef,
+        title: t('projectsScreen.tour.listTitle'),
+        description: t('projectsScreen.tour.listDesc'),
+        tooltipPosition: 'bottom',
+        targetStyle: { borderRadius: 12 },
+        spotlightPadding: 8,
+      },
+      ...(!isTechnician ? [{
+        id: 'projects-fab',
+        targetRef: tourFabRef,
+        title: t('projectsScreen.tour.fabTitle'),
+        description: t('projectsScreen.tour.fabDesc'),
+        tooltipPosition: 'top' as const,
+        targetStyle: { borderRadius: 28 },
+        spotlightPadding: 8,
+      }] : []),
+    ], {
+      autoPositionTooltip: true,
+      animationDuration: 250,
+      nextButtonText: t('Next'),
+      prevButtonText: t('Back'),
+      skipButtonText: t('Skip'),
+      doneButtonText: t('Done'),
+      renderTooltip: renderProjectTooltip,
+    });
+  }, [startTour, t, userRole, renderProjectTooltip]);
+
   // Custom popup hooks
   const { alertState, showError, showSuccess, hideAlert } = useAlertPopup();
   const { confirmState, showDeleteConfirmation, hideConfirmation } = useConfirmationPopup();
@@ -618,34 +703,6 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
     });
   }, [projectType]);
 
-  const projectTourSteps = useMemo(() => {
-    if (Platform.OS === 'android' && projectType === 'small') {
-      return [
-        { id: 'typeToggle', i18nSuffix: 'typeToggle' },
-        { id: 'smallBody', i18nSuffix: 'filters' },
-        { id: 'smallBody', i18nSuffix: 'list' },
-      ];
-    }
-    return [
-      { id: 'typeToggle', i18nSuffix: 'typeToggle' },
-      { id: 'filters', i18nSuffix: 'filters' },
-      { id: 'list', i18nSuffix: 'list' },
-    ];
-  }, [projectType]);
-
-  const projectTour = useSimpleScreenTour(projectTourSteps, 'userProjectsTab');
-
-  const startProjectsTour = useCallback(() => {
-    setCurrentPage('list');
-    setSelectedProject(null);
-    setSelectedTechnicianId(null);
-    setTimeout(() => projectTour.startTour(), 220);
-  }, [projectTour.startTour]);
-
-  useEffect(() => {
-    onExposeTourControl?.({ startTour: startProjectsTour });
-  }, [onExposeTourControl, startProjectsTour]);
-
   /** Back from root list only: go to Home when onBack provided, else stay on list. */
   const handleBack = useCallback(() => {
     if (onBack) {
@@ -664,6 +721,10 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
   const goToProjectList = useCallback(() => {
     if (openedFromHome.current) {
       openedFromHome.current = false;
+      // Reset to list BEFORE navigating back so the Projects tab is clean next time it opens.
+      setCurrentPage('list');
+      setSelectedProject(null);
+      setSelectedTechnicianId(null);
       onBack?.();
       return;
     }
@@ -1790,8 +1851,22 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
       {/* Android Design - New Redesign */}
       {Platform.OS === 'android' ? (
         <View style={[styles.androidContainer, { backgroundColor: colors.background }]}>
+          {/* Top Nav Bar with title + tour icon */}
+          <View style={[styles.androidTopNavBar, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+            <Text style={[styles.androidNavTitle, { color: colors.text, fontFamily }]}>
+              {t('projectsScreen.projects')}
+            </Text>
+            <TouchableOpacity
+              onPress={handleStartProjectTour}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              style={styles.androidNavTourBtn}
+            >
+              <Ionicons name="map-outline" size={24} color={colors.primary} />
+            </TouchableOpacity>
+          </View>
+
           {/* Project Type Selector - Toggle (always visible) */}
-          <View ref={projectTour.register('typeToggle')} collapsable={false} style={styles.androidProjectTypeSelector}>
+          <View ref={tourProjectTypeRef} collapsable={false} style={styles.androidProjectTypeSelector}>
             <AnimatedProjectTypeToggle
               selectedType={projectType}
               onTypeChange={handleProjectTypeChange}
@@ -1821,7 +1896,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
                 />
               }
             >
-              <View ref={projectTour.register('smallBody')} collapsable={false} style={{ flex: 1 }}>
+              <View collapsable={false} style={{ flex: 1 }}>
               <SmallTasksListScreen
                 onBack={handleBack}
                 isTechnician={userRole?.toUpperCase() === 'TECHNICIAN'}
@@ -1861,262 +1936,225 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
             </ScrollView>
           ) : (
             <View style={{ flex: 1 }}>
-              {/* Header: title, phase tabs (same as web), service category, search */}
-              <View ref={projectTour.register('filters')} collapsable={false} style={[styles.androidHeaderSection, { backgroundColor: colors.cardBackground }]}>
-                <View style={styles.androidTitleSection}>
-                  <Text style={[styles.androidPageTitle, { color: colors.text }]}>
-                    {(() => {
-                      const isTechnician = userRole?.toUpperCase() === 'TECHNICIAN';
-                      return localFilter === 'all'
-                        ? t('projectsScreen.all')
-                        : localFilter === 'available'
-                          ? (isTechnician ? t('projectsScreen.available') : t('projectsScreen.availableProjects'))
-                          : localFilter === 'running'
-                            ? (isTechnician ? t('projectsScreen.inProgress') : t('projectsScreen.runningProjects'))
-                            : localFilter === 'approved'
-                              ? t('projectsScreen.approvedFilter')
-                            : localFilter === 'bid_received'
-                              ? t('projectsScreen.bidding')
-                              : localFilter === 'direct_offers'
-                                ? t('projectsScreen.directAssigned')
-                                : localFilter === 'completed'
-                                  ? (isTechnician ? t('projectsScreen.completed') : t('projectsScreen.completedProjects'))
-                                  : t('projectsScreen.myProjects');
-                    })()}
-                  </Text>
-                  <Text style={[styles.androidProjectCount, { color: colors.textSecondary }]}>
-                    {filteredProjects.length} {t('projectsScreen.totalProjects')}
-                  </Text>
-                </View>
+              {/* Compact Project Header - NEW DESIGN */}
+              <CompactProjectHeader
+                ref={headerRef}
+                projectType={projectType}
+                onTypeChange={handleProjectTypeChange}
+                projectCount={filteredProjects.length}
+                searchQuery={searchQuery}
+                onSearchChange={setSearchQuery}
+                onFilterPress={() => {
+                  const showPicker =
+                    userRole?.toUpperCase() === 'TECHNICIAN' && localFilter === 'available';
+                  setAndroidFilterMenuStep(showPicker ? 'pick' : 'list');
+                  setShowAndroidFiltersModal(true);
+                }}
+              />
 
-                <Modal
-                  visible={showAndroidFiltersModal}
-                  transparent
-                  animationType="fade"
-                  onRequestClose={() => setShowAndroidFiltersModal(false)}
-                >
-                  <View style={{ flex: 1 }}>
-                    <TouchableOpacity
-                      style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.45)' }]}
-                      activeOpacity={1}
-                      onPress={() => setShowAndroidFiltersModal(false)}
-                    />
-                    <View style={[styles.androidPhaseFilterModalRoot, { pointerEvents: 'box-none' }]} pointerEvents="box-none">
-                      <View style={[styles.androidPhaseFilterModalSheet, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
-                        {(() => {
-                          const showAndroidFilterTypePicker =
-                            userRole?.toUpperCase() === 'TECHNICIAN' && localFilter === 'available';
-                          const showFilterSubBack = showAndroidFilterTypePicker && androidFilterMenuStep !== 'pick';
-                          return (
-                            <>
-                              {showFilterSubBack ? (
-                                <TouchableOpacity
-                                  style={{
-                                    flexDirection: 'row',
-                                    alignItems: 'center',
-                                    paddingHorizontal: 12,
-                                    paddingVertical: 14,
-                                    borderBottomWidth: StyleSheet.hairlineWidth,
-                                    borderBottomColor: colors.border,
-                                  }}
-                                  onPress={() => setAndroidFilterMenuStep('pick')}
-                                  activeOpacity={0.7}
-                                >
-                                  <Feather name="chevron-left" size={22} color={colors.primary} />
-                                  <Text style={{ marginLeft: 6, fontSize: 16, fontWeight: '600', color: colors.text }}>
-                                    {androidFilterMenuStep === 'list'
-                                      ? t('projectsScreen.projects')
-                                      : t('Select Region')}
-                                  </Text>
-                                </TouchableOpacity>
-                              ) : null}
-                              <ScrollView
-                                bounces={false}
-                                keyboardShouldPersistTaps="handled"
-                                style={{ maxHeight: 480 }}
-                                contentContainerStyle={{ paddingBottom: 12, paddingTop: showFilterSubBack ? 0 : 6 }}
+              {/* Filter Modal */}
+              <Modal
+                visible={showAndroidFiltersModal}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setShowAndroidFiltersModal(false)}
+              >
+                <View style={{ flex: 1 }}>
+                  <TouchableOpacity
+                    style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.45)' }]}
+                    activeOpacity={1}
+                    onPress={() => setShowAndroidFiltersModal(false)}
+                  />
+                  <View style={[styles.androidPhaseFilterModalRoot, { pointerEvents: 'box-none' }]} pointerEvents="box-none">
+                    <View style={[styles.androidPhaseFilterModalSheet, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+                      {(() => {
+                        const showAndroidFilterTypePicker =
+                          userRole?.toUpperCase() === 'TECHNICIAN' && localFilter === 'available';
+                        const showFilterSubBack = showAndroidFilterTypePicker && androidFilterMenuStep !== 'pick';
+                        return (
+                          <>
+                            {showFilterSubBack ? (
+                              <TouchableOpacity
+                                style={{
+                                  flexDirection: 'row',
+                                  alignItems: 'center',
+                                  paddingHorizontal: 12,
+                                  paddingVertical: 14,
+                                  borderBottomWidth: StyleSheet.hairlineWidth,
+                                  borderBottomColor: colors.border,
+                                }}
+                                onPress={() => setAndroidFilterMenuStep('pick')}
+                                activeOpacity={0.7}
                               >
-                                {showAndroidFilterTypePicker && androidFilterMenuStep === 'pick' ? (
-                                  <>
-                                    <TouchableOpacity
-                                      style={[styles.androidFilterOption, { borderBottomColor: colors.border }]}
-                                      onPress={() => setAndroidFilterMenuStep('list')}
-                                      activeOpacity={0.7}
-                                    >
-                                      <View style={{ flex: 1, paddingRight: 8 }}>
-                                        <Text
-                                          style={[styles.androidFilterOptionText, { color: colors.text, fontWeight: '600' }]}
-                                        >
-                                          {t('projectsScreen.projects')}
-                                        </Text>
-                                        <Text
-                                          style={{ fontSize: 13, color: colors.textSecondary, marginTop: 4 }}
-                                          numberOfLines={2}
-                                        >
-                                          {currentAndroidListFilterLabel}
-                                        </Text>
-                                      </View>
-                                      <Feather name="chevron-right" size={20} color={colors.textSecondary} />
-                                    </TouchableOpacity>
-                                    <TouchableOpacity
-                                      style={[styles.androidFilterOption, { borderBottomColor: colors.border }]}
-                                      onPress={() => setAndroidFilterMenuStep('region')}
-                                      activeOpacity={0.7}
-                                    >
-                                      <View style={{ flex: 1, paddingRight: 8 }}>
-                                        <Text
-                                          style={[styles.androidFilterOptionText, { color: colors.text, fontWeight: '600' }]}
-                                        >
-                                          {t('Select Region')}
-                                        </Text>
-                                        <Text
-                                          style={{ fontSize: 13, color: colors.textSecondary, marginTop: 4 }}
-                                          numberOfLines={2}
-                                        >
-                                          {regionFilterButtonLabel}
-                                        </Text>
-                                      </View>
-                                      <Feather name="chevron-right" size={20} color={colors.textSecondary} />
-                                    </TouchableOpacity>
-                                  </>
-                                ) : null}
-                                {!showAndroidFilterTypePicker || androidFilterMenuStep === 'list'
-                                  ? androidPhaseFilterOptions.map((opt) => (
-                                      <TouchableOpacity
-                                        key={opt.key}
-                                        style={[
-                                          styles.androidFilterOption,
-                                          { borderBottomColor: colors.border },
-                                          localFilter === opt.key && { backgroundColor: colors.primary + '18' },
-                                        ]}
-                                        onPress={() => handleFilterChange(opt.key)}
+                                <Feather name="chevron-left" size={22} color={colors.primary} />
+                                <Text style={{ marginLeft: 6, fontSize: 16, fontWeight: '600', color: colors.text }}>
+                                  {androidFilterMenuStep === 'list'
+                                    ? t('projectsScreen.projects')
+                                    : t('Select Region')}
+                                </Text>
+                              </TouchableOpacity>
+                            ) : null}
+                            <ScrollView
+                              bounces={false}
+                              keyboardShouldPersistTaps="handled"
+                              style={{ maxHeight: 480 }}
+                              contentContainerStyle={{ paddingBottom: 12, paddingTop: showFilterSubBack ? 0 : 6 }}
+                            >
+                              {showAndroidFilterTypePicker && androidFilterMenuStep === 'pick' ? (
+                                <>
+                                  <TouchableOpacity
+                                    style={[styles.androidFilterOption, { borderBottomColor: colors.border }]}
+                                    onPress={() => setAndroidFilterMenuStep('list')}
+                                    activeOpacity={0.7}
+                                  >
+                                    <View style={{ flex: 1, paddingRight: 8 }}>
+                                      <Text
+                                        style={[styles.androidFilterOptionText, { color: colors.text, fontWeight: '600' }]}
                                       >
-                                        <Text
-                                          style={[
-                                            styles.androidFilterOptionText,
-                                            {
-                                              color: localFilter === opt.key ? colors.primary : colors.textSecondary,
-                                              fontWeight: localFilter === opt.key ? '600' : '400',
-                                            },
-                                          ]}
-                                          numberOfLines={2}
-                                        >
-                                          {opt.label}
-                                        </Text>
-                                        {localFilter === opt.key ? (
-                                          <Feather name="check" size={18} color={colors.primary} />
-                                        ) : null}
-                                      </TouchableOpacity>
-                                    ))
-                                  : null}
-                                {showAndroidFilterTypePicker && androidFilterMenuStep === 'region' ? (
-                                  <>
+                                        {t('projectsScreen.projects')}
+                                      </Text>
+                                      <Text
+                                        style={{ fontSize: 13, color: colors.textSecondary, marginTop: 4 }}
+                                        numberOfLines={2}
+                                      >
+                                        {currentAndroidListFilterLabel}
+                                      </Text>
+                                    </View>
+                                    <Feather name="chevron-right" size={20} color={colors.textSecondary} />
+                                  </TouchableOpacity>
+                                  <TouchableOpacity
+                                    style={[styles.androidFilterOption, { borderBottomColor: colors.border }]}
+                                    onPress={() => setAndroidFilterMenuStep('region')}
+                                    activeOpacity={0.7}
+                                  >
+                                    <View style={{ flex: 1, paddingRight: 8 }}>
+                                      <Text
+                                        style={[styles.androidFilterOptionText, { color: colors.text, fontWeight: '600' }]}
+                                      >
+                                        {t('Select Region')}
+                                      </Text>
+                                      <Text
+                                        style={{ fontSize: 13, color: colors.textSecondary, marginTop: 4 }}
+                                        numberOfLines={2}
+                                      >
+                                        {regionFilterButtonLabel}
+                                      </Text>
+                                    </View>
+                                    <Feather name="chevron-right" size={20} color={colors.textSecondary} />
+                                  </TouchableOpacity>
+                                </>
+                              ) : null}
+                              {!showAndroidFilterTypePicker || androidFilterMenuStep === 'list'
+                                ? androidPhaseFilterOptions.map((opt) => (
                                     <TouchableOpacity
+                                      key={opt.key}
                                       style={[
                                         styles.androidFilterOption,
                                         { borderBottomColor: colors.border },
-                                        selectedRegionId === 'all' && { backgroundColor: colors.primary + '18' },
+                                        localFilter === opt.key && { backgroundColor: colors.primary + '18' },
                                       ]}
-                                      onPress={() => {
-                                        setSelectedRegionId('all');
-                                        setShowAndroidFiltersModal(false);
-                                      }}
+                                      onPress={() => handleFilterChange(opt.key)}
                                     >
                                       <Text
                                         style={[
                                           styles.androidFilterOptionText,
                                           {
-                                            color: selectedRegionId === 'all' ? colors.primary : colors.textSecondary,
-                                            fontWeight: selectedRegionId === 'all' ? '600' : '400',
+                                            color: localFilter === opt.key ? colors.primary : colors.textSecondary,
+                                            fontWeight: localFilter === opt.key ? '600' : '400',
                                           },
                                         ]}
+                                        numberOfLines={2}
                                       >
-                                        {t('projectsScreen.all')}
+                                        {opt.label}
                                       </Text>
-                                      {selectedRegionId === 'all' ? (
+                                      {localFilter === opt.key ? (
                                         <Feather name="check" size={18} color={colors.primary} />
                                       ) : null}
                                     </TouchableOpacity>
-                                    {isLoadingRegions ? (
-                                      <View style={{ padding: 16 }}>
-                                        <Text style={{ color: colors.textSecondary }}>
-                                          {t('projectsScreen.loadingRegions')}
-                                        </Text>
-                                      </View>
-                                    ) : (
-                                      regions.map((region) => (
-                                        <TouchableOpacity
-                                          key={region.id}
+                                  ))
+                                : null}
+                              {showAndroidFilterTypePicker && androidFilterMenuStep === 'region' ? (
+                                <>
+                                  <TouchableOpacity
+                                    style={[
+                                      styles.androidFilterOption,
+                                      { borderBottomColor: colors.border },
+                                      selectedRegionId === 'all' && { backgroundColor: colors.primary + '18' },
+                                    ]}
+                                    onPress={() => {
+                                      setSelectedRegionId('all');
+                                      setShowAndroidFiltersModal(false);
+                                    }}
+                                  >
+                                    <Text
+                                      style={[
+                                        styles.androidFilterOptionText,
+                                        {
+                                          color: selectedRegionId === 'all' ? colors.primary : colors.textSecondary,
+                                          fontWeight: selectedRegionId === 'all' ? '600' : '400',
+                                        },
+                                      ]}
+                                    >
+                                      {t('projectsScreen.all')}
+                                    </Text>
+                                    {selectedRegionId === 'all' ? (
+                                      <Feather name="check" size={18} color={colors.primary} />
+                                    ) : null}
+                                  </TouchableOpacity>
+                                  {isLoadingRegions ? (
+                                    <View style={{ padding: 16 }}>
+                                      <Text style={{ color: colors.textSecondary }}>
+                                        {t('projectsScreen.loadingRegions')}
+                                      </Text>
+                                    </View>
+                                  ) : (
+                                    regions.map((region) => (
+                                      <TouchableOpacity
+                                        key={region.id}
+                                        style={[
+                                          styles.androidFilterOption,
+                                          { borderBottomColor: colors.border },
+                                          selectedRegionId === region.id && { backgroundColor: colors.primary + '18' },
+                                        ]}
+                                        onPress={() => {
+                                          setSelectedRegionId(region.id);
+                                          setShowAndroidFiltersModal(false);
+                                        }}
+                                      >
+                                        <Text
                                           style={[
-                                            styles.androidFilterOption,
-                                            { borderBottomColor: colors.border },
-                                            selectedRegionId === region.id && { backgroundColor: colors.primary + '18' },
+                                            styles.androidFilterOptionText,
+                                            {
+                                              color:
+                                                selectedRegionId === region.id
+                                                  ? colors.primary
+                                                  : colors.textSecondary,
+                                              fontWeight: selectedRegionId === region.id ? '600' : '400',
+                                            },
                                           ]}
-                                          onPress={() => {
-                                            setSelectedRegionId(region.id);
-                                            setShowAndroidFiltersModal(false);
-                                          }}
+                                          numberOfLines={2}
                                         >
-                                          <Text
-                                            style={[
-                                              styles.androidFilterOptionText,
-                                              {
-                                                color:
-                                                  selectedRegionId === region.id
-                                                    ? colors.primary
-                                                    : colors.textSecondary,
-                                                fontWeight: selectedRegionId === region.id ? '600' : '400',
-                                              },
-                                            ]}
-                                            numberOfLines={2}
-                                          >
-                                            {i18n.language === 'ar' ? region.nameAr : region.nameEn}
-                                          </Text>
-                                          {selectedRegionId === region.id ? (
-                                            <Feather name="check" size={18} color={colors.primary} />
-                                          ) : null}
-                                        </TouchableOpacity>
-                                      ))
-                                    )}
-                                  </>
-                                ) : null}
-                              </ScrollView>
-                            </>
-                          );
-                        })()}
-                      </View>
+                                          {i18n.language === 'ar' ? region.nameAr : region.nameEn}
+                                        </Text>
+                                        {selectedRegionId === region.id ? (
+                                          <Feather name="check" size={18} color={colors.primary} />
+                                        ) : null}
+                                      </TouchableOpacity>
+                                    ))
+                                  )}
+                                </>
+                              ) : null}
+                            </ScrollView>
+                          </>
+                        );
+                      })()}
                     </View>
                   </View>
-                </Modal>
-
-                <View style={[styles.androidSearchContainer, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
-                  <Feather name="search" size={20} color={colors.textSecondary} />
-                  <TextInput
-                    style={[styles.androidSearchInput, { color: colors.text }]}
-                    placeholder={t('projectsScreen.searchPlaceholder')}
-                    placeholderTextColor={colors.textSecondary}
-                    value={searchQuery}
-                    onChangeText={setSearchQuery}
-                  />
-                  <TouchableOpacity
-                    onPress={() => {
-                      const showPicker =
-                        userRole?.toUpperCase() === 'TECHNICIAN' && localFilter === 'available';
-                      setAndroidFilterMenuStep(showPicker ? 'pick' : 'list');
-                      setShowAndroidFiltersModal(true);
-                    }}
-                    activeOpacity={0.7}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    accessibilityRole="button"
-                    accessibilityLabel={t('projectsScreen.projects')}
-                  >
-                    <Feather name="filter" size={20} color={colors.primary} />
-                  </TouchableOpacity>
                 </View>
-              </View>
+              </Modal>
 
               {/* Project Cards List */}
-              <View ref={projectTour.register('list')} collapsable={false} style={{ flex: 1 }}>
+              <View ref={tourListRef} collapsable={false} style={{ flex: 1 }}>
               <ReAnimated.FlatList
                 data={filteredProjects}
                 extraData={localFilter + selectedCategory + searchQuery}
@@ -2197,6 +2235,8 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
           {/* FAB – new project (users only; technicians browse/bid, no create-from-here) */}
           {userRole?.toUpperCase() !== 'TECHNICIAN' && (
             <TouchableOpacity
+              ref={tourFabRef}
+              collapsable={false}
               style={[styles.androidFab, { backgroundColor: colors.primary }]}
               onPress={() => setCurrentPage('project-type-selection')}
               activeOpacity={0.8}
@@ -2211,7 +2251,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
       {!IS_LARGE_WEB && (() => {
         const isTechnician = userRole?.toUpperCase() === 'TECHNICIAN';
         return (
-          <View ref={projectTour.register('typeToggle')} collapsable={false} style={[styles.header, styles.headerLTR, { paddingTop: Math.max(insets.top, 50), borderBottomColor: colors.border }]}>
+          <View collapsable={false} style={[styles.header, styles.headerLTR, { paddingTop: Math.max(insets.top, 50), borderBottomColor: colors.border }]}>
             {onBack ? (
               <TouchableOpacity onPress={handleBackScreen}>
                 <BackArrowIonicons variant="chevron" size={24} color={colors.text}/>
@@ -2238,7 +2278,7 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
           {(Platform.OS !== 'android' as any) && (() => {
         const isTechnician = userRole?.toUpperCase() === 'TECHNICIAN';
         return (
-          <View ref={projectTour.register('filters')} collapsable={false} style={[IS_LARGE_WEB ? styles.tabsContainer : styles.mobileTabsContainer, { backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
+          <View collapsable={false} style={[IS_LARGE_WEB ? styles.tabsContainer : styles.mobileTabsContainer, { backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
             <ScrollView 
               horizontal 
               showsHorizontalScrollIndicator={false}
@@ -2430,14 +2470,14 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
           {(Platform.OS !== 'android' as any) && (
             <>
       {filteredProjects.length === 0 ? (
-        <View ref={projectTour.register('list')} collapsable={false} style={styles.emptyContainer}>
+        <View collapsable={false} style={styles.emptyContainer}>
           <Ionicons name="folder-outline" size={80} color={colors.textSecondary} />
           <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
             No projects found
           </Text>
         </View>
       ) : (
-        <View ref={projectTour.register('list')} collapsable={false} style={{ flex: 1 }}>
+        <View collapsable={false} style={{ flex: 1 }}>
         <FlatList
           data={filteredProjects}
           renderItem={renderProjectCard}
@@ -2479,34 +2519,6 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
           )}
         </>
       )}
-
-          <ScreenTourOverlay
-            visible={projectTour.tourActive}
-            tourStep={projectTour.tourStep}
-            stepRect={projectTour.stepRect}
-            totalSteps={projectTourSteps.length}
-            stepOrder={projectTour.tourStep + 1}
-            stepText={
-              projectTourSteps[projectTour.tourStep]
-                ? t(`tutorial.tab.projects.${projectTourSteps[projectTour.tourStep].i18nSuffix}`)
-                : ''
-            }
-            isFirst={projectTour.tourStep === 0}
-            isLast={projectTour.tourStep === projectTourSteps.length - 1}
-            primaryColor={colors.primary}
-            textColor={colors.text}
-            secondaryTextColor={colors.textSecondary}
-            bgColor={colors.cardBackground}
-            fontFamily={fontFamily}
-            boldFontFamily={boldFontFamily}
-            onNext={() =>
-              projectTour.setTourStep((s) => Math.min(s + 1, projectTourSteps.length - 1))
-            }
-            onPrev={() => projectTour.setTourStep((s) => Math.max(s - 1, 0))}
-            onSkip={projectTour.endTour}
-            onFinish={projectTour.endTour}
-            t={t}
-          />
 
           </View>
       )}
@@ -2562,7 +2574,6 @@ export default function ProjectsScreen({ onBack, filter = 'available', initialSe
       {/* Project Type Selection Screen - First screen when clicking New Project */}
       {currentPage === 'project-type-selection' && (
         <ProjectTypeSelectionScreen
-          onExposeTourControl={onExposeProjectTypeTourControl}
           onSelectLarge={() => {
             setCurrentPage('new-project');
           }}
@@ -3224,6 +3235,24 @@ const styles = StyleSheet.create({
   androidContainer: {
     flex: 1,
     backgroundColor: '#f8fafc',
+  },
+  androidTopNavBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 0.5,
+  },
+  androidNavTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  androidNavTourBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   androidHeader: {
     backgroundColor: '#1e5a9e',

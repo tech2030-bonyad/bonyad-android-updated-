@@ -49,6 +49,8 @@ interface GlassTabBarProps {
   isDark?: boolean;
   bottomInset?: number;
   t?: (key: string) => string;
+  /** Per-tab refs for tour guide highlighting — keyed by tab id */
+  tabRefs?: Record<string, React.RefObject<View | null>>;
 }
 
 /**
@@ -75,6 +77,7 @@ export default function GlassTabBar({
   isDark = false,
   bottomInset = 20,
   t,
+  tabRefs,
 }: GlassTabBarProps) {
   const { t: i18nT } = useTranslation();
   const tFn = t ?? i18nT ?? ((k: string) => k);
@@ -152,6 +155,7 @@ export default function GlassTabBar({
                   onPress={() => (onNewPress ? onNewPress() : onTabPress('new'))}
                   primaryColor={primaryColor}
                   primaryColorDark={primaryColorDark}
+                  tabRef={tabRefs?.['new']}
                 />
               ) : (
                 <TabItem
@@ -162,6 +166,7 @@ export default function GlassTabBar({
                   primaryColor={primaryColor}
                   isDark={isDark}
                   t={tFn}
+                  tabRef={tabRefs?.[tab.id]}
                 />
               );
             return inner;
@@ -181,6 +186,7 @@ function TabItem({
   primaryColor,
   isDark,
   t,
+  tabRef,
 }: {
   tab: TabItemConfig;
   isSelected: boolean;
@@ -188,6 +194,7 @@ function TabItem({
   primaryColor: string;
   isDark: boolean;
   t: (k: string) => string;
+  tabRef?: React.RefObject<View | null>;
 }) {
   const scale = useRef(new Animated.Value(1)).current;
   const iconScale = useRef(new Animated.Value(isSelected ? 1 : 0.92)).current;
@@ -227,6 +234,7 @@ function TabItem({
 
   return (
     <Pressable
+      ref={tabRef as React.RefObject<View>}
       onPress={() => {
         fireRipple();
         onPress();
@@ -281,10 +289,12 @@ function PlusButton({
   onPress,
   primaryColor,
   primaryColorDark,
+  tabRef,
 }: {
   onPress: () => void;
   primaryColor: string;
   primaryColorDark: string;
+  tabRef?: React.RefObject<View | null>;
 }) {
   const scale = useRef(new Animated.Value(1)).current;
   const glowOpacity = useRef(new Animated.Value(0.1)).current;
@@ -350,6 +360,7 @@ function PlusButton({
 
   return (
     <Pressable
+      ref={tabRef as React.RefObject<View>}
       onPress={() => {
         fireRipple();
         onPress();

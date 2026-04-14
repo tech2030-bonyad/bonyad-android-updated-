@@ -589,3 +589,91 @@ export const getQRCodeUrl = (userId: number): string => {
   return `${API_BASE_URL}/portfolios/qr-code/${userId}`;
 };
 
+/**
+ * Types for enhanced portfolio data
+ */
+export interface ProjectSizeIndicators {
+  small?: number;
+  medium?: number;
+  large?: number;
+}
+
+export interface PriceRanges {
+  residential?: string;
+  commercial?: string;
+  industrial?: string;
+}
+
+export interface EmployeeCounts {
+  fullTime?: number;
+  contractors?: number;
+  partTime?: number;
+}
+
+export interface EnhancedPortfolioData {
+  projectSizeIndicators?: ProjectSizeIndicators;
+  priceRanges?: PriceRanges;
+  employeeCounts?: EmployeeCounts;
+  certifications?: string[];
+  licenseNumber?: string;
+  publicPortfolioUrl?: string;
+}
+
+/**
+ * Update enhanced portfolio data
+ * @param portfolioId - Portfolio ID
+ * @param data - Enhanced portfolio data
+ * @returns Promise with updated portfolio
+ */
+export const updateEnhancedPortfolio = async (
+  portfolioId: number,
+  data: EnhancedPortfolioData
+): Promise<any> => {
+  try {
+    const token = await storage.getAuthToken();
+
+    if (!token) {
+      throw new Error('No authentication token');
+    }
+
+    const url = `${API_BASE_URL}/portfolios/${portfolioId}/enhanced`;
+
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('📤 [PortfolioService] Updating enhanced portfolio...');
+    console.log('📤 [PortfolioService] URL:', url);
+    console.log('═══════════════════════════════════════════════════════════');
+
+    const response = await fetch(url, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+
+    const status = response.status;
+    console.log('📥 [PortfolioService] Response Status:', status);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ [PortfolioService] Error response:', errorText);
+
+      try {
+        const errorJson = JSON.parse(errorText);
+        throw new Error(errorJson.message || `Failed to update enhanced portfolio: ${status}`);
+      } catch {
+        throw new Error(`Failed to update enhanced portfolio: ${status}`);
+      }
+    }
+
+    const portfolio = await response.json();
+    console.log('✅ [PortfolioService] Enhanced portfolio updated successfully');
+    console.log('═══════════════════════════════════════════════════════════');
+
+    return portfolio;
+  } catch (error: any) {
+    console.error('❌ [PortfolioService] Update enhanced portfolio error:', error);
+    throw error;
+  }
+};

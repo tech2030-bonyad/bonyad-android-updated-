@@ -21,6 +21,7 @@ import { Image as ExpoImage } from 'expo-image';
 import BonyadLogo from '../components/BonyadLogo';
 import AppTopBar from '../components/AppTopBar';
 import GlassTabBar, { TECHNICIAN_TABS } from '../components/GlassTabBar';
+import ScreenTransition from '../components/ScreenTransition';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import ProjectsScreen from './ProjectsScreen';
@@ -233,6 +234,15 @@ export default function TechnicianHomeScreen({
   const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null);
   const [showCreateTicket, setShowCreateTicket] = useState(false);
 
+
+  // Bottom tab bar ref — passed to home content for tour guide highlighting
+  const tabBarRef = useRef<View>(null);
+  // Per-tab refs for individual tour steps
+  const tabHomeRef = useRef<View>(null);
+  const tabProjectsRef = useRef<View>(null);
+  const tabWalletRef = useRef<View>(null);
+  const tabProfileRef = useRef<View>(null);
+  const tabRefs = { home: tabHomeRef, projects: tabProjectsRef, wallet: tabWalletRef, profile: tabProfileRef };
 
   // Animation values for dropdowns and tab transition
   const mobileDropdownAnim = useRef(new Animated.Value(0)).current;
@@ -511,12 +521,6 @@ export default function TechnicianHomeScreen({
     }
   }, [openProfileOnMount]);
 
-  const technicianDashboardCopilotActive =
-    activeTab === 'home' &&
-    !smallTasksView &&
-    !showCommissionPayment &&
-    !commissionCheckoutRequest &&
-    !showAppointmentsView;
 
   // Render mobile layout — iOS-style: on home tab (content only), hide parent top bar
   if (shouldRenderMobile) {
@@ -540,14 +544,13 @@ export default function TechnicianHomeScreen({
           />
         )}
 
-        {/* Render tab content — animated transition */}
+        {/* Render tab content */}
         <View style={{ flex: 1 }}>
         {/* Home dashboard - always mounted to preserve state when navigating back */}
         <View style={{ flex: 1, display: (activeTab === 'home' && !smallTasksView && !showCommissionPayment && !commissionCheckoutRequest && !showAppointmentsView && !showTicketList && selectedTicketId === null && !showCreateTicket) ? 'flex' : 'none', pointerEvents: (activeTab === 'home' && !smallTasksView && !showCommissionPayment && !commissionCheckoutRequest && !showAppointmentsView && !showTicketList && selectedTicketId === null && !showCreateTicket) ? 'auto' : 'none' }}>
           <TechnicalHomeScreenContent
             userName={userProfile?.name}
             unreadNotificationCount={unreadNotificationCount}
-            copilotStepsActive={technicianDashboardCopilotActive}
             onPressChat={() => {
               setSelectedChat(null);
               setShowChatList(true);
@@ -615,6 +618,8 @@ export default function TechnicianHomeScreen({
             onPressSupportTickets={() => setShowTicketList(true)}
             onPressSupportTicket={(ticketId) => setSelectedTicketId(ticketId)}
             onPressCreateSupportTicket={() => setShowCreateTicket(true)}
+            tabBarRef={tabBarRef}
+            tabRefs={tabRefs}
           />
         </View>
 
@@ -705,6 +710,7 @@ export default function TechnicianHomeScreen({
                 }
                 setProjectsInitialProjectType(null);
                 setSelectedSmallTask(null);
+                setInitialProjectForDetail(null);
               }}
               onRequestVisit={() => {}}
               filter={currentProjectsFilter}
@@ -801,16 +807,16 @@ export default function TechnicianHomeScreen({
         )}
 
         {activeTab === 'notifications' && (
-          <View style={{ flex: 1 }}>
+          <ScreenTransition>
             <NotificationsScreen
               onUnreadCountChange={setUnreadNotificationCount}
               onNavigateFromNotification={onNavigateFromNotification}
             />
-          </View>
+          </ScreenTransition>
         )}
 
         {activeTab === 'wallet' && (
-          <View style={{ flex: 1 }}>
+          <ScreenTransition>
             <CommissionPaymentScreen
               onBack={() => setActiveTab('home')}
               onNavigateToCheckout={(request, description) => {
@@ -818,7 +824,7 @@ export default function TechnicianHomeScreen({
                 setCommissionCheckoutDescription(description);
               }}
             />
-          </View>
+          </ScreenTransition>
         )}
 
         <View style={{ flex: 1, display: activeTab === 'profile' ? 'flex' : 'none', pointerEvents: activeTab === 'profile' ? 'auto' : 'none' }}>
@@ -927,7 +933,7 @@ export default function TechnicianHomeScreen({
         </View>
 
         {activeTab === 'chatbot' && (
-          <View style={{ flex: 1 }}>
+          <ScreenTransition>
             <ChatbotScreen
               onBack={() => setActiveTab('home')}
               userId={userId}
@@ -937,12 +943,12 @@ export default function TechnicianHomeScreen({
               onRequestLiveAgent={onChatbotRequestLiveAgent}
               hasBottomTabBar
             />
-          </View>
+          </ScreenTransition>
         )}
         </View>
 
         {/* Glass tab bar — iOS-style with water-drop press */}
-        <View style={styles.glassTabBarContainer}>
+        <View ref={tabBarRef} collapsable={false} style={styles.glassTabBarContainer}>
           <View style={{ width: '100%' }}>
             <GlassTabBar
               activeTab={
@@ -956,6 +962,9 @@ export default function TechnicianHomeScreen({
                 if (activeTab === 'profile' && tab !== 'profile') {
                   onProfileTabClosed?.();
                 }
+                if (tab === 'projects') {
+                  setInitialProjectForDetail(null);
+                }
                 setActiveTab(tab);
               }}
               tabs={TECHNICIAN_TABS}
@@ -964,6 +973,7 @@ export default function TechnicianHomeScreen({
               isDark={isDarkMode}
               bottomInset={insets.bottom}
               t={t}
+              tabRefs={tabRefs}
             />
           </View>
         </View>
@@ -1113,7 +1123,6 @@ export default function TechnicianHomeScreen({
           <TechnicalHomeScreenContent
             userName={userProfile?.name}
             unreadNotificationCount={unreadNotificationCount}
-            copilotStepsActive={technicianDashboardCopilotActive}
             onPressChat={() => {
               setSelectedChat(null);
               setShowChatList(true);
@@ -1177,6 +1186,8 @@ export default function TechnicianHomeScreen({
             onPressSupportTickets={() => setShowTicketList(true)}
             onPressSupportTicket={(ticketId) => setSelectedTicketId(ticketId)}
             onPressCreateSupportTicket={() => setShowCreateTicket(true)}
+            tabBarRef={tabBarRef}
+            tabRefs={tabRefs}
           />
         </View>
 
@@ -1242,6 +1253,7 @@ export default function TechnicianHomeScreen({
                   }
                   setProjectsInitialProjectType(null);
                   setSelectedSmallTask(null);
+                  setInitialProjectForDetail(null);
                 }}
                 onRequestVisit={() => {}}
                 filter={currentProjectsFilter}

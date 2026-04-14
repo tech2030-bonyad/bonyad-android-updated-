@@ -105,8 +105,6 @@ interface NotificationsScreenProps {
   onNavigateToPhase?: (projectId: number, phaseId?: number) => void;
   onNavigateToBid?: (projectId: number, bidId: number) => void;
   onUnreadCountChange?: (count: number) => void;
-  /** Optional: allow parent (UserHomeScreen) to store a tour control handle. */
-  onExposeTourControl?: (control: { startTour: () => void }) => void;
 }
 
 export default function NotificationsScreen({
@@ -116,7 +114,6 @@ export default function NotificationsScreen({
   onNavigateToPhase,
   onNavigateToBid,
   onUnreadCountChange,
-  onExposeTourControl,
 }: NotificationsScreenProps) {
   const { colors, theme } = useTheme();
   const { t, i18n } = useTranslation();
@@ -153,11 +150,6 @@ export default function NotificationsScreen({
   useEffect(() => {
     fetchNotifications();
   }, []);
-
-  useEffect(() => {
-    // No dedicated notifications tour yet; expose a no-op control for compatibility.
-    onExposeTourControl?.({ startTour: () => {} });
-  }, [onExposeTourControl]);
 
   useEffect(() => {
     Animated.timing(screenSlideAnim, {

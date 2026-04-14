@@ -74,8 +74,6 @@ interface ChatRoomsListScreenProps {
   onOpenChat?: (roomId: string, receiverId: number, receiverName: string, projectId?: number | null) => void;
   /** When true, AppTopBar is already above this screen — skip extra header top inset. */
   stackedUnderAppTopBar?: boolean;
-  /** Optional: allow parent (UserHomeScreen) to store a tour control handle. */
-  onExposeTourControl?: (control: { startTour: () => void }) => void;
 }
 
 type ChatRowProps = {
@@ -165,7 +163,6 @@ export default function ChatRoomsListScreen({
   onBack,
   onOpenChat,
   stackedUnderAppTopBar = false,
-  onExposeTourControl,
 }: ChatRoomsListScreenProps) {
   const { t, i18n } = useTranslation();
   const { colors } = useTheme();
@@ -178,11 +175,6 @@ export default function ChatRoomsListScreen({
   const [filterChip, setFilterChip] = useState<FilterChip>('all');
   const appState = useRef(AppState.currentState);
   const flatListRef = useRef<FlatList<ChatRoom>>(null);
-
-  useEffect(() => {
-    // No dedicated chat list tour yet; expose a no-op control for compatibility.
-    onExposeTourControl?.({ startTour: () => {} });
-  }, [onExposeTourControl]);
 
   const listOpacity = useSharedValue(1);
   const listTranslateY = useSharedValue(0);

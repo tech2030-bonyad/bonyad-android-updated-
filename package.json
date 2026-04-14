@@ -32,6 +32,7 @@
     "@react-native-firebase/messaging": "^23.4.1",
     "@react-native-picker/picker": "^2.11.4",
     "@stomp/stompjs": "^7.2.1",
+    "@wrack/react-native-tour-guide": "^0.1.4",
     "damerau-levenshtein": "^1.0.8",
     "expo": "54.0.20",
     "expo-asset": "~12.0.9",

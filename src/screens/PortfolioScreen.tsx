@@ -16,11 +16,13 @@ import {
   ScrollView,
   Dimensions,
   Animated,
+  Switch,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTheme } from '../context/ThemeContext';
 import { useFontFamily } from '../context/FontContext';
 import { API_BASE_URL } from '../config/api';
@@ -49,6 +51,7 @@ import {
   AddProjectButton,
   PortfolioViewToggle,
   PortfolioBottomTabBar,
+  EnhancedPortfolioModal,
 } from '../components/portfolio';
 
 const SCREEN_W = Dimensions.get('window').width;
@@ -116,9 +119,18 @@ export default function PortfolioScreen({
   const [isSaving, setIsSaving] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [location, setLocation] = useState('');
+  const [clientName, setClientName] = useState('');
+  const [projectValue, setProjectValue] = useState('');
+  const [startDate, setStartDate] = useState<Date | null>(null);
+  const [endDate, setEndDate] = useState<Date | null>(null);
+  const [isPublic, setIsPublic] = useState(true);
+  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
+  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [selectedImages, setSelectedImages] = useState<ImagePicker.ImagePickerAsset[]>([]);
   const [qrVisible, setQrVisible] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
+  const [showEnhancedPortfolioModal, setShowEnhancedPortfolioModal] = useState(false);
 
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const cardTranslateY = useRef(new Animated.Value(28)).current;
@@ -249,6 +261,7 @@ export default function PortfolioScreen({
   const handleHeaderMenu = () => {
     const buttons: { text: string; onPress?: () => void; style?: 'cancel' | 'destructive' }[] = [
       ...(onEditProfile ? [{ text: t('Edit Profile'), onPress: onEditProfile }] : []),
+      { text: t('Enhanced Portfolio'), onPress: () => setShowEnhancedPortfolioModal(true) },
       { text: t('Share'), onPress: () => handleShare() },
       { text: t('Cancel'), style: 'cancel' },
     ];
@@ -313,6 +326,12 @@ export default function PortfolioScreen({
     setEditingProject(null);
     setTitle('');
     setDescription('');
+    setLocation('');
+    setClientName('');
+    setProjectValue('');
+    setStartDate(null);
+    setEndDate(null);
+    setIsPublic(true);
     setSelectedImages([]);
     setShowAddModal(true);
   };
@@ -321,6 +340,14 @@ export default function PortfolioScreen({
     setEditingProject(p);
     setTitle(p.title || '');
     setDescription(p.description || '');
+    setLocation((p as any).location || '');
+    setClientName((p as any).clientName || '');
+    setProjectValue((p as any).projectValue?.toString() || '');
+    const start = (p as any).startDate;
+    const end = (p as any).endDate;
+    setStartDate(start ? new Date(start) : null);
+    setEndDate(end ? new Date(end) : null);
+    setIsPublic((p as any).isPublic !== false);
     setSelectedImages([]);
     setShowAddModal(true);
   };
@@ -334,6 +361,10 @@ export default function PortfolioScreen({
       showError(t('missing_fields'));
       return;
     }
+    if (endDate && startDate && endDate < startDate) {
+      showError(t('End date must be after start date'));
+      return;
+    }
 
     setIsSaving(true);
     try {
@@ -342,26 +373,30 @@ export default function PortfolioScreen({
         photoUrls.push(await uploadPortfolioPhoto(asset));
       }
 
+      const projectData: Record<string, unknown> = {
+        title: title.trim(),
+        description: description.trim() || title.trim(),
+      };
+
+      if (location.trim()) projectData.location = location.trim();
+      if (clientName.trim()) (projectData as any).clientName = clientName.trim();
+      if (projectValue.trim()) projectData.projectValue = parseFloat(projectValue);
+      if (startDate) projectData.startDate = startDate.toISOString().split('T')[0];
+      if (endDate) projectData.endDate = endDate.toISOString().split('T')[0];
+      projectData.isPublic = isPublic;
+
       if (editingProject) {
-        const payload: Record<string, unknown> = {
-          title: title.trim(),
-          description: description.trim() || title.trim(),
-        };
-        if (photoUrls.length > 0) payload.photos = photoUrls;
-        await updatePortfolioProject(editingProject.id, payload as any);
+        if (photoUrls.length > 0) projectData.photos = photoUrls;
+        await updatePortfolioProject(editingProject.id, projectData as any);
         showSuccess(t('Project updated successfully'));
       } else {
         const hasPortfolio = await checkHasPortfolio();
         if (!hasPortfolio) await createPortfolio();
-        const today = new Date().toISOString().split('T')[0];
-        await addPortfolioProject({
-          title: title.trim(),
-          description: description.trim() || title.trim(),
-          startDate: today,
-          endDate: today,
-          photos: photoUrls,
-          isPublic: true,
-        });
+        projectData.photos = photoUrls;
+        // If no dates provided, use today's date
+        if (!projectData.startDate) projectData.startDate = new Date().toISOString().split('T')[0];
+        if (!projectData.endDate) projectData.endDate = new Date().toISOString().split('T')[0];
+        await addPortfolioProject(projectData as any);
         showSuccess(t('Project added successfully'));
       }
       closeAddModal();
@@ -622,24 +657,128 @@ export default function PortfolioScreen({
                 <Ionicons name="close" size={24} color={colors.text} />
               </TouchableOpacity>
             </View>
-            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 12, paddingBottom: 100 }}
+            >
+              {/* Title */}
+              <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{t('Title')}</Text>
               <TextInput
                 style={[styles.input, { color: colors.text, borderColor: colors.border, ...fontStyle }]}
                 value={title}
                 onChangeText={setTitle}
-                placeholder={t('Title')}
+                placeholder={t('Project Title')}
                 placeholderTextColor={colors.textTertiary}
               />
+
+              {/* Description */}
+              <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginTop: 12 }]}>{t('Description')}</Text>
               <TextInput
                 style={[styles.textArea, { color: colors.text, borderColor: colors.border, ...fontStyle }]}
                 value={description}
                 onChangeText={setDescription}
-                placeholder={t('Description')}
+                placeholder={t('Project Description')}
                 placeholderTextColor={colors.textTertiary}
                 multiline
                 textAlignVertical="top"
               />
-              <TouchableOpacity style={[styles.addPhotosBtn, { borderColor: colors.primary }]} onPress={pickImages}>
+
+              {/* Location */}
+              <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginTop: 12 }]}>{t('Location')}</Text>
+              <TextInput
+                style={[styles.input, { color: colors.text, borderColor: colors.border, ...fontStyle }]}
+                value={location}
+                onChangeText={setLocation}
+                placeholder={t('Project Location')}
+                placeholderTextColor={colors.textTertiary}
+              />
+
+              {/* Client Name */}
+              <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginTop: 12 }]}>{t('Client Name')}</Text>
+              <TextInput
+                style={[styles.input, { color: colors.text, borderColor: colors.border, ...fontStyle }]}
+                value={clientName}
+                onChangeText={setClientName}
+                placeholder={t('Client Name')}
+                placeholderTextColor={colors.textTertiary}
+              />
+
+              {/* Project Value */}
+              <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginTop: 12 }]}>{t('Project Value (SAR)')}</Text>
+              <TextInput
+                style={[styles.input, { color: colors.text, borderColor: colors.border, ...fontStyle }]}
+                value={projectValue}
+                onChangeText={setProjectValue}
+                placeholder={t('e.g., 50000')}
+                placeholderTextColor={colors.textTertiary}
+                keyboardType="decimal-pad"
+              />
+
+              {/* Start Date */}
+              <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginTop: 12 }]}>{t('Start Date')}</Text>
+              <TouchableOpacity
+                style={[styles.dateButton, { borderColor: colors.border, backgroundColor: colors.cardBackground }]}
+                onPress={() => setShowStartDatePicker(true)}
+              >
+                <Ionicons name="calendar" size={20} color={colors.primary} />
+                <Text style={[{ color: startDate ? colors.text : colors.textTertiary, ...fontStyle }]}>
+                  {startDate ? startDate.toLocaleDateString() : t('Select Start Date')}
+                </Text>
+              </TouchableOpacity>
+              {showStartDatePicker && (
+                <DateTimePicker
+                  value={startDate || new Date()}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={(event, date) => {
+                    if (Platform.OS !== 'ios') setShowStartDatePicker(false);
+                    if (date) setStartDate(date);
+                  }}
+                />
+              )}
+
+              {/* End Date */}
+              <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginTop: 12 }]}>{t('End Date')}</Text>
+              <TouchableOpacity
+                style={[styles.dateButton, { borderColor: colors.border, backgroundColor: colors.cardBackground }]}
+                onPress={() => setShowEndDatePicker(true)}
+              >
+                <Ionicons name="calendar" size={20} color={colors.primary} />
+                <Text style={[{ color: endDate ? colors.text : colors.textTertiary, ...fontStyle }]}>
+                  {endDate ? endDate.toLocaleDateString() : t('Select End Date')}
+                </Text>
+              </TouchableOpacity>
+              {showEndDatePicker && (
+                <DateTimePicker
+                  value={endDate || new Date()}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={(event, date) => {
+                    if (Platform.OS !== 'ios') setShowEndDatePicker(false);
+                    if (date) setEndDate(date);
+                  }}
+                />
+              )}
+
+              {/* Is Public Toggle */}
+              <View style={[styles.publicToggleRow, { marginTop: 12 }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginBottom: 8 }]}>{t('Public')}</Text>
+                  <Text style={[{ color: colors.textSecondary, fontSize: 12, ...fontStyle }]}>
+                    {t('Make this project visible to others')}
+                  </Text>
+                </View>
+                <Switch
+                  value={isPublic}
+                  onValueChange={setIsPublic}
+                  trackColor={{ false: '#767577', true: colors.primary + '80' }}
+                  thumbColor={isPublic ? colors.primary : '#f4f3f4'}
+                />
+              </View>
+
+              {/* Images */}
+              <TouchableOpacity style={[styles.addPhotosBtn, { borderColor: colors.primary, marginTop: 16 }]} onPress={pickImages}>
                 <Ionicons name="images-outline" size={22} color={colors.primary} />
                 <Text style={{ color: colors.primary, marginLeft: 8, ...fontStyle }}>{t('Add Images')}</Text>
               </TouchableOpacity>
@@ -653,8 +792,10 @@ export default function PortfolioScreen({
                   </View>
                 ))}
               </View>
+
+              {/* Save Button */}
               <TouchableOpacity
-                style={[styles.saveBtn, { backgroundColor: colors.primary }]}
+                style={[styles.saveBtn, { backgroundColor: colors.primary, marginTop: 16 }]}
                 onPress={handleSaveProject}
                 disabled={isSaving}
               >
@@ -682,6 +823,17 @@ export default function PortfolioScreen({
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Enhanced Portfolio Modal */}
+      <EnhancedPortfolioModal
+        visible={showEnhancedPortfolioModal}
+        portfolioId={resolvedUserId}
+        onClose={() => setShowEnhancedPortfolioModal(false)}
+        onSuccess={() => {
+          setShowEnhancedPortfolioModal(false);
+          loadAll();
+        }}
+      />
     </View>
   );
 }
@@ -767,4 +919,26 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   qrBox: { borderRadius: 16, padding: 20, alignItems: 'center' },
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginHorizontal: 18,
+    marginBottom: 8,
+  },
+  dateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 12,
+    marginHorizontal: 18,
+    gap: 12,
+  },
+  publicToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: 18,
+    paddingVertical: 12,
+  },
 });

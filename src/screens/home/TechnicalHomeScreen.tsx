@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useTourGuide } from '@wrack/react-native-tour-guide';
+import AppTourTooltip from '../../components/AppTourTooltip';
 import {
   View,
   Text,
@@ -13,7 +15,6 @@ import {
   TouchableWithoutFeedback,
   Animated,
 } from 'react-native';
-import { walkthroughable } from 'react-native-copilot';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
@@ -123,14 +124,11 @@ interface ApiProject {
 const IOS_PRIMARY = '#00A5F4';
 const IOS_CHAT = '#4C9AD5';
 
-const WalkableView = walkthroughable(View);
-
 interface TechnicalHomeScreenProps {
   userName?: string;
   unreadNotificationCount?: number;
   onPressChat?: () => void;
   onPressNotifications?: () => void;
-  onPressInfo?: () => void;
   onPressAvailableProject?: (status: ProjectStatus) => void;
   onPressTaskCategory?: (status: ProjectStatus) => void;
   onPressSmallTask?: (task: SmallTaskRequest) => void;
@@ -147,6 +145,10 @@ interface TechnicalHomeScreenProps {
   onPressSupportTickets?: () => void;
   onPressSupportTicket?: (ticketId: number) => void;
   onPressCreateSupportTicket?: () => void;
+  /** Ref to the bottom tab bar — passed from the shell for tour guide highlighting */
+  tabBarRef?: React.RefObject<View | null>;
+  /** Per-tab refs for individual tour steps — keyed by tab id */
+  tabRefs?: Record<string, React.RefObject<View | null>>;
 }
 
 export default function TechnicalHomeScreen({
@@ -167,8 +169,9 @@ export default function TechnicalHomeScreen({
   onPressCreateSupportTicket,
   onPressChat,
   onPressNotifications,
-  onPressInfo,
   unreadNotificationCount = 0,
+  tabBarRef,
+  tabRefs,
 }: TechnicalHomeScreenProps) {
   const { t, i18n } = useTranslation();
   const { colors: themeColors, theme } = useTheme();
@@ -194,6 +197,153 @@ export default function TechnicalHomeScreen({
   const escrowFadeAnim = useRef(new Animated.Value(0)).current;
   const escrowScaleAnim = useRef(new Animated.Value(0.9)).current;
   const mainScrollRef = useRef<ScrollView>(null);
+  const mainScrollY = useRef(0);
+
+  // Tour guide refs
+  const tourLogoRef = useRef<View>(null);
+  const tourTopBarIconsRef = useRef<View>(null);
+  const tourBannerRef = useRef<View>(null);
+  const tourProjectsRef = useRef<View>(null);
+  const tourSmallTasksRef = useRef<View>(null);
+  const tourContractsRef = useRef<View>(null);
+  const tourSupportRef = useRef<View>(null);
+  const tourChatbotRef = useRef<View>(null);
+
+  const { startTour } = useTourGuide();
+
+  // Memoize renderTooltip to prevent unnecessary re-renders during tour transitions
+  const renderTooltip = useCallback((props: any) => (
+    <AppTourTooltip
+      {...props}
+      primaryColor={primaryColor}
+      isDark={isDarkMode}
+    />
+  ), [primaryColor, isDarkMode]);
+
+  const handleStartTour = useCallback(() => {
+    startTour([
+      {
+        id: 'tech-logo',
+        targetRef: tourLogoRef,
+        title: t('Bonyad'),
+        description: t('Your platform for connecting with trusted service providers and qualified experts.'),
+        tooltipPosition: 'bottom',
+        targetStyle: { borderRadius: 8 },
+        spotlightPadding: 12,
+      },
+      {
+        id: 'tech-topbar',
+        targetRef: tourTopBarIconsRef,
+        title: t('App Navigation'),
+        description: t('Use these icons to open chats with clients and view your notifications.'),
+        tooltipPosition: 'bottom',
+        targetStyle: { borderRadius: 8 },
+      },
+      {
+        id: 'tech-banner',
+        targetRef: tourBannerRef,
+        title: t('Opportunities & Promotions'),
+        description: t('Swipe through banners to discover new project opportunities and platform announcements.'),
+        tooltipPosition: 'bottom',
+        targetStyle: { borderRadius: 16 },
+        scrollToTarget: { scrollRef: mainScrollRef, offset: -20, animated: false, getCurrentScrollOffset: () => mainScrollY.current },
+      },
+      {
+        id: 'tech-projects',
+        targetRef: tourProjectsRef,
+        title: t('Available Projects'),
+        description: t('Browse and bid on active projects posted by clients. Tap "View All" to see every opportunity.'),
+        tooltipPosition: 'bottom',
+        targetStyle: { borderRadius: 20 },
+        scrollToTarget: { scrollRef: mainScrollRef, offset: -20, animated: false, getCurrentScrollOffset: () => mainScrollY.current },
+      },
+      {
+        id: 'tech-small-tasks',
+        targetRef: tourSmallTasksRef,
+        title: t('Small Tasks'),
+        description: t('Quick job requests from clients. Complete small tasks to build your reputation and earn fast.'),
+        tooltipPosition: 'auto',
+        targetStyle: { borderRadius: 20 },
+        scrollToTarget: { scrollRef: mainScrollRef, offset: -20, animated: false, getCurrentScrollOffset: () => mainScrollY.current },
+      },
+      {
+        id: 'tech-contracts',
+        targetRef: tourContractsRef,
+        title: t('My Contracts'),
+        description: t('View and manage all your contracts with service providers. Tap any contract to see details.'),
+        tooltipPosition: 'auto',
+        targetStyle: { borderRadius: 20 },
+        scrollToTarget: { scrollRef: mainScrollRef, offset: -20, animated: false, getCurrentScrollOffset: () => mainScrollY.current },
+      },
+      {
+        id: 'tech-support',
+        targetRef: tourSupportRef,
+        title: t('Support'),
+        description: t('Get help from our support team. Open a ticket and track its status right here.'),
+        tooltipPosition: 'auto',
+        targetStyle: { borderRadius: 20 },
+        scrollToTarget: { scrollRef: mainScrollRef, offset: -20, animated: false, getCurrentScrollOffset: () => mainScrollY.current },
+      },
+      {
+        id: 'tech-chatbot',
+        targetRef: tourChatbotRef,
+        title: t('AI Assistant'),
+        description: t('Chat with our AI assistant for instant answers about services, pricing, and platform features.'),
+        tooltipPosition: 'top',
+        targetStyle: { borderRadius: 34 },
+        spotlightPadding: 8,
+        active: !!onPressChatbot,
+      },
+      {
+        id: 'tech-tab-home',
+        targetRef: tabRefs?.['home'],
+        title: t('Home Tab'),
+        description: t('Your home screen — see your recent activity, contracts, and quick actions.'),
+        tooltipPosition: 'top',
+        targetStyle: { borderRadius: 16 },
+        spotlightPadding: 4,
+        active: !!(tabRefs?.['home']),
+      },
+      {
+        id: 'tech-tab-projects',
+        targetRef: tabRefs?.['projects'],
+        title: t('Projects Tab'),
+        description: t('View and manage all your posted projects and track their progress.'),
+        tooltipPosition: 'top',
+        targetStyle: { borderRadius: 16 },
+        spotlightPadding: 4,
+        active: !!(tabRefs?.['projects']),
+      },
+      {
+        id: 'tech-tab-wallet',
+        targetRef: tabRefs?.['wallet'],
+        title: t('Wallet Tab'),
+        description: t('Track your earnings, view payment history, and manage your finances.'),
+        tooltipPosition: 'top',
+        targetStyle: { borderRadius: 16 },
+        spotlightPadding: 4,
+        active: !!(tabRefs?.['wallet']),
+      },
+      {
+        id: 'tech-tab-profile',
+        targetRef: tabRefs?.['profile'],
+        title: t('Profile Tab'),
+        description: t('Manage your account, settings, subscription, and personal information.'),
+        tooltipPosition: 'top',
+        targetStyle: { borderRadius: 16 },
+        spotlightPadding: 4,
+        active: !!(tabRefs?.['profile']),
+      },
+    ], {
+      autoPositionTooltip: true,
+      animationDuration: 150,
+      nextButtonText: t('Next'),
+      prevButtonText: t('Back'),
+      skipButtonText: t('Skip'),
+      doneButtonText: t('Done'),
+      renderTooltip,
+    });
+  }, [startTour, t, mainScrollRef, tabBarRef, tabRefs, primaryColor, isDarkMode, onPressChatbot, renderTooltip]);
 
   const fontStyle = useMemo(() => ({ fontFamily: fontFamily || undefined }), [fontFamily]);
   const boldFontStyle = useMemo(() => ({ fontFamily: boldFontFamily || fontFamily || undefined }), [boldFontFamily, fontFamily]);
@@ -364,19 +514,21 @@ export default function TechnicalHomeScreen({
         ]}
         showsVerticalScrollIndicator={false}
         bounces={true}
+        onScroll={(e) => { mainScrollY.current = e.nativeEvent.contentOffset.y; }}
+        scrollEventThrottle={16}
         nestedScrollEnabled={true}
       >
         {/* Top bar — first item in scroll (matches iOS TechnicianHomeContentView) */}
         <View style={[styles.iosTopBar, { paddingTop: topSpacing + 14, backgroundColor: isDarkMode ? themeColors.background : COLORS.background }]}>
-          <View style={styles.iosTopBarLogo}>
+          <View ref={tourLogoRef} collapsable={false} style={styles.iosTopBarLogo}>
             <BonyadLogo size="small" responsive={false} variant={isDarkMode ? 'light' : 'dark'} />
           </View>
-          <View style={styles.iosTopBarIcons}>
+          <View ref={tourTopBarIconsRef} collapsable={false} style={styles.iosTopBarIcons}>
+            <TouchableOpacity style={styles.iosTopBarIconBtn} onPress={handleStartTour} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Ionicons name="map-outline" size={24} color={primaryColor} />
+            </TouchableOpacity>
             <TouchableOpacity style={styles.iosTopBarIconBtn} onPress={onPressChat} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
               <Ionicons name="chatbubbles-outline" size={24} color={primaryColor} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.iosTopBarIconBtn} onPress={onPressInfo} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <Ionicons name="information-circle-outline" size={24} color={primaryColor} />
             </TouchableOpacity>
             <TouchableOpacity style={styles.iosTopBarIconBtn} onPress={onPressNotifications} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
               <View>
@@ -392,6 +544,7 @@ export default function TechnicalHomeScreen({
         {/* Main content — same horizontal padding as iOS */}
         <View style={styles.content}>
       {/* Section 1: Horizontal banner carousel (5 cards, swipe left/right — matches iOS AdvertisementComponent) */}
+      <View ref={tourBannerRef} collapsable={false}>
       <StaggeredAppearView index={0} style={{ marginBottom: SECTION_GAP, marginHorizontal: -H_PADDING }}>
           <ScrollView
             ref={bannerScrollRef}
@@ -431,6 +584,7 @@ export default function TechnicalHomeScreen({
             ))}
           </View>
       </StaggeredAppearView>
+      </View>
 
       {/* Section 2: Title "Available Opportunities" */}
       <StaggeredAppearView index={1}>
@@ -446,6 +600,7 @@ export default function TechnicalHomeScreen({
       </StaggeredAppearView>
 
       {/* Section 2: Available Projects */}
+      <View ref={tourProjectsRef} collapsable={false}>
       <StaggeredAppearView index={2}>
       <FlowingBorderCard
         accent="#00A5F4"
@@ -523,8 +678,10 @@ export default function TechnicalHomeScreen({
       </View>
       </FlowingBorderCard>
       </StaggeredAppearView>
+      </View>
 
       {/* Section 3: Small Tasks */}
+      <View ref={tourSmallTasksRef} collapsable={false}>
       <StaggeredAppearView index={3}>
       <FlowingBorderCard
         accent="#FF9500"
@@ -608,6 +765,7 @@ export default function TechnicalHomeScreen({
       </View>
       </FlowingBorderCard>
       </StaggeredAppearView>
+      </View>
 
       {/* Section 5: Quick Action Cards */}
       <StaggeredAppearView index={4}>
@@ -641,6 +799,7 @@ export default function TechnicalHomeScreen({
       </StaggeredAppearView>
 
       {/* Section 6: My Contracts */}
+      <View ref={tourContractsRef} collapsable={false}>
       <FlowingBorderCard
         accent="#5856D6"
         cornerRadius={20}
@@ -726,8 +885,10 @@ export default function TechnicalHomeScreen({
           )}
         </View>
       </FlowingBorderCard>
+      </View>
 
       {/* Section 7: Support */}
+      <View ref={tourSupportRef} collapsable={false}>
       <FlowingBorderCard
         accent="#34C759"
         cornerRadius={20}
@@ -795,17 +956,33 @@ export default function TechnicalHomeScreen({
           )}
         </View>
       </FlowingBorderCard>
+      </View>
 
         </View>
       </ScrollView>
       {/* iOS-style Chatbot FAB when provided; otherwise legacy FAB for small tasks */}
       {onPressChatbot ? (
-        <ChatbotFab
-          onPress={onPressChatbot}
-          primaryColor={primaryColor}
-          primaryDark={themeColors.primary}
-          bottomOffset={chatbotFabBottomOffset(insets.bottom)}
-        />
+        <View
+          ref={tourChatbotRef}
+          collapsable={false}
+          pointerEvents="box-none"
+          style={{
+            position: 'absolute',
+            bottom: chatbotFabBottomOffset(insets.bottom),
+            left: isArabic ? undefined : 20,
+            right: isArabic ? 20 : undefined,
+            width: 67,
+            height: 67,
+          }}
+        >
+          <ChatbotFab
+            embedInParent
+            onPress={onPressChatbot}
+            primaryColor={primaryColor}
+            primaryDark={themeColors.primary}
+            bottomOffset={0}
+          />
+        </View>
       ) : onPressFab ? (
         <TouchableOpacity
           style={[styles.fab, { backgroundColor: themeColors.primary }, styles.fabLTR]}

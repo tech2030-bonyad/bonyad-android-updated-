@@ -607,7 +607,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 12,
     borderRadius: 8,
-    marginTop: 12,
+    marginTop: 6,
     gap: 8,
   },
   actionButtonText: {
@@ -629,7 +629,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   emptyContainer: {
-    padding: 32,
+    padding: 16,
     alignItems: 'center',
   },
   emptyText: {

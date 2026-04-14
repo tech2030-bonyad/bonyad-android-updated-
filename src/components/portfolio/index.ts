@@ -7,4 +7,5 @@ export { ProjectCard } from './ProjectCard';
 export { AddProjectButton } from './AddProjectButton';
 export { PortfolioViewToggle } from './PortfolioViewToggle';
 export { PortfolioBottomTabBar } from './PortfolioBottomTabBar';
+export { default as EnhancedPortfolioModal } from './EnhancedPortfolioModal';
 export type { BottomTabId } from './PortfolioBottomTabBar';
